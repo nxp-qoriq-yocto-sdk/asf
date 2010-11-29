@@ -354,20 +354,19 @@ static inline ffp_flow_t  *asf_ffp_flow_lookup(
 					unsigned long vsg, unsigned long szone, unsigned char protocol, unsigned long *pHashVal)
 {
 	ffp_flow_t *flow, *pHead;
-	unsigned long ulHashVal;
 #ifdef ASF_DEBUG
 	unsigned long ulCount = 0;
 #endif
 
-	ulHashVal = ASFFFPComputeFlowHash1(sip, dip, ports, vsg, szone, asf_ffp_hash_init_value);
-	*pHashVal = ulHashVal;
+	*pHashVal = ASFFFPComputeFlowHash1(sip, dip, ports, vsg,
+					szone, asf_ffp_hash_init_value);
 #if 0
 	printk("ASF: Hash(0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx)  = %lx (masked %lx) (hini 0x%lx)\n",
 	       iph->saddr, iph->daddr, ports, ulVsgId, ulZoneId,
 	       ulHashVal, FFP_HINDEX(ulHashVal), asf_ffp_hash_init_value);
 #endif
 
-	pHead = (ffp_flow_t *) asf_ffp_bucket_by_hash(ulHashVal);
+	pHead = (ffp_flow_t *) asf_ffp_bucket_by_hash(*pHashVal);
 
 	/*todo - check rcu flow_list_for_each(flow, pHead)
 for (flow = pHead->pNext; flow != pHead; flow = rcu_deference(flow->pNext)) */
@@ -381,7 +380,6 @@ for (flow = pHead->pNext; flow != pHead; flow = rcu_deference(flow->pNext)) */
 		&& (flow->ulVsgId == vsg)
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		) {
-			/* *pHashVal = ulHashVal; */
 			return flow;
 		}
 #ifdef ASF_DEBUG
@@ -389,7 +387,7 @@ for (flow = pHead->pNext; flow != pHead; flow = rcu_deference(flow->pNext)) */
 		if (ulCount >= SEARCH_MAX_PER_BUCKET) {
 			asf_debug("Max (%u) scanned in bucket (%d)"\
 			"... aborting search!\n",
-			SEARCH_MAX_PER_BUCKET, FFP_HINDEX(ulHashVal));
+			SEARCH_MAX_PER_BUCKET, FFP_HINDEX(*pHashVal));
 			return NULL;
 		}
 #endif
@@ -688,7 +686,7 @@ int asf_process_ip_options(struct sk_buff *skb, struct net_device *dev, struct i
 	return 0;
 }
 EXPORT_SYMBOL(asf_process_ip_options);
-#if ASF_DEBUG
+#ifdef ASF_DEBUG
 void asf_display_frags(struct sk_buff *skb, char *msg)
 {
 	struct iphdr *iph;
@@ -771,27 +769,32 @@ void asf_display_skb_list(struct sk_buff *skb, char *msg)
 
 static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	ASFFFPGlobalStats_t     *gstats;
 	ASFFFPVsgStats_t	*vstats;
-	int		     bLockFlag;
+	int			bCsumVerify = 0;
+#endif
+	int			bLockFlag;
 	/*struct net_device	*logical_dev;*/
 	/*x_hh_len = extra hardware-header length (data b/w end
 		of ETH_H to IPH) */
-	int		     x_hh_len, len;
-	int		     bCsumVerify = 0;
+	int			x_hh_len, len;
 	ASFNetDevEntry_t	*anDev;
-	ASF_uint16_t	    usEthType;
-	struct iphdr	    *iph;
-	ASFBuffer_t	     abuf;
+	ASF_uint16_t		usEthType;
+	struct iphdr		*iph;
+	ASFBuffer_t		abuf;
 
-	if (!asf_enable)
+	if (0 == asf_enable)
 		return AS_FP_PROCEED;
 
-	gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
-	ACCESS_XGSTATS();
 	ASF_RCU_READ_LOCK(bLockFlag);
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
+	ACCESS_XGSTATS();
+
 	gstats->ulInPkts++;
+#endif
 
 	/*skb->protocol = eth_type_trans(skb, real_dev);*/
 
@@ -799,6 +802,9 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	skb->protocol = eth_type_trans(skb, skb->dev);
 
 	skb->mac_len = ETH_HLEN;
+	usEthType = skb->protocol; /* *(short *)(skb->data + 12); */
+	x_hh_len = 0;
+
 	if (skb->pkt_type != PACKET_HOST) {
 		/* multicast or broadcast or a packet
 			received in promiscous mode */
@@ -810,12 +816,12 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	}
 
 	anDev = ASFNetDev(real_dev);
-	if (anDev == NULL)
+	if (NULL == anDev)
 		goto iface_not_found;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (real_dev != skb->dev)
 		anDev = ASFGetVlanDev(anDev, skb->vlan_tci & VLAN_VID_MASK);
-	if (anDev == NULL)
+	if (NULL == anDev)
 		goto iface_not_found;
 	if (unlikely(anDev->ulVSGId == ASF_INVALID_VSG)) {
 		abuf.nativeBuffer = skb;
@@ -829,8 +835,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		anDev = anDev->pBridgeDev;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
-	x_hh_len = 0;
-	usEthType = skb->protocol; /* *(short *)(skb->data + 12); */
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (unlikely(usEthType == __constant_htons(ETH_P_8021Q))) {
@@ -889,7 +893,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
 	/* By now anDev, usEthType and hh_len will have proper values */
-	if (unlikely(usEthType != __constant_htons(ETH_P_IP))) {
+	if ((usEthType != __constant_htons(ETH_P_IP))) {
 		XGSTATS_INC(NonIpPkts);
 		asf_debug_l2("Non IP traffic. EthType = 0x%x\n", usEthType);
 		goto ret_pkt;
@@ -903,34 +907,41 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		goto ret_pkt;
 	}
 
-	if (unlikely(iph->ihl < 5)) {
-		gstats->ulErrIpHdr++;
-		/*asfFfpSendLog(flow, ASF_LOG_ID_SHORT_IP_HDR, ulHashVal);
-		TODO: there's no flow pointer */
-		goto drop_pkt;
+	if (unlikely(iph->ihl != 5)) {
+		if (likely(iph->ihl > 5)) {
+			XGSTATS_INC(IpOptPkts);
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+			if (asf_process_ip_options(skb, skb->dev, iph) < 0) {
+				gstats->ulErrIpHdr++;
+				XGSTATS_INC(IpOptProcFail);
+				goto drop_pkt;
+			}
+#endif
+		} else {
+		/* IP Header Length is < 5... PKT HDR ERROR */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+			gstats->ulErrIpHdr++;
+#endif
+			/*asfFfpSendLog(flow,
+			  ASF_LOG_ID_SHORT_IP_HDR,ulHashVal);
+			TODO: there's no flow pointer */
+			goto drop_pkt;
+		}
 	}
 
 	len = ntohs(iph->tot_len);
 	if (unlikely((skb->len < (len + x_hh_len)) || (len < (iph->ihl*4)))) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulErrIpHdr++;
+#endif
 		goto drop_pkt;
 	}
 
-	if (unlikely(iph->ihl > 5)) {
-		XGSTATS_INC(IpOptPkts);
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-		if (asf_process_ip_options(skb, skb->dev, iph) < 0)
-#endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
-		{
-			gstats->ulErrIpHdr++;
-			XGSTATS_INC(IpOptProcFail);
-			goto drop_pkt;
-		}
-	}
 	/* If in Forwarding Mode , send packet to
 	   FWD module for further processing */
-	if ((asf_vsg_info[anDev->ulVSGId]->curMode == fwdMode)
-			&& asf_fwd_func_on) {
+	if (asf_fwd_func_on &&
+		(asf_vsg_info[anDev->ulVSGId]->curMode == fwdMode)) {
+
 		/* Checksum verification will be done by eTSEC.*/
 		abuf.nativeBuffer = skb;
 		pFwdProcessPkt(anDev->ulVSGId, anDev->ulCommonInterfaceId,
@@ -994,7 +1005,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 			}
 		}
 	}
-#else
+
 	if (ip_fast_csum((u8 *)iph, iph->ihl)) {
 		gstats->ulErrCsum++;
 		XGSTATS_INC(LocalBadCsum);
@@ -1054,7 +1065,9 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	vstats = asfPerCpuPtr(asf_vsg_stats, smp_processor_id()) + anDev->ulVSGId;
+#endif
 
 	abuf.nativeBuffer = skb;
 	ASFFFPProcessAndSendPkt(anDev->ulVSGId,
@@ -1074,7 +1087,9 @@ iface_not_found:
 ret_pkt:
 	/* no frag list expected */
 	netif_receive_skb(skb);
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	gstats->ulPktsToFNP++;
+#endif
 	ASF_RCU_READ_UNLOCK(bLockFlag);
 	return AS_FP_STOLEN;
 
@@ -1102,36 +1117,38 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 				     /* pass this to VPN In Hook */
 				   )
 {
-	struct iphdr	    *iph;
-	unsigned long int       ports;
-	ffp_flow_t	      *flow;
-	ASFFFPFlowStats_t       *flow_stats;
-	unsigned long	   ulHashVal, ulLogId;
-	unsigned int	    curTime;
-	int		     bL2blobRefresh = 0, bSpecialIndication = 0, bFlowValidate = 0;
-	unsigned int	    ulTcpState;
-	unsigned int	    trhlen;
-	unsigned int	    iphlen, fragCnt;
+	struct iphdr		*iph;
+	ffp_flow_t		*flow;
+	unsigned long		ulHashVal;
+	unsigned int		trhlen;
+	unsigned int		iphlen;
+	unsigned short int      *q;
+	int			bL2blobRefresh = 0;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	int			bSpecialIndication = 0,
+				bFlowValidate = 0;
+	unsigned int		ulTcpState;
+	unsigned int		fragCnt;
+	asf_vsg_info_t		*vsgInfo;
 	ASFFFPGlobalStats_t     *gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
 	ASFFFPVsgStats_t	*vstats;
-	unsigned short int      *q;
+	ASFFFPFlowStats_t	*flow_stats;
+	unsigned long		ulOrgSeqNum, ulOrgAckNum, ulLogId;
+	int			iRetVal;
+	struct tcphdr		*ptcph;
+#endif
+	int			tot_len;
 	unsigned long int       *ptrhdrOffset;
-	unsigned long	   ulZoneId;
-	unsigned long	   ulOrgSeqNum, ulOrgAckNum;
-	int		     bLockFlag;
-	int		     iRetVal, tot_len;
-	struct sk_buff	  *skb;
+	unsigned long		ulZoneId;
+	struct sk_buff		*skb;
 	ASFNetDevEntry_t	*anDev;
-	struct tcphdr	   *ptcph;
-	asf_vsg_info_t	  *vsgInfo;
-	int		     do_ret_pkt = 0;
 	ACCESS_XGSTATS();
 
-	skb = (struct sk_buff *)  Buffer.nativeBuffer;
+	skb = (struct sk_buff *) Buffer.nativeBuffer;
 
 	anDev = ASFCiiToNetDev(ulCommonInterfaceId);
 
-	if (unlikely(!anDev)) {
+	if (NULL == anDev) {
 		asf_debug("CII %u doesn't appear to be valid\n", ulCommonInterfaceId);
 		dev_kfree_skb_any(skb);	/* FIXME: Use pFreeFn function ? */
 		return;
@@ -1140,13 +1157,11 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 	ulZoneId = anDev->ulZoneId;
 
 	/* TODO: review check for skb->len before directly accessing data */
-
-	ASF_RCU_READ_LOCK(bLockFlag);
-
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	vstats = asfPerCpuPtr(asf_vsg_stats, smp_processor_id()) + ulVsgId;
-	iph = ip_hdr(skb);
-
 	vstats->ulInPkts++;
+#endif
+	iph = ip_hdr(skb);
 
 
 #ifdef ASF_IPSEC_FP_SUPPORT
@@ -1156,7 +1171,9 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 	/* Needed to verify checksum of the packet recieved in tunnel */
 	if (pIpsecOpaque) {
 		if (unlikely(iph->ihl < 5)) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpHdr++;
+#endif
 			dev_kfree_skb_any(skb);	/* FIXME: Use pFreeFn function ? */
 			return;
 		}
@@ -1171,13 +1188,17 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 		/* Do ip header length checks if the packet is received thru IPsec */
 		tot_len = ntohs(iph->tot_len);
 		if (unlikely((skb->len < tot_len) || (tot_len < (iph->ihl*4)))) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpHdr++;
+#endif
 			goto drop_pkt;
 		}
 
 		XGSTATS_INC(LocalCsumVerify);
 		if (ip_fast_csum((u8 *)iph, iph->ihl)) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrCsum++;
+#endif
 			XGSTATS_INC(LocalBadCsum);
 			asf_warn("Ip Checksum verification failed \r\n");
 			goto drop_pkt;
@@ -1202,7 +1223,6 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 				asf_debug("IPSEC must consume non UDP&TCP"\
 					" packet!!!! ERROR!!!\n");
 			}
-			ASF_RCU_READ_UNLOCK(bLockFlag);
 			return;	/* FIXME: review! */
 		}
 	}
@@ -1219,7 +1239,6 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 		skb = asfIpv4Defrag(ulVsgId, skb, NULL, NULL, NULL, &fragCnt);
 		if (!(skb)) {
 			asf_debug("Skb absorbed for re-assembly \r\n");
-			ASF_RCU_READ_UNLOCK(bLockFlag);
 			return;
 		}
 		asf_display_frags(skb, "After Defrag");
@@ -1240,7 +1259,9 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			if (iRetVal) {
 				/* Failure */
 				asf_debug("Could not pull in the UDP or TCP header\r\n");
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;
+#endif
 				goto drop_pkt;
 			}
 			/* TBD */
@@ -1251,58 +1272,57 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 	}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
-	iphlen = iph->ihl*4;
+	iphlen = iph->ihl * 4;
 	ptrhdrOffset = (unsigned long int *)(((unsigned char *) iph) + iphlen);
-	ports = *ptrhdrOffset;
 
-	flow = asf_ffp_flow_lookup(iph->saddr, iph->daddr, ports, ulVsgId, ulZoneId, iph->protocol, &ulHashVal);
-
-#if ASF_DEBUG
+	flow = asf_ffp_flow_lookup(iph->saddr, iph->daddr,
+					*ptrhdrOffset/* ports*/, ulVsgId,
+					ulZoneId, iph->protocol, &ulHashVal);
+#ifdef ASF_DEBUG
 	asf_debug("ASF: %s Hash(%d.%d.%d.%d, %d.%d.%d.%d, 0x%lx, %d, %d)"\
 		" = %lx (hindex %lx) (hini 0x%lx) => %s\n",
 		skb->dev->name,
-		NIPQUAD(iph->saddr), NIPQUAD(iph->daddr), ports, ulVsgId,
-		ulZoneId, ulHashVal, FFP_HINDEX(ulHashVal),
+		NIPQUAD(iph->saddr), NIPQUAD(iph->daddr), *ptrhdrOffset,
+		ulVsgId, ulZoneId, ulHashVal, FFP_HINDEX(ulHashVal),
 		asf_ffp_hash_init_value, flow ? "FOUND" : "NOT FOUND");
 #endif
 
-	if (flow) {
-		/* TODO: ensure SecurityZone of all fragments to be same */
-		gstats->ulInPktFlowMatches++;
-		vstats->ulInPktFlowMatches++;
-		/* general purpose flag. This gets set when TCP connection is
-		 * completed and we are waiting for FNP to delete flows. The
-		 * same can be used by L2 firewall later */
-
-		if (flow->bDrop) {
-			XGSTATS_INC(bDropPkts);
-			asf_debug("dropping packet as bDrop is set\n");
-			goto drop_pkt;
-		}
-
-	}
 #ifdef ASF_IPSEC_FP_SUPPORT
 	if (pIpsecOpaque /*&& pFFPIpsecInVerifyV4 */) {
 		if (pFFPIpsecInVerifyV4(ulVsgId, skb,
 			anDev->ulCommonInterfaceId,
 			(flow && flow->bIPsecIn) ? &flow->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
-			ASF_RCU_READ_UNLOCK(bLockFlag);
 			return;	/* FIXME: review! */
 		}
 	}
 #endif
 
-	if ((flow) && (iph->ttl > 1)) {
+	if (flow && (iph->ttl > 1)) {
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+		gstats->ulInPktFlowMatches++;
+		vstats->ulInPktFlowMatches++;
 		XGSTATS_INC(Condition1);
+
 		flow_stats = &flow->stats;
+#endif
+		/* general purpose flag. This gets set when TCP connection is
+		 * completed and we are waiting for FNP to delete flows. The
+		 * same can be used by L2 firewall later */
+		if (flow->bDrop) {
+			XGSTATS_INC(bDropPkts);
+			asf_debug("dropping packet as bDrop is set\n");
+			goto drop_pkt;
+		}
+
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		vsgInfo = asf_ffp_get_vsg_info_node(ulVsgId);
 		if (vsgInfo) {
 			if (vsgInfo->configIdentity.ulConfigMagicNumber > flow->configIdentity.ulConfigMagicNumber)
 				bFlowValidate = 1;
 		}
-
+#endif
 		q = (unsigned short *)  ptrhdrOffset;
 		if (iph->protocol == IPPROTO_UDP) {
 			XGSTATS_INC(UdpPkts);
@@ -1310,15 +1330,20 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			printk("UDP: skb->len %d iph->tot_len %u iphlen %d" \
 				"udph->len %d\n", skb->len, iph->tot_len,
 				iphlen, ntohs(*(q + 2))); */
-			if (((iph->tot_len-iphlen) < 8) ||  (ntohs(*(q + 2)) >  (iph->tot_len-iphlen))) {
+			if (((iph->tot_len-iphlen) < 8) ||
+				(ntohs(*(q + 2)) > (iph->tot_len-iphlen))) {
 				/* Udp header length is invalid */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;
+#endif
 				asfFfpSendLog(flow, ASF_LOG_ID_INVALID_UDP_HDRLEN, ulHashVal);
 				goto drop_pkt;
 			}
 		} else if (iph->protocol == IPPROTO_TCP) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			int     optlen, tcp_data_len;
 			ffp_flow_t      *oth_flow;
+#endif
 
 			XGSTATS_INC(TcpPkts);
 			trhlen = ((*(ptrhdrOffset + 3) & 0xf0000000) >> 28) * 4;
@@ -1328,7 +1353,9 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			*/
 			if (((ntohs(iph->tot_len)-iphlen) < trhlen) || ((iph->tot_len-iphlen) < trhlen)) {
 				/* Need to add code for TCP */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;
+#endif
 				XGSTATS_INC(TcpHdrLenErr);
 				asfFfpSendLog(flow, ASF_LOG_ID_INVALID_TCP_HDRLEN, ulHashVal);
 				goto drop_pkt;
@@ -1399,16 +1426,18 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			asf_debug_l2("TCP state processing is done!\n");
 		}
-		curTime = jiffies;
-		flow_stats->ulInPkts++;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+		flow_stats->ulInPkts++;
+#if 0
+/* Only timer based L2 blob refresh  is supported in current release */
 		if (asf_l2blob_refresh_npkts &&
 			(flow_stats->ulInPkts % asf_l2blob_refresh_npkts) == 0) {
 			asf_debug_l2("Decided to send L2Blob refresh ind based on npkts\n");
 			bL2blobRefresh = 1;
 		}
+#endif
+		flow->ulLastPktInAt = jiffies;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
-		flow->ulLastPktInAt = curTime;
 
 #ifdef ASF_IPSEC_FP_SUPPORT
 		if (pFFPIPSecOutv4) {
@@ -1420,14 +1449,13 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 		}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
 
-		if (unlikely (flow->l2blob_len == 0)) {
+		if ((flow->l2blob_len == 0)) {
 			asf_debug("Generating L2blob Indication as Blank L2blob found!\n");
 			bL2blobRefresh = 1;
-			do_ret_pkt = 1;
 			goto gen_indications;
 		}
 
-		if (!netif_queue_stopped(flow->odev)) {
+		if (0 == netif_queue_stopped(flow->odev)) {
 			asf_debug_l2("attempting to xmit the packet\n");
 			/*skb_set_network_header(skb, hh_len); */
 
@@ -1579,18 +1607,22 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 						asf_debug("Transmitting  buffer = 0x%x dev->index = %d\r\n",
 							  pSkb, pSkb->dev->ifindex);
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 						gstats->ulOutBytes += pSkb->len;
 						flow_stats->ulOutBytes += pSkb->len;
 						vstats->ulOutBytes += pSkb->len;
+#endif
 						if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 							asf_debug("Error in transmit: Should not happen\r\n");
 							kfree_skb(pSkb);
 						}
 
 					}
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 					gstats->ulOutPkts += ulFrags;
 					vstats->ulOutPkts += ulFrags;
 					flow_stats->ulOutPkts += ulFrags;
+#endif
 				} else {
 					printk("asfcore.c:%d - asfIpv4Fragment returned NULL!!\n", __LINE__);
 				}
@@ -1598,16 +1630,16 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			XGSTATS_INC(NormalXmit);
-			asf_debug_l2("attempting to xmit non fragment packet\n");
-			skb->dev = flow->odev;
 			asf_debug_l2("decreasing TTL\n");
 			ip_decrease_ttl(iph);
 
+			asf_debug_l2("attempting to xmit non"
+						" fragment packet\n");
+			skb->dev = flow->odev;
 			/* FIXME: ensure there's enough head room for flow->l2blob_len */
 			/* Update the MAC address information */
-			skb->data -= flow->l2blob_len;
 			skb->len += flow->l2blob_len;
-
+			skb->data -= flow->l2blob_len;
 			asf_debug_l2("copy l2blob to packet (blob_len %d)\n",
 				flow->l2blob_len);
 			asfCopyWords((unsigned int *)skb->data,
@@ -1626,24 +1658,28 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 				skb->vlan_tci = flow->tx_vlan_id;
 			else
 				skb->vlan_tci = 0;
-
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutBytes += skb->len;
 			flow_stats->ulOutBytes += skb->len;
 			vstats->ulOutBytes += skb->len;
+#endif
 
 			asf_debug_l2("invoke hard_start_xmit skb-packet (blob_len %d)\n", flow->l2blob_len);
-			if (asfDevHardXmit(skb->dev, skb) != 0) {
+			if (asfDevHardXmit(skb->dev, skb)) {
 				XGSTATS_INC(DevXmitErr);
 				asf_debug("Error in transmit: may happen as we don't check for gfar free desc\n");
 				kfree_skb(skb);
 			}
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutPkts++;
 			vstats->ulOutPkts++;
 			flow_stats->ulOutPkts++;
+#endif
 
 			gen_indications:
 			/* skip all other indications if flow_end indication is going to be sent */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (bSpecialIndication) {
 				/*XGSTATS_INC(FlowSpecialInd);*/
 				 /* TODO: must always be present? */
@@ -1682,9 +1718,8 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 					ffpCbFns.pFnFlowTcpSpecialPkts(ulVsgId, &ind);
 				}
 			}
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			/* TODO: FlowValidate indicaion? */
-			if (unlikely(bFlowValidate)) {
+			if (bFlowValidate) {
 				if (!flow->bDeleted && ffpCbFns.pFnFlowValidate) {
 					ASFFFPFlowValidateCbInfo_t  ind;
 
@@ -1703,8 +1738,9 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 					ffpCbFns.pFnFlowValidate(ulVsgId, &ind);
 				}
 			}
+#endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
-			if (unlikely(bL2blobRefresh)) {
+			if (bL2blobRefresh) {
 				if (!flow->bDeleted && ffpCbFns.pFnFlowRefreshL2Blob) {
 					ASFFFPFlowL2BlobRefreshCbInfo_t  ind;
 
@@ -1737,17 +1773,16 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 					XGSTATS_INC(PktCtxL2blobInd);
 					ffpCbFns.pFnFlowRefreshL2Blob(ulVsgId, &ind);
 				}
-				if (do_ret_pkt)
-					goto ret_pkt_to_stk;
+				goto ret_pkt_to_stk;
 			}
-#endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
-			ASF_RCU_READ_UNLOCK(bLockFlag);
 			return;
 		} else {
 			XGSTATS_INC(NetIfQStopped);
 			/* drop the packet here */
 			/* TODO: incr some error counter */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			flow_stats->ulInPkts--;
+#endif
 			goto drop_pkt;
 		}
 	} else {
@@ -1757,14 +1792,13 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			flow, iph->version, skb->data[0] & 0x01, iph->ttl);
 
 		if (flow) {
-			if (iph->ttl <= 1) {
-				gstats->ulErrTTL++;
-				goto drop_pkt;
-			}
-			/* TODO: any other conditions possible here??
-			 */
+			/* If Flow exist then only case left is TTL <= 1,
+			So not check is required */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+			gstats->ulErrTTL++;
+#endif
 			goto drop_pkt;
-		}
+		} /* Else continue with return packet to stack */
 		asf_debug_l2("defaulting to ret_pkt_to_stk code in else case");
 	}
 	/* continue with ret_pkt_to_stk labelled code */
@@ -1772,10 +1806,11 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 ret_pkt_to_stk:
 	asf_debug_l2("ret_pkt_to_stk LABEL\n");
 	if (skb_shinfo(skb)->frag_list) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulPktsToFNP++;
+#endif
 		/*TODO: count frags */
 		asfAdjustFragAndSendUp(skb, anDev);
-		ASF_RCU_READ_UNLOCK(bLockFlag);
 		return;
 	}
 	/* proceed with ret_pkt labelled code for non-frag pkt */
@@ -1785,7 +1820,9 @@ ret_pkt:
 		ASFBuffer_t	abuf;
 
 		abuf.nativeBuffer = skb;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulPktsToFNP++;
+#endif
 		ffpCbFns.pFnNoFlowFound(anDev->ulVSGId,
 			anDev->ulCommonInterfaceId, anDev->ulZoneId,
 			abuf, ASF_SKB_FREE_FUNC, skb);
@@ -1832,10 +1869,11 @@ ret_pkt:
 		}
 		skb_set_mac_header(skb, -ETH_HLEN);
 		skb->mac_len = ETH_HLEN;
-		ASF_RCU_READ_UNLOCK(bLockFlag);
 	}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	gstats->ulPktsToFNP++;
+#endif
 	asf_debug_l2("  ret_pkt LABEL -- calling netif_receive_skb!\n");
 	netif_receive_skb(skb);
 	asf_debug_l2("  ret_pkt LABEL -- returning from function!\n");
@@ -1845,7 +1883,6 @@ ret_pkt:
 drop_pkt:
 	asf_debug_l2("drop_pkt LABEL\n");
 	/* TODO: we may have to iterate through frag_list and free all of them*/
-	ASF_RCU_READ_UNLOCK(bLockFlag);
 	/* TODO: ensure all fragments are also dropped. and return STOLEN
 	 always return stolen?? */
 	dev_kfree_skb_any(skb);	/*FIXME: what about pFreeFn ? */

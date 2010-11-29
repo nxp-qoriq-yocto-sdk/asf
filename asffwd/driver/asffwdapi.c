@@ -255,18 +255,16 @@ static inline fwd_cache_t *asf_fwd_entry_lookup(
 	unsigned long vsg, unsigned long *pHashVal)
 {
 	fwd_cache_t *Cache, *pHead;
-	unsigned long ulHashVal;
 #ifdef ASF_DEBUG
 	unsigned long ulCount = 0;
 #endif
 
-	ulHashVal = ASFFWDComputeFlowHash(sip, dip, dscp, vsg,
+	*pHashVal = ASFFWDComputeFlowHash(sip, dip, dscp, vsg,
 					asf_fwd_hash_init_value);
-	*pHashVal = ulHashVal;
 	asf_print("ASF: Hash(0x%lx, 0x%lx, 0x%x, 0x%lx)"
-			" = %lx \n", sip, dip, dscp, vsg, ulHashVal);
+			" = %lx \n", sip, dip, dscp, vsg, *pHashVal);
 
-	pHead = (fwd_cache_t *) asf_fwd_bucket_by_hash(ulHashVal);
+	pHead = (fwd_cache_t *) asf_fwd_bucket_by_hash(*pHashVal);
 
 	for (Cache = pHead->pNext; Cache != pHead; Cache = Cache->pNext) {
 		if (
@@ -282,7 +280,7 @@ static inline fwd_cache_t *asf_fwd_entry_lookup(
 		if (ulCount >= SEARCH_MAX_PER_BUCKET) {
 			asf_print("Max (%d) scanned in bucket for"
 					" hashVal(%ld) ... aborting search!\n",
-					SEARCH_MAX_PER_BUCKET, ulHashVal);
+					SEARCH_MAX_PER_BUCKET, *pHashVal);
 			return NULL;
 		}
 #endif
@@ -403,21 +401,21 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 				ASF_void_t	*freeArg)
 {
 	fwd_cache_t		*Cache;
-	ASFFWDCacheEntryStats_t	*cache_stats;
 	unsigned long		ulHashVal;
 	int			bL2blobRefresh = 0;
-	int			bLockFlag;
 	struct sk_buff		*skb ;
 	struct iphdr		*iph ;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	ASFFFPGlobalStats_t	*gstats;
 	ASFFFPVsgStats_t	*vstats;
+	ASFFWDCacheEntryStats_t	*cache_stats;
 
-	ASF_RCU_READ_LOCK(bLockFlag);
 
 	gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
 	vstats = asfPerCpuPtr(asf_vsg_stats, smp_processor_id())
 							+ ulVsgId;
 	vstats->ulInPkts++;
+#endif
 
 	skb = (struct sk_buff *) Buffer.nativeBuffer;
 	iph = ip_hdr(skb);
@@ -429,7 +427,7 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 		skb->dev->name, NIPQUAD(iph->saddr), NIPQUAD(iph->daddr),
 			iph->tos, ulVsgId, ulHashVal, Cache, Cache ?
 						"FOUND" : "NOT FOUND");
-	if (unlikely(!Cache)) {
+	if (unlikely(NULL == Cache)) {
 		if (fwdCbFns.pFnCacheEntryNotFound) {
 			ASFBuffer_t		abuf;
 			ASFNetDevEntry_t	*anDev;
@@ -446,6 +444,7 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 	}
 
 	if (likely(iph->ttl > 1)) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulInPktFlowMatches++;
 		vstats->ulInPktFlowMatches++;
 
@@ -453,7 +452,7 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 		cache_stats->ulInPkts++;
 		cache_stats->ulInBytes += (skb->mac_len + skb->len);
 #if 0
-/* Only timer based L2 blob refresh  is supported in current releas*/
+/* Only timer based L2 blob refresh  is supported in current release */
 		if (fwd_l2blob_refresh_npkts
 		&& ((cache_stats->ulInPkts % fwd_l2blob_refresh_npkts) == 0)) {
 			asf_print("Decided to send L2Blob "
@@ -461,7 +460,6 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 			bL2blobRefresh = 1;
 		}
 #endif
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		/* Mark the Cache as most recently used in aging list */
 		if (fwd_aging_enable) {
 			int processor_id = smp_processor_id();
@@ -497,9 +495,10 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 					fwd_aging_table[processor_id]
 							[ulVsgId].pTail);
 			}
+			Cache->ulLastPktInAt = jiffies;
 		}
 #endif
-		if (unlikely(Cache->l2blob_len == 0)) {
+		if (Cache->l2blob_len == 0) {
 			asf_warn("Generating L2blob Indication"
 					" as Blank L2blob found!\n");
 			bL2blobRefresh = 1;
@@ -507,9 +506,7 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 		}
 		asf_print("L2blob Info found! out dev %p\n", Cache->odev);
 
-		Cache->ulLastPktInAt = jiffies;
-
-		if (!netif_queue_stopped(Cache->odev)) {
+		if (0 == netif_queue_stopped(Cache->odev)) {
 			asf_print("attempting to xmit the packet\n");
 			asf_print("----------------------------------------\n");
 			asf_print("len = %d,  data_len = %d, mac_len = %d, "
@@ -525,26 +522,26 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 
 			/* Cache->l2blob_len > 0 && Cache->odev != NULL
 			from this point onwards */
-			if ((((skb->len + Cache->l2blob_len) >
-				(Cache->odev->mtu + ETH_HLEN)) &&
-				(skb->len > Cache->pmtu)) ||
+			if ((((skb->len > Cache->pmtu) &&
+				(skb->len + Cache->l2blob_len) >
+				(Cache->odev->mtu + ETH_HLEN))) ||
 				(skb_shinfo(skb)->frag_list)) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				/* Fragmentation Needed, so do it */
 				asfFragmentAndSendPkt(Cache, skb, iph,
 						cache_stats, gstats, vstats);
+#endif
 				goto gen_indications;
 			}
 
-			asf_print("attempting to xmit non fragment packet\n");
-			skb->dev = Cache->odev;
 			asf_print("decreasing TTL\n");
 			ip_decrease_ttl(iph);
-
+			asf_print("attempting to xmit non fragment packet\n");
+			skb->dev = Cache->odev;
 			/* Ensure there's enough head room for l2blob_len */
 			/* Update the MAC address information */
-			skb->data -= Cache->l2blob_len;
 			skb->len += Cache->l2blob_len;
-
+			skb->data -= Cache->l2blob_len;
 			asf_print("copy l2blob to packet (blob_len %d)\n",
 							Cache->l2blob_len);
 			asfCopyWords((unsigned int *)skb->data,
@@ -554,23 +551,23 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 			skb->pkt_type = PACKET_FASTROUTE;
 			skb->asf = 1;
 
-			gstats->ulOutBytes += skb->len;
-			vstats->ulOutBytes += skb->len;
-			cache_stats->ulOutBytes += skb->len;
-
 			asf_print("invoke hard_start_xmit skb-packet"
 					" (blob_len %d)\n", Cache->l2blob_len);
-			if (asfDevHardXmit(skb->dev, skb) != 0) {
+			if (0 != asfDevHardXmit(skb->dev, skb)) {
 				asf_err("Error in transmit: may happen as "
 					"we don't check for gfar free desc\n");
 				kfree_skb(skb);
 			}
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+			gstats->ulOutBytes += skb->len;
+			vstats->ulOutBytes += skb->len;
+			cache_stats->ulOutBytes += skb->len;
 
 			gstats->ulOutPkts++;
 			vstats->ulOutPkts++;
 			cache_stats->ulOutPkts++;
+#endif
 
-			ASF_RCU_READ_UNLOCK(bLockFlag);
 			return;
 
 gen_indications:
@@ -600,27 +597,33 @@ gen_indications:
 				goto ret_pkt_to_stk;
 			}
 #endif
-			ASF_RCU_READ_UNLOCK(bLockFlag);
 			return;
 		} else {
 			/* drop the packet here */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			cache_stats->ulInPkts--;
+#endif
 			goto drop_pkt;
 		}
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	} else
 		gstats->ulErrTTL++;
+#else
+	} /* End of if (likely(iph->ttl > 1)) */
+#endif
+
 	/* Return to Slow path for further handling */
 ret_pkt_to_stk:
 	netif_receive_skb(skb);
 
 exit:
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	gstats->ulPktsToFNP++;
-	ASF_RCU_READ_UNLOCK(bLockFlag);
+#endif
 	return;
 
 drop_pkt:
 	asf_print("drop_pkt LABEL\n");
-	ASF_RCU_READ_UNLOCK(bLockFlag);
 	dev_kfree_skb_any(skb);
 	return;
 }
