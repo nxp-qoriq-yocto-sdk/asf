@@ -161,8 +161,9 @@ ASF_void_t ASFIPSecConfig(ASF_uint32_t   ulVSGId,
 					ASF_IPSEC_INVALID_MAGIC_NUMBER);
 				return;
 			}
-			SPDParams.bOnlySaPerDSCP = 0;
-
+			if (pAddSPDContainer->pSPDParams &&
+			pAddSPDContainer->pSPDParams->dscpRange)
+					SPDParams.bOnlySaPerDSCP = 1;
 
 			ret = secfp_SPDOutContainerCreate(ulVSGId,
 					pAddSPDContainer->ulTunnelId,

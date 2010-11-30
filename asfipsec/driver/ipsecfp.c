@@ -3902,7 +3902,7 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 static inline void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb /*, unsigned char *pOrgEthHdr */)
 {
 	struct iphdr *iph;
-	u32 ecn, check;
+	u32 tos;
 
 	skb_reset_network_header(pHeadSkb);
 
@@ -3918,30 +3918,11 @@ static inline void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb /*, un
 	/* ECN Handling*/
 	if ((pHeadSkb->cb[SECFP_UPDATE_TOS_INDEX]) &&
 		(pHeadSkb->cb[SECFP_TOS_INDEX] & SECFP_ECN_ECT_CE) &&
-		!(pHeadSkb->data[1] & SECFP_ECN_ECT_CE)) {
-
-		ecn = (pHeadSkb->data[1] + 1) & SECFP_ECN_ECT_CE;
-		/*
-		 * After the last operation we have (in binary):
-		 * INET_ECN_NOT_ECT => 01
-		 * INET_ECN_ECT_1   => 10
-		 * INET_ECN_ECT_0   => 11
-		 * INET_ECN_CE	    => 00
-		 */
-		if (!(ecn & 2))
-			return;
-
+		!(iph->tos & SECFP_ECN_ECT_CE)) {
+		tos = iph->tos | SECFP_ECN_ECT_CE;
 		ASFIPSEC_DEBUG("doing incremntal checksum here");
-
-		check = (__force u32)iph->check;
-		/*
-		 * The following gives us:
-		 * INET_ECN_ECT_1 => check += htons(0xFFFD)
-		 * INET_ECN_ECT_0 => check += htons(0xFFFE)
-		 */
-		check += (__force u16)htons(0xFFFB) + (__force u16)htons(ecn);
-		iph->check = (__force __sum16)(check + (check >= 0xFFFF));
-		pHeadSkb->data[1] |= SECFP_ECN_ECT_CE;
+		csum_replace4(&iph->check, iph->tos, tos);
+		iph->tos = tos;
 	}
 }
 
@@ -6575,9 +6556,12 @@ unsigned int secfp_createOutSA(
 unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 				 ASFIPSecRuntimeModOutSAArgs_t *pModSA)
 {
-	outSA_t *pOutSA;
+	outSA_t *pOutSA = NULL;
 	SPDOutContainer_t *pOutContainer;
 	SPDOutSALinkNode_t *pOutSALinkNode;
+	unsigned  short usDscpStart = 0;
+	unsigned  short usDscpEnd = SECFP_MAX_DSCP_SA - 1;
+	int ii;
 	int bVal = in_softirq();
 
 	if (!bVal)
@@ -6588,8 +6572,18 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 
 	if (pOutContainer) {
 		if (pOutContainer->SPDParams.bOnlySaPerDSCP) {
-			pOutSA = NULL;
-			/* Needs to handle */
+			for (ii = usDscpStart; ii < usDscpEnd; ii++) {
+				if (pOutContainer->SAHolder.ulSAIndex[ii] != ulMaxSupportedIPSecSAs_g) {
+					/* DSCP Index has already an SA, so compare the SPI values */
+					pOutSA = (outSA_t *)ptrIArray_getData(
+						&secFP_OutSATable,
+						pOutContainer->SAHolder.ulSAIndex[ii]);
+					if (pModSA->ulSPI == pOutSA->SAParams.ulSPI)
+						break;
+					else
+						pOutSA = NULL;
+				}
+			}
 		} else {
 			pOutSALinkNode = secfp_findOutSALinkNode(pOutContainer, pModSA->DestAddr.ipv4addr,
 								 pModSA->ucProtocol, pModSA->ulSPI);

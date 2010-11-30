@@ -517,7 +517,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
-	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_OFF;
+	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 
 	if (xfrm->lft.hard_use_expires_seconds != XFRM_INF) {
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_ON;
@@ -700,7 +700,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.bRedSideFragment = ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 			ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
-	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_OFF;
+	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 
 	if (xfrm->lft.hard_use_expires_seconds != XFRM_INF) {
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_ON;
