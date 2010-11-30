@@ -932,6 +932,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		goto drop_pkt;
 	}
 
+#ifdef ASF_FWD_FP_SUPPORT
 	/* If in Forwarding Mode , send packet to
 	   FWD module for further processing */
 	if (asf_fwd_func_on &&
@@ -944,7 +945,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		ASF_RCU_READ_UNLOCK(bLockFlag);
 		return AS_FP_STOLEN;
 	}
-
+#endif
 	if (unlikely((iph->protocol != IPPROTO_TCP)
 		&& (iph->protocol != IPPROTO_UDP)
 #ifdef ASF_IPSEC_FP_SUPPORT
@@ -3440,10 +3441,11 @@ ASF_uint32_t ASFSetVSGMode(ASF_uint32_t ulVSGId, ASF_Modes_t  mode)
 
 	} else {
 		/* cleanup all fwd flows */
+#ifdef ASF_FWD_FP_SUPPORT
 		if (vsg_info->curMode == fwdMode)
 			if (pFwdCleanVsg)
 				pFwdCleanVsg(ulVSGId);
-
+#endif
 		vsg_info->curMode = fwMode;
 	}
 

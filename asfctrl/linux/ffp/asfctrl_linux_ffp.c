@@ -415,7 +415,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		cmd1.flow1.tuple.usDestPort = orig_dport;
 		cmd1.flow1.tuple.usSrcPort = orig_sport;
 
-
+#ifdef ASFCTRL_IPSEC_FP_SUPPORT
 		if (fn_ipsec_get_flow4) {
 			memset(&fl_out, 0, sizeof(fl_out));
 			fl_out.fl_ip_sport = orig_sport;
@@ -430,7 +430,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
 				&(cmd1.flow1.ipsecInInfo), net, fl_out);
 		}
-
+#endif
 		cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
 		cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
 		cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;

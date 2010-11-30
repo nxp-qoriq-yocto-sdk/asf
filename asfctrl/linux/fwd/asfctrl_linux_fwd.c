@@ -229,9 +229,6 @@ ASF_void_t asfctrl_fwd_l2blob_update_fn(struct sk_buff *skb,
 	struct iphdr		*iph;
 	int err = ASFFWD_RESPONSE_FAILURE;
 
-	if (hh_len > ASF_MAX_L2BLOB_LEN)
-		return;
-
 	iph = (struct iphdr *)(skb->data+hh_len);
 	ASFCTRL_INFO("L2 Blob Indication:--------------\n");
 

@@ -103,7 +103,7 @@ ASF_void_t ASFIPSecConfig(ASF_uint32_t   ulVSGId,
 
 	/* Validate input parameters */
 	if (pArgs == NULL) {
-		ASFIPSEC_DEBUG("Input argument is null\r\n");
+		ASFIPSEC_DEBUG("Input argument is null");
 		return ;
 	}
 
@@ -181,7 +181,7 @@ ASF_void_t ASFIPSecConfig(ASF_uint32_t   ulVSGId,
 					SECFP_SUCCESS, pReqIdentifier,
 					ulReqIdentifierlen, 0);
 				ASFIPSEC_DEBUG("secfp_SPDOutContainerCreate"\
-					"returned success\r\n");
+					"returned success");
 				return;
 			}
 		}
@@ -233,14 +233,14 @@ ASF_void_t ASFIPSecConfig(ASF_uint32_t   ulVSGId,
 							 pAddSPDContainer->ulMagicNumber,
 							 &SPDParams);
 			if (ret != SECFP_SUCCESS) {
-				ASFIPSEC_DEBUG("secfp_SPDInContainerCreate returned failure - ret = %d\r\n", ret);
+				ASFIPSEC_WARN("secfp_SPDInContainerCreate returned failure - ret = %d\r\n", ret);
 				ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_FAILURE,
 						       pReqIdentifier, ulReqIdentifierlen, ret);
 				return;
 			} else {
 				ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_SUCCESS,
 						       pReqIdentifier, ulReqIdentifierlen, 0);
-				ASFIPSEC_DEBUG("secfp_SPDInContainerCreate returned success\r\n");
+				ASFIPSEC_DEBUG("secfp_SPDInContainerCreate returned success");
 				return;
 			}
 		}
@@ -298,7 +298,7 @@ ASF_void_t ASFIPSecConfig(ASF_uint32_t   ulVSGId,
 			} else {
 				ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_SUCCESS,
 						       pReqIdentifier, ulReqIdentifierlen, 0);
-				ASFIPSEC_DEBUG("secfp_SPDOutContainerDelete returned success\r\n");
+				ASFIPSEC_DEBUG("secfp_SPDOutContainerDelete returned success");
 				return;
 			}
 		}
@@ -361,7 +361,7 @@ ASF_void_t ASFIPSecConfig(ASF_uint32_t   ulVSGId,
 			} else {
 				ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_SUCCESS,
 						       pReqIdentifier, ulReqIdentifierlen, 0);
-				ASFIPSEC_DEBUG("secfp_SPDInContainerDelete returned success\r\n");
+				ASFIPSEC_DEBUG("secfp_SPDInContainerDelete returned success");
 				return;
 			}
 		}
@@ -382,9 +382,10 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			   ASF_void_t    *pReqIdentifier,
 			   ASF_uint32_t   ulReqIdentifierlen)
 {
+	ASFIPSEC_FENTRY;
 	/* Validate input parameters */
 	if (pArgs == NULL) {
-		ASFIPSEC_DEBUG("Input argument is null\r\n");
+		ASFIPSEC_DEBUG("Input argument is null");
 		return;
 	}
 
@@ -409,21 +410,21 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			SECFP_IS_TUNNEL_ID_INVALID(pAddSA->ulTunnelId)
 			{
 				GlobalErrors.ulInvalidTunnelId++;
-				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n",
+				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u",
 					pAddSA->ulTunnelId);
 				return;
 			}
 
 			if (secfp_copySAParams(pAddSA->pSAParams,
-					       &SAParams) == SECFP_FAILURE) {
-				ASFIPSEC_DEBUG("secfp_copySAParamsFromILPSAParams returned failure\r\n");
+					&SAParams) == SECFP_FAILURE) {
+				ASFIPSEC_WARN("secfp_copySAParams returned failure");
 				return;
 			}
 
 			if (secfp_copySrcAndDestSelSet(&pSrcSel, &pDstSel,
 						       pAddSA->pSASelector,
 						       &ucSelFlag) == SECFP_FAILURE) {
-				ASFIPSEC_DEBUG("secfp_copySrcAndDestSelSetFromILPSelSet returned failure\r\n");
+				ASFIPSEC_WARN("secfp_copySrcAndDestSelSet returned failure");
 				return;
 			}
 
@@ -442,7 +443,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 					      pSrcSel, pDstSel, ucSelFlag, &SAParams,
 					      usDscpStart,
 					      usDscpEnd, pAddSA->pSAParams->ulMtu) != SECFP_SUCCESS) {
-				ASFIPSEC_DEBUG("secfp_createOutSA returned failure\r\n");
+				ASFIPSEC_WARN("secfp_createOutSA returned failure");
 			}
 			secfp_freeSelSet(pSrcSel);
 			secfp_freeSelSet(pDstSel);
@@ -455,19 +456,18 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			SECFP_IS_TUNNEL_ID_INVALID(pDelSA->ulTunnelId)
 			{
 				GlobalErrors.ulInvalidTunnelId++;
-				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n", pDelSA->ulTunnelId);
+				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u", pDelSA->ulTunnelId);
 				return;
 			}
-
 			if (secfp_DeleteOutSA(pDelSA->ulSPDContainerIndex,
-					      pDelSA->ulSPDMagicNumber,
-					      pDelSA->DestAddr.ipv4addr,
-					      pDelSA->ucProtocol,
-					      pDelSA->ulSPI,
-					      pDelSA->usDscpStart,
-					      pDelSA->usDscpEnd) !=
+					pDelSA->ulSPDMagicNumber,
+					pDelSA->DestAddr.ipv4addr,
+					pDelSA->ucProtocol,
+					pDelSA->ulSPI,
+					pDelSA->usDscpStart,
+					pDelSA->usDscpEnd) !=
 						SECFP_SUCCESS) {
-				ASFIPSEC_DEBUG("secfp_DeleteOutSA returned failure\r\n");
+				ASFIPSEC_WARN("secfp_DeleteOutSA returned failure");
 			}
 		}
 		break;
@@ -488,15 +488,15 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 
 			memset(&SAParams, 0, sizeof(SAParams));
 			if (secfp_copySAParams(pAddSA->pSAParams,
-					       &SAParams) == SECFP_FAILURE) {
-				ASFIPSEC_DEBUG("secfp_copySAParams returned failure\r\n");
+					&SAParams) == SECFP_FAILURE) {
+				ASFIPSEC_WARN("secfp_copySAParams returned failure");
 				return;
 			}
 
 			if (secfp_copySrcAndDestSelSet(&pSrcSel, &pDstSel,
 						       pAddSA->pSASelector,
 						       &ucSelFlag) == SECFP_FAILURE) {
-				ASFIPSEC_DEBUG("secfp_copySrcAndDestSelSet returned failure\r\n");
+				ASFIPSEC_WARN("secfp_copySrcAndDestSelSet returned failure");
 				return;
 			}
 
@@ -507,7 +507,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 					     pSrcSel, pDstSel, ucSelFlag, &SAParams,
 					     pAddSA->ulOutSPDContainerIndex,
 					     pAddSA->ulOutSPI) != SECFP_SUCCESS) {
-				ASFIPSEC_DEBUG("secfp_CreateInSA returned failure\r\n");
+				ASFIPSEC_WARN("secfp_CreateInSA returned failure");
 			}
 			secfp_freeSelSet(pSrcSel);
 			secfp_freeSelSet(pDstSel);
@@ -530,7 +530,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 					     pDelSA->DestAddr.ipv4addr,
 					     pDelSA->ucProtocol,
 					     pDelSA->ulSPI) != SECFP_SUCCESS) {
-				ASFIPSEC_DEBUG("secfp_DeleteInSA returned failure\r\n");
+				ASFIPSEC_WARN("secfp_DeleteInSA returned failure");
 			}
 		}
 		break;
@@ -545,7 +545,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 				return;
 			}
 			if (secfp_ModifyOutSA(ulVSGId, pModSA) == SECFP_FAILURE) {
-				ASFIPSEC_DEBUG("secfp_ModifyOutSA returned failure\r\n");
+				ASFIPSEC_WARN("secfp_ModifyOutSA returned failure");
 			}
 		}
 		break;
@@ -560,7 +560,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 				return;
 			}
 			if (secfp_ModifyInSA(ulVSGId, pModSA) != SECFP_SUCCESS) {
-				ASFIPSEC_DEBUG("secfp_ModifyInSA returned failure\r\n");
+				ASFIPSEC_WARN("secfp_ModifyInSA returned failure");
 			}
 		}
 		break;
@@ -576,7 +576,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			}
 
 			if (secfp_SetDPDInSA(ulVSGId, pSetDPD) != SECFP_SUCCESS) {
-				ASFIPSEC_DEBUG("secfp_SetDPD returned failure\r\n");
+				ASFIPSEC_WARN("secfp_SetDPD returned failure");
 			}
 		}
 		break;
@@ -585,6 +585,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			ASFIPSEC_DEBUG("Invalid Command = %d\r\n", cmd);
 		}
 	}
+	ASFIPSEC_FEXIT;
 	return;
 }
 
@@ -636,14 +637,14 @@ ASF_void_t ASFIPSecGetCapabilities(ASFIPSecCap_t *pCap)
 		ASFIPSEC_FEXIT;
 		return;
 	}
-	ASFIPSEC_ERR("Invalid input arguments\r\n");
+	ASFIPSEC_ERR("Invalid input arguments");
 	return;
 }
 
 ASF_void_t  ASFIPSecUpdateVSGMagicNumber(ASFIPSecUpdateVSGMagicNumber_t *pVSGMagicInfo)
 {
 	if (pVSGMagicInfo == NULL) {
-		ASFIPSEC_DEBUG("Input argument is null\r\n");
+		ASFIPSEC_DEBUG("Input argument is null");
 		return;
 	}
 
@@ -660,7 +661,7 @@ ASF_void_t  ASFIPSecUpdateVSGMagicNumber(ASFIPSecUpdateVSGMagicNumber_t *pVSGMag
 ASF_void_t  ASFIPSecUpdateTunnelMagicNumber(ASFIPSecUpdateTunnelMagicNumber_t *pTunnelMagicInfo)
 {
 	if (pTunnelMagicInfo == NULL) {
-		ASFIPSEC_DEBUG("Input argument is null\r\n");
+		ASFIPSEC_DEBUG("Input argument is null");
 		return;
 	}
 
@@ -686,13 +687,13 @@ ASF_void_t  ASFIPSecUpdateTunnelMagicNumber(ASFIPSecUpdateTunnelMagicNumber_t *p
 /* Registering Callback functions */
 ASF_uint32_t ASFIPSecRegisterCallbacks(ASFIPSecCbFn_t *pFnPtr)
 {
-	ASFIPSEC_DEBUG("Entry\r\n");
+	ASFIPSEC_DEBUG("Entry");
 	if (pFnPtr) {
 		ASFIPSecCbFn = *pFnPtr;
-		ASFIPSEC_DEBUG("Exit\r\n");
+		ASFIPSEC_DEBUG("Exit");
 		return SECFP_SUCCESS;
 	}
-	ASFIPSEC_DEBUG("pFnPtr is null\r\n");
+	ASFIPSEC_DEBUG("pFnPtr is null");
 	return SECFP_FAILURE;
 }
 
@@ -1023,7 +1024,7 @@ ASF_void_t ASFIPSecGetFirstNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 	int bVal = in_softirq();
 
 	if ((!pParams->ulNumSPDContainers) || (!pSPDContainers->containerData)) {
-		ASFIPSEC_DEBUG(" Supplied NULL as input \r\n");
+		ASFIPSEC_DEBUG("Supplied NULL as input ");
 		return;
 	}
 
@@ -1088,7 +1089,7 @@ ASF_void_t ASFIPSecGetFirstNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 	spin_unlock(&secfp_TunnelIfaceCIIndexListLock);
 
 	if (ulCount == 0) {
-		ASFIPSEC_DEBUG(" Container list is empty for the given VSG/Tunnel Id \r\n");
+		ASFIPSEC_DEBUG("Container list is empty for the given VSG/Tunnel Id ");
 	}
 	if (!bVal)
 		local_bh_enable();
@@ -1106,7 +1107,7 @@ ASF_void_t  ASFIPSecGetNextNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 	int bVal = in_softirq();
 
 	if ((!pParams->ulNumSPDContainers) || (!pSPDContainers->containerData)) {
-		ASFIPSEC_DEBUG(" Supplied NULL as input \r\n");
+		ASFIPSEC_DEBUG("Supplied NULL as input ");
 		return;
 	}
 
@@ -1179,7 +1180,7 @@ ASF_void_t  ASFIPSecGetNextNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 	spin_unlock(&secfp_TunnelIfaceCIIndexListLock);
 
 	if (ulCount == 0) {
-		ASFIPSEC_DEBUG(" No Containers present in the list after the given container Id in VSG/Tunnel Id \r\n");
+		ASFIPSEC_DEBUG("No Containers present in the list after the given container Id in VSG/Tunnel Id ");
 	}
 
 	if (!bVal)
@@ -1199,7 +1200,7 @@ ASF_void_t ASFGetExactSPDContainers(ASFIPSecGetContainerParams_t   *pParams,
 	int bVal = in_softirq();
 
 	if ((!pParams->ulNumSPDContainers) || (!pSPDContainers->containerData)) {
-		ASFIPSEC_DEBUG(" Supplied NULL as input \r\n");
+		ASFIPSEC_DEBUG("Supplied NULL as input ");
 		return;
 	}
 
@@ -1269,7 +1270,7 @@ ASF_void_t ASFGetExactSPDContainers(ASFIPSecGetContainerParams_t   *pParams,
 	spin_unlock(&secfp_TunnelIfaceCIIndexListLock);
 
 	if (ulCount == 0) {
-		ASFIPSEC_DEBUG(" No Containers present in the list from/after the given container Id in VSG/Tunnel Id \r\n");
+		ASFIPSEC_DEBUG("No Containers present in the list from/after the given container Id in VSG/Tunnel Id ");
 	}
 
 	if (!bVal)
@@ -1369,7 +1370,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 	unsigned int ulHashVal;
 
 	if ((!pSAParams->ulNumSAs) || (!pSAs->SA)) {
-		ASFIPSEC_DEBUG(" Supplied NULL as input \r\n");
+		ASFIPSEC_DEBUG("Supplied NULL as input ");
 		return;
 	}
 
@@ -1402,7 +1403,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 								      pSAParams->SPDContainer.ulContainerId);
 		if (!pOutContainer) {
 			GlobalErrors.ulSPDOutContainerNotFound++;
-			ASFIPSEC_DEBUG("OUT SPDContainer not found\r\n");
+			ASFIPSEC_DEBUG("OUT SPDContainer not found");
 			if (!bVal)
 				local_bh_enable();
 			return;
@@ -1420,7 +1421,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 					pSAs->SA[ulCount].gwAddr.ipv4addr = pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 					pSAs->SA[ulCount].ucProtocol = pOutSA->SAParams.ucProtocol;
 					if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pOutSA->SAParams) == SECFP_FAILURE) {
-						ASFIPSEC_DEBUG("asf_FillSAParams returned failure for Out Container \r\n");
+						ASFIPSEC_DEBUG("asf_FillSAParams returned failure for Out Container ");
 						if (!bVal)
 							local_bh_enable();
 						return;
@@ -1455,7 +1456,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 					pSAs->SA[ulCount].ucProtocol = pOutSA->SAParams.ucProtocol;
 
 					if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pOutSA->SAParams) == SECFP_FAILURE) {
-						ASFIPSEC_DEBUG("asf_FillSAParams returned failure\r\n");
+						ASFIPSEC_DEBUG("asf_FillSAParams returned failure");
 						if (!bVal)
 							local_bh_enable();
 						return;
@@ -1482,7 +1483,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 								    pSAParams->SPDContainer.ulContainerId);
 		if (!pInContainer) {
 			GlobalErrors.ulSPDInContainerNotFound++;
-			ASFIPSEC_DEBUG("IN SPDContainer not found\r\n");
+			ASFIPSEC_DEBUG("IN SPDContainer not found");
 			if (!bVal)
 				local_bh_enable();
 			return;
@@ -1497,7 +1498,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 					pSAs->SA[ulCount].gwAddr.ipv4addr = pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 					pSAs->SA[ulCount].ucProtocol = pInSA->SAParams.ucProtocol;
 					if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pInSA->SAParams) == SECFP_FAILURE) {
-						ASFIPSEC_DEBUG("asf_FillSAParams returned failure for IN SAs \r\n");
+						ASFIPSEC_DEBUG("asf_FillSAParams returned failure for IN SAs ");
 						if (!bVal)
 							local_bh_enable();
 						return;
@@ -1534,7 +1535,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 	ASF_boolean_t  bMark = FALSE;
 
 	if ((!pSAParams->ulNumSAs) || (!pSAs->SA)) {
-		ASFIPSEC_DEBUG(" Supplied NULL as input \r\n");
+		ASFIPSEC_DEBUG("Supplied NULL as input ");
 		return;
 	}
 
@@ -1567,7 +1568,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 								      pSAParams->SPDContainer.ulContainerId);
 		if (!pOutContainer) {
 			GlobalErrors.ulSPDOutContainerNotFound++;
-			ASFIPSEC_DEBUG("OUT SPDContainer not found\r\n");
+			ASFIPSEC_DEBUG("OUT SPDContainer not found");
 			if (!bVal)
 				local_bh_enable();
 			return;
@@ -1592,7 +1593,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 						pSAs->SA[ulCount].ucProtocol = pOutSA->SAParams.ucProtocol;
 						if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pOutSA->SAParams) == SECFP_FAILURE) {
-							ASFIPSEC_DEBUG("asf_FillSAParams returned failure for Out Container \r\n");
+							ASFIPSEC_DEBUG("asf_FillSAParams returned failure for Out Container ");
 							if (!bVal)
 								local_bh_enable();
 							return;
@@ -1633,7 +1634,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 						pSAs->SA[ulCount].ucProtocol = pOutSA->SAParams.ucProtocol;
 						if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pOutSA->SAParams) == SECFP_FAILURE) {
-							ASFIPSEC_DEBUG("asf_FillSAParams returned failure\r\n");
+							ASFIPSEC_DEBUG("asf_FillSAParams returned failure");
 							if (!bVal)
 								local_bh_enable();
 							return;
@@ -1661,7 +1662,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 								    pSAParams->SPDContainer.ulContainerId);
 		if (!pInContainer) {
 			GlobalErrors.ulSPDInContainerNotFound++;
-			ASFIPSEC_DEBUG("IN SPDContainer not found\r\n");
+			ASFIPSEC_DEBUG("IN SPDContainer not found");
 			if (!bVal)
 				local_bh_enable();
 			return;
@@ -1683,7 +1684,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 						pSAs->SA[ulCount].ucProtocol = pInSA->SAParams.ucProtocol;
 						if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pInSA->SAParams) == SECFP_FAILURE) {
-							ASFIPSEC_DEBUG("asf_FillSAParams returned failure for IN SAs \r\n");
+							ASFIPSEC_DEBUG("asf_FillSAParams returned failure for IN SAs ");
 							if (!bVal)
 								local_bh_enable();
 							return;
@@ -1721,7 +1722,7 @@ ASF_void_t ASFIPSecGetExactSAs(ASFIPSecGetSAParams_t  *pSAParams,
 	unsigned int ulHashVal;
 
 	if ((!pSAParams->ulNumSAs) || (!pSAs->SA)) {
-		ASFIPSEC_DEBUG(" Supplied NULL as input \r\n");
+		ASFIPSEC_DEBUG("Supplied NULL as input ");
 		return;
 	}
 
@@ -1754,7 +1755,7 @@ ASF_void_t ASFIPSecGetExactSAs(ASFIPSecGetSAParams_t  *pSAParams,
 								      pSAParams->SPDContainer.ulContainerId);
 		if (!pOutContainer) {
 			GlobalErrors.ulSPDOutContainerNotFound++;
-			ASFIPSEC_DEBUG("OUT SPDContainer not found\r\n");
+			ASFIPSEC_DEBUG("OUT SPDContainer not found");
 			if (!bVal)
 				local_bh_enable();
 			return;
@@ -1773,7 +1774,7 @@ ASF_void_t ASFIPSecGetExactSAs(ASFIPSecGetSAParams_t  *pSAParams,
 							pSAs->SA[ulCount].gwAddr.ipv4addr = pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 							pSAs->SA[ulCount].ucProtocol = pOutSA->SAParams.ucProtocol;
 							if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pOutSA->SAParams) == SECFP_FAILURE) {
-								ASFIPSEC_DEBUG("asf_FillSAParams returned failure for Out Container \r\n");
+								ASFIPSEC_DEBUG("asf_FillSAParams returned failure for Out Container ");
 								if (!bVal)
 									local_bh_enable();
 								return;
@@ -1796,7 +1797,7 @@ ASF_void_t ASFIPSecGetExactSAs(ASFIPSecGetSAParams_t  *pSAParams,
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 						pSAs->SA[ulCount].ucProtocol = pOutSA->SAParams.ucProtocol;
 						if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pOutSA->SAParams) == SECFP_FAILURE) {
-							ASFIPSEC_DEBUG("asf_FillSAParams returned failure\r\n");
+							ASFIPSEC_DEBUG("asf_FillSAParams returned failure");
 							if (!bVal)
 								local_bh_enable();
 							return;
@@ -1813,7 +1814,7 @@ ASF_void_t ASFIPSecGetExactSAs(ASFIPSecGetSAParams_t  *pSAParams,
 								    pSAParams->SPDContainer.ulContainerId);
 		if (!pInContainer) {
 			GlobalErrors.ulSPDInContainerNotFound++;
-			ASFIPSEC_DEBUG("IN SPDContainer not found\r\n");
+			ASFIPSEC_DEBUG("IN SPDContainer not found");
 			if (!bVal)
 				local_bh_enable();
 			return;
@@ -1831,7 +1832,7 @@ ASF_void_t ASFIPSecGetExactSAs(ASFIPSecGetSAParams_t  *pSAParams,
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 						pSAs->SA[ulCount].ucProtocol = pInSA->SAParams.ucProtocol;
 						if (asf_FillSAParams(pSAs->SA[ulCount].pSA, &pInSA->SAParams) == SECFP_FAILURE) {
-							ASFIPSEC_DEBUG("asf_FillSAParams returned failure for IN SAs \r\n");
+							ASFIPSEC_DEBUG("asf_FillSAParams returned failure for IN SAs ");
 							if (!bVal)
 								local_bh_enable();
 							return;
@@ -1874,16 +1875,16 @@ ASF_void_t  ASFIPSecInitConfigIdentity(ASFIPSecInitConfigIdentity_t  *pConfigIde
 	ASF_uint32_t ii, kk;
 
 	if (pConfigIdentity &&
-	    (pConfigIdentity->ulMaxVSGs == ulMaxVSGs_g) &&
-	    (pConfigIdentity->ulMaxTunnels == ulMaxTunnels_g)) {
+	    (pConfigIdentity->ulMaxVSGs <= ulMaxVSGs_g) &&
+	    (pConfigIdentity->ulMaxTunnels <= ulMaxTunnels_g)) {
 		if (pConfigIdentity->pulVSGMagicNumber)
-			for (ii = 0; ii < ulMaxVSGs_g; ii++)
+			for (ii = 0; ii < pConfigIdentity->ulMaxVSGs; ii++)
 				pulVSGMagicNumber[ii] =
 					pConfigIdentity->pulVSGMagicNumber[ii];
 		if (pConfigIdentity->pulTunnelMagicNumber)
-			for (ii = 0; ii < ulMaxVSGs_g; ii++)
+			for (ii = 0; ii < pConfigIdentity->ulMaxVSGs; ii++)
 				if (pConfigIdentity->pulTunnelMagicNumber[ii])
-					for (kk = 0; kk < ulMaxTunnels_g; kk++)
+					for (kk = 0; kk < pConfigIdentity->ulMaxTunnels; kk++)
 						secFP_TunnelIfaces[ii][kk].
 							ulTunnelMagicNumber =
 						pConfigIdentity->
@@ -1933,7 +1934,7 @@ static int __init ASFIPSec_Init(void)
 	int  err = -EINVAL;
 	ASFCap_t	asf_cap;
 
-	ASFIPSEC_DEBUG("Entry\r\n");
+	ASFIPSEC_DEBUG("Entry");
 
 	/* Get ASF Capabilities and store them for future use. */
 	ASFGetCapabilities(&asf_cap);
@@ -1948,6 +1949,7 @@ static int __init ASFIPSec_Init(void)
 	if (!ulMaxTunnels_g || ulMaxTunnels_g > SECFP_MAX_NUM_TUNNEL_IFACES) {
 		asf_err("Invalid value set for ulMaxTunnels_g =%d,'"\
 			"...Exiting\n", ulMaxTunnels_g);
+		return err;
 	}
 
 	if (!ulMaxSPDContainers_g
@@ -1961,6 +1963,7 @@ static int __init ASFIPSec_Init(void)
 		|| ulMaxSupportedIPSecSAs_g > SECFP_MAX_SAS) {
 		asf_err("Invalid value set for ulMaxSupportedIPSecSAs_g =%d,'"\
 			"...Exiting\n", ulMaxSupportedIPSecSAs_g);
+		return err;
 	}
 
 	ulMaxVSGs_g = asf_cap.ulNumVSGs;
@@ -1977,30 +1980,33 @@ static int __init ASFIPSec_Init(void)
 					ulL2BlobRefreshTimeInSec_g);
 
 	if (bFirewallCoExistence_g) {
-		ASFIPSEC_DEBUG("Firewall Co-Existence : YES\r\n");
+		ASFIPSEC_DEBUG("Firewall Co-Existence : YES");
 	} else {
-		ASFIPSEC_DEBUG("Firewall Co-Existence : NO\r\n");
+		ASFIPSEC_DEBUG("Firewall Co-Existence : NO");
 	}
 
 	if (bTightlyIntegrated_g) {
-		ASFIPSEC_DEBUG("Applicyation and ASF tightly coupled\r\n");
+		ASFIPSEC_DEBUG("Application and ASF tightly coupled");
 	} else {
-		ASFIPSEC_DEBUG("Applicyation and ASF loosly coupled\r\n");
+		ASFIPSEC_DEBUG("Application and ASF loosly coupled");
+	}
+
+	if (SECFP_FAILURE == secfp_init()) {
+		asf_err("Failure in secfp_init.... Exiting\n");
+		return err;
 	}
 
 	if (secfp_register_proc())
 		ASFIPSEC_WARN("Unable to register IPSEC proc");
 
-	secfp_init();
-
-	ASFIPSEC_DEBUG("Exit\r\n");
+	ASFIPSEC_DEBUG("Exit");
 	return 0;
 
 }
 static void __exit ASFIPSec_Exit(void)
 {
-	secfp_deInit();
 	secfp_unregister_proc();
+	secfp_deInit();
 }
 
 module_init(ASFIPSec_Init);

@@ -95,7 +95,7 @@ static ssize_t asfctrl_vsg_mode_store(struct kobject *kobj,
 	vsg = -1;
 	bipsec = -1;
 
-	sscanf(buf, "vsg=%d mode=%d ipsec=%d", &vsg, &mode, &bipsec);
+	sscanf(buf, "vsg=%d mode=%d ipsec=%d", &vsg, (int *)&mode, &bipsec);
 
 	if (-1 == vsg) {
 		ASFCTRL_ERR("Wrong command format: \

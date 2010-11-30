@@ -198,8 +198,8 @@ static inline int free_sa_index(int index, int dir)
 static inline int get_sa_index(struct xfrm_state *xfrm, int direction)
 {
 	int i;
-	ASFCTRL_TRACE("SA-TABLE: saddr %x daddr %x",
-		xfrm->props.saddr.a4, xfrm->id.daddr.a4);
+	ASFCTRL_TRACE("SA-TABLE: saddr 0x%x daddr 0x%x spi 0x%x",
+		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi);
 
 	if (direction != IN_SA && direction != OUT_SA) {
 		ASFCTRL_ERR("direction %d", direction);
@@ -301,7 +301,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 				outSPDContainer.ulMagicNumber =
 					asfctrl_vsg_ipsec_cont_magic_id;
 			} else {
-				ASFCTRL_ERR("No free containder index");
+				ASFCTRL_ERR("No OUT free containder index");
 				goto err;
 			}
 		}
@@ -342,7 +342,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 					asfctrl_vsg_ipsec_cont_magic_id;
 
 			} else {
-				ASFCTRL_ERR("No free containder index");
+				ASFCTRL_ERR("No IN free containder index");
 				goto err;
 			}
 		}
@@ -618,6 +618,9 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	sa_table[OUT_SA][sa_id].container_id = outSA.ulSPDContainerIndex;
 	sa_table[OUT_SA][sa_id].ref_count++;
 /*tbd	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
+	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x OUT-SPD=%d",
+		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
+		outSA.ulSPDContainerIndex);
 
 	ASFCTRL_FUNC_EXIT;
 
@@ -795,6 +798,11 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	sa_table[IN_SA][sa_id].container_id = inSA.ulInSPDContainerIndex;
 	sa_table[IN_SA][sa_id].ref_count++;
 /*	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
+
+	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x IN-SPD=%d",
+		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
+		inSA.ulInSPDContainerIndex);
+
 err:
 	ASFCTRL_FUNC_EXIT;
 	return 0;
@@ -1134,7 +1142,7 @@ static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
 	case XFRM_MSG_NEWAE: /* not yet supported */
 		break;
 	default:
-		ASFCTRL_ERR("pfkey: Unknown SA event %d\n", c->event);
+		ASFCTRL_ERR("XFRM_MSG_UNKNOWN: SA event %d\n", c->event);
 		break;
 	}
 	ASFCTRL_FUNC_EXIT;
@@ -1168,7 +1176,8 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 		asfctrl_xfrm_delete_policy(xp, dir);
 		break;
 	case XFRM_MSG_NEWPOLICY:
-		ASFCTRL_INFO("XFRM_MSG_NEWPOLICY");
+		ASFCTRL_INFO("XFRM_MSG_NEWPOLICY-%s",
+			(dir == OUT_SA) ? "OUT" : "IN");
 		asfctrl_xfrm_add_policy(xp, dir);
 		break;
 	case XFRM_MSG_UPDPOLICY:

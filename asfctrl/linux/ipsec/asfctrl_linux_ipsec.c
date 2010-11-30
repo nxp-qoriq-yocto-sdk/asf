@@ -121,11 +121,11 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t  ulVsgId,
 	if (NET_RX_DROP == ip_forward_asf_packet(skb))
 			pFreeFn(Buffer.nativeBuffer);
 #endif
-	ASFCTRL_ERR("\n NO OUT SA Found Drop packet\n");
+	ASFCTRL_ERR("NO OUT SA Found Drop packet");
 	pFreeFn(Buffer.nativeBuffer);
 
-	/*
-	if (bRevalidate) Revalidate the SPD OUT */
+	if (bRevalidate)
+		ASFCTRL_DBG("Revalidation is required");
 
 	if (!bVal)
 		local_bh_enable();
@@ -192,8 +192,8 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	/*3. send the packet to slow path */
 	netif_receive_skb(skb);
 
-	/*
-	4.if (bRevalidate) Revalidate the SPD IN */
+	if (bRevalidate)
+		ASFCTRL_DBG("Revalidation is required");
 
 fnexit:
 	if (!bVal)
@@ -446,8 +446,6 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 	}
 
 	pSAData->ucChangeType = 3;
-	if (hh_len > ASF_MAX_L2BLOB_LEN)
-		return;
 	pSAData->u.l2blob.ulDeviceID = ulDeviceID;
 	pSAData->u.l2blob.ulL2BlobLen =  hh_len;
 	memcpy(&pSAData->u.l2blob.l2blob, skb->data,
@@ -460,6 +458,7 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 
 void asfctrl_ipsec_update_vsg_magic_number(void)
 {
+	ASFCTRL_FUNC_TRACE;
 	ASFIPSecUpdateVSGMagicNumber_t VSGMagicInfo;
 	VSGMagicInfo.ulVSGId = ASF_DEF_VSG;
 	VSGMagicInfo.ulVSGMagicNumber = asfctrl_vsg_config_id;
@@ -476,6 +475,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 	ASFFFPIpsecContainerInfo_t *outInfo;
 	ASFFFPIpsecContainerInfo_t *inInfo;
 
+	ASFCTRL_FUNC_TRACE;
 	*ipsec_in = ASF_FALSE;
 	*ipsec_out = ASF_FALSE;
 
@@ -493,7 +493,8 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 					asfctrl_vsg_config_id;
 		outInfo->configIdentity.ulTunnelConfigMagicNumber =
 					ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM;
-		ASFCTRL_INFO("\n magicnum %x contId %d",
+		ASFCTRL_DBG("vsg id %d magicnum %d contId %d",
+				outInfo->configIdentity.ulVSGConfigMagicNumber,
 				outInfo->ulSPDMagicNumber,
 				outInfo->ulSPDContainerId);
 	}
@@ -508,7 +509,8 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 					asfctrl_vsg_config_id;
 		inInfo->configIdentity.ulTunnelConfigMagicNumber =
 					ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM;
-		ASFCTRL_INFO("\n magicnum %x contId %d",
+		ASFCTRL_DBG("vsg id %d magicnum %d contId %d",
+				inInfo->configIdentity.ulVSGConfigMagicNumber,
 				inInfo->ulSPDMagicNumber,
 				inInfo->ulSPDContainerId);
 
@@ -554,7 +556,7 @@ static int __init asfctrl_linux_ipsec_init(void)
 		asfctrl_max_sas = g_ipsec_cap.ulMaxSupportedIPSecSAs;
 
 	if (g_ipsec_cap.ulMaxSPDContainers < ASFCTRL_MAX_SPD_CONTAINERS)
-		asfctrl_max_policy_cont = g_ipsec_cap.ulMaxSupportedIPSecSAs;
+		asfctrl_max_policy_cont = g_ipsec_cap.ulMaxSPDContainers;
 
 	asfctrl_vsg_ipsec_cont_magic_id = jiffies;
 	/* Updating the existing Config ID in ASF IPSEC */

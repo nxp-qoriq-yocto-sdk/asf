@@ -997,10 +997,11 @@ typedef struct ASFIPSecGlobalErrorCounters_st {
 } \
 }
 
+#define ASFIPSEC_ERR	asf_err
+
 #ifdef ASF_IPSEC_DEBUG
 #define ASFIPSEC_PRINT	asf_print
 #define ASFIPSEC_WARN	asf_warn
-#define ASFIPSEC_ERR	asf_err
 #define ASFIPSEC_DEBUG	asf_debug
 #define ASFIPSEC_DBGL2	asf_debug_l2
 
@@ -1011,7 +1012,6 @@ typedef struct ASFIPSecGlobalErrorCounters_st {
 
 #define ASFIPSEC_PRINT(fmt, arg...)
 #define ASFIPSEC_WARN(fmt, arg...)
-#define ASFIPSEC_ERR(fmt, arg...)
 #define ASFIPSEC_DEBUG(fmt, arg...)
 #define ASFIPSEC_DBGL2(fmt, arg...)
 #define ASFIPSEC_DEBUG(fmt, arg...)
