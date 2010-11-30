@@ -804,6 +804,22 @@ ASF_void_t ASFIPSecSetNotifyPreference(ASF_boolean_t  bEnable)
 }
 EXPORT_SYMBOL(ASFIPSecSetNotifyPreference);
 
+ASF_void_t  ASFIPSecv4MapFlowToContainer(ASF_uint32_t ulVSGId,
+					 ASF_IPAddr_t   srcAddr,
+					 ASF_IPAddr_t   destAddr,
+					 ASF_uint8_t ucProtocol,
+					 ASF_uint16_t  srcPort,
+					 ASF_uint16_t destPort,
+					 ASF_uint32_t ulTunnelId,
+					 ASF_uint8_t ucActionFlag, /*bIpsecInProcess:1, bIPsecOutProcess:1 */
+					 ASFIPSecContainerInfo_t outContainer,
+					 ASFIPSecContainerInfo_t inContainer
+					)
+{
+	ASFIPSEC_WARN("Function not implemented");
+}
+EXPORT_SYMBOL(ASFIPSecv4MapFlowToContainer);
+
 ASF_void_t ASFIPSecSPDContainerQueryStats(ASFIPSecGetContainerQueryParams_t *pInParams,
 					  ASFSPDPolPPStats_t *pOutParams)
 {

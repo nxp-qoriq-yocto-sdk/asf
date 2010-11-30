@@ -61,6 +61,7 @@ struct sa_node {
 	__be16 ref_count;
 	__be32 saddr_a4;
 	__be32 daddr_a4;
+	__be32 spi;
 	__be32 iifindex;
 	__be32 container_id;
 	uintptr_t asf_cookie;
@@ -123,7 +124,7 @@ static inline int alloc_container_index(int cont_dir)
 	if (containers_ids[cont_dir][cur_id - 1] == 0) {
 		containers_ids[cont_dir][cur_id - 1] = 1;
 		atomic_inc(&current_index[cont_dir]);
-		if (atomic_read(&current_index[cont_dir]) ==
+		if (atomic_read(&current_index[cont_dir]) >
 					asfctrl_max_policy_cont)
 			atomic_set(&current_index[cont_dir], 0);
 
@@ -131,8 +132,14 @@ static inline int alloc_container_index(int cont_dir)
 	}
 
 	for (i = 1; i <= asfctrl_max_policy_cont; i++) {
-		if (containers_ids[cont_dir][i - 1] == 0)
+		if (containers_ids[cont_dir][i - 1] == 0) {
+			containers_ids[cont_dir][i - 1] = 1;
+			atomic_set(&current_index[cont_dir], i + 1);
+			if (atomic_read(&current_index[cont_dir]) >
+				asfctrl_max_policy_cont)
+				atomic_set(&current_index[cont_dir], 1);
 			return i;
+		}
 	}
 	return -1;
 }
@@ -179,8 +186,13 @@ static inline int alloc_sa_index(int dir)
 	}
 
 	for (i = 0; i < asfctrl_max_sas; i++) {
-		if (sa_table[dir][i].status == 0)
+		if (sa_table[dir][i].status == 0) {
+			sa_table[dir][i].status = 1;
+			atomic_set(&current_sa_index[dir], i + 1);
+			if (atomic_read(&current_sa_index[dir]) == asfctrl_max_sas)
+				atomic_set(&current_sa_index[dir], 0);
 			return i;
+		}
 	}
 	return -1;
 }
@@ -207,14 +219,16 @@ static inline int get_sa_index(struct xfrm_state *xfrm, int direction)
 	}
 
 	for (i = 0; i < asfctrl_max_sas; i++) {
-		ASFCTRL_TRACE("SA-TABLE-%d: saddr %x daddr %x\n", sa_table
-							[direction][i].status,
+		ASFCTRL_DBG("SA-TABLE-%d: saddr 0x%x daddr 0x%x spi 0x%x",
+			sa_table[direction][i].status,
 			sa_table[direction][i].saddr_a4,
-			sa_table[direction][i].daddr_a4);
+			sa_table[direction][i].daddr_a4,
+			sa_table[direction][i].spi);
 
 		if (sa_table[direction][i].status
 		&& (xfrm->props.saddr.a4 == sa_table[direction][i].saddr_a4)
-		&& (xfrm->id.daddr.a4 == sa_table[direction][i].daddr_a4))
+		&& (xfrm->id.daddr.a4 == sa_table[direction][i].daddr_a4)
+		&& (xfrm->id.spi == sa_table[direction][i].spi))
 				return i;
 	}
 	return -EINVAL;
@@ -614,6 +628,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	sa_table[OUT_SA][sa_id].saddr_a4 = xfrm->props.saddr.a4;
 	sa_table[OUT_SA][sa_id].daddr_a4 = xfrm->id.daddr.a4;
+	sa_table[OUT_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[OUT_SA][sa_id].asf_cookie = (uintptr_t)xfrm;
 	sa_table[OUT_SA][sa_id].container_id = outSA.ulSPDContainerIndex;
 	sa_table[OUT_SA][sa_id].ref_count++;
@@ -794,6 +809,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	sa_table[IN_SA][sa_id].saddr_a4 = xfrm->props.saddr.a4;
 	sa_table[IN_SA][sa_id].daddr_a4 = xfrm->id.daddr.a4;
+	sa_table[IN_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[IN_SA][sa_id].asf_cookie = (uintptr_t)xfrm;
 	sa_table[IN_SA][sa_id].container_id = inSA.ulInSPDContainerIndex;
 	sa_table[IN_SA][sa_id].ref_count++;
@@ -1108,7 +1124,7 @@ static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
 {
 	ASFCTRL_FUNC_TRACE;
 
-	if (!x) {
+	if (!x && (c->event != XFRM_MSG_FLUSHSA)) {
 		ASFCTRL_ERR("Null SA passed.");
 		return 0;
 	}
@@ -1118,10 +1134,9 @@ static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
 #endif
 	switch (c->event) {
 	case XFRM_MSG_EXPIRE:
-		ASFCTRL_INFO("XFRM_MSG_EXPIRE");
-		/*TBD - should we use this expire event or use the delete
-		 * event. */
-		asfctrl_xfrm_delete_sa(x);
+		ASFCTRL_INFO("XFRM_MSG_EXPIRE Hard=%d\n", c->data.hard);
+		if (c->data.hard)
+			asfctrl_xfrm_delete_sa(x);
 		return 0;
 	case XFRM_MSG_DELSA:
 		ASFCTRL_INFO("XFRM_MSG_DELSA");
@@ -1159,7 +1174,7 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 		ASFCTRL_INFO("Policy Type=%d ", xp->type);
 		return 0;
 	}
-	if (!xp) {
+	if (!xp && (c->event != XFRM_MSG_FLUSHPOLICY)) {
 		ASFCTRL_ERR("Null Policy.");
 		return 0;
 	}

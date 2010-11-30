@@ -79,7 +79,7 @@
 #define ASF_TMR_NEXT_FEW_BUCKETS 4
 
 extern ASFFFPGlobalStats_t *asf_gstats;
-static void asfTimerProc(unsigned int data);
+static void asfTimerProc(unsigned long data);
 
 struct asfTmrAppInstanceInfo_s {
 	asfTmrCbFn pFn;
@@ -159,7 +159,7 @@ unsigned int asfTimerInit(unsigned short int ulMaxApps,
 
 	pAsfTmrAppInfo = kzalloc(ulMaxApps *  sizeof(struct asfTmrAppInfo_s), GFP_KERNEL);
 	if (!pAsfTmrAppInfo) {
-		asf_timer_debug(KERN_INFO "asfTimerInit Returned failure\r\n");
+		asf_timer_debug("asfTimerInit Returned failure\r\n");
 		return ASF_TMR_FAILURE;
 	}
 
@@ -225,8 +225,9 @@ void asfTimerDisableKernelTimers(void)
 		for (ulInstanceId = 0; ulInstanceId < ASF_TMR_MAX_INSTANCES; ulInstanceId++) {
 			pWheel = &(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
 			if (pWheel) {
-				printk("DisKernTimers: appId %d instId %d .. SET interval = 0\n",
-				       ulAppId, ulInstanceId);
+				asf_timer_debug("DisKernTimers: appId %d"\
+					"instId %d .. SET interval = 0\n",
+					ulAppId, ulInstanceId);
 				pWheel->ulTimerInterval = 0;
 				if (pWheel->pTmrWheel) {
 					for_each_possible_cpu(ii)
@@ -235,7 +236,7 @@ void asfTimerDisableKernelTimers(void)
 
 						if (timer_pending(&(pTmrWheel->timer))) {
 							iRetVal = del_timer_sync(&(pTmrWheel->timer));
-							printk("DisKernTimers: del_timer_sync appId %d instId %d cpuId %d result %d\n",
+							asf_timer_debug("DisKernTimers: del_timer_sync appId %d instId %d cpuId %d result %d\n",
 							       ulAppId, ulInstanceId, ii, iRetVal);
 						}
 					}
@@ -353,7 +354,7 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 	struct asfTmrRQ_s *pTempRq;
 
 	if ((ulAppId > ASF_TMR_MAX_APPS) || (ulInstanceId > ASF_TMR_MAX_INSTANCES)) {
-		asf_timer_debug(KERN_INFO "Invalid instance Id: App Id \r\n");
+		asf_timer_debug("Invalid instance Id: App Id \r\n");
 		return ASF_TMR_FAILURE;
 	}
 
@@ -439,7 +440,7 @@ unsigned int asfTimerWheelDeInit(unsigned short int ulAppId, unsigned  short int
 	int ii, iRetVal;
 
 	if (ulAppId > ASF_TMR_MAX_APPS) {
-		asf_timer_debug(KERN_INFO "Invalid instance Id: App Id \r\n");
+		asf_timer_debug("Invalid instance Id: App Id \r\n");
 		return ASF_TMR_FAILURE;
 	}
 
@@ -452,7 +453,7 @@ unsigned int asfTimerWheelDeInit(unsigned short int ulAppId, unsigned  short int
 
 			if (timer_pending(&(pTmrWheel->timer))) {
 				iRetVal = del_timer_sync(&(pTmrWheel->timer));
-				printk("del_timer_sync: appId %d instId %d cpuId %d result %d\n",
+				asf_timer_debug("del_timer_sync: appId %d instId %d cpuId %d result %d\n",
 				       ulAppId, ulInstanceId, ii, iRetVal);
 			}
 
@@ -463,6 +464,7 @@ unsigned int asfTimerWheelDeInit(unsigned short int ulAppId, unsigned  short int
 		}
 		asfFreePerCpu(pWheel->pTmrWheel);
 	}
+	pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].pFn = NULL;
 	return ASF_TMR_SUCCESS;
 }
 
@@ -604,7 +606,7 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 		local_bh_disable();
 
 	if (ptmr->ulState == ASF_TMR_STOPPED) {
-		printk("Timer already stopped\n");
+		asf_timer_debug("Timer already stopped\n");
 		if (!bInInterrupt)
 			local_bh_enable();
 		return ASF_TMR_FAILURE;
@@ -707,23 +709,23 @@ unsigned int asfTimerRestart(unsigned int ulAppId,
 		return ASF_TMR_SUCCESS;
 
 	}
-
+}
 #endif
 
 /*
  * Function Name : asfTimerDelete
  * Input: pData - pointer to tmr data structure
  * Description: This routine is called from rcu callbacks after suff. time, to actually free the node
- *	      RCU is used so that, if there is any race condition between callback issued and at the
- *	      same time, timer is stopped.
+ *	RCU is used so that, if there is any race condition between callback issued and at the
+ *	same time, timer is stopped.
  */
 
-	void asfTimerDelete(struct rcu_head *pData)
-	{
-		asfTmr_t *ptmr;
-		ptmr = (asfTmr_t *)  pData;
-		asfReleaseNode(ptmr->ulPoolId, ptmr, ptmr->bHeap);
-	}
+void asfTimerDelete(struct rcu_head *pData)
+{
+	asfTmr_t *ptmr;
+	ptmr = (asfTmr_t *)  pData;
+	asfReleaseNode(ptmr->ulPoolId, ptmr, ptmr->bHeap);
+}
 
 /*
  * Actual processing function:
@@ -734,109 +736,132 @@ unsigned int asfTimerRestart(unsigned int ulAppId,
  * go through the Reclaim queue that may have been filled by other cores and clean up
  * restart its timer by calling add_timer
  */
-	unsigned int ulLastTimerExpiry[NR_CPUS];
-	static void asfTimerProc(unsigned int data)
-	{
-		unsigned short int ulAppId = ((unsigned int)(data) & 0xffff0000) >> 16;
-		unsigned short int ulInstanceId = (unsigned int)data & 0xffff;
-		struct asfTmrWheelInstance_s *pWheel =  &(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
-		struct asfTmrWheelPerCore_s *pTmrWheel;
-		struct asfTmrRQ_s *pRq;
-		unsigned long old_state, new_state;
-		asfTmr_t *pNextTmr, *ptmr;
-		int ii;
+unsigned int ulLastTimerExpiry[NR_CPUS];
+static void asfTimerProc(unsigned long data)
+{
+	unsigned short int ulAppId = ((unsigned int)(data) & 0xffff0000) >> 16;
+	unsigned short int ulInstanceId = (unsigned int)data & 0xffff;
+	struct asfTmrWheelInstance_s *pWheel =
+		&(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
+	struct asfTmrWheelPerCore_s *pTmrWheel;
+	struct asfTmrRQ_s *pRq;
+	unsigned long old_state, new_state;
+	asfTmr_t *pNextTmr, *ptmr;
+	int ii;
 
-		asf_timer_debug("Entering timer proc CPU %d ulAppId=%d, ulInstanceId =%d data=%d\r\n",
-				smp_processor_id(), ulAppId, ulInstanceId, data);
+	asf_timer_debug("Entering CPU %d ulAppId=%d, ulInstanceId =%d data=%d",
+			smp_processor_id(), ulAppId, ulInstanceId, data);
 
-		pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, smp_processor_id());
+	pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, smp_processor_id());
 
-		pTmrWheel->ulCurBucketIndex = (pTmrWheel->ulCurBucketIndex + 1) & (pTmrWheel->ulMaxBuckets - 1);
+	pTmrWheel->ulCurBucketIndex =
+		(pTmrWheel->ulCurBucketIndex + 1) & (pTmrWheel->ulMaxBuckets - 1);
 
 #ifdef ASF_TIMER_DEBUG
-		asf_timer_debug("asfTmrProc: Current jiffies = %d, next expiry = %d, ulCurBucketIndex=%d\r\n", jiffies, jiffies+pWheel->ulTimerInterval, pTmrWheel->ulCurBucketIndex);
+	asf_timer_debug("Current jiffies = %d, next expiry = %d, ulCurBucketIndex=%d",
+		jiffies, jiffies+pWheel->ulTimerInterval, pTmrWheel->ulCurBucketIndex);
 
-		if (ulLastTimerExpiry[smp_processor_id()] == 0) {
-			ulLastTimerExpiry[smp_processor_id()] = jiffies;
-		} else {
-			asf_timer_debug("Last Timer expiry = %d, Time Now in jiffies = %d: Next time expiry interval = %d\r\n", ulLastTimerExpiry[smp_processor_id()], jiffies, pWheel->ulTimerInterval);
-			ulLastTimerExpiry[smp_processor_id()] = jiffies;
+	if (ulLastTimerExpiry[smp_processor_id()] == 0) {
+		ulLastTimerExpiry[smp_processor_id()] = jiffies;
+	} else {
+		asf_timer_debug("Last Timer expiry = %d, Time Now in jiffies = %d"\
+			": Next time expiry interval = %d",
+			ulLastTimerExpiry[smp_processor_id()],
+			jiffies, pWheel->ulTimerInterval);
+		ulLastTimerExpiry[smp_processor_id()] = jiffies;
+	}
+#endif
+
+	asf_timer_debug("Timer Bucket processing: ulCurBucketIndex = %d",
+		pTmrWheel->ulCurBucketIndex);
+	ptmr = pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex];
+
+#ifdef ASF_TIMER_DEBUG
+	if (ptmr != NULL)
+		asf_timer_debug("ptmr = 0x%x, pTmrWheel->pBuckets["\
+		"pTmrWheel->ulCurBucketIndex] = 0x%x, bucket_index = %d",
+		ptmr, pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex],
+		pTmrWheel->ulCurBucketIndex);
+#endif
+	pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex] = NULL;
+	for (pNextTmr = NULL; ptmr != NULL; ptmr = pNextTmr) {
+		pNextTmr = ptmr->pNext;
+		while (1) {
+			old_state = ptmr->ulState;
+			new_state = old_state | (ASF_TMR_Q_IN_PROCESS);
+			if (unlikely(cmpxchg(&(ptmr->ulState), old_state, new_state)
+				!= old_state)) {
+				continue;
+			} else
+				break;
 		}
-#endif
 
-		asf_timer_debug("Timer Bucket processing: ulCurBucketIndex = %d\r\n", pTmrWheel->ulCurBucketIndex);
-		ptmr = pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex];
+		asf_timer_debug("About to invoke timer cbk. in_progress? %d",
+			(ptmr->ulState & ASF_TMR_Q_IN_PROCESS));
 
-#ifdef ASF_TIMER_DEBUG
-		if (ptmr != NULL)
-			asf_timer_debug("ptmr = 0x%x, pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex] = 0x%x, bucket_index = %d\r\n", ptmr, pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex], pTmrWheel->ulCurBucketIndex);
-#endif
-		pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex] = NULL;
-		for (pNextTmr = NULL; ptmr != NULL; ptmr = pNextTmr) {
-			pNextTmr = ptmr->pNext;
+		asf_timer_debug("Calling Callback function 0x%x",
+			pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].pFn);
+		/* If this function returns 1, then stop the periodic tmr */
+		if (!(ptmr->bStopPeriodic) &&
+			(!pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].pFn(
+				ptmr->ulCbInfo[0], ptmr->ulCbInfo[1],
+				ptmr->ulCbInfo[2], ptmr->ulCbInfo[3])) &&
+				!(ptmr->bStopPeriodic)) {
+			asf_timer_debug("Restarting timer 0x%x, stop-periodic %d",
+					ptmr, ptmr->bStopPeriodic);
+			ptmr->ulBucketIndex =
+				(pTmrWheel->ulCurBucketIndex + ptmr->ulTmOutVal)
+				& (pTmrWheel->ulMaxBuckets - 1);
+			asfAddTmrToBucket(pTmrWheel, ptmr);
+
 			while (1) {
 				old_state = ptmr->ulState;
-				new_state = old_state | (ASF_TMR_Q_IN_PROCESS);
-				if (unlikely(cmpxchg(&(ptmr->ulState), old_state, new_state) != old_state)) {
+				new_state = ASF_TMR_STARTED;
+				if (unlikely(cmpxchg(&(ptmr->ulState),
+					old_state, new_state) != old_state)) {
 					continue;
 				} else
 					break;
 			}
-
-			asf_timer_debug("About to invoke timer cbk. in_progress? %d\n", (ptmr->ulState & ASF_TMR_Q_IN_PROCESS));
-
-			asf_timer_debug("Calling Callback function 0x%x\r\n", pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].pFn);
-			/* If this function returns 1, then stop the periodic tmr */
-			if (!(ptmr->bStopPeriodic) && (!pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].pFn(ptmr->ulCbInfo[0], ptmr->ulCbInfo[1],
-													    ptmr->ulCbInfo[2], ptmr->ulCbInfo[3])) && !(ptmr->bStopPeriodic)) {
-				asf_timer_debug("Restarting timer 0x%x, stop-periodic %d\n", ptmr, ptmr->bStopPeriodic);
-				ptmr->ulBucketIndex  = (pTmrWheel->ulCurBucketIndex + ptmr->ulTmOutVal) & (pTmrWheel->ulMaxBuckets - 1);
-				asfAddTmrToBucket(pTmrWheel, ptmr);
-
-				while (1) {
-					old_state = ptmr->ulState;
-					new_state = ASF_TMR_STARTED;
-					if (unlikely(cmpxchg(&(ptmr->ulState), old_state, new_state) != old_state)) {
-						continue;
-					} else
-						break;
-				}
-			} else {
-				asf_timer_debug("TimerProc: ptmr 0x%x free: either tmr cbk asked for deletion or deletion occurred on another cpu (stop %d)\n",
-						ptmr, ptmr->bStopPeriodic);
-				/* Release to the memory pool */
-				/* invoke call_rcu, it can be released later */
-				call_rcu((struct rcu_head *)  ptmr,  asfTimerDelete);
-
-
-			}
-		}
-		asf_timer_debug("Reclamation Q processing:\r\n");
-		/* Process the reclamation queue */
-		for_each_possible_cpu(ii)
-		{
-			pRq = per_cpu_ptr(pTmrWheel->pQs, ii);
-
-			while (1) {
-				ptmr = pRq->pQueue[pTmrWheel->ulRqRdIndex[ii]];
-				if (ptmr != NULL) {
-					asfRemoveTmrFromBucket(pTmrWheel, ptmr);
-					asfReleaseNode(pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].ulTmrPoolId, ptmr, ptmr->bHeap);
-					pRq->pQueue[pTmrWheel->ulRqRdIndex[ii]] = NULL;
-					pTmrWheel->ulRqRdIndex[ii] = (pTmrWheel->ulRqRdIndex[ii] + 1) & (pTmrWheel->ulMaxRqEntries - 1);
-				} else {
-					break;
-				}
-			}
-		}
-		/* this interval is set to zero while ASF is being removed */
-		if (pWheel->ulTimerInterval) {
-			pTmrWheel->timer.expires = jiffies + pWheel->ulTimerInterval;
-			add_timer(&pTmrWheel->timer);
 		} else {
-			printk("TimerProc: Not rescheduling timer. cpu=%d, appId %d instId %d\n",
-			       smp_processor_id(), ulAppId, ulInstanceId);
+			asf_timer_debug("ptmr 0x%x free: either tmr cbk asked for "/
+				"deletion or deletion occurred on another cpu (stop %d)",
+				ptmr, ptmr->bStopPeriodic);
+			/* Release to the memory pool */
+			/* invoke call_rcu, it can be released later */
+			call_rcu((struct rcu_head *)  ptmr,  asfTimerDelete);
+
+
 		}
 	}
+	asf_timer_debug("Reclamation Q processing:\r\n");
+	/* Process the reclamation queue */
+	for_each_possible_cpu(ii)
+	{
+		pRq = per_cpu_ptr(pTmrWheel->pQs, ii);
+
+		while (1) {
+			ptmr = pRq->pQueue[pTmrWheel->ulRqRdIndex[ii]];
+			if (ptmr != NULL) {
+				asfRemoveTmrFromBucket(pTmrWheel, ptmr);
+				asfReleaseNode(pAsfTmrAppInfo[ulAppId].pInstance[
+					ulInstanceId].ulTmrPoolId, ptmr, ptmr->bHeap);
+				pRq->pQueue[pTmrWheel->ulRqRdIndex[ii]] = NULL;
+				pTmrWheel->ulRqRdIndex[ii] =
+					(pTmrWheel->ulRqRdIndex[ii] + 1)
+					& (pTmrWheel->ulMaxRqEntries - 1);
+			} else
+				break;
+		}
+	}
+	/* this interval is set to zero while ASF is being removed */
+	if (pWheel->ulTimerInterval) {
+		pTmrWheel->timer.expires = jiffies + pWheel->ulTimerInterval;
+		add_timer(&pTmrWheel->timer);
+	} else {
+		asf_timer_debug("Not rescheduling timer. cpu=%d, appId %d instId %d",
+		smp_processor_id(), ulAppId, ulInstanceId);
+	}
+}
 
 

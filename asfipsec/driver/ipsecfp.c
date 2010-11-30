@@ -452,17 +452,22 @@ unsigned int asfsecfpBlobTmrCb(unsigned int ulVSGId,
 
 	pSA = ptrIArray_getData(&secFP_OutSATable, ulIndex);
 	if (pSA) {
-		if (ptrIArray_getMagicNum(&secFP_OutSATable, ulIndex) == ulMagicNum) {
+		if (ASFIPSecCbFn.pFnRefreshL2Blob
+		&& (ptrIArray_getMagicNum(&secFP_OutSATable, ulIndex) ==
+			ulMagicNum)) {
 			TunAddress.IP_Version = 4;
-			TunAddress.dstIP.bIPv4OrIPv6  = 0;
-			TunAddress.srcIP.bIPv4OrIPv6  = 0;
-			TunAddress.dstIP.ipv4addr = pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
-			TunAddress.srcIP.ipv4addr = pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
-			ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, pSA->ulTunnelId, ulSPDContainerIndex,
-							ptrIArray_getMagicNum(&(secfp_OutDB),  ulSPDContainerIndex),
-							&TunAddress,
-							pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
-
+			TunAddress.dstIP.bIPv4OrIPv6 = 0;
+			TunAddress.srcIP.bIPv4OrIPv6 = 0;
+			TunAddress.dstIP.ipv4addr =
+				pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+			TunAddress.srcIP.ipv4addr =
+				pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
+			ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, pSA->ulTunnelId,
+				ulSPDContainerIndex,
+				ptrIArray_getMagicNum(&(secfp_OutDB),
+					ulSPDContainerIndex),
+				&TunAddress,
+				pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
 			return 0;
 		}
 		return 1;
@@ -600,57 +605,61 @@ void secfp_DeInitInSATable(void)
 
 void secfp_DeInitMemPools(void)
 {
-	if ((ulSPDCILinkNodePoolId_g != -1)
-		&& asfDestroyPool(ulSPDCILinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDCILinkNodePoolId_g");
-	}
-	if ((ulSPDOutContainerPoolId_g != -1)
-		&& asfDestroyPool(ulSPDOutContainerPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDOutContainerPoolId_g");
-	}
-	if ((ulOutSelListPoolId_g != -1)
-		&& asfDestroyPool(ulOutSelListPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulOutSelListPoolId_g");
-	}
-	if ((ulSASelPoolId_g != -1)
-		&& asfDestroyPool(ulSASelPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSASelPoolId_g");
-	}
-	if ((ulOutSAPoolId_g != -1)
-		&& asfDestroyPool(ulOutSAPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulOutSAPoolId_g");
-	}
-
-	if ((ulOutSAl2blobPoolId_g != -1)
-		&& asfDestroyPool(ulOutSAl2blobPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulOutSAl2blobPoolId_g");
-		asfTimerWheelDeInit(ASF_SECFP_BLOB_TMR_ID, 0);
-	}
-
-	if ((ulSPDInContainerPoolId_g != -1)
-		&& asfDestroyPool(ulSPDInContainerPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDInContainerPoolId_g");
-	}
-	if ((ulSPDInSelTblIndexLinkNodePoolId_g != -1)
-		&& asfDestroyPool(ulSPDInSelTblIndexLinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDInSelTblIndexLinkNodePoolId_g");
-	}
-	if ((ulSPDInSPIValLinkNodePoolId_g != -1)
-		&& asfDestroyPool(ulSPDInSPIValLinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDInSPIValLinkNodePoolId_g");
-	}
-	if ((ulInSelListPoolId_g != -1)
-		&& asfDestroyPool(ulInSelListPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulInSelListPoolId_g");
+	if ((ulSPDOutSALinkNodePoolId_g != -1)
+		&& asfDestroyPool(ulSPDOutSALinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDOutSALinkNodePoolId_g");
 	}
 	if ((ulInSAPoolId_g != -1)
 		&& asfDestroyPool(ulInSAPoolId_g) != 0) {
 		ASFIPSEC_ERR("asfDestroyPool failed for ulInSAPoolId_g");
 	}
-	if ((ulSPDOutSALinkNodePoolId_g != -1)
-		&& asfDestroyPool(ulSPDOutSALinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDOutSALinkNodePoolId_g");
+	if ((ulInSelListPoolId_g != -1)
+		&& asfDestroyPool(ulInSelListPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulInSelListPoolId_g");
 	}
+	if ((ulSPDInSPIValLinkNodePoolId_g != -1)
+		&& asfDestroyPool(ulSPDInSPIValLinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDInSPIValLinkNodePoolId_g");
+	}
+	if ((ulSPDInSelTblIndexLinkNodePoolId_g != -1)
+		&& asfDestroyPool(ulSPDInSelTblIndexLinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for"
+			"ulSPDInSelTblIndexLinkNodePoolId_g");
+	}
+	if ((ulSPDInContainerPoolId_g != -1)
+		&& asfDestroyPool(ulSPDInContainerPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDInContainerPoolId_g");
+	}
+	if (ulOutSAl2blobPoolId_g != -1) {
+		asfTimerWheelDeInit(ASF_SECFP_BLOB_TMR_ID, 0);
+		if (asfDestroyPool(ulOutSAl2blobPoolId_g) != 0)
+			ASFIPSEC_ERR("asfDestroyPool failed for ulOutSAl2blobPoolId_g");
+	}
+
+	synchronize_rcu();
+
+	if ((ulOutSAPoolId_g != -1)
+		&& asfDestroyPool(ulOutSAPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulOutSAPoolId_g");
+	}
+	if ((ulSASelPoolId_g != -1)
+		&& asfDestroyPool(ulSASelPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulSASelPoolId_g");
+	}
+	if ((ulOutSelListPoolId_g != -1)
+		&& asfDestroyPool(ulOutSelListPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulOutSelListPoolId_g");
+	}
+	if ((ulSPDOutContainerPoolId_g != -1)
+		&& asfDestroyPool(ulSPDOutContainerPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDOutContainerPoolId_g");
+	}
+	if ((ulSPDCILinkNodePoolId_g != -1)
+		&& asfDestroyPool(ulSPDCILinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDCILinkNodePoolId_g");
+	}
+	ASFIPSEC_PRINT("Waiting for all CPUs to finish existing RCU callbacks!\n");
+	synchronize_rcu();
 }
 
 void secfp_DeInitConfigIdentitiy(void)
@@ -664,16 +673,17 @@ void secfp_DeInitConfigIdentitiy(void)
 void secfp_deInit(void)
 {
 	ASFIPSEC_PRINT("DeInitializing Sec FP ");
-	secfp_DeInitOutSATable();
+
+	secfp_DeInitInSelTable();
+	secfp_DeInitInSATable();
+
+	secfp_DeInitMemPools();
+	secfp_DeInitConfigIdentitiy();
 	secfp_DeInitOutContainerTable();
 	secfp_IVDeInit();
 	secfp_DeInitInContainerTable();
-	secfp_DeInitInSelTable();
-	secfp_DeInitInSATable();
 	secfp_DeInitTunnelIfaces();
-	secfp_DeInitMemPools();
-	secfp_DeInitConfigIdentitiy();
-
+	secfp_DeInitOutSATable();
 	if (desc_cache)
 		kmem_cache_destroy(desc_cache);
 
@@ -927,6 +937,10 @@ static inline outSA_t *secfp_allocOutSA(void)
 static void secfp_freeOutSA(struct rcu_head *pData)
 {
 	outSA_t *pSA = (outSA_t *)  pData;
+
+	if (pSA->pL2blobTmr)
+		asfTimerStop(ASF_SECFP_BLOB_TMR_ID, 0, pSA->pL2blobTmr);
+
 	if (pSA->pSelList) {
 		secfp_cleanupSelList(pSA->pSelList);
 	}
@@ -1643,10 +1657,9 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	pIpHdrInSA = (unsigned int *)  &(pSA->ipHdrInfo.hdrdata.iphv4);
 
 	/* Outer IP already has the TOS and the length field */
-
 	/* Since length and TOS bits are already set, copy the rest */
 
-	ASFIPSEC_PRINT("FinishPkt: pOuterIpHdr = 0x%x",  pOuterIpHdr);
+	ASFIPSEC_PRINT("FinishPkt: pOuterIpHdr = 0x%x", (int)pOuterIpHdr);
 	for (ii = 1; ii < 5; ii++) {
 		/* Copy prepared header from SA */
 		*(unsigned int *)  &(pOuterIpHdr[ii]) = pIpHdrInSA[ii];
@@ -1694,7 +1707,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	skb->len +=  usNatOverHead;
 	ASFIPSEC_PRINT("Finish packet: ulSecLenIncrease = %d, IP_HDR_LEN=%d "\
 		"Updated skb->data = 0x%x",
-		pSA->ulSecLenIncrease, SECFP_IP_HDR_LEN, skb->data);
+		pSA->ulSecLenIncrease, SECFP_IP_HDR_LEN, (int)skb->data);
 
 	/* Update L2 Blob information and send pkt out */
 	if (pSA->bl2blob) {
@@ -1707,6 +1720,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		skb_set_network_header(skb, pSA->ulL2BlobLen);
 		skb_set_transport_header(skb, (20 + pSA->ulL2BlobLen));
 	} else {
+		ASFIPSEC_DEBUG("OutSA - L2blob info not available");
 		/* Update the ethernet header */
 		skb->data -= ETH_HLEN;
 		skb->len += ETH_HLEN;
@@ -1754,7 +1768,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 }
 
 
-#ifdef ASF_IPSEC_DEBUG
+#ifdef ASF_IPSEC_DEBUG_L2
 void print_desc(struct talitos_desc *desc)
 {
 	int ii;
@@ -1842,8 +1856,8 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	/* Just copy enough information from inner header */
 	/* the rest can be filled in later */
 	ASFIPSEC_DEBUG("(Pointer update:)pOuterIpHdr = 0x%x",
-					*pOuterIpHdr);
-	*pOuterIpHdr = (unsigned int *)  (pHeadSkb->data - usNatOverHead - SECFP_IP_HDR_LEN - pSA->ulSecHdrLen);
+					(int)*pOuterIpHdr);
+	*pOuterIpHdr = (unsigned int *) (pHeadSkb->data - usNatOverHead - SECFP_IP_HDR_LEN - pSA->ulSecHdrLen);
 
 	iph = (struct iphdr *)  (*pOuterIpHdr);
 
@@ -1866,7 +1880,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	pHeadSkb->data -= pSA->ulSecHdrLen;
 
 	ASFIPSEC_DBGL2("After preparing sec header skb->data = 0x%x",
-			pHeadSkb->data);
+			(int)pHeadSkb->data);
 
 	*(unsigned int *)  &(pHeadSkb->data[0]) = pSA->SAParams.ulSPI;
 
@@ -1877,7 +1891,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 			ulLoSeqNum = atomic_inc_return(&pSA->ulLoSeqNum);
 			if (ulLoSeqNum  == 0) {
 				ulHiSeqNum = atomic_inc_return(&pSA->ulHiSeqNum);
-				if (ulHiSeqNum == 0) {
+				if ((ulHiSeqNum == 0) && ASFIPSecCbFn.pFnSeqNoOverFlow) {
 					ASF_IPAddr_t	  DstAddr;
 					DstAddr.bIPv4OrIPv6 = 0;
 					DstAddr.ipv4addr =  pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
@@ -1888,7 +1902,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 			}
 		} else {
 			ulLoSeqNum = atomic_inc_return(&pSA->ulLoSeqNum);
-			if (ulLoSeqNum  == 0) {
+			if ((ulLoSeqNum  == 0) && ASFIPSecCbFn.pFnSeqNoOverFlow) {
 				ASF_IPAddr_t	  DstAddr;
 				DstAddr.bIPv4OrIPv6 = 0;
 				DstAddr.ipv4addr =  pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
@@ -1924,13 +1938,13 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 				+ SECFP_ESP_TRAILER_LEN;
 
 	ASFIPSEC_DBGL2("pHeadSkb->data_len = %d",
-				pHeadSkb->data_len);
+		(int)pHeadSkb->data_len);
 	ASFIPSEC_DBGL2("HeadSkb: skb->data = 0x%x, skb->len = %d,"\
 		"usPadLen =%d, trailer=%d",
-		pHeadSkb->data, pHeadSkb->len, usPadLen, SECFP_ESP_TRAILER_LEN);
+		(int)pHeadSkb->data, pHeadSkb->len, usPadLen, SECFP_ESP_TRAILER_LEN);
 	ASFIPSEC_DBGL2("TailSkb: skb->data = 0x%x, skb->len = %d,"\
 		"usPadLen =%d, trailer=%d",
-		pTailSkb->data, pTailSkb->len, usPadLen, SECFP_ESP_TRAILER_LEN);
+		(int)pTailSkb->data, pTailSkb->len, usPadLen, SECFP_ESP_TRAILER_LEN);
 }
 
 
@@ -2708,6 +2722,12 @@ static inline outSA_t  *secfp_findOutSA(
 			pulVSGMagicNumber[ulVsgId]) ||
 			(pSecInfo->outContainerInfo.configIdentity.ulTunnelConfigMagicNumber !=
 			secFP_TunnelIfaces[ulVsgId][pSecInfo->outContainerInfo.ulTunnelId].ulTunnelMagicNumber)) {
+			ASFIPSEC_DEBUG("VSG:%d=%d, tunnel:%d=%d",
+			pSecInfo->outContainerInfo.configIdentity.ulVSGConfigMagicNumber,
+			pulVSGMagicNumber[ulVsgId],
+			pSecInfo->outContainerInfo.configIdentity.ulTunnelConfigMagicNumber,
+			secFP_TunnelIfaces[ulVsgId][pSecInfo->outContainerInfo.ulTunnelId].ulTunnelMagicNumber);
+
 			*ppContainer = NULL;
 			*pbRevalidate = TRUE;
 			return NULL;
@@ -2724,7 +2744,8 @@ static inline outSA_t  *secfp_findOutSA(
 				  pSecInfo->outContainerInfo.ulSPDContainerId) ==
 		pSecInfo->outContainerInfo.ulSPDMagicNumber) {
 
-		ASFIPSEC_DEBUG("SA within Container : Container Matched ");
+		ASFIPSEC_DEBUG("SA within Container : Container Matched SA=%d ",
+			pSecInfo->outSAInfo.ulSAIndex);
 		if ((pSecInfo->outSAInfo.ulSAIndex == ulMaxSupportedIPSecSAs_g) ||
 			(ptrIArray_getMagicNum(&secFP_OutSATable, pSecInfo->outSAInfo.ulSAIndex)
 			!= pSecInfo->outSAInfo.ulSAMagicNumber)) {
@@ -2749,6 +2770,7 @@ static inline outSA_t  *secfp_findOutSA(
 					ASFIPSEC_DEBUG("Send packet to CP ");
 					return NULL;
 				}
+				ASFIPSEC_DEBUG("Got the SA = %d", pOutSALinkNode->ulSAIndex);
 				/* We don't have the SA yet, Get it from global table  */
 				pSecInfo->outSAInfo.ulSAIndex = pOutSALinkNode->ulSAIndex;
 			}
@@ -2778,7 +2800,7 @@ inline int secfp_try_fastPathOutv6(
 				  unsigned int *pVSGId,
 				  struct sk_buff *skb,
 				  unsigned int *pSecInfo) {
-	ASFIPSEC_DEBUG("Stub function: Currently not implemented ");
+	ASFIPSEC_WARN("Stub function: Currently not implemented ");
 	return 0;
 }
 
@@ -2992,7 +3014,7 @@ int secfp_try_fastPathOutv4 (
 			(*pSA->prepareOutPktFnPtr)(skb, pSA, pContainer, &pOuterIpHdr);
 
 			ASFIPSEC_DBGL2("Out Process; pOuterIPHdr set to 0x%x",
-				pOuterIpHdr);
+				(int)pOuterIpHdr);
 			/* Put sufficient data in the skb for futher processing post SEC */
 			/*	*(unsigned int *)  &(skb->cb[SECFP_SKB_SG_DMA_INDEX]) = skb->len + 12; */
 			*(unsigned int *)  &(skb->cb[SECFP_SPD_CI_INDEX]) = pSecInfo->outContainerInfo.ulSPDContainerId;
@@ -3010,7 +3032,7 @@ int secfp_try_fastPathOutv4 (
 
 			ASFIPSEC_DBGL2("Before secfp_talitos_submit:"
 				"skb= 0x%x, skb->data= 0x%x, skb->dev= 0x%x\n",
-				skb, skb->data, skb->dev);
+				(int)skb, (int)skb->data, (int)skb->dev);
 #ifdef ASFIPSEC_DEBUG_FRAME
 			ASFIPSEC_PRINT("secfp_out: Pkt Pre submission Processing");
 			hexdump(skb->data, skb->len);
@@ -3038,8 +3060,8 @@ int secfp_try_fastPathOutv4 (
 #ifdef ASFIPSEC_LOG_MSG
 				ASFIPSEC_DEBUG("secfp_talitos_submit failed ");
 				snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
-					"Cipher Operation Failed");
-				AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID3;
+					"Cipher Operation Failed-5");
+				AsfLogInfo.ulMsgId = ASF_IPSEC_LOG_MSG_ID3;
 				AsfLogInfo.u.IPSecInfo.ulSPDContainerIndex =
 					pSecInfo->outContainerInfo.ulSPDContainerId;
 				AsfLogInfo.ulVSGId = ulVSGId;
@@ -3116,7 +3138,7 @@ int secfp_try_fastPathOutv4 (
 			return 1;
 		}
 
-		} else{
+		} else if (ASFIPSecCbFn.pFnNoOutSA) {
 			ASF_uchar8_t  bSPDContainerPresent;
 			ASFBuffer_t Buffer;
 			/* Homogenous buffer */
@@ -3283,7 +3305,7 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 		}
 	} else {
 		skb->data_len = 0;
-		ASFIPSEC_WARN(" %s DROP PKT ", __func__);
+		ASFIPSEC_WARN("error = %d DROP PKT ", error);
 		kfree_skb(skb);
 	}
 }
@@ -3490,7 +3512,7 @@ void secfp_adaptPeerGW(unsigned int ulVSGId, inSA_t *pSA, unsigned int saddr)
 										&secFP_OutSATable, pOutSALinkNode->ulSAIndex);
 				}
 			}
-			if (pOutSA) {
+			if (pOutSA && ASFIPSecCbFn.pFnPeerChange) {
 				pOutSA->ipHdrInfo.hdrdata.iphv4.daddr = saddr;
 				ASFIPSecCbFn.pFnPeerChange(ulVSGId,
 							   pSA->SAParams.ulSPI,
@@ -3986,7 +4008,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 		if (pSA) {
 			pSA->ulBytes[smp_processor_id()] -= skb1->len;
 			pSA->ulPkts[smp_processor_id()]--;
-			snprintf((aMsg), ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed");
+			snprintf((aMsg), ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed-1");
 			AsfLogInfo.aMsg = aMsg;
 			AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID3;
 			asfFillLogInfo(&AsfLogInfo, pSA);
@@ -4055,7 +4077,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 			if (pSA) {
 				pSA->ulBytes[smp_processor_id()] -= skb1->len;
 				pSA->ulPkts[smp_processor_id()]--;
-				snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed");
+				snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed-2");
 				AsfLogInfo.aMsg = aMsg;
 				AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID3;
 				asfFillLogInfo(&AsfLogInfo, pSA);
@@ -4192,7 +4214,7 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
 		if (pSA) {
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
-			snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed");
+			snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed-3");
 			AsfLogInfo.aMsg = aMsg;
 			AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID3;
 			asfFillLogInfo(&AsfLogInfo, pSA);
@@ -4262,7 +4284,7 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 						 (unsigned int *)&(skb->cb[SECFP_HASH_VALUE_INDEX]));
 			if (pSA) {
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT18);
-				snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed");
+				snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed-4");
 				AsfLogInfo.aMsg = aMsg;
 				AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID3;
 				asfFillLogInfo(&AsfLogInfo, pSA);
@@ -5312,7 +5334,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	struct iphdr *iph = ip_hdr(skb1);
 	unsigned int ulLowerBoundSeqNum;
 	unsigned int ulHashVal = usMaxInSAHashTaleSize_g;
-	unsigned int *pCurICVLoc, *pNewICVLoc;
+	unsigned int *pCurICVLoc = 0, *pNewICVLoc = 0;
 	unsigned int fragCnt = 0;
 	int ii, kk;
 	struct sk_buff *pHeadSkb, *pTailSkb, *pTailPrevSkb = 0;
@@ -5476,7 +5498,8 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			DestAddr.ipv4addr = iph->daddr;
 			ASFIPSEC_DEBUG("Calling DPD alive callback VSG=%u, Tunnel=%u, address=%x, Container=%u, SPI=%x",  \
 					 ulVSGId, pSA->ulTunnelId, iph->daddr, pSA->ulSPDInContainerIndex, ulSPI);
-			ASFIPSecCbFn.pFnDPDAlive(ulVSGId, pSA->ulTunnelId, ulSPI, iph->protocol,
+			if (ASFIPSecCbFn.pFnDPDAlive)
+				ASFIPSecCbFn.pFnDPDAlive(ulVSGId, pSA->ulTunnelId, ulSPI, iph->protocol,
 						 DestAddr, pSA->ulSPDInContainerIndex);
 			pSA->bDPDAlive = 0;
 		}
@@ -5661,9 +5684,8 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			ASFIPSEC_DEBUG("Inbound Submission to SEC failed");
 			AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID3;
 			AsfLogInfo.aMsg = aMsg;
-			snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Crypto  Operation Failed");
+			snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "In Crypto  Operation Failed");
 			asfFillLogInfo(&AsfLogInfo, pSA);
-			ASFIPSEC_DEBUG("");
 #endif
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
@@ -5745,7 +5767,9 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		ASFIPSEC_DEBUG("Inbound SA Not found ");
 		/* Homogenous buffer */
 		Buffer.nativeBuffer = skb1;
-		ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, ASFSkbFree, skb1, ulCommonInterfaceId);
+		if (ASFIPSecCbFn.pFnNoInSA)
+			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, ASFSkbFree,
+				skb1, ulCommonInterfaceId);
 		return 1;
 	}
 }
@@ -5815,7 +5839,8 @@ callverify:
 	ASFIPSEC_DEBUG("Calling Inbound SPD verification function");
 	/* Homogenous buffer */
 	Buffer.nativeBuffer = skb;
-	ASFIPSecCbFn.pFnVerifySPD(*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
+	if (ASFIPSecCbFn.pFnVerifySPD)
+		ASFIPSecCbFn.pFnVerifySPD(*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
 				  pIPSecOpque->ulInSPDContainerId,
 				  pIPSecOpque->ulInSPDMagicNumber,
 				  *(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]),
@@ -6520,7 +6545,8 @@ unsigned int secfp_createOutSA(
 			pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
 		if (!bVal)
 			local_bh_enable();
-		ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, ulTunnelId,
+		if (ASFIPSecCbFn.pFnRefreshL2Blob)
+			ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, ulTunnelId,
 				ulSPDContainerIndex, ulMagicNumber, &TunAddress,
 				pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
 		if (!ulL2BlobRefreshTimeInSec_g) {
@@ -6644,8 +6670,8 @@ unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 				return ASF_IPSEC_OUTSA_NOT_FOUND;
 
 			}
-			pOutSA = (outSA_t *)ptrIArray_getData(
-								&secFP_OutSATable, ulSAIndex);
+			pOutSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
+								ulSAIndex);
 			if (pOutSA) {
 				for (Index = 0; Index < NR_CPUS; Index++) {
 					ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[0], pOutSA->PolicyPPStats[Index].NumInBoundInPkts);
@@ -6668,6 +6694,9 @@ unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 			for (ii = usDscpStart; ii < usDscpEnd; ii++)
 				pContainer->SAHolder.ulSAIndex[ii] = ulMaxSupportedIPSecSAs_g;
 		} else {
+			ASFIPSEC_DEBUG("Delete - dest %x, proto = %d spi= %x ",
+				daddr, ucProtocol, ulSPI);
+
 			pOutSALinkNode = secfp_findOutSALinkNode(pContainer, daddr,
 								 ucProtocol, ulSPI);
 			if (pOutSALinkNode) {
@@ -7385,6 +7414,8 @@ unsigned int secfp_copySrcAndDestSelSet(
 static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
 {
 	int ii;
+	if (!ASFIPSecCbFn.pFnAuditLog)
+		return;
 	pAsfLogInfo->u.IPSecInfo.ucDirection = 0;
 	pAsfLogInfo->ulVSGId = pSA->ulVSGId;
 	pAsfLogInfo->u.IPSecInfo.ucDirection = 0;
@@ -7422,6 +7453,8 @@ static inline void asfIPSecCopyWords(unsigned int *dst, unsigned int *src, int l
 static inline void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA)
 {
 	int ii;
+	if (!ASFIPSecCbFn.pFnAuditLog)
+		return;
 	pAsfLogInfo->u.IPSecInfo.ucDirection = 1;
 	for (ii = 0; ii < NR_CPUS; ii++) {
 		pAsfLogInfo->u.IPSecInfo.ulNumOfPktsProcessed += pSA->ulPkts[ii];
@@ -7627,7 +7660,7 @@ ASF_uint32_t ASFIPSecFlushAllSA(ASF_uint32_t ulVSGId, ASF_uint32_t ulTunnelId)
 
 	if (secFP_TunnelIfaces[ulVSGId][ulTunnelId].bInUse == 0) {
 		GlobalErrors.ulTunnelIdNotInUse++;
-		ASFIPSEC_PRINT("Tunnel Interface is not in use"
+		ASFIPSEC_DEBUG("Tunnel Interface is not in use"
 			" TunnelId=%u, VSGId=%u",  ulTunnelId, ulVSGId);
 		if (!bVal)
 			local_bh_enable();
@@ -7640,7 +7673,7 @@ ASF_uint32_t ASFIPSecFlushAllSA(ASF_uint32_t ulVSGId, ASF_uint32_t ulTunnelId)
 		/* Deleting All Out SAs */
 		iRetVal = asfFlushAllOutSAs(pCINode->ulIndex);
 		if (iRetVal == SECFP_FAILURE) {
-			ASFIPSEC_PRINT("Failure while flushing Out SAs");
+			ASFIPSEC_WARN("Failure while flushing Out SAs");
 			if (!bVal)
 				local_bh_enable();
 			return SECFP_FAILURE;
@@ -7653,7 +7686,7 @@ ASF_uint32_t ASFIPSecFlushAllSA(ASF_uint32_t ulVSGId, ASF_uint32_t ulTunnelId)
 		/* Deleting All In SAs */
 		iRetVal = asfFlushAllInSAs(pCINode->ulIndex);
 		if (iRetVal == SECFP_FAILURE) {
-			ASFIPSEC_PRINT("Failure while flushing SAs");
+			ASFIPSEC_WARN("Failure while flushing SAs");
 			if (!bVal)
 				local_bh_enable();
 			return SECFP_FAILURE;

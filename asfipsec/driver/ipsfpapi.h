@@ -425,9 +425,9 @@ typedef struct ASF_IPSecSASelector_s {
 #define ASF_IPSEC_DF_SET       0x02
 
 
-#define ASF_IPSEC_PROTOCOL_ESP		0x01
-#define ASF_IPSEC_PROTOCOL_AH		0x02
-#define ASF_IPSEC_PROTOCOL_IPCOMP	0x04
+#define ASF_IPSEC_PROTOCOL_ESP		50
+#define ASF_IPSEC_PROTOCOL_AH		51
+#define ASF_IPSEC_PROTOCOL_IPCOMP	108
 
 
 typedef  struct {
@@ -440,7 +440,7 @@ typedef struct {
 	ASF_uint32_t  spi;
 	ASF_uint8_t   qos;
 	ASF_uint32_t  flags;
-	ASF_uint32_t  reserved:8,
+	ASF_uint32_t  reserved:4,
 	bRedSideFragment:1,
 	bVerifyInPktWithSASelectors:1,
 	bDoPeerGWIPAddressChangeAdaptation:1,
@@ -452,7 +452,7 @@ typedef struct {
 	bEncapsulationMode:1,
 	handleToSOrDSCPAndFlowLabel:8,
 	handleDFBit:2,
-	protocol:4;
+	protocol:8;
 	int   authAlgo;
 	int  encAlgo;
 	ASF_uint32_t softKbyteLimit;

@@ -345,6 +345,7 @@ int asfDestroyPool(unsigned int numPool)
 	ptr = &(global_pools[numPool]);
 	/* printk("Freeing ID %d GblPool Ptr 0x%x\n", numPool, ptr->pHead->head); */
 	kfree(ptr->pHead->pMemory);
+	ptr->pHead->bInUse = 0;
 
 	for_each_possible_cpu(ii)
 	{
@@ -354,6 +355,7 @@ int asfDestroyPool(unsigned int numPool)
 		if (poolPtr->bInUse) {
 			/*printk("Freeing ID %d PerCpu[%d] Ptr 0x%x\n", numPool, ii, poolPtr->head);*/
 			kfree(poolPtr->pMemory);
+			poolPtr->bInUse = 0;
 		}
 
 	}

@@ -205,11 +205,11 @@ static int display_secfp_proc_global_stats(char *page, char **start,
 		GSTATS_SUM(TotOutPktsSecAppled);
 	}
 
-	printk(KERN_INFO"IN %lu IN-Proc %lu OUT %lu OUT-proc %lu\n",
+	printk(KERN_INFO"IN %lu \rIN-Proc %lu OUT %lu OUT-proc %lu\n",
 		GSTATS_TOTAL(TotInRecvPkts), GSTATS_TOTAL(TotInProcPkts),
 		GSTATS_TOTAL(TotOutRecvPkts), GSTATS_TOTAL(TotOutProcPkts));
 
-	printk(KERN_INFO"SEC-IN %lu IN-Proc %lu OUT %lu OUT-secapplied %lu\n",
+	printk(KERN_INFO"SEC-IN %lu \rIN-Proc %lu OUT %lu OUT-secapplied %lu\n",
 		GSTATS_TOTAL(TotInRecvSecPkts),
 		GSTATS_TOTAL(TotInProcSecPkts),
 		GSTATS_TOTAL(TotOutRecvPktsSecApply),
@@ -282,7 +282,7 @@ static int display_secfp_proc_out_spd(char *page, char **start,
 			local_bh_enable();
 		return ASF_IPSEC_TUNNEL_NOT_FOUND;
 	}
-	printk(KERN_INFO"\n OUTSPD- VSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
+	printk(KERN_INFO"\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
 		ulVSGId, ulTunnelId,
 		secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
 
@@ -294,8 +294,8 @@ static int display_secfp_proc_out_spd(char *page, char **start,
 					pCINode->ulIndex));
 		if (!pOutContainer)
 			continue;
-
-		printk(KERN_INFO"Id=%d, Proto 0x%x, Dscp 0x%x \n"\
+		printk(KERN_INFO"=========OUT Policy==================\n");
+		printk(KERN_INFO"Id=%d, Proto 0x%x, Dscp 0x%x"\
 			"Flags:Udp(%d) RED(%d),ESN(%d),DSCP(%d),DF(%d)\n",
 		pCINode->ulIndex,
 		pOutContainer->SPDParams.ucProto,
@@ -308,7 +308,7 @@ static int display_secfp_proc_out_spd(char *page, char **start,
 
 		print_SPDPolPPStats(pOutContainer->PPStats);
 
-		printk(KERN_INFO"SA IDs:");
+		printk(KERN_INFO"List SA IDs:");
 		for (pOutSALinkNode = pOutContainer->SAHolder.pSAList;
 			pOutSALinkNode != NULL;
 			pOutSALinkNode = pOutSALinkNode->pNext) {
@@ -316,6 +316,7 @@ static int display_secfp_proc_out_spd(char *page, char **start,
 			if (pOutSALinkNode->ulSAIndex % 10)
 				printk(KERN_INFO"\n\t");
 		}
+		printk(KERN_INFO"\n");
 	}
 	if (!bVal)
 		local_bh_enable();
@@ -346,7 +347,7 @@ static int display_secfp_proc_in_spd(char *page, char **start,
 			local_bh_enable();
 		return ASF_IPSEC_TUNNEL_NOT_FOUND;
 	}
-	printk(KERN_INFO"\n INSPD- VSGID= %d TUNNELID= %d, MAGIC NUM = %d",
+	printk(KERN_INFO"\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d",
 		ulVSGId, ulTunnelId,
 		secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
 
@@ -358,8 +359,8 @@ static int display_secfp_proc_in_spd(char *page, char **start,
 					pCINode->ulIndex));
 		if (!pInContainer)
 			continue;
-
-		printk(KERN_INFO"\nId=%d, Proto 0x%x, Dscp 0x%x \n"\
+		printk(KERN_INFO"=========IN Policy==================\n");
+		printk(KERN_INFO"Id=%d, Proto 0x%x, Dscp 0x%x "\
 			"Flags:Udp(%d) ESN(%d),DSCP(%d),ECN(%d)\n",
 		pCINode->ulIndex,
 		pInContainer->SPDParams.ucProto,
@@ -371,16 +372,17 @@ static int display_secfp_proc_in_spd(char *page, char **start,
 
 		print_SPDPolPPStats(pInContainer->PPStats);
 
-		printk(KERN_INFO"SA -SPI Val:");
+		printk(KERN_INFO"List IN SA -SPI Val:");
 
 		for (pSPILinkNode = pInContainer->pSPIValList, ulSAIndex = 0;
 			pSPILinkNode != NULL;
 			pSPILinkNode = pSPILinkNode->pNext, ulSAIndex++) {
 
-			printk(KERN_INFO" 0x%x ", pSPILinkNode->ulSPIVal);
+			printk(KERN_INFO"0x%x ", pSPILinkNode->ulSPIVal);
 			if (ulSAIndex % 10)
-				printk(KERN_INFO"\n\t");
+				printk(KERN_INFO"\n");
 		}
+		printk(KERN_INFO"\n");
 	}
 	if (!bVal)
 		local_bh_enable();
@@ -389,20 +391,22 @@ static int display_secfp_proc_in_spd(char *page, char **start,
 
 static void print_SAParams(SAParams_t *SAParams)
 {
-	printk(KERN_INFO"\n CIid = %d Tunnel Info saddr = 0x%x, daddr = 0x%x",
+	printk(KERN_INFO"CId = %d Tunnel Info saddr = 0x%x, daddr = 0x%x SPI=0x%x",
 		SAParams->ulCId,
 		SAParams->tunnelInfo.addr.iphv4.saddr,
-		SAParams->tunnelInfo.addr.iphv4.daddr);
+		SAParams->tunnelInfo.addr.iphv4.daddr,
+		SAParams->ulSPI);
 
-	printk(KERN_INFO"\n AntiReplay = %d, UDPEncap(NAT) = %d",
-		SAParams->bDoUDPEncapsulationForNATTraversal,
-		SAParams->bDoAntiReplayCheck);
-
-	printk(KERN_INFO"\n protocol = 0x%x, Dscp = 0x%x,"\
-		"AuthAlgo =%d(Len=%d), CipherAlgo = %d (Len=%d)\n",
+	printk(KERN_INFO"\nProtocol = 0x%x, Dscp = 0x%x,"\
+		"AuthAlgo =%d(Len=%d), CipherAlgo = %d (Len=%d) ",
 		SAParams->ucProtocol, SAParams->ucDscp,
 		SAParams->ucAuthAlgo, SAParams->AuthKeyLen,
 		SAParams->ucCipherAlgo, SAParams->EncKeyLen);
+
+	printk(KERN_INFO"AntiReplay = %d, UDPEncap(NAT) = %d\n",
+		SAParams->bDoUDPEncapsulationForNATTraversal,
+		SAParams->bDoAntiReplayCheck);
+
 }
 
 static int display_secfp_proc_out_sa(char *page, char **start,
@@ -429,7 +433,7 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 			local_bh_enable();
 		return ASF_IPSEC_TUNNEL_NOT_FOUND;
 	}
-	printk(KERN_INFO"\n OUTSPD- VSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
+	printk(KERN_INFO"\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
 		ulVSGId, ulTunnelId,
 		secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
 
@@ -441,8 +445,8 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 					pCINode->ulIndex));
 		if (!pOutContainer)
 			continue;
-
-		printk(KERN_INFO"Id=%d, Proto %d, Dscp %d \n"\
+		printk(KERN_INFO"=========OUT Policy==================\n");
+		printk(KERN_INFO"Id=%d, Proto %d, Dscp %d "\
 			"Flags:Udp(%d) RED(%d),ESN(%d),DSCP(%d),DF(%d)\n",
 		pCINode->ulIndex,
 		pOutContainer->SPDParams.ucProto,
@@ -454,18 +458,18 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 		pOutContainer->SPDParams.handleDf);
 
 		print_SPDPolPPStats(pOutContainer->PPStats);
-
-		printk(KERN_INFO"SA IDs:");
+		printk(KERN_INFO"--------------SA_LIST--------------------");
 		for (pOutSALinkNode = pOutContainer->SAHolder.pSAList;
 			pOutSALinkNode != NULL;
 			pOutSALinkNode = pOutSALinkNode->pNext) {
-			printk(KERN_INFO" %d ", pOutSALinkNode->ulSAIndex);
+			printk(KERN_INFO"\nSA-ID= %d ", pOutSALinkNode->ulSAIndex);
 			pOutSA =
 				(outSA_t *) ptrIArray_getData(&secFP_OutSATable,
 					pOutSALinkNode->ulSAIndex);
 			if (pOutSA)
 				print_SAParams(&pOutSA->SAParams);
 		}
+		printk(KERN_INFO"\n");
 	}
 	if (!bVal)
 		local_bh_enable();
@@ -498,7 +502,7 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 			local_bh_enable();
 		return ASF_IPSEC_TUNNEL_NOT_FOUND;
 	}
-	printk(KERN_INFO"\n OUTSPD- VSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
+	printk(KERN_INFO"\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
 		ulVSGId, ulTunnelId,
 		secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
 
@@ -511,8 +515,8 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 		if (!pInContainer)
 			continue;
 
-
-		printk(KERN_INFO"Id=%d, Proto %d, Dscp %d \n"\
+		printk(KERN_INFO"=========IN Policy==================\n");
+		printk(KERN_INFO"Id=%d, Proto %d, Dscp %d "\
 			"Flags:Udp(%d) ESN(%d),DSCP(%d),ECN(%d)\n",
 		pCINode->ulIndex,
 		pInContainer->SPDParams.ucProto,
@@ -523,21 +527,20 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 		pInContainer->SPDParams.bCopyEcn);
 
 		print_SPDPolPPStats(pInContainer->PPStats);
-
-		printk(KERN_INFO"SA -SPI Val:");
-
+		printk(KERN_INFO"--------------SA_LIST--------------------");
 		for (pSPILinkNode = pInContainer->pSPIValList, ulSAIndex = 0;
 			pSPILinkNode != NULL;
 			pSPILinkNode = pSPILinkNode->pNext, ulSAIndex++) {
-			printk(KERN_INFO" 0x%x ", pSPILinkNode->ulSPIVal);
+			printk(KERN_INFO"\nSPI = 0x%x", pSPILinkNode->ulSPIVal);
 			ulHashVal = secfp_compute_hash(pSPILinkNode->ulSPIVal);
 			for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
 				pInSA != NULL; pInSA = pInSA->pNext) {
-				printk(KERN_INFO"SpdContId =%d\n",
+				printk(KERN_INFO"SpdContId =%d",
 					pInSA->ulSPDInContainerIndex);
 				print_SAParams(&pInSA->SAParams);
 			}
 		}
+		printk(KERN_INFO"\n");
 	}
 	if (!bVal)
 		local_bh_enable();
