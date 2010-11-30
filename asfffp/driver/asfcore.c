@@ -181,11 +181,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *dev);
 #define	ASF_FFP_NUM_RQ_ENTRIES	(256)
 #define ASF_FFP_AUTOMODE_FLOW_INACTIME	(300)
 
-/*#undef ASF_DO_INC_CHECKSUM*/
-/*With hardware checksum feature enabled, all packets are going with
- wrong checksum.*/
-#define ASF_DO_INC_CHECKSUM
-
 #define FFP_HINDEX(hval) ASF_HINDEX(hval, ffp_hash_buckets)
 
 /** Local functions */
@@ -1464,11 +1459,15 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 				asf_debug_l2("applying NAT\n");
 				/* Update IP Checksum also */
 				if (iph->saddr != flow->ulSrcNATIp) {
+#ifdef ASF_DO_INC_CHECKSUM
 					csum_replace4(&iph->check, iph->saddr, flow->ulSrcNATIp);
+#endif
 					iph->saddr = flow->ulSrcNATIp;
 				}
 				if (iph->daddr != flow->ulDestNATIp) {
+#ifdef ASF_DO_INC_CHECKSUM
 					csum_replace4(&iph->check, iph->daddr, flow->ulDestNATIp);
+#endif
 					iph->daddr = flow->ulDestNATIp;
 				}
 
