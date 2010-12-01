@@ -275,6 +275,8 @@ int  asfctrl_fwd_l3_route_add(
 {
 	ASFFWDCreateCacheEntry_t cmd;
 
+	if (0 == asf_enable)
+		return 0;
 	/*loopback dummy packet */
 	if (iif == 1) {
 		ASFCTRL_INFO("dummy Loop Back offload...ignoring\n");
@@ -316,7 +318,7 @@ int  asfctrl_fwd_l3_route_add(
 		asfctrl_fwd_XmitL2blobDummyPkt(&cmd.CacheEntry.tuple);
 		ASFCTRL_INFO("Flow created successfully! --\n");
 	} else
-		ASFCTRL_ERR("Flow creation Failed! --\n");
+		ASFCTRL_INFO("Flow creation Failed! --\n");
 	return 0;
 }
 
