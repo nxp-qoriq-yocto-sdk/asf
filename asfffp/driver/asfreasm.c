@@ -1595,12 +1595,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 	unsigned int offset = 0;
 	bool bNewSkb = 1;
 	struct sk_buff *pSkb, *frag;
-#ifdef RAMU
-	if (unlikely(iph->frag_off & IP_DF)) {
-		asf_reasm_debug("IP data gram should not be fragmented\r\n");
-		return 1;
-	}
-#endif
+
 	asf_reasm_debug("skb->len = %d, ulMTU=%d, ulDevXmitHdrLen = %d ip_tot_len =%d\r\n", skb->len,
 			ulMTU, ulDevXmitHdrLen, iph->tot_len);
 	if ((likely(iph->tot_len > ulMTU)) || (skb_shinfo(skb)->frag_list)) {

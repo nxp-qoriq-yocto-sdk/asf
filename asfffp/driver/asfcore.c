@@ -1555,6 +1555,10 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 				struct sk_buff *pSkb, *pTempSkb;
 
 				XGSTATS_INC(FragAndXmit);
+
+				if (iph->frag_off & IP_DF)
+					goto ret_pkt_to_stk;
+
 				/* Need to call fragmentation routine */
 				asf_debug("attempting to fragment and xmit\n");
 

@@ -527,6 +527,9 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 				(Cache->odev->mtu + ETH_HLEN))) ||
 				(skb_shinfo(skb)->frag_list)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+				if (iph->frag_off & IP_DF)
+					goto ret_pkt_to_stk;
+
 				/* Fragmentation Needed, so do it */
 				asfFragmentAndSendPkt(Cache, skb, iph,
 						cache_stats, gstats, vstats);
