@@ -1714,9 +1714,20 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		skb->data -= pSA->ulL2BlobLen;
 		skb->len += pSA->ulL2BlobLen;
 
+		/* make following unconditional*/
+		if (pSA->bVLAN)
+			skb->vlan_tci = pSA->tx_vlan_id;
+		else
+			skb->vlan_tci = 0;
+
 		asfIPSecCopyWords((unsigned int *)  skb->data,
 				  (unsigned int *)  pSA->l2blob, pSA->ulL2BlobLen);
-
+		if (pSA->bPPPoE) {
+			/* PPPoE packet.. Set Payload length in PPPoE header */
+			*((short *)&(skb->data[pSA->ulL2BlobLen-4])) = htons(ntohs(iph->tot_len) + 2);
+		}
+		ASFIPSEC_DEBUG("skb->network_header = 0x%x, skb->transport_header = 0x%x\r\n",
+			skb_network_header(skb), skb_transport_header(skb));
 		skb_set_network_header(skb, pSA->ulL2BlobLen);
 		skb_set_transport_header(skb, (20 + pSA->ulL2BlobLen));
 	} else {
@@ -3192,9 +3203,7 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 	struct sk_buff *skb = (struct sk_buff *) context;
 	struct sk_buff *pOutSkb, *pTempSkb;
 	outSA_t *pSA;
-#ifdef ASFIPSEC_DEBUG_FRAME
 	struct iphdr *iph;
-#endif
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	secfp_desc_free(desc);
@@ -3263,8 +3272,8 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 						pOutSkb->pkt_type = 6;
 #ifdef ASFIPSEC_DEBUG_FRAME
 						ASFIPSEC_DEBUG("Next skb = 0x%x",  pTempSkb);
-						iph = ip_hdr(pOutSkb);
 #endif
+						iph = ip_hdr(pOutSkb);
 						pOutSkb->next = NULL;
 
 						pOutSkb->pkt_type = PACKET_FASTROUTE;
@@ -3273,8 +3282,20 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 
 						pOutSkb->dev = pSA->odev;
 
+						if (pSA->bVLAN)
+							pOutSkb->vlan_tci = pSA->tx_vlan_id;
+						else
+							pOutSkb->vlan_tci = 0;
+
 						asfIPSecCopyWords((unsigned int *)pOutSkb->data,
-								  (unsigned int *)pSA->l2blob, pSA->ulL2BlobLen);
+							(unsigned int *)pSA->l2blob, pSA->ulL2BlobLen);
+						if (pSA->bPPPoE) {
+							/* PPPoE packet.. Set Payload length in PPPoE header */
+							*((short *)&(pOutSkb->data[pSA->ulL2BlobLen-4])) = htons(ntohs(iph->tot_len) + 2);
+						}
+						ASFIPSEC_DEBUG("skb->network_header = 0x%x, skb->transport_header = 0x%x\r\n",
+							  skb_network_header(pOutSkb), skb_transport_header(pOutSkb));
+
 
 #ifdef ASFIPSEC_DEBUG_FRAME
 						ASFIPSEC_DEBUG("skb->network_header = 0x%x, skb->transport_header = 0x%x",
@@ -6601,9 +6622,17 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 			} else if (pModSA->ucChangeType == 2) {
 				pOutSA->ulPathMTU = pModSA->u.ulMtu;
 			} else if (pModSA->ucChangeType == 3) {
-				memcpy(pOutSA->l2blob, pModSA->u.l2blob.l2blob, pModSA->u.l2blob.ulL2BlobLen);
-				pOutSA->ulL2BlobLen = pModSA->u.l2blob.ulL2BlobLen;
-				pOutSA->odev = ASFFFPGetDeviceInterface(pModSA->u.l2blob.ulDeviceID);
+				memcpy(pOutSA->l2blob, pModSA->u.l2blob.l2blob,
+					pModSA->u.l2blob.ulL2BlobLen);
+				pOutSA->ulL2BlobLen =
+					pModSA->u.l2blob.ulL2BlobLen;
+				pOutSA->bVLAN = pModSA->u.l2blob.bTxVlan;
+				pOutSA->bPPPoE =
+					pModSA->u.l2blob.bUpdatePPPoELen;
+				pOutSA->tx_vlan_id =
+						pModSA->u.l2blob.usTxVlanId;
+				pOutSA->odev = ASFFFPGetDeviceInterface(
+						pModSA->u.l2blob.ulDeviceID);
 				if (!pOutSA->odev) {
 					if (!bVal)
 						local_bh_enable();

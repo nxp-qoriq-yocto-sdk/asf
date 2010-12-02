@@ -450,6 +450,11 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 	pSAData->u.l2blob.ulL2BlobLen =  hh_len;
 	memcpy(&pSAData->u.l2blob.l2blob, skb->data,
 			pSAData->u.l2blob.ulL2BlobLen);
+	if (vlan_tx_tag_present(skb)) {
+		pSAData->u.l2blob.bTxVlan = 1;
+		pSAData->u.l2blob.usTxVlanId = vlan_tx_tag_get(skb);
+	} else
+		pSAData->u.l2blob.bTxVlan = 0;
 	ASFIPSecRuntime(ulVSGId, ASF_IPSEC_RUNTIME_MOD_OUTSA, pSAData,
 			sizeof(ASFIPSecRuntimeModOutSAArgs_t), NULL, 0);
 	return;
@@ -458,8 +463,8 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 
 void asfctrl_ipsec_update_vsg_magic_number(void)
 {
-	ASFCTRL_FUNC_TRACE;
 	ASFIPSecUpdateVSGMagicNumber_t VSGMagicInfo;
+	ASFCTRL_FUNC_TRACE;
 	VSGMagicInfo.ulVSGId = ASF_DEF_VSG;
 	VSGMagicInfo.ulVSGMagicNumber = asfctrl_vsg_config_id;
 	ASFIPSecUpdateVSGMagicNumber(&VSGMagicInfo);

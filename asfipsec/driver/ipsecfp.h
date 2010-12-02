@@ -579,8 +579,11 @@ typedef struct outSA_s {
 	asfTmr_t		    *pL2blobTmr;
 	bool bIVDataPresent;
 	char bHeap;
-	unsigned char	     l2blob[ASF_MAX_L2BLOB_LEN];
-	unsigned short	    ulL2BlobLen;
+	unsigned char	bVLAN:1, bPPPoE:1;
+	unsigned char	l2blob[ASF_MAX_L2BLOB_LEN];
+	unsigned short	ulL2BlobLen;
+	unsigned short	tx_vlan_id; /*valid if bVLAN is 1*/
+
 } outSA_t;
 
 

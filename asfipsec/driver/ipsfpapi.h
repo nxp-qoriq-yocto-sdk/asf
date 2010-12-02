@@ -537,10 +537,11 @@ typedef struct ASFIPSecRuntimeModOutSAArgs_s {
 			ASF_uchar8_t l2blob[ASF_MAX_L2BLOB_LEN];
 			ASF_uint16_t ulL2BlobLen;
 			ASF_uint16_t ulDeviceID;
+			ASF_uint16_t bTxVlan:1, bUpdatePPPoELen:1;
+			ASF_uint16_t usTxVlanId;
 		} l2blob;
 	} u;
 } ASFIPSecRuntimeModOutSAArgs_t;
-
 
 typedef struct ASFIPSecRuntimeModInSAArgs_s {
 	ASF_uint32_t  ulTunnelId;
