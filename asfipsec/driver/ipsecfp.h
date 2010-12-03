@@ -583,7 +583,6 @@ typedef struct outSA_s {
 	unsigned char	l2blob[ASF_MAX_L2BLOB_LEN];
 	unsigned short	ulL2BlobLen;
 	unsigned short	tx_vlan_id; /*valid if bVLAN is 1*/
-
 } outSA_t;
 
 

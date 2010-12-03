@@ -233,8 +233,8 @@ ASF_void_t asfctrl_ipsec_fn_audit_log(ASFLogInfo_t *pIPSecV4Info)
 	/* Filling the Loging message fields, IPSec module specific fileds  */
 	ASFCTRL_FUNC_TRACE;
 
-	ASFCTRL_TRACE("%s-SA, SPI=%d, Proto=%d, "\
-			"Dst IPAddr= %d,  Src IPAddr= %d PathMTU=%d,",
+	ASFCTRL_TRACE("%s-SA, SPI=0x%x, Proto=%d, "\
+			"Dst IPAddr= 0x%x,  Src IPAddr= 0x%x PathMTU=%d,",
 		XFRM_DIR(pIPSecV4Info->u.IPSecInfo.ucDirection),
 		pIPSecV4Info->u.IPSecInfo.ulSPI,
 		pIPSecV4Info->u.IPSecInfo.ucProtocol,
@@ -246,7 +246,7 @@ ASF_void_t asfctrl_ipsec_fn_audit_log(ASFLogInfo_t *pIPSecV4Info)
 		pIPSecV4Info->aMsg ? pIPSecV4Info->aMsg : "null");
 
 	/*pIPSecV4Info->u.IPSecInfo.ulSeqNumber*/
-	ASFCTRL_TRACE("Num of Pkts = %d\nNumof Bytes = %d",
+	ASFCTRL_TRACE("Num of Pkts = %u\nNumof Bytes = %u",
 		pIPSecV4Info->u.IPSecInfo.ulNumOfPktsProcessed,
 		pIPSecV4Info->u.IPSecInfo.ulNumOfBytesProcessed);
 

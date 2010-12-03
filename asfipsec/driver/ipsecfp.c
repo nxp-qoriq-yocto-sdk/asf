@@ -1956,6 +1956,11 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	ASFIPSEC_DBGL2("TailSkb: skb->data = 0x%x, skb->len = %d,"\
 		"usPadLen =%d, trailer=%d",
 		(int)pTailSkb->data, pTailSkb->len, usPadLen, SECFP_ESP_TRAILER_LEN);
+
+#ifdef ASFIPSEC_DEBUG_FRAME
+	hexdump(skb1->data, 64);
+	ASFIPSEC_PRINT("");
+#endif
 }
 
 
@@ -5001,10 +5006,10 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT15);
 				AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID5;
 				ASFIPSEC_WARN("Anti-replay window check failed");
-				snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Anti-replay window check failed");
+				snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
+					"Anti-replay window check failed #1");
 				AsfLogInfo.aMsg = aMsg;
 				asfFillLogInfo(&AsfLogInfo, pSA);
-				ASFIPSEC_WARN("Anti-replay window check failed #1");
 				/* Update SA Statistics */
 				skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP; /* DROP = 1*/
 				return;
@@ -5053,7 +5058,7 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 					if (uiDiff > pSA->SAParams.
 							AntiReplayWin) {
 						ASFIPSEC_WARN("Anti-replay window check failed#2");
-						snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Anti-replay window check failed");
+						snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Anti-replay window check failed #2");
 						AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID5;
 						AsfLogInfo.aMsg = aMsg;
 						asfFillLogInfo(&AsfLogInfo, pSA);
@@ -5115,7 +5120,8 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 					ASFIPSEC_WARN("Anti-replay window check failed#3");
 					AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID5;
 					/* Update SA Statistics */
-					snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Anti-replay window check failed");
+					snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
+					"Anti-replay window check failed #3");
 					AsfLogInfo.aMsg = aMsg;
 					asfFillLogInfo(&AsfLogInfo, pSA);
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
@@ -5155,7 +5161,7 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 							AntiReplayWin) {
 						ASFIPSEC_WARN("Anti-replay window check failed#4");
 						/* Update SA Statistics */
-						snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Anti-replay window check failed");
+						snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Anti-replay window check failed #4");
 						AsfLogInfo.aMsg = aMsg;
 						AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID5;
 						asfFillLogInfo(&AsfLogInfo, pSA);
@@ -6491,6 +6497,10 @@ unsigned int secfp_createOutSA(
 		pSA->ulIvSizeInWords = pSA->SAParams.ulIvSize/4;
 		pSA->ulSecHdrLen = SECFP_ESP_HDR_LEN + pSA->SAParams.ulIvSize;
 
+		/* starting the seq number from 2 to avoid the conflict
+		with the Networking Stack seq number */
+		atomic_set(&pSA->ulLoSeqNum, 2);
+
 		if (pSA->SAParams.bAuth) {
 			pSA->ulSecOverHead += SECFP_ICV_LEN;
 			pSA->ulSecLenIncrease += SECFP_ICV_LEN;
@@ -7449,7 +7459,7 @@ static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
 	}
 	pAsfLogInfo->u.IPSecInfo.ucProtocol = pSA->SAParams.ucProtocol;
 	pAsfLogInfo->u.IPSecInfo.ulSeqNumber = pSA->ulLastSeqNum;
-	/*pAsfLogInfo->u.IPSecInfo.ulPathMTU = pSA->ulPathMTU; */
+	pAsfLogInfo->u.IPSecInfo.ulPathMTU = 0xffff;
 	pAsfLogInfo->u.IPSecInfo.ulSPI = pSA->SAParams.ulSPI;
 	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6 == 0) {
 		pAsfLogInfo->u.IPSecInfo.Address.IP_Version = 4;
@@ -7484,7 +7494,7 @@ static inline void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA)
 		pAsfLogInfo->u.IPSecInfo.ulNumOfBytesProcessed += pSA->ulBytes[ii];
 	}
 	pAsfLogInfo->u.IPSecInfo.ucProtocol = pSA->SAParams.ucProtocol;
-	/*pAsfLogInfo->u.IPSecInfo.ulSeqNumber = pSA->ulLastSeqNum;*/
+	pAsfLogInfo->u.IPSecInfo.ulSeqNumber = 0xffff;
 	pAsfLogInfo->u.IPSecInfo.ulPathMTU = pSA->ulPathMTU;
 	pAsfLogInfo->u.IPSecInfo.ulSPI = pSA->SAParams.ulSPI;
 	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6 == 0) {

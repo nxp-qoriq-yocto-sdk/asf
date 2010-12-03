@@ -519,6 +519,8 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 
+	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_ON;
+	SAParams.replayWindowSize = 32;/*xfrm->props.replay_window;*/
 	if (xfrm->lft.hard_use_expires_seconds != XFRM_INF) {
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_ON;
 		SAParams.softSecsLimit = xfrm->lft.soft_use_expires_seconds;
@@ -526,9 +528,6 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	} else
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
 
-	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
-	SAParams.bDoAntiReplayCheck = xfrm->props.replay_window ? 1 : 0;
-	SAParams.replayWindowSize = xfrm->props.replay_window;
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
 	SAParams.handleToSOrDSCPAndFlowLabel = ASF_IPSEC_QOS_TOS_COPY;
 	/*if not copy than set - SAParams.qos = defined value */
@@ -701,6 +700,8 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 			ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
+	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_ON;
+	SAParams.replayWindowSize = 32;/*xfrm->props.replay_window;*/
 
 	if (xfrm->lft.hard_use_expires_seconds != XFRM_INF) {
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_ON;
@@ -709,8 +710,6 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	} else
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
 
-	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
-	SAParams.replayWindowSize = xfrm->props.replay_window;
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
 	SAParams.handleToSOrDSCPAndFlowLabel = ASF_IPSEC_QOS_TOS_COPY;
 	SAParams.handleDFBit = ASF_IPSEC_DF_COPY;

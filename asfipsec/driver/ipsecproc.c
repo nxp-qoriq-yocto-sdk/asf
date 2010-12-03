@@ -205,11 +205,11 @@ static int display_secfp_proc_global_stats(char *page, char **start,
 		GSTATS_SUM(TotOutPktsSecAppled);
 	}
 
-	printk(KERN_INFO"IN %lu \rIN-Proc %lu OUT %lu OUT-proc %lu\n",
+	printk(KERN_INFO"\n    InRcv %lu \t InProc %lu \tOutRcv %lu OutProc %lu\n",
 		GSTATS_TOTAL(TotInRecvPkts), GSTATS_TOTAL(TotInProcPkts),
 		GSTATS_TOTAL(TotOutRecvPkts), GSTATS_TOTAL(TotOutProcPkts));
 
-	printk(KERN_INFO"SEC-IN %lu \rIN-Proc %lu OUT %lu OUT-secapplied %lu\n",
+	printk(KERN_INFO"\nSEC-InRcv %lu \t InProc %lu \tOutRcv %lu OutProc %lu\n",
 		GSTATS_TOTAL(TotInRecvSecPkts),
 		GSTATS_TOTAL(TotInProcSecPkts),
 		GSTATS_TOTAL(TotOutRecvPktsSecApply),
@@ -403,9 +403,9 @@ static void print_SAParams(SAParams_t *SAParams)
 		SAParams->ucAuthAlgo, SAParams->AuthKeyLen,
 		SAParams->ucCipherAlgo, SAParams->EncKeyLen);
 
-	printk(KERN_INFO"AntiReplay = %d, UDPEncap(NAT) = %d\n",
-		SAParams->bDoUDPEncapsulationForNATTraversal,
-		SAParams->bDoAntiReplayCheck);
+	printk(KERN_INFO"AntiReplay = %d, UDPEncap(NAT-T) = %d\n",
+		SAParams->bDoAntiReplayCheck,
+		SAParams->bDoUDPEncapsulationForNATTraversal);
 
 }
 
