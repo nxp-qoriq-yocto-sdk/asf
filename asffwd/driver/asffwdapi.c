@@ -83,7 +83,9 @@ MODULE_PARM_DESC(fwd_l2blob_refresh_npkts, "Number of packets after which"\
 module_param(fwd_l2blob_refresh_interval, int, 0644);
 MODULE_PARM_DESC(fwd_l2blob_refresh_interval, "Time interval after which"\
 							"L2 blob required");
-
+module_param(fwd_hash_buckets, int, 0644);
+MODULE_PARM_DESC(fwd_hash_buckets, "Maximum number of buckets"\
+						" in FWD Hash table");
 static unsigned int  fwd_cur_entry_count;
 static unsigned int  fwd_cache_pool_id = -1;
 static unsigned int  fwd_blob_timer_pool_id = -1;
