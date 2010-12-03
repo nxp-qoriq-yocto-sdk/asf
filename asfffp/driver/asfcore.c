@@ -1681,7 +1681,7 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			flow_stats->ulOutPkts++;
 #endif
 
-			gen_indications:
+gen_indications:
 			/* skip all other indications if flow_end indication is going to be sent */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (bSpecialIndication) {

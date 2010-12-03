@@ -511,6 +511,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	memset(&dstSel, 0, sizeof(ASF_IPSecSelectorSet_t));
 	memset(&outSASel, 0, sizeof(ASF_IPSecSASelector_t));
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	SAParams.bVerifyInPktWithSASelectors =
 				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
 	SAParams.bRedSideFragment =
@@ -519,8 +520,26 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 
+	SAParams.bDoAntiReplayCheck =
+		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
+			: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
+
 	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_ON;
 	SAParams.replayWindowSize = 32;/*xfrm->props.replay_window;*/
+	ASFCTRL_INFO("Out Replay window size = %d ", xfrm->props.replay_window);
+
+#else
+	SAParams.bVerifyInPktWithSASelectors =
+				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+	SAParams.bRedSideFragment =
+				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+	SAParams.bDoPeerGWIPAddressChangeAdaptation =
+				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
+	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_OFF;
+
+	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
+
+#endif
 	if (xfrm->lft.hard_use_expires_seconds != XFRM_INF) {
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_ON;
 		SAParams.softSecsLimit = xfrm->lft.soft_use_expires_seconds;
@@ -694,15 +713,32 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	inSA.DestAddr.bIPv4OrIPv6 = 0;
 	inSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	SAParams.bVerifyInPktWithSASelectors =
-			ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
-	SAParams.bRedSideFragment = ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+	SAParams.bRedSideFragment =
+				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
-			ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
+				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
+	SAParams.bDoAntiReplayCheck =
+		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
+			: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
 	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_ON;
 	SAParams.replayWindowSize = 32;/*xfrm->props.replay_window;*/
+	ASFCTRL_INFO("In  Replay window size = %d ", xfrm->props.replay_window);
 
+#else
+	SAParams.bVerifyInPktWithSASelectors =
+				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+	SAParams.bRedSideFragment =
+				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+	SAParams.bDoPeerGWIPAddressChangeAdaptation =
+				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
+	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_OFF;
+
+	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
+#endif
 	if (xfrm->lft.hard_use_expires_seconds != XFRM_INF) {
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_ON;
 		SAParams.softSecsLimit = xfrm->lft.soft_use_expires_seconds;

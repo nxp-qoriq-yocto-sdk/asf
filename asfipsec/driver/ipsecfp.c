@@ -1764,18 +1764,23 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 	/* set up the Skb dev pointer */
 	skb->dev = pSA->odev;
-
-	if ((pSA->ulPkts[0] + pSA->ulPkts[1]) % ulL2BlobRefreshPktCnt_g == 0) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	if (ASFIPSecCbFn.pFnRefreshL2Blob &&
+		((pSA->ulPkts[0] + pSA->ulPkts[1]) % ulL2BlobRefreshPktCnt_g == 0)) {
 		TunAddress.IP_Version = 4;
-		TunAddress.dstIP.bIPv4OrIPv6  = 0;
-		TunAddress.srcIP.bIPv4OrIPv6  = 0;
-		TunAddress.dstIP.ipv4addr = pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
-		TunAddress.srcIP.ipv4addr = pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
-		ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, pSA->ulTunnelId, ulSPDContainerIndex,
-						ptrIArray_getMagicNum(&(secfp_OutDB),  ulSPDContainerIndex), &TunAddress,
-						pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
+		TunAddress.dstIP.bIPv4OrIPv6 = 0;
+		TunAddress.srcIP.bIPv4OrIPv6 = 0;
+		TunAddress.dstIP.ipv4addr =
+			pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+		TunAddress.srcIP.ipv4addr =
+			pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
+		ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, pSA->ulTunnelId,
+			ulSPDContainerIndex,
+			ptrIArray_getMagicNum(&(secfp_OutDB),
+				ulSPDContainerIndex), &TunAddress,
+			pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
 	}
-
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 }
 
 
@@ -2733,6 +2738,7 @@ static inline outSA_t  *secfp_findOutSA(
 	SPDOutSALinkNode_t *pOutSALinkNode;
 
 	ASFIPSEC_FENTRY;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (unlikely(pSecInfo->outContainerInfo.ulTimeStamp < ulTimeStamp_g)) {
 		if ((pSecInfo->outContainerInfo.configIdentity.ulVSGConfigMagicNumber !=
 			pulVSGMagicNumber[ulVsgId]) ||
@@ -2750,6 +2756,7 @@ static inline outSA_t  *secfp_findOutSA(
 		}
 		pSecInfo->outContainerInfo.ulTimeStamp = ulTimeStamp_g;
 	}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 	*ppContainer = pContainer = (SPDOutContainer_t *) ptrIArray_getData(&(secfp_OutDB), pSecInfo->outContainerInfo.ulSPDContainerId);
 
 	ASFIPSEC_DEBUG("Valid Container found pContainer = 0x%x",
@@ -3024,7 +3031,11 @@ int secfp_try_fastPathOutv4 (
 			bScatterGatherList);
 		ASFIPSEC_DEBUG("outv4: skb = 0x%x skb1 =0x%x",
 				(unsigned int) skb, (unsigned int) skb1);
-		for (pNextSkb = skb->next; skb != NULL; skb = pNextSkb) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+		for (; skb != NULL; skb = pNextSkb)
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
+		{
+			pNextSkb = skb->next;
 			skb->next = NULL;
 
 			(*pSA->prepareOutPktFnPtr)(skb, pSA, pContainer, &pOuterIpHdr);
@@ -3057,22 +3068,17 @@ int secfp_try_fastPathOutv4 (
 			and one for the core */
 			skb->cb[SECFP_REF_INDEX] = 2;
 			desc = secfp_desc_alloc();
-			switch (secout_sg_flag) {
-			case SECFP_OUT | SECFP_NO_SCATTER_GATHER:
-				if (desc)
-					secfp_prepareOutDescriptor(skb,  pSA,
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+			if ((secout_sg_flag & SECFP_SCATTER_GATHER)
+				== SECFP_SCATTER_GATHER)
+				secfp_prepareOutDescriptorWithFrags(skb, pSA,
 							desc, 0);
-			break;
-			case SECFP_OUT | SECFP_SCATTER_GATHER:
-				if (desc)
-					secfp_prepareOutDescriptor(skb,  pSA,
-							desc, 0);
-			break;
-			}
-			if (secfp_talitos_submit(pdev, desc,
-				(secout_sg_flag & SECFP_SCATTER_GATHER)
-				? secfp_outComplete : secfp_outComplete
-				, (void *)skb) == -EAGAIN) {
+			else
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+				secfp_prepareOutDescriptor(skb, pSA, desc, 0);
+
+			if (secfp_talitos_submit(pdev, desc, secfp_outComplete,
+				(void *)skb) == -EAGAIN) {
 #ifdef ASFIPSEC_LOG_MSG
 				ASFIPSEC_DEBUG("secfp_talitos_submit failed ");
 				snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
@@ -3093,27 +3099,21 @@ int secfp_try_fastPathOutv4 (
 				rcu_read_unlock();
 				return 1;
 			}
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (pSA->option[1] != SECFP_NONE) {
 				/* 2nd iteration required ICV */
 				skb->cb[SECFP_REF_INDEX]++;
 				desc = secfp_desc_alloc();
+				if ((secout_sg_flag & SECFP_SCATTER_GATHER)
+						== SECFP_SCATTER_GATHER)
+					secfp_prepareOutDescriptorWithFrags(skb,
+						pSA, desc, 1);
+				else
+					secfp_prepareOutDescriptor(skb, pSA, desc, 1);
 
-				switch (secout_sg_flag) {
-				case SECFP_OUT | SECFP_NO_SCATTER_GATHER:
-				if (desc)
-					secfp_prepareOutDescriptor(skb,  pSA,
-								desc, 1);
-				break;
-				case SECFP_OUT | SECFP_SCATTER_GATHER:
-				if (desc)
-					secfp_prepareOutDescriptorWithFrags
-						(skb, pSA, desc, 1);
-				break;
-				}
 				if (secfp_talitos_submit(pdev, desc,
-					(secout_sg_flag & SECFP_SCATTER_GATHER)
-					? secfp_outComplete : secfp_outComplete
-					, (void *)skb) == -EAGAIN) {
+					secfp_outComplete,
+					(void *)skb) == -EAGAIN) {
 					ASFIPSEC_ERR("secfp_talitos_submit"
 							" failed ");
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
@@ -3134,7 +3134,7 @@ int secfp_try_fastPathOutv4 (
 					return 1;
 				}
 			}
-
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			(*pSA->finishOutPktFnPtr)(skb, pSA, pContainer, pOuterIpHdr, ulVSGId, pSecInfo->outContainerInfo.ulSPDContainerId);
 #ifdef ASFIPSEC_DEBUG_FRAME
 			ASFIPSEC_PRINT("secfp_out: Pkt Post Processing");
@@ -3149,35 +3149,36 @@ int secfp_try_fastPathOutv4 (
 				ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
 				skb->data_len = 0;
 				kfree_skb(skb);
+				rcu_read_unlock();
+				return 1;
 			}
-			rcu_read_unlock();
-			return 1;
-		}
-
-		} else if (ASFIPSecCbFn.pFnNoOutSA) {
-			ASF_uchar8_t  bSPDContainerPresent;
-			ASFBuffer_t Buffer;
-			/* Homogenous buffer */
-			rcu_read_unlock();
-			if (skb_shinfo(skb1)->frag_list) {
-				if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
-					ASFIPSEC_DEBUG("asflLinearize failed");
-					kfree_skb(skb1);
-					return 1;
-				}
-				skb_reset_network_header(skb1);
-			}
-
-			Buffer.nativeBuffer = skb1;
-			if (pContainer)
-				bSPDContainerPresent = 1;
-			else
-				bSPDContainerPresent = 0;
-			ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer, ASFSkbFree, skb1, bSPDContainerPresent, bRevalidate);
-			return 1;
 		}
 		rcu_read_unlock();
-		return 0;
+		return 1;
+	} else if (ASFIPSecCbFn.pFnNoOutSA) {
+		ASF_uchar8_t  bSPDContainerPresent;
+		ASFBuffer_t Buffer;
+		/* Homogenous buffer */
+		rcu_read_unlock();
+		if (skb_shinfo(skb1)->frag_list) {
+			if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
+				ASFIPSEC_DEBUG("asflLinearize failed");
+				kfree_skb(skb1);
+				return 1;
+			}
+			skb_reset_network_header(skb1);
+		}
+
+		Buffer.nativeBuffer = skb1;
+		if (pContainer)
+			bSPDContainerPresent = 1;
+		else
+			bSPDContainerPresent = 0;
+			ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer,
+				ASFSkbFree, skb1, bSPDContainerPresent, bRevalidate);
+		return 1;
+	}
+	return 0;
 }
 
 static inline void secfp_unmap_descs(struct sk_buff *skb)
@@ -5514,6 +5515,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		ulLowerBoundSeqNum = 0;
 		if (pSA->SAParams.bAuth) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (unlikely(pTailSkb->len < SECFP_ICV_LEN)) {
 				/* pTailPrevSkb gets initialized in the case of fragments; This case comes
 				   into picture only when we have fragments */
@@ -5523,7 +5525,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 
 				pTailPrevSkb->len -= ulICVInPrevFrag;
 				pTailSkb->len += ulICVInPrevFrag;
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+
 				if (pSA->SAParams.bDoAntiReplayCheck) {
 					pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
 					if (pSA->SAParams.bUseExtendedSequenceNumber) {
@@ -5576,9 +5578,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 						pCurICVLocBytePtrInPrevFrag[ii];
 
 					}
-				} else
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
-				{
+				} else {
 					/* Copy to Tail frag */
 					pNewICVLocBytePtr = pTailSkb->data;
 					for (ii = pTailSkb->len - 1;
@@ -5594,7 +5594,6 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 						pCurICVLocBytePtrInPrevFrag[ii];
 
 				}
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			} else {
 				if (pSA->SAParams.bDoAntiReplayCheck) {
 					pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
@@ -5616,8 +5615,8 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 
 				} else
 					ASFIPSEC_DEBUG("No Antoreplay check\n");
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		} else {
 			pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 0;
 			/* No need to do post SEC Lookup */
@@ -5672,18 +5671,15 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		ASFIPSEC_DEBUG("Calling secfp_talitos_submit");
 		pHeadSkb->cb[SECFP_REF_INDEX] = 2;
 		desc = secfp_desc_alloc();
-		switch (secin_sg_flag) {
-		case SECFP_IN | SECFP_NO_SCATTER_GATHER:
-			if (desc)
-				secfp_prepareInDescriptor(pHeadSkb,
-						pSA, desc, 0);
-		break;
-		case SECFP_IN | SECFP_SCATTER_GATHER:
-			if (desc)
-				secfp_prepareInDescriptorWithFrags(pHeadSkb,
-						pSA, desc, 0);
-		break;
-		}
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+		if ((secin_sg_flag & SECFP_SCATTER_GATHER)
+			== SECFP_SCATTER_GATHER)
+			secfp_prepareInDescriptorWithFrags(pHeadSkb, pSA,
+						desc, 0);
+		else
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
+
 		if (secfp_talitos_submit(pdev, desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
 			 secfp_inCompleteWithFrags : secfp_inComplete,
@@ -5708,23 +5704,16 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		pHeadSkb->data += (pSA->ulSecHdrLen);
 		pHeadSkb->cb[SECFP_REF_INDEX]--;
 		/* length of skb memory to unmap upon completion */
-
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (pSA->option[1] != SECFP_NONE) {
 			pHeadSkb->cb[SECFP_REF_INDEX]++;
 			desc = secfp_desc_alloc();
-
-			switch (secin_sg_flag) {
-			case SECFP_IN | SECFP_NO_SCATTER_GATHER:
-				if (desc)
-					secfp_prepareInDescriptor(pHeadSkb,
-						pSA, desc, 1);
-			break;
-			case SECFP_IN | SECFP_SCATTER_GATHER:
-				if (desc)
-					secfp_prepareInDescriptorWithFrags(
-						pHeadSkb, pSA, desc, 1);
-			break;
-			}
+			if ((secin_sg_flag & SECFP_SCATTER_GATHER)
+				== SECFP_SCATTER_GATHER)
+				secfp_prepareInDescriptorWithFrags(pHeadSkb,
+						pSA, desc, 0);
+			else
+				secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 
 			if (secfp_talitos_submit(pdev, desc,
 				(secin_sg_flag & SECFP_SCATTER_GATHER)
@@ -5746,16 +5735,16 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 				return 1;
 			}
 		}
-
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		/* Post submission, we can move the data pointer beyond the ESP header */
 		/* Trim the length accordingly */
 		/* Since we will be giving packet to fwnat processing, keep the data pointer as 14 bytes before data start */
 		ASFIPSEC_DEBUG("In: Offseting data by ulSecHdrLen = %d",
 					pSA->ulSecHdrLen);
-
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
 			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
-
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
 			ASFIPSEC_TRACE;
 			pHeadSkb->data_len = 0;
