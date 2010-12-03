@@ -607,6 +607,8 @@ static int __init asfctrl_init(void)
 
 static void __exit asfctrl_exit(void)
 {
+	int ii;
+
 	ASFCTRL_FUNC_ENTRY;
 
 	if (g_cap.mode[fwMode])
@@ -615,6 +617,12 @@ static void __exit asfctrl_exit(void)
 	asfctrl_sysfs_exit();
 	devfp_register_tx_hook(NULL);
 	unregister_netdevice_notifier(&asfctrl_dev_notifier);
+
+	for (ii = 0; ii < ASFCTRL_MAX_IFACES; ii++) {
+		if (p_asfctrl_netdev_cii[ii])
+			asfctrl_delete_dev_map(p_asfctrl_netdev_cii[ii]);
+	}
+
 	ASFRemove();
 
 	ASFCTRL_INFO("ASF Control Module - Core Unloaded \n");

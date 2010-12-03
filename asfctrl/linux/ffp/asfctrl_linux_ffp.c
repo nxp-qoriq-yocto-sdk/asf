@@ -1091,6 +1091,7 @@ void asfctrl_linux_unregister_ffp(void)
 
 	nf_conntrack_unregister_notifier(&asfctrl_conntrack_event_nb);
 
+	ffp_sysfs_exit();
 	ASFCTRL_FUNC_EXIT;
 	return;
 }
