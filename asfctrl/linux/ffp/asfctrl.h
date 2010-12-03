@@ -270,6 +270,4 @@ extern void asfctrl_linux_register_ffp(void);
 	#define ASFCTRL_DBG(fmt, arg...)
 #endif
 
-extern int asf_enable;
-
 #endif /*__ASFCTRL_H__*/
