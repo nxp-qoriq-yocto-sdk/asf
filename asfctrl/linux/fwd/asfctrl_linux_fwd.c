@@ -275,7 +275,7 @@ int  asfctrl_fwd_l3_route_add(
 {
 	ASFFWDCreateCacheEntry_t cmd;
 
-	if (0 == asf_enable)
+	if (0 == ASFGetStatus())
 		return 0;
 	/*loopback dummy packet */
 	if (iif == 1) {
