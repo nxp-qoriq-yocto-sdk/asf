@@ -501,7 +501,7 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 		}
 #endif
 		if (Cache->l2blob_len == 0) {
-			asf_warn("Generating L2blob Indication"
+			asf_print("Generating L2blob Indication"
 					" as Blank L2blob found!\n");
 			bL2blobRefresh = 1;
 			goto gen_indications;
@@ -817,7 +817,7 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 			ulVsgId, &hash);
 
 	if (CacheEntry) {
-		asf_warn("Cache entry already exist!\n");
+		asf_print("Cache entry already exist!\n");
 		return ASFFWD_RESPONSE_FAILURE;
 	}
 
@@ -868,7 +868,7 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 					0, CacheEntry->pL2blobTmr);
 		/* Now use this as fresh Cache entry */
 #else
-		asf_warn("Cache entry table Full!\n");
+		asf_print("Cache entry table Full!\n");
 		return ASFFWD_RESPONSE_FAILURE;
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	} else {
@@ -1156,7 +1156,7 @@ unsigned int asfFwdBlobTmrCb(unsigned int ulVsgId, unsigned int ulCacheEntryPtr,
 			}
 			return 0;
 		}
-		asf_warn("Blob Tmr: CacheEntry not found {%p}.."
+		asf_print("Blob Tmr: CacheEntry not found {%p}.."
 			" (might happen while Caches are being deleted)!!!\n",
 							CacheEntry);
 	}

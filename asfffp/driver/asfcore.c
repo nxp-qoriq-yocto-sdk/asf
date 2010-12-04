@@ -1196,7 +1196,7 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			gstats->ulErrCsum++;
 #endif
 			XGSTATS_INC(LocalBadCsum);
-			asf_warn("Ip Checksum verification failed \r\n");
+			asf_debug("Ip Checksum verification failed \r\n");
 			goto drop_pkt;
 		}
 

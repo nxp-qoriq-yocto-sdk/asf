@@ -213,7 +213,7 @@ extern void asfctrl_linux_register_ffp(void);
 #ifdef ASFCTRL_DEBUG
 	#define DEBUG_GLOBAL_LEVEL 	TRACE
 #else
-	#define DEBUG_GLOBAL_LEVEL 	WARNING
+	#define DEBUG_GLOBAL_LEVEL 	ERROR
 #endif
 
 #define ASFCTRL_FATAL(fmt, arg...) \

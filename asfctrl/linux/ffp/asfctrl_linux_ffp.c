@@ -84,7 +84,7 @@ static T_INT32 asf_linux_XmitL2blobDummyPkt(
 
 	if ((0 != ip_route_input(skb, uldestIp, ulSrcIp, 0, dev)) ||
 		(skb_rtable(skb)->rt_flags & RTCF_LOCAL)) {
-		ASFCTRL_ERR("Route not found for dst %x local host : %d",
+		ASFCTRL_INFO("Route not found for dst %x local host : %d",
 			uldestIp,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
 		dev_put(dev);
@@ -332,7 +332,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 
 	if ((0 != ip_route_input(skb, uldestIp, pInfo->tuple.ulSrcIp, 0, dev))
 		|| (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) {
-		ASFCTRL_ERR("Route not found for dst %x local host : %d",
+		ASFCTRL_INFO("Route not found for dst %x local host : %d",
 			uldestIp,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
 		dev_put(dev);
@@ -452,7 +452,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			ASFFFP_RESPONSE_SUCCESS) {
 				ASFCTRL_INFO("Flow modified successfully");
 		} else {
-				ASFCTRL_ERR("Flow modification failure");
+				ASFCTRL_WARN("Flow modification failure");
 		}
 	}
 #endif
@@ -856,7 +856,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		ct_event->status |= IPS_ASF_OFFLOADED;
 	} else {
 		/* Error hanling */
-		ASFCTRL_ERR("Flow creation failure in ASF");
+		ASFCTRL_WARN("Flow creation failure in ASF");
 	}
 
 	} /* New scope end */
