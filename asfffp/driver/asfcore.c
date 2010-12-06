@@ -1424,14 +1424,12 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		flow_stats->ulInPkts++;
-#if 0
 /* Only timer based L2 blob refresh  is supported in current release */
 		if (asf_l2blob_refresh_npkts &&
 			(flow_stats->ulInPkts % asf_l2blob_refresh_npkts) == 0) {
 			asf_debug_l2("Decided to send L2Blob refresh ind based on npkts\n");
 			bL2blobRefresh = 1;
 		}
-#endif
 		flow->ulLastPktInAt = jiffies;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
