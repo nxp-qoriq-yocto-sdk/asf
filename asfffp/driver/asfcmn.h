@@ -277,10 +277,11 @@ static inline ASF_uint32_t asf_cii_cache(struct net_device *dev)
 static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 {
 	if (ETH_HLEN == len) {
-		/* Only copy SRC & DST Addresses */
 		dst[0] = src[0];
 		dst[1] = src[1];
 		dst[2] = src[2];
+		/* Copy last 2 bytes */
+		dst[3] = (dst[3] & 0x0000FFFF) | (src[3] & 0xFFFF0000);
 	} else {
 		while (len >= sizeof(unsigned int)) {
 			*dst = *src;

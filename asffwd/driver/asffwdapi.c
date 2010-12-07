@@ -382,7 +382,7 @@ inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 			cache_stats->ulOutBytes += pSkb->len;
 			vstats->ulOutBytes += pSkb->len;
 			if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
-				asf_err("Error in Xmit: Should may happen\r\n");
+				asf_warn("Error in Xmit: may happen\r\n");
 				kfree_skb(pSkb);
 			}
 

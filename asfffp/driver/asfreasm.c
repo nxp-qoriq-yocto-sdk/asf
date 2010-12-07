@@ -1670,8 +1670,10 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			}
 		}
 
-
 		if (bNewSkb) {
+			unsigned int alignamount;
+			int required = 1;
+
 			asf_reasm_debug("New Skb required \r\n");
 			*pOutSkb = NULL;
 			ulMTU -= ihl;
@@ -1680,14 +1682,21 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			while (bytesLeft > 0) {
 				asf_reasm_debug("bytesLeft = %d\r\n", bytesLeft);
 				len = (bytesLeft > ulMTU) ?  ulMTU : bytesLeft;
-				if (len < bytesLeft)
+				if (len < bytesLeft) {
 					len &= ~7;
-#if 0
-				if (dev)
-					skb2 = gfar_new_skb(dev);
-				else
-#endif
-					skb2 = alloc_skb(len+ihl+ulDevXmitHdrLen, GFP_ATOMIC);
+					skb2 = alloc_skb(len + ihl +
+						ulDevXmitHdrLen, GFP_ATOMIC);
+				} else {
+					/* Last one, no more
+					   allocation required */
+					/* Reset Tail pointer */
+					skb->tail = skb->data;
+					/* Re-using the org skb */
+					skb2 = skb;
+					/* To bypass some stepts */
+					required = 0;
+				}
+
 				if (skb2) {
 					if (!*pOutSkb) {
 						asf_reasm_debug("First skb\r\n");
@@ -1699,21 +1708,32 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 						pLastSkb = skb2;
 
 					}
-					skb_reserve(skb2, ulDevXmitHdrLen);
+					if (required)
+						skb_reserve(skb2,
+							ulDevXmitHdrLen);
+
 					skb2->tail += (len+ihl);
 					skb2->len = (len+ihl);
 					skb_reset_network_header(skb2);
-					skb2->transport_header = skb2->network_header + ihl;
+					skb2->transport_header =
+						skb2->network_header + ihl;
 
 					/*
-					 *	Copy the packet header into the new buffer.
+					 *	Copy the packet header
+					 *	into the new buffer.
 					 */
-					pSrc = (unsigned int *)  iph;
-					pTgt = (unsigned int *)  skb_network_header(skb2);
-					for (ii = 0; ii < 5; ii++)
-						pTgt[ii] = pSrc[ii];
-
-					asfSkbCopyBits(skb, ptr, skb_transport_header(skb2), len);
+					if (required) {
+						pSrc = (unsigned int *)
+								ip_hdr(skb);
+						pTgt = (unsigned int *)
+								ip_hdr(skb2);
+						for (ii = 0; ii < 5; ii++)
+							pTgt[ii] = pSrc[ii];
+					}
+					asfSkbCopyBits(skb,
+						ptr,
+						skb_transport_header(skb2),
+						len);
 
 					bytesLeft -= len;
 
@@ -1725,10 +1745,12 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					iph->tot_len = htons(len + ihl);
 
 					if (!bDoChecksum) {
-						skb2->ip_summed = CHECKSUM_PARTIAL;
+						skb2->ip_summed =
+							CHECKSUM_PARTIAL;
 					} else {
 						ip_send_check(iph);
-						skb2->ip_summed = CHECKSUM_UNNECESSARY;
+						skb2->ip_summed =
+							CHECKSUM_UNNECESSARY;
 					}
 
 					if (offset == 0)
@@ -1741,12 +1763,12 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					offset += len;
 					ptr += len;
 				} else {
-					asf_reasm_debug("Skb allocatin failed in fragmenation\r\n");
+					asf_reasm_debug("Skb allocatin"
+						" failed in fragmenation\r\n");
 					kfree_skb(skb);
 					return 1;
 				}
 			}
-			kfree_skb(skb);
 			return 0;
 		}
 	}
