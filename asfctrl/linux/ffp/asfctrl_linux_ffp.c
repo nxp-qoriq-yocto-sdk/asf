@@ -742,11 +742,11 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
 	if (fn_ipsec_get_flow4) {
 		memset(&fl_out, 0, sizeof(fl_out));
-		fl_out.fl_ip_sport = orig_sport;
-		fl_out.fl_ip_dport = orig_dport;
+		fl_out.fl_ip_sport = reply_dport;
+		fl_out.fl_ip_dport = reply_sport;
 		fl_out.proto = orig_prot;
-		fl_out.fl4_dst = orig_dip;
-		fl_out.fl4_src = orig_sip;
+		fl_out.fl4_dst = reply_sip;
+		fl_out.fl4_src = reply_dip;
 		fl_out.fl4_tos = 0;
 
 		dev = dev_get_by_name(&init_net, "lo");
