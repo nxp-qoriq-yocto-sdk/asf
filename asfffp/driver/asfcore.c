@@ -116,6 +116,9 @@ MODULE_PARM_DESC(asf_max_ifaces, "Maximum number of interfaces");
 module_param(ffp_hash_buckets, int, 0644);
 MODULE_PARM_DESC(ffp_hash_buckets,
 			"Number of hash buckets in FFP flow hash table");
+module_param(asf_l2blob_refresh_interval, int, 0644);
+MODULE_PARM_DESC(asf_l2blob_refresh_interval,
+	"Periodic interval at which L2 blob refresh indication to be generated");
 #if 0
 module_param(asf_tcp_fin_timeout, int, 0644);
 MODULE_PARM_DESC(asf_tcp_fin_timeout,
