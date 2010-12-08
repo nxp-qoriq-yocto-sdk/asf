@@ -1079,9 +1079,11 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 
 iface_not_found:
 	ASF_RCU_READ_UNLOCK(bLockFlag);
-	abuf.nativeBuffer = skb;
-	ffpCbFns.pFnInterfaceNotFound(abuf, ASF_SKB_FREE_FUNC, skb);
-	return AS_FP_STOLEN;
+	if(ffpCbFns.pFnInterfaceNotFound) {
+		abuf.nativeBuffer = skb;
+		ffpCbFns.pFnInterfaceNotFound(abuf, ASF_SKB_FREE_FUNC, skb);
+		return AS_FP_STOLEN;
+	}
 
 ret_pkt:
 	/* no frag list expected */
