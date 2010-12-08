@@ -3442,6 +3442,7 @@ ASF_uint32_t ASFSetVSGMode(ASF_uint32_t ulVSGId, ASF_Modes_t  mode)
 	}
 
 	if (mode == fwdMode) {
+		asf_ffp_cleanup_all_flows();
 		/*tbd take a lock */
 		asf_print("Setting FWD Mode for VSG [%d]\n", ulVSGId);
 		vsg_info->curMode = fwdMode;
