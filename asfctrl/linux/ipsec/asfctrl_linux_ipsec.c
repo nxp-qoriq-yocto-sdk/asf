@@ -301,7 +301,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 	if (!bVal)
 		local_bh_disable();
 	/* Generate Dummy packet */
-	skb = alloc_skb((4*1024), GFP_ATOMIC);
+	skb = alloc_skb(1024, GFP_ATOMIC);
 	if (skb) {
 		struct iphdr *iph;
 		ASF_uint32_t *pData;

@@ -7789,7 +7789,7 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 	struct flowi fl;
 	struct in_device *in_dev;
 
-	pSkb = alloc_skb((1024*4), GFP_ATOMIC);
+	pSkb = alloc_skb(1024, GFP_ATOMIC);
 
 	if (pSkb) {
 		pSkb->data += 60;

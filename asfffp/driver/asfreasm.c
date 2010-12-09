@@ -54,6 +54,8 @@
 #include "asf.h"
 #include "asfcmn.h"
 
+/*#define ASF_REASM_DEBUG*/
+
 extern ASFFFPGlobalStats_t *asf_gstats;
 #ifdef ASF_REASM_DEBUG
 #define asf_reasm_debug(fmt, args...) printk("[CPU %d line %d %s] " fmt, smp_processor_id(), __LINE__, __FUNCTION__, ##args)
@@ -408,19 +410,6 @@ void asfReasmDeInit(void)
 		cb4 = pReasmCb->cb4;	\
 	} while (0)
 
-
-#define ASF_REASM_DOBBS_MIX(a, b, c) \
-{ \
-  a -= b; a -= c; a ^= (c >> 13); \
-  b -= c; b -= a; b ^= (a << 8); \
-  c -= a; c -= b; c ^= (b >> 13); \
-  a -= b; a -= c; a ^= (c >> 12);  \
-  b -= c; b -= a; b ^= (a << 16); \
-  c -= a; c -= b; c ^= (b >> 5); \
-  a -= b; a -= c; a ^= (c >> 3);  \
-  b -= c; b -= a; b ^= (a << 10); \
-  c -= a; c -= b; c ^= (b >> 15); \
-}
 #if 0
 static int gfar_kfree_skb(struct sk_buff *skb);
 #else
@@ -472,14 +461,14 @@ static inline unsigned int asfReasmComputeHash(unsigned int word_a, unsigned int
 	unsigned int hash;
 
 	register unsigned int temp_a, temp_b, temp_c;
-	temp_a = temp_b = 0x9e3779b9;  /* the golden ratio; an arbitrary value */
-	temp_c = asf_reasmRandValue_g;	       /* random value*/
+	temp_a = temp_b = 0x9e3779b9;/* the golden ratio; an arbitrary value */
+	temp_c = asf_reasmRandValue_g;/* random value*/
 
 	temp_a += word_a;
 	temp_b += word_b;
 	temp_c += word_c;
 
-	ASF_REASM_DOBBS_MIX(temp_a, temp_b, temp_c);
+	ASF_BJ3_MIX(temp_a, temp_b, temp_c);
 	hash = temp_c & (ASF_REASM_NUM_CB_HASH_TBL_ENTRIES-1);
 	return hash;
 }
@@ -1581,10 +1570,10 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 */
 
 inline int asfIpv4Fragment(struct sk_buff *skb,
-			   unsigned int ulMTU, unsigned int ulDevXmitHdrLen,
-			   unsigned int bDoChecksum,
-			   struct net_device *dev,
-			   struct sk_buff **pOutSkb)
+	unsigned int ulMTU, unsigned int ulDevXmitHdrLen,
+	unsigned int bDoChecksum,
+	struct net_device *dev,
+	struct sk_buff **pOutSkb)
 {
 	struct iphdr *iph = ip_hdr(skb);
 	unsigned int ihl = iph->ihl*4;
@@ -1671,9 +1660,6 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 		}
 
 		if (bNewSkb) {
-			unsigned int alignamount;
-			int required = 1;
-
 			asf_reasm_debug("New Skb required \r\n");
 			*pOutSkb = NULL;
 			ulMTU -= ihl;
@@ -1681,36 +1667,30 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			ptr = ihl;
 			while (bytesLeft > 0) {
 				asf_reasm_debug("bytesLeft = %d\r\n", bytesLeft);
-				len = (bytesLeft > ulMTU) ?  ulMTU : bytesLeft;
-				if (len < bytesLeft) {
+				len = (bytesLeft > ulMTU) ? ulMTU : bytesLeft;
+				if (len < bytesLeft)
 					len &= ~7;
-					skb2 = alloc_skb(len + ihl +
+#if 0
+				if (dev)
+					skb2 = gfar_new_skb(dev);
+				else
+#endif
+				skb2 = alloc_skb(len + ihl +
 						ulDevXmitHdrLen, GFP_ATOMIC);
-				} else {
-					/* Last one, no more
-					   allocation required */
-					/* Reset Tail pointer */
-					skb->tail = skb->data;
-					/* Re-using the org skb */
-					skb2 = skb;
-					/* To bypass some stepts */
-					required = 0;
-				}
-
 				if (skb2) {
 					if (!*pOutSkb) {
-						asf_reasm_debug("First skb\r\n");
+						asf_reasm_debug("FirstSkb 0x%x",
+							skb2);
 						*pOutSkb = skb2;
 						pLastSkb = skb2;
 					} else {
-						asf_reasm_debug("Next skb\r\n");
+						asf_reasm_debug("Next skb 0x%x",
+							skb2);
 						pLastSkb->next = skb2;
 						pLastSkb = skb2;
 
 					}
-					if (required)
-						skb_reserve(skb2,
-							ulDevXmitHdrLen);
+					skb_reserve(skb2, ulDevXmitHdrLen);
 
 					skb2->tail += (len+ihl);
 					skb2->len = (len+ihl);
@@ -1722,35 +1702,27 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					 *	Copy the packet header
 					 *	into the new buffer.
 					 */
-					if (required) {
-						pSrc = (unsigned int *)
-								ip_hdr(skb);
-						pTgt = (unsigned int *)
-								ip_hdr(skb2);
-						for (ii = 0; ii < 5; ii++)
-							pTgt[ii] = pSrc[ii];
-					}
-					asfSkbCopyBits(skb,
-						ptr,
-						skb_transport_header(skb2),
-						len);
+					pSrc = (unsigned int *)iph;
+					pTgt = (unsigned int *)skb_network_header(skb2);
+					for (ii = 0; ii < 5; ii++)
+						pTgt[ii] = pSrc[ii];
+
+					asfSkbCopyBits(skb, ptr, skb_transport_header(skb2), len);
 
 					bytesLeft -= len;
 
 					/*
-					  *	Fill in the new header fields.
-					  */
+					*	Fill in the new header fields.
+					*/
 					iph = ip_hdr(skb2);
 					iph->frag_off = htons((offset >> 3));
 					iph->tot_len = htons(len + ihl);
 
 					if (!bDoChecksum) {
-						skb2->ip_summed =
-							CHECKSUM_PARTIAL;
+						skb2->ip_summed = CHECKSUM_PARTIAL;
 					} else {
 						ip_send_check(iph);
-						skb2->ip_summed =
-							CHECKSUM_UNNECESSARY;
+						skb2->ip_summed = CHECKSUM_UNNECESSARY;
 					}
 
 					if (offset == 0)
@@ -1763,12 +1735,13 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					offset += len;
 					ptr += len;
 				} else {
-					asf_reasm_debug("Skb allocatin"
+					asf_reasm_debug("Skb allocation"
 						" failed in fragmenation\r\n");
 					kfree_skb(skb);
 					return 1;
 				}
 			}
+			kfree_skb(skb);
 			return 0;
 		}
 	}

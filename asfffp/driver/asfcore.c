@@ -1111,15 +1111,15 @@ drop_pkt:
 */
 }
 
-ASF_void_t    ASFFFPProcessAndSendPkt(
-				     ASF_uint32_t    ulVsgId,
-				     ASF_uint32_t    ulCommonInterfaceId,
-				     ASFBuffer_t     Buffer,
-				     genericFreeFn_t pFreeFn,
-				     ASF_void_t      *freeArg,
-				     ASF_void_t      *pIpsecOpaque
-				     /* pass this to VPN In Hook */
-				   )
+ASF_void_t ASFFFPProcessAndSendPkt(
+				ASF_uint32_t    ulVsgId,
+				ASF_uint32_t    ulCommonInterfaceId,
+				ASFBuffer_t     Buffer,
+				genericFreeFn_t pFreeFn,
+				ASF_void_t      *freeArg,
+				ASF_void_t      *pIpsecOpaque
+				/* pass this to VPN In Hook */
+				)
 {
 	struct iphdr		*iph;
 	ffp_flow_t		*flow;
@@ -1282,14 +1282,13 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 	flow = asf_ffp_flow_lookup(iph->saddr, iph->daddr,
 					*ptrhdrOffset/* ports*/, ulVsgId,
 					ulZoneId, iph->protocol, &ulHashVal);
-#ifdef ASF_DEBUG
+
 	asf_debug("ASF: %s Hash(%d.%d.%d.%d, %d.%d.%d.%d, 0x%lx, %d, %d)"\
 		" = %lx (hindex %lx) (hini 0x%lx) => %s\n",
 		skb->dev->name,
 		NIPQUAD(iph->saddr), NIPQUAD(iph->daddr), *ptrhdrOffset,
 		ulVsgId, ulZoneId, ulHashVal, FFP_HINDEX(ulHashVal),
 		asf_ffp_hash_init_value, flow ? "FOUND" : "NOT FOUND");
-#endif
 
 #ifdef ASF_IPSEC_FP_SUPPORT
 	if (pIpsecOpaque /*&& pFFPIpsecInVerifyV4 */) {
