@@ -159,14 +159,14 @@ unsigned int asfTimerInit(unsigned short int ulMaxApps,
 
 	pAsfTmrAppInfo = kzalloc(ulMaxApps *  sizeof(struct asfTmrAppInfo_s), GFP_KERNEL);
 	if (!pAsfTmrAppInfo) {
-		asf_timer_debug("asfTimerInit Returned failure\r\n");
+		asf_timer_debug("Returned failure\r\n");
 		return ASF_TMR_FAILURE;
 	}
 
 	for (ii = 0; ii < ulMaxApps; ii++) {
 		pAsfTmrAppInfo[ii].pInstance = kzalloc(ulMaxTmrWheelInstancePerApp * sizeof(struct asfTmrAppInstanceInfo_s), GFP_KERNEL);
 		if (!pAsfTmrAppInfo[ii].pInstance) {
-			asf_timer_debug("asfTimerInit: kzalloc of Per Instance App Info failed\r\n");
+			asf_timer_debug("kzalloc of Per Instance App Info failed\r\n");
 			return ASF_TMR_FAILURE;
 		}
 		pAsfTmrAppInfo[ii].ulNumInstances = ulMaxTmrWheelInstancePerApp;
@@ -174,7 +174,7 @@ unsigned int asfTimerInit(unsigned short int ulMaxApps,
 
 	pAsfTmrWheelInstances = kzalloc(ulMaxApps  * sizeof(struct asfTmrWheelInfo_s), GFP_KERNEL);
 	if (!pAsfTmrWheelInstances) {
-		asf_timer_debug(KERN_INFO "asfTimerInit: Allocation for TmrWheelInstances failed\r\n");
+		asf_timer_debug("Allocation for TmrWheelInstances failed\r\n");
 		return ASF_TMR_FAILURE;
 	}
 
@@ -182,7 +182,7 @@ unsigned int asfTimerInit(unsigned short int ulMaxApps,
 		pAsfTmrWheelInstances[ii].pWheel =
 		kzalloc(ulMaxTmrWheelInstancePerApp * sizeof(struct asfTmrWheelInstance_s), GFP_KERNEL);
 		if (!pAsfTmrWheelInstances[ii].pWheel) {
-			asf_timer_debug("asfTimerInit: kzalloc of per Instance App Info failed\r\n");
+			asf_timer_debug("kzalloc of per Instance App Info failed\r\n");
 			return ASF_TMR_FAILURE;
 		}
 		pAsfTmrWheelInstances[ii].ulNumEntries = ulMaxTmrWheelInstancePerApp;

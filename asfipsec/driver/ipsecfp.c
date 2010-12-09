@@ -840,7 +840,7 @@ static void  secfp_addOutSelSet(outSA_t *pSA,
 	pSA->pSelList = (OutSelList_t *)  asfGetNode(ulOutSelListPoolId_g, &bHeap);
 	if (pSA->pSelList == NULL) {
 		GlobalErrors.ulResourceNotAvailable++;
-		ASFIPSEC_ERR("secfp_addOutSelSet: Allocation of SASelList failed");
+		ASFIPSEC_WARN("secfp_addOutSelSet: Allocation of SASelList failed");
 		return;
 	}
 	if (bHeap) {
@@ -2880,7 +2880,7 @@ int secfp_try_fastPathOutv4 (
 #ifdef ASFIPSEC_DEBUG_FRAME
 	ASFIPSEC_PRINT("*****secfp_out: Pkt received skb->len = %d,"\
 		"iph->tot_len = %d",  skb1->len, iph->tot_len);
-	hexdump(skb->data, ((skb1->len > 64) ?  64 : (skb1->len)));
+	hexdump(skb->data - 14, skb1->len + 14);
 #endif
 	ASFIPSEC_FENTRY;
 	pSA = secfp_findOutSA(ulVSGId, pSecInfo, skb1, iph->tos,
@@ -3117,8 +3117,7 @@ int secfp_try_fastPathOutv4 (
 				if (secfp_talitos_submit(pdev, desc,
 					secfp_outComplete,
 					(void *)skb) == -EAGAIN) {
-					ASFIPSEC_ERR("secfp_talitos_submit"
-							" failed ");
+					ASFIPSEC_WARN("secfp_talitos_submit failed ");
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
 					/* We cannot free the skb now, as it is submitted to h/w */
@@ -3330,14 +3329,14 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 						ASFIPSEC_DEBUG("Fragment offset field = 0x%x",   iph->frag_off);
 #endif
 						if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
-							ASFIPSEC_ERR("Error in transmit: Should not happen");
+							ASFIPSEC_WARN("Error in transmit: Should not happen");
 							kfree_skb(pOutSkb);
 						}
 					}
 					rcu_read_unlock();
 					return;
 				} else {
-					ASFIPSEC_ERR("Magic number mismatch");
+					ASFIPSEC_WARN("Magic number mismatch");
 					kfree_skb(skb);
 					rcu_read_unlock();
 					return;
@@ -3606,7 +3605,7 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 
 		if ((desc->hdr_lo & DESC_HDR_LO_ICCR1_MASK) !=
 			DESC_HDR_LO_ICCR1_PASS) {
-			ASFIPSEC_ERR(KERN_INFO "hw cmp: ICV Verification failed");
+			ASFIPSEC_WARN("hw cmp: ICV Verification failed");
 			return 1;
 		} else {
 			skb->len -= ICV_LEN;
@@ -3625,7 +3624,7 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 			/* If ICV verification was done in h/w */
 			if ((desc->hdr_lo & DESC_HDR_LO_ICCR0_MASK) !=
 				DESC_HDR_LO_ICCR0_PASS) {
-				ASFIPSEC_ERR(KERN_INFO "hw comparison ICV Verification failed desc->hdr_lo = 0x%x",  desc->hdr_lo);
+				ASFIPSEC_WARN("hw comparison ICV Verification failed desc->hdr_lo = 0x%x", desc->hdr_lo);
 				return 1;
 			} else {
 				skb->len -= ICV_LEN;
@@ -3651,7 +3650,7 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 				}
 			}
 			if (ii != 3) {
-				ASFIPSEC_ERR("byte comparison ICV Comparison failed");
+				ASFIPSEC_WARN("byte comparison ICV Comparison failed");
 				return 1;
 			}
 			skb->len -= ICV_LEN;
@@ -3666,7 +3665,7 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 				break;
 		}
 		if (ii != 3) {
-			ASFIPSEC_ERR(KERN_INFO "ICV Comparison failed");
+			ASFIPSEC_WARN("ICV Comparison failed");
 			return 1;
 		}
 		skb->len -= ICV_LEN;
@@ -3756,7 +3755,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(struct sk_buff *pHeadSkb, stru
 			pSA->ulPkts[smp_processor_id()]--;
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT12);
 		}
-		ASFIPSEC_WARN(KERN_INFO "Invalid Pad length");
+		ASFIPSEC_WARN("Invalid Pad length");
 		rcu_read_unlock();
 		return 1;
 	}
@@ -5235,15 +5234,15 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 /* Checks for SPI based matching entry */
 
 inSA_t *ASF_findInv4SA(unsigned int ulVSGId,
-			 unsigned char ucProto,
-			 unsigned long int ulSPI, unsigned int daddr, unsigned int *pHashVal)
+		unsigned char ucProto,
+		unsigned long int ulSPI, unsigned int daddr, unsigned int *pHashVal)
 {
 	return secfp_findInv4SA(ulVSGId, ucProto, ulSPI, daddr, pHashVal);
 }
 
 static inline inSA_t *secfp_findInv4SA(unsigned int ulVSGId,
-					unsigned char ucProto,
-					unsigned long int ulSPI, unsigned int daddr, unsigned int *pHashVal)
+		unsigned char ucProto,
+		unsigned long int ulSPI, unsigned int daddr, unsigned int *pHashVal)
 {
 	inSA_t *pSA = NULL;
 
