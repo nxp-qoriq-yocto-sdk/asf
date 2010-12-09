@@ -46,7 +46,7 @@ enum alg_type {
 #define ASF_IN_CONTANER_ID 	1
 #define MAX_POLICY_CONT_ID 	2
 
-
+#define ASFCTRL_DEF_PMTU 1500
 #define MAX_AUTH_ENC_ALGO	5
 #define MAX_ALGO_TYPE		2
 

@@ -224,6 +224,7 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 					int *eof, void *data)
 {
 	ASFIPSecGlobalErrorCounters_t *total;
+	ASFIPSec4GlobalPPStats_t Outparams;
 	total = &GlobalErrors;
 
 	GLBERR_DISP(InvalidVSGId);
@@ -249,6 +250,38 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 	GLBERR_DISP(InSANotFound);
 	GLBERR_DISP(InSASPDContainerMisMatch);
 	GLBERR_DISP(OutSASPDContainerMisMatch);
+
+	ASFIPSecGlobalQueryStats(&Outparams);
+	printk(KERN_INFO" \nERRORS:");
+	printk(KERN_INFO"%lu (Does not enough tail room to continue)",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT9]);
+	printk(KERN_INFO"%lu (No of packets Invalid ESP)",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT10]);
+	printk(KERN_INFO"%lu (Decrypted Protocol != IPV4)",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT11]);
+	printk(KERN_INFO"%lu (Invalid Pad length)",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
+	printk(KERN_INFO"%lu (Inbound Submission to SEC failed)",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
+	printk(KERN_INFO"%lu (Invalid sequence number )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT1]);
+	printk(KERN_INFO"%lu (Anti-replay window check failed )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
+	printk(KERN_INFO"%lu (Replay packet )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT16]);
+	printk(KERN_INFO"%lu (ICV Comp Failed )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT17]);
+	printk(KERN_INFO"%lu (Crypto Operation Failed )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
+	printk(KERN_INFO"%lu (Anti Replay window -- Drop the packet )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT19]);
+	printk(KERN_INFO"%lu (Verification of SA Selectross Failed )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT20]);
+	printk(KERN_INFO"%lu (Packet size is > Path MTU and"\
+		"fragment bit set in SA or packet )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT21]);
+	printk(KERN_INFO"%lu (Fragmentation Failed )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 
 	return 0;
 }

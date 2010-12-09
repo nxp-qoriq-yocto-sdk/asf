@@ -80,7 +80,6 @@ AsfIPSec4GlobalPPStats_t IPSec4GblPPStats_g;
 
 static  inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
 static inline  void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA);
-static inline void asfIPSecCopyWords(unsigned int *dst, unsigned int *src, int len);
 
 #define ASF_ICMP_PROTO  1
 #define ASF_ICMP_DEST_UNREACH   3
@@ -1720,8 +1719,8 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		else
 			skb->vlan_tci = 0;
 
-		asfIPSecCopyWords((unsigned int *)  skb->data,
-				  (unsigned int *)  pSA->l2blob, pSA->ulL2BlobLen);
+		asfCopyWords((unsigned int *)  skb->data,
+				(unsigned int *)  pSA->l2blob, pSA->ulL2BlobLen);
 		if (pSA->bPPPoE) {
 			/* PPPoE packet.. Set Payload length in PPPoE header */
 			*((short *)&(skb->data[pSA->ulL2BlobLen-4])) = htons(ntohs(iph->tot_len) + 2);
@@ -2868,6 +2867,7 @@ int secfp_try_fastPathOutv4 (
 	ASF_boolean_t	bRevalidate = FALSE;
 	struct talitos_desc *desc = NULL;
 	unsigned char secout_sg_flag;
+	unsigned short usPadLen = 0;
 
 	rcu_read_lock();
 
@@ -2897,8 +2897,11 @@ int secfp_try_fastPathOutv4 (
 		ip_decrease_ttl(iph);
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+		usPadLen = (iph->tot_len + SECFP_ESP_TRAILER_LEN)
+				& (pSA->SAParams.ulBlockSize - 1);
+		usPadLen = (usPadLen == 0) ? 0 : pSA->SAParams.ulBlockSize - usPadLen;
 #ifndef SECFP_SG_SUPPORT
-		if ((iph->tot_len  > (pSA->ulPathMTU)) || (skb_shinfo(skb1)->frag_list)) {
+		if ((iph->tot_len > (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen))) || (skb_shinfo(skb1)->frag_list)) {
 			if (((iph->frag_off & IP_DF) && (pSA->SAParams.bRedSideFragment)) ||
 				((!pSA->SAParams.bRedSideFragment) && ((pSA->SAParams.handleDf == SECFP_DF_SET) ||
 								   ((iph->frag_off & IP_DF) && (pSA->SAParams.handleDf == SECFP_DF_COPY))))) {
@@ -2935,22 +2938,22 @@ int secfp_try_fastPathOutv4 (
 			if (pSA->SAParams.bRedSideFragment) {
 				ASFIPSEC_DEBUG("Red side fragmentation is enabled");
 				if (unlikely(asfIpv4Fragment(skb1,
-								pSA->ulPathMTU,
-								ETH_HLEN, TRUE, skb1->dev, &skb))) {
+					pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen),
+					pSA->ulL2BlobLen + (pSA->ulSecOverHead + usPadLen),
+					TRUE, skb1->dev, &skb))) {
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
 					return 1;
 				}
-				skb = skb1;
 			}
 		}
 #else
-		if ((iph->tot_len  > (pSA->ulPathMTU)) || (skb_shinfo(skb1)->frag_list)) {
+		if ((iph->tot_len > (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen))) || (skb_shinfo(skb1)->frag_list)) {
 			ASFIPSEC_DEBUG("Total Leng is > ulPathMTU or has a frag list:"\
 				"tot_len = %d, ulPathMTU = %d, frag_list = %d",
 				iph->tot_len, pSA->ulPathMTU,
 				skb_shinfo(skb1)->frag_list);
-			if (unlikely((iph->tot_len) < pSA->ulPathMTU)) {
+			if (unlikely((iph->tot_len) < (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen)))) {
 				ASFIPSEC_DEBUG("TotalLength is"\
 					" less than path MTU, but frag_list "\
 					"present: Calling skb_copy_bits ");
@@ -2972,7 +2975,7 @@ int secfp_try_fastPathOutv4 (
 				"total length + ulSecOverHead exceeds PathMTU ");
 				if (((iph->frag_off & IP_DF) && ((pSA->SAParams.bRedSideFragment)) ||
 					((!(pSA->SAParams.bRedSideFragment) && ((pSA->SAParams.handleDf == SECFP_DF_SET) ||
-										((iph->frag_off & IP_DF) && (pSA->SAParams.handleDf == SECFP_DF_COPY))))))) {
+					((iph->frag_off & IP_DF) && (pSA->SAParams.handleDf == SECFP_DF_COPY))))))) {
 					ASFIPSEC_DEBUG("Packet size is > Path MTU and fragment bit set in SA or packet");
 					/* Need to send to normal path */
 					snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Packet size is > Path MTU and fragment bit set in SA or packet");
@@ -2989,54 +2992,54 @@ int secfp_try_fastPathOutv4 (
 				if (pSA->SAParams.bRedSideFragment) {
 					ASFIPSEC_DEBUG("Red side fragmentation is enabled");
 						if (unlikely(asfIpv4Fragment(skb1,
-									 pSA->ulPathMTU + ETH_HLEN + pSA->ulSecOverHead,
-									 ETH_HLEN, TRUE, skb1->dev, &skb))) {
+							pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen),
+							pSA->ulL2BlobLen + (pSA->ulSecOverHead + usPadLen),
+							TRUE, skb1->dev, &skb))) {
 						ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 						ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
 						return 1;
 						}
-					} else{
-						ASFIPSEC_DEBUG("bScatterGather Enabling");
-						/*Check for  most common two fragment case */
-						bScatterGatherList = SECFP_SCATTER_GATHER;
-						skb = skb1;
-						if (!(skb_shinfo(skb1)->frag_list)) {
-							ASFIPSEC_DEBUG("Trying to see if we can fit in two fragment");
-							/* In the 2 fragment case, total packet size would include additional ip header length */
-							/* Assumption: rest are accounted in ulPathMTU */
-							if ((iph->tot_len + pSA->ulSecOverHead) <= (pSA->ulPathMTU * 2) &&
-							(pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL)) { /* Can fit in 2 fragments */
-								ASFIPSEC_DEBUG("IP packet fits into 2 fragments");
-								ASFIPSEC_DEBUG("Current packet does not have a fragments, but  will be fragmented subsequently ");
-								/* Temporary holder for the extra fragment */
-								skb1->prev = gfar_new_skb(pSA->odev);
-								if (skb1->prev) {
-									ASFIPSEC_DEBUG("Allocated skb->prev");
-									skb_reserve(skb1->prev, ETH_HLEN + SECFP_IP_HDR_LEN);
-									skb1->prev->len = (iph->tot_len + (pSA->ulSecOverHead + ucPadLen) - pSA->ulPathMTU);
-									skb1->prev->tail = skb1->prev->data + skb1->prev->len;
-								}
-							} else { /*  Will not fit in 2 fragments */
-							ASFIPSEC_DEBUG("Single packet case: Will not fit into 2 fragments");
-							bScatterGatherList = SECFP_NO_SCATTER_GATHER;
-							} /* Will not fit in 2 fragments or algorithm is ESP_NULL */
-						} /* If there is a frag_list, let is be in SCATTER - GATHER Mode */
-					} /* handled Non- Red side fragmentation cases */
+				} else{
+					ASFIPSEC_DEBUG("bScatterGather Enabling");
+					/*Check for  most common two fragment case */
+					bScatterGatherList = SECFP_SCATTER_GATHER;
+					skb = skb1;
+					if (!(skb_shinfo(skb1)->frag_list)) {
+						ASFIPSEC_DEBUG("Trying to see if we can fit in two fragment");
+						/* In the 2 fragment case, total packet size would include additional ip header length */
+						/* Assumption: rest are accounted in ulPathMTU */
+						if ((iph->tot_len + pSA->ulSecOverHead) <= (pSA->ulPathMTU * 2) &&
+						(pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL)) { /* Can fit in 2 fragments */
+							ASFIPSEC_DEBUG("IP packet fits into 2 fragments");
+							ASFIPSEC_DEBUG("Current packet does not have a fragments, but  will be fragmented subsequently ");
+							/* Temporary holder for the extra fragment */
+							skb1->prev = gfar_new_skb(pSA->odev);
+							if (skb1->prev) {
+								ASFIPSEC_DEBUG("Allocated skb->prev");
+								skb_reserve(skb1->prev, ETH_HLEN + SECFP_IP_HDR_LEN);
+								skb1->prev->len = (iph->tot_len + (pSA->ulSecOverHead + usPadLen) - pSA->ulPathMTU);
+								skb1->prev->tail = skb1->prev->data + skb1->prev->len;
+							}
+						} else { /*  Will not fit in 2 fragments */
+						ASFIPSEC_DEBUG("Single packet case: Will not fit into 2 fragments");
+						bScatterGatherList = SECFP_NO_SCATTER_GATHER;
+						} /* Will not fit in 2 fragments or algorithm is ESP_NULL */
+					} /* If there is a frag_list, let is be in SCATTER - GATHER Mode */
+				} /* handled Non- Red side fragmentation cases */
 			} /* Cases where the total length exceeds Path MTU, irrespective of fragments present */
 		} /* Handled all cases where there is either a fragment list or length is > Path MTU */
 #endif /* SECFP_SG_SUPPORT */
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		secout_sg_flag = SECFP_OUT|bScatterGatherList;
-		ASFIPSEC_DEBUG("outV4: bScatterGather = %d",
-			bScatterGatherList);
-		ASFIPSEC_DEBUG("outv4: skb = 0x%x skb1 =0x%x",
-				(unsigned int) skb, (unsigned int) skb1);
+		ASFIPSEC_DEBUG("outV4: bScatterGather = %d", bScatterGatherList);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		for (; skb != NULL; skb = pNextSkb)
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		{
 			pNextSkb = skb->next;
 			skb->next = NULL;
+			ASFIPSEC_DEBUG("outv4: skb = 0x%x skb1 = 0x%x, nextSkb = 0x%x",
+				(unsigned int) skb, (unsigned int) skb1, (unsigned int) pNextSkb);
 
 			(*pSA->prepareOutPktFnPtr)(skb, pSA, pContainer, &pOuterIpHdr);
 
@@ -3140,8 +3143,7 @@ int secfp_try_fastPathOutv4 (
 			ASFIPSEC_PRINT("secfp_out: Pkt Post Processing");
 			hexdump(skb->data, skb->len);
 			nr_frags = skb_shinfo(skb)->nr_frags;
-			ASFIPSEC_PRINT("nf_frags after finish function = %d",
-				nr_frags);
+			ASFIPSEC_PRINT("nf_frags after finish function = %d", nr_frags);
 #endif
 			skb->cb[SECFP_REF_INDEX]--;
 			if (skb->cb[SECFP_REF_INDEX] == 0) {
@@ -3268,17 +3270,27 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 				pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable, *(unsigned int *)&(skb->cb[SECFP_SAD_SAI_INDEX]));
 				if (pSA) {
 					ASFIPSEC_DEBUG("Found SA : outCb");
+#ifdef ASFIPSEC_DEBUG_FRAME
+					ASFIPSEC_DEBUG("OutComplete: Sending packet to gfar: skb = 0x%x, skb->data = 0x%x, skb->dev = 0x%x, skb->len = %d*****",
+						skb, skb->data, skb->dev, skb->len);
+					ASFIPSEC_DEBUG("out_complete : Printing SEC Header ");
+					hexdump(skb->data, skb->len);
+					ASFIPSEC_DEBUG("");
+#endif
 					skb->data += pSA->ulL2BlobLen;
 					skb->len -= pSA->ulL2BlobLen;
-					asfIpv4Fragment(skb, pSA->odev->mtu, pSA->ulL2BlobLen,
-							FALSE, pSA->odev, &pOutSkb);
+					if (unlikely(asfIpv4Fragment(skb,
+						pSA->odev->mtu,
+						pSA->ulL2BlobLen,
+						FALSE, pSA->odev, &pOutSkb))) {
+						ASFIPSEC_DEBUG("Error in Fragmentation");
+						rcu_read_unlock();
+						return;
+					}
 
 					for (; pOutSkb != NULL; pOutSkb = pTempSkb) {
 						pTempSkb = pOutSkb->next;
 						pOutSkb->pkt_type = 6;
-#ifdef ASFIPSEC_DEBUG_FRAME
-						ASFIPSEC_DEBUG("Next skb = 0x%x",  pTempSkb);
-#endif
 						iph = ip_hdr(pOutSkb);
 						pOutSkb->next = NULL;
 
@@ -3287,13 +3299,20 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 						pOutSkb->len += pSA->ulL2BlobLen;
 
 						pOutSkb->dev = pSA->odev;
+#ifdef ASFIPSEC_DEBUG_FRAME
+						ASFIPSEC_DEBUG("Next skb = 0x%x",  pTempSkb);
+						ASFIPSEC_DEBUG("Frag : skb = 0x%x, skb->data = 0x%x, skb->dev = 0x%x, skb->len = %d*****",
+							 pOutSkb, pOutSkb->data, pOutSkb->dev, pOutSkb->len);
+						hexdump(pOutSkb->data, pOutSkb->len);
+						ASFIPSEC_DEBUG("");
+#endif
 
 						if (pSA->bVLAN)
 							pOutSkb->vlan_tci = pSA->tx_vlan_id;
 						else
 							pOutSkb->vlan_tci = 0;
 
-						asfIPSecCopyWords((unsigned int *)pOutSkb->data,
+						asfCopyWords((unsigned int *)pOutSkb->data,
 							(unsigned int *)pSA->l2blob, pSA->ulL2BlobLen);
 						if (pSA->bPPPoE) {
 							/* PPPoE packet.. Set Payload length in PPPoE header */
@@ -4206,8 +4225,8 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 	memset(&IPSecOpque, 0 , sizeof(IPSecOpque));
 
 	ASFIPSEC_DEBUG("InComplete: iteration=%d, desc=0x%x, err = %d"
-			"refIndex = %d\n", ++ulNumIter[smp_processor_id()]
-			, (unsigned int) desc, err, skb->cb[SECFP_REF_INDEX]);
+			"refIndex = %d\n", ++ulNumIter[smp_processor_id()],
+			(unsigned int) desc, err, skb->cb[SECFP_REF_INDEX]);
 
 	skb->cb[SECFP_REF_INDEX]--;
 	if (err < 0) {
@@ -4307,8 +4326,6 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 			return;
 		}
 #ifdef ASFIPSEC_DEBUG_FRAME
-		skb->data = skb->data + 16;
-		skb->len -= 16;
 		ASFIPSEC_DEBUG("skb->data = 0x%x, skb->data - 20 - 16 =0x%x,"\
 			"skb->len = %d",
 			skb->data, skb->data - 20 - 16, skb->len);
@@ -4346,6 +4363,10 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 
 		if (ucNextProto == SECFP_PROTO_IP) {
 			secfp_inCompleteUpdateIpv4Pkt(skb);
+#ifdef ASFIPSEC_DEBUG_FRAME
+			ASFIPSEC_PRINT("Pkt received skb->len = %d", skb->len);
+			hexdump(skb->data, skb->len);
+#endif
 			/* Homogenous buffer */
 			Buffer.nativeBuffer = skb;
 			ASFFFPProcessAndSendPkt(
@@ -5391,6 +5412,10 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		}
 		skb_reset_network_header(skb1);
 		iph = ip_hdr(skb1);
+#ifdef ASFIPSEC_DEBUG_FRAME
+		ASFIPSEC_PRINT("Pkt received skb->len = %d", skb1->len);
+		hexdump(skb1->data - 14, skb1->len);
+#endif
 
 		if (unlikely(skb1->len < ((iph->ihl*4) + SECFP_ESP_HDR_LEN))) {
 			ASFIPSEC_WARN("ESP header length is invalid len = %d ",   skb1->len);
@@ -7458,18 +7483,6 @@ static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
 		/* IPV6 Filling */
 	}
 	ASFIPSecCbFn.pFnAuditLog(pAsfLogInfo);
-}
-static inline void asfIPSecCopyWords(unsigned int *dst, unsigned int *src, int len)
-{
-	while (len >= sizeof(unsigned int)) {
-		*dst = *src;
-		dst++;
-		src++;
-		len -= sizeof(unsigned int);
-	}
-	if (len) {
-		memcpy(dst, src, len);
-	}
 }
 
 static inline void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA)

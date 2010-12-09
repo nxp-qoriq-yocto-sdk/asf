@@ -513,19 +513,18 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	SAParams.bVerifyInPktWithSASelectors =
-				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
 	SAParams.bRedSideFragment =
 				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
-				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
+				ASF_IPSEC_ADAPT_PEER_GATEWAY_ENABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 
 	SAParams.bDoAntiReplayCheck =
 		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
 			: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
 
-	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_ON;
-	SAParams.replayWindowSize = 32;/*xfrm->props.replay_window;*/
+	SAParams.replayWindowSize = xfrm->props.replay_window;
 	ASFCTRL_INFO("Out Replay window size = %d ", xfrm->props.replay_window);
 
 #else
@@ -585,7 +584,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.spi = xfrm->id.spi;
 	/*tbd - find the common interface Id or we can use some default here */
 	/* SAParams.ulCommonInterfaceId = ; */
-	SAParams.ulMtu = 1500;
+	SAParams.ulMtu = ASFCTRL_DEF_PMTU;
 
 	/*if UDP Encapsulation is enabled */
 	if (xfrm->encap) {
@@ -715,17 +714,16 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	SAParams.bVerifyInPktWithSASelectors =
-				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
 	SAParams.bRedSideFragment =
 				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
-				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
+				ASF_IPSEC_ADAPT_PEER_GATEWAY_ENABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 	SAParams.bDoAntiReplayCheck =
 		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
 			: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
-	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_ON;
-	SAParams.replayWindowSize = 32;/*xfrm->props.replay_window;*/
+	SAParams.replayWindowSize = xfrm->props.replay_window;
 	ASFCTRL_INFO("In  Replay window size = %d ", xfrm->props.replay_window);
 
 #else
@@ -751,7 +749,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.handleDFBit = ASF_IPSEC_DF_COPY;
 	SAParams.protocol = ASF_IPSEC_PROTOCOL_ESP;
 
-	SAParams.ulMtu = 1500;
+	SAParams.ulMtu = ASFCTRL_DEF_PMTU;
 	/*tbd - find the common interface Id or we can use some default here*/
 	/* SAParams.ulCommonInterfaceId = ; */
 
