@@ -846,9 +846,11 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 			}
 		}
 
-		if (CacheEntry->aPrev != CacheEntry)
+		if (CacheEntry->aPrev != CacheEntry) {
 			fwd_aging_table[processor_id]
 						[vsg].pTail = CacheEntry->aPrev;
+			CacheEntry->aPrev->aNext = NULL;
+		}
 		else {
 			fwd_aging_table[processor_id][vsg].pHead = NULL;
 			fwd_aging_table[processor_id][vsg].pTail = NULL;
