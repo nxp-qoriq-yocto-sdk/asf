@@ -66,25 +66,27 @@ static int proc_asf_cache_stats(char *page, char **start,
 	fwd_cache_t	*head, *Cache;
 
 	printk(KERN_INFO "Index	SRC_IP		DST_IP	   TOS  VSG   ");
-	printk("  InPkts    OutPkts    InBytes    OutBytes\n");
+	printk(KERN_INFO "  InPkts    OutPkts    InBytes    OutBytes\n");
 	for (i = 0; i < fwd_hash_buckets; i++) {
+		spin_lock_bh(&fwd_cache_table[i].lock);
 		head = (fwd_cache_t *) &fwd_cache_table[i];
 		Cache = head->pNext;
 		while (Cache != head) {
-			printk(KERN_INFO "%2d    %d.%d.%d.%d     "
-				"%d.%d.%d.%d  %2d %4d	",
+			printk(KERN_INFO "%2u    %d.%d.%d.%d     "
+				"%d.%d.%d.%d  %2u %4u	",
 						j++,
 						NIPQUAD(Cache->ulSrcIp),
 						NIPQUAD(Cache->ulDestIp),
 						Cache->ucDscp,
 						Cache->ulVsgId);
-			printk("%5d %10d %10d %12d\n",
+			printk(KERN_INFO "%5u %10u %10u %12u\n",
 						Cache->stats.ulInPkts,
 						Cache->stats.ulOutPkts,
 						Cache->stats.ulInBytes,
 						Cache->stats.ulOutBytes);
 			Cache = Cache->pNext;
 		}
+		spin_unlock_bh(&fwd_cache_table[i].lock);
 	}
 	return 0;
 

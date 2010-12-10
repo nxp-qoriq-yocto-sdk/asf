@@ -86,7 +86,8 @@ MODULE_PARM_DESC(fwd_l2blob_refresh_interval, "Time interval after which"\
 module_param(fwd_hash_buckets, int, 0644);
 MODULE_PARM_DESC(fwd_hash_buckets, "Maximum number of buckets"\
 						" in FWD Hash table");
-static unsigned int  fwd_cur_entry_count;
+static volatile unsigned int  fwd_cur_entry_count;
+spinlock_t	fwd_entry_count_lock;
 static unsigned int  fwd_cache_pool_id = -1;
 static unsigned int  fwd_blob_timer_pool_id = -1;
 static unsigned int  fwd_expiry_timer_pool_id = -1;
@@ -821,9 +822,12 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 		return ASFFWD_RESPONSE_FAILURE;
 	}
 
+	spin_lock_bh(&fwd_entry_count_lock);
 	if (fwd_cur_entry_count >= fwd_max_entry) {
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		unsigned int	vsg = ulVsgId;
+
+		spin_unlock_bh(&fwd_entry_count_lock);
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		/* On demand Force cleaning of existing Cache entry*/
 		asf_print("Doing On Demand force cleaning\n");
 		CacheEntry = fwd_aging_table[processor_id][vsg].pTail;
@@ -866,17 +870,18 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 		__asf_fwd_cache_remove(CacheEntry, bkt);
 		spin_unlock_bh(&bkt->lock);
 		if (CacheEntry->pL2blobTmr)
-			asfTimerStop(ASF_FFP_BLOB_TMR_ID,
+			asfTimerStop(ASF_FWD_BLOB_TMR_ID,
 					0, CacheEntry->pL2blobTmr);
 		/* Now use this as fresh Cache entry */
 #else
-		asf_print("Cache entry table Full!\n");
+		asf_print("Cache entry table Full for vsg %d!\n", vsg);
 		return ASFFWD_RESPONSE_FAILURE;
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	} else {
 		CacheEntry = fwd_cache_alloc();
 		/* Increment number of current cache count */
 		fwd_cur_entry_count++;
+		spin_unlock_bh(&fwd_entry_count_lock);
 	}
 	asf_print("Current FWD entries count [%d]\n", fwd_cur_entry_count);
 
@@ -957,17 +962,21 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 	}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 down2:
-	fwd_cur_entry_count--;
 	asf_print("%s - timer allocation failed!\n", __func__);
 	if (CacheEntry && CacheEntry->pL2blobTmr)
-		asfTimerStop(ASF_FFP_BLOB_TMR_ID, 0, CacheEntry->pL2blobTmr);
+		asfTimerStop(ASF_FWD_BLOB_TMR_ID, 0, CacheEntry->pL2blobTmr);
 #endif
 down:
+	spin_lock_bh(&fwd_entry_count_lock);
+	fwd_cur_entry_count--;
+	spin_unlock_bh(&fwd_entry_count_lock);
+
 	if (CacheEntry)
 		fwd_cache_free(CacheEntry);
 	asf_print("%s - Cache creation failed!\n", __func__);
 	if (pFlow)
 		*pFlow = NULL;
+
 	return ASFFWD_RESPONSE_FAILURE;
 }
 
@@ -1006,7 +1015,7 @@ static int fwd_cmd_delete_entry(ASF_uint32_t  ulVsgId,
 		fwd_cur_entry_count--;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (CacheEntry->pL2blobTmr)
-			asfTimerStop(ASF_FFP_BLOB_TMR_ID,
+			asfTimerStop(ASF_FWD_BLOB_TMR_ID,
 					0,
 					CacheEntry->pL2blobTmr);
 
@@ -1197,9 +1206,10 @@ unsigned int asfFwdExpiryTmrCb(unsigned int ulVsgId,
 				bkt = (fwd_bucket_t *)CacheEntry->bkt;
 				spin_lock_bh(&bkt->lock);
 				__asf_fwd_cache_remove(CacheEntry, bkt);
+				fwd_cur_entry_count--;
 				spin_unlock_bh(&bkt->lock);
 				if (CacheEntry->pL2blobTmr)
-					asfTimerStop(ASF_FFP_BLOB_TMR_ID,
+					asfTimerStop(ASF_FWD_BLOB_TMR_ID,
 						0, CacheEntry->pL2blobTmr);
 				/* Control layer callback */
 				if (fwdCbFns.pFnCacheEntryExpiry) {
@@ -1220,7 +1230,6 @@ unsigned int asfFwdExpiryTmrCb(unsigned int ulVsgId,
 				}
 				call_rcu((struct rcu_head *)CacheEntry,
 					fwd_cache_free_rcu);
-				fwd_cur_entry_count--;
 				/* Move to Next entry */
 				CacheEntry = fwd_aging_table[processor_id]
 								[ulVsgId].pTail;
@@ -1298,15 +1307,15 @@ static void fwd_cmd_flush_table(unsigned long ulVsgId)
 		bkt = (fwd_bucket_t *)CacheEntry->bkt;
 		spin_lock_bh(&bkt->lock);
 		__asf_fwd_cache_remove(CacheEntry, bkt);
+		fwd_cur_entry_count--;
 		spin_unlock_bh(&bkt->lock);
 		if (CacheEntry->pL2blobTmr)
-			asfTimerStop(ASF_FFP_BLOB_TMR_ID,
+			asfTimerStop(ASF_FWD_BLOB_TMR_ID,
 				0, CacheEntry->pL2blobTmr);
 
 		call_rcu((struct rcu_head *)CacheEntry,  fwd_cache_free_rcu);
 		/* Move to Next entry */
 		CacheEntry = CacheEntry->aNext;
-		fwd_cur_entry_count--;
 	}
 #endif
 	return;
@@ -1605,6 +1614,7 @@ static int __init asf_fwd_init(void)
 	asf_vsg_stats = get_asf_vsg_stats();
 	asf_gstats = get_asf_gstats();
 
+	spin_lock_init(&fwd_entry_count_lock);
 	return err;
 }
 
