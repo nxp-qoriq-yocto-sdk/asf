@@ -597,7 +597,9 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 	struct asfTmrWheelPerCore_s *pTmrWheel;
 	struct asfTmrRQ_s *pRq;
 	unsigned int ulDiff;
+#if 0
 	bool bInProcess;
+#endif
 	bool bInInterrupt = in_softirq();
 
 	asf_timer_debug("TimerStop: AppId %d InstId %d ptmr 0x%x\n", ulAppId, ulInstanceId, ptmr);
@@ -619,6 +621,11 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 		 (ptmr->ulBucketIndex - pTmrWheel->ulCurBucketIndex) :
 		 (pTmrWheel->ulMaxBuckets - pTmrWheel->ulCurBucketIndex) + ptmr->ulBucketIndex;
 
+	/* Following Check is not required as its creating memory leak issue.
+	While running Garbage collection , Flush or Aging, most of the time
+	this check don't allow the Timer memory to be freed which is no more
+	referenced by any existing pointer. */
+#if 0
 	bInProcess = ptmr->ulState & ASF_TMR_Q_IN_PROCESS;
 
 	if ((ulDiff < ASF_TMR_NEXT_FEW_BUCKETS) || (bInProcess)) {
@@ -628,7 +635,7 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 			local_bh_enable();
 		return ASF_TMR_FAILURE;
 	}
-
+#endif
 	/* Else check if the the bucket belongs to this CPU */
 	if (ptmr->ulCoreId == smp_processor_id()) {
 		/* Feel free to fix the list */
