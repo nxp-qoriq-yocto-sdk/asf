@@ -143,6 +143,9 @@ module_param(asf_reasm_num_cbs, int, 0644);
 MODULE_PARM_DESC(asf_reasm_num_cbs,
 				"Maximum number of Reassembly context blocks per VSG");
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#define ASF_DO_INC_CHECKSUM
+#endif
 
 ptrIArry_tbl_t ffp_ptrary;
 ffp_bucket_t *ffp_flow_table;
@@ -1108,15 +1111,15 @@ drop_pkt:
 */
 }
 
-ASF_void_t    ASFFFPProcessAndSendPkt(
-				     ASF_uint32_t    ulVsgId,
-				     ASF_uint32_t    ulCommonInterfaceId,
-				     ASFBuffer_t     Buffer,
-				     genericFreeFn_t pFreeFn,
-				     ASF_void_t      *freeArg,
-				     ASF_void_t      *pIpsecOpaque
-				     /* pass this to VPN In Hook */
-				   )
+ASF_void_t ASFFFPProcessAndSendPkt(
+				ASF_uint32_t    ulVsgId,
+				ASF_uint32_t    ulCommonInterfaceId,
+				ASFBuffer_t     Buffer,
+				genericFreeFn_t pFreeFn,
+				ASF_void_t      *freeArg,
+				ASF_void_t      *pIpsecOpaque
+				/* pass this to VPN In Hook */
+				)
 {
 	struct iphdr		*iph;
 	ffp_flow_t		*flow;
@@ -1195,15 +1198,15 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			goto drop_pkt;
 		}
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		XGSTATS_INC(LocalCsumVerify);
 		if (ip_fast_csum((u8 *)iph, iph->ihl)) {
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrCsum++;
-#endif
 			XGSTATS_INC(LocalBadCsum);
 			asf_debug("Ip Checksum verification failed \r\n");
 			goto drop_pkt;
 		}
+#endif
 
 #if 0 /* todo - how to get logical incoming device ? */
 		if (unlikely(iph->ihl > 5)) {
@@ -1279,14 +1282,13 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 	flow = asf_ffp_flow_lookup(iph->saddr, iph->daddr,
 					*ptrhdrOffset/* ports*/, ulVsgId,
 					ulZoneId, iph->protocol, &ulHashVal);
-#ifdef ASF_DEBUG
+
 	asf_debug("ASF: %s Hash(%d.%d.%d.%d, %d.%d.%d.%d, 0x%lx, %d, %d)"\
 		" = %lx (hindex %lx) (hini 0x%lx) => %s\n",
 		skb->dev->name,
 		NIPQUAD(iph->saddr), NIPQUAD(iph->daddr), *ptrhdrOffset,
 		ulVsgId, ulZoneId, ulHashVal, FFP_HINDEX(ulHashVal),
 		asf_ffp_hash_init_value, flow ? "FOUND" : "NOT FOUND");
-#endif
 
 #ifdef ASF_IPSEC_FP_SUPPORT
 	if (pIpsecOpaque /*&& pFFPIpsecInVerifyV4 */) {
@@ -1323,8 +1325,7 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 			if (vsgInfo->configIdentity.ulConfigMagicNumber > flow->configIdentity.ulConfigMagicNumber)
 				bFlowValidate = 1;
 
-
-			/* L2blob refersh handling for the possible change in the l2blob */  
+			/* L2blob refersh handling for the possible change in the l2blob */
 
 			if (vsgInfo->configIdentity.l2blobConfig.ulL2blobMagicNumber
 				> flow->configIdentity.l2blobConfig.ulL2blobMagicNumber) {
@@ -1334,7 +1335,7 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 					flow->configIdentity.l2blobConfig.bl2blobRefreshSent = 1;
 				}
 
-				if ( time_after(jiffies , 
+				if ( time_after(jiffies ,
 					flow->configIdentity.l2blobConfig.ulOldL2blobJiffies +
 					ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT) ) {
 					L2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
@@ -1454,121 +1455,135 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 		if (asf_l2blob_refresh_npkts &&
 			(flow_stats->ulInPkts % asf_l2blob_refresh_npkts) == 0) {
 			asf_debug_l2("Decided to send L2Blob refresh ind based on npkts\n");
-			L2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
+		        L2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;	
 		}
 		flow->ulLastPktInAt = jiffies;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
+		if (!flow->bIPsecOut &&
+			(flow->l2blob_len == 0)) {
+			asf_debug("Generating L2blob Indication as L2blob Not found!\n");
+			L2blobRefresh = ASF_L2BLOB_REFRESH_RET_PKT_STK;	
+			goto gen_indications;
+		}
+
+		if (flow->bNat) {
+			XGSTATS_INC(NatPkts);
+			asf_debug_l2("applying NAT\n");
+			/* Update IP Checksum also */
+			if (iph->saddr != flow->ulSrcNATIp) {
+#ifdef ASF_DO_INC_CHECKSUM
+				csum_replace4(&iph->check,
+					iph->saddr, flow->ulSrcNATIp);
+#endif
+				iph->saddr = flow->ulSrcNATIp;
+			}
+			if (iph->daddr != flow->ulDestNATIp) {
+#ifdef ASF_DO_INC_CHECKSUM
+				csum_replace4(&iph->check,
+					iph->daddr, flow->ulDestNATIp);
+#endif
+				iph->daddr = flow->ulDestNATIp;
+			}
+
+			*ptrhdrOffset = flow->ulNATPorts;
+			skb_set_transport_header(skb, iphlen);
+#if 0
+			/* apply nat to all fragments */
+			if (skb_shinfo(skb)->frag_list) {
+				struct sk_buff *pSkb;
+				struct iphdr  *pIph;
+				pSkb = skb_shinfo(skb)->frag_list;
+
+				for (; pSkb; pSkb = pSkb->next) {
+					pIph = ip_hdr(pSkb);
+					if (pIph->saddr != flow->ulSrcNATIp) {
+						csum_replace4(&pIph->check,
+							pIph->saddr,
+							flow->ulSrcNATIp);
+						pIph->saddr = flow->ulSrcNATIp;
+					}
+					if (pIph->daddr != flow->ulDestNATIp) {
+						csum_replace4(&pIph->check,
+							pIph->daddr,
+							flow->ulDestNATIp);
+						pIph->daddr = flow->ulDestNATIp;
+					}
+				}
+			}
+#endif
+
+#ifndef ASF_DO_INC_CHECKSUM
+			if (iph->ihl != 5) /* Options */
+#endif
+			{
+				/* Hardware does not handle this, so we do incremental checksum */
+				if (iph->protocol == IPPROTO_UDP) {
+					q = ((unsigned short int *) ptrhdrOffset) + 3;
+				} else { /*if (iph->protocol == IPPROTO_TCP) */
+					q = ((unsigned short int *) ptrhdrOffset) + 8;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+					if (ulOrgSeqNum != ntohl(ptcph->seq))
+						inet_proto_csum_replace4(q, skb,
+							htonl(ulOrgSeqNum),
+							ptcph->seq, 1);
+
+					if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+						inet_proto_csum_replace4(q, skb,
+							htonl(ulOrgAckNum),
+							ptcph->ack_seq, 1);
+#endif
+				}
+
+				inet_proto_csum_replace4(q, skb,
+					flow->ulSrcIp, flow->ulSrcNATIp, 1);
+				inet_proto_csum_replace4(q, skb,
+					flow->ulDestIp, flow->ulDestNATIp, 1);
+				inet_proto_csum_replace4(q, skb,
+					flow->ulPorts, flow->ulNATPorts, 0);
+			}
+#ifndef ASF_DO_INC_CHECKSUM
+			else {
+				skb->ip_summed = CHECKSUM_PARTIAL;
+			}
+#endif
+		} else {
+#ifndef ASF_DO_INC_CHECKSUM
+			if (iph->ihl != 5) /* Options */
+#endif
+			{
+				if (iph->protocol == IPPROTO_TCP) {
+					skb_set_transport_header(skb, iphlen);
+					q = (unsigned short int *) ptrhdrOffset;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+					if (ulOrgSeqNum != ntohl(ptcph->seq))
+						inet_proto_csum_replace4(q + 8, skb,
+							htonl(ulOrgSeqNum),
+							ptcph->seq, 1);
+					if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+						inet_proto_csum_replace4(q + 8, skb,
+							htonl(ulOrgAckNum),
+							ptcph->ack_seq, 1);
+#endif
+				}
+			}
+		}
+
 #ifdef ASF_IPSEC_FP_SUPPORT
-		if (pFFPIPSecOutv4) {
-			if (flow->bIPsecOut) {
-				if (pFFPIPSecOutv4(ulVsgId, skb, &flow->ipsecInfo) != 0) {
+		if (flow->bIPsecOut) {
+			if (pFFPIPSecOutv4) {
+				if (pFFPIPSecOutv4(ulVsgId,
+					skb, &flow->ipsecInfo) != 0) {
 					goto gen_indications;
 				}
 			}
 		}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
 
-		if ((flow->l2blob_len == 0)) {
-			asf_debug("Generating L2blob Indication as Blank L2blob found!\n");
-			L2blobRefresh = ASF_L2BLOB_REFRESH_RET_PKT_STK;
-			goto gen_indications;
-		}
-
 		if (0 == netif_queue_stopped(flow->odev)) {
 			asf_debug_l2("attempting to xmit the packet\n");
 			/*skb_set_network_header(skb, hh_len); */
 
-			if (flow->bNat) {
-				XGSTATS_INC(NatPkts);
-				asf_debug_l2("applying NAT\n");
-				/* Update IP Checksum also */
-				if (iph->saddr != flow->ulSrcNATIp) {
-#ifdef ASF_DO_INC_CHECKSUM
-					csum_replace4(&iph->check, iph->saddr, flow->ulSrcNATIp);
-#endif
-					iph->saddr = flow->ulSrcNATIp;
-				}
-				if (iph->daddr != flow->ulDestNATIp) {
-#ifdef ASF_DO_INC_CHECKSUM
-					csum_replace4(&iph->check, iph->daddr, flow->ulDestNATIp);
-#endif
-					iph->daddr = flow->ulDestNATIp;
-				}
-
-				*ptrhdrOffset = flow->ulNATPorts;
-				skb_set_transport_header(skb, iphlen);
-
-#if 0
-
-				/* apply nat to all fragments */
-				if (skb_shinfo(skb)->frag_list) {
-					struct sk_buff *pSkb;
-					struct iphdr  *pIph;
-					pSkb = skb_shinfo(skb)->frag_list;
-
-					for (; pSkb; pSkb = pSkb->next) {
-						pIph = ip_hdr(pSkb);
-						if (pIph->saddr != flow->ulSrcNATIp) {
-							csum_replace4(&pIph->check, pIph->saddr, flow->ulSrcNATIp);
-							pIph->saddr = flow->ulSrcNATIp;
-						}
-						if (pIph->daddr != flow->ulDestNATIp) {
-							csum_replace4(&pIph->check, pIph->daddr, flow->ulDestNATIp);
-							pIph->daddr = flow->ulDestNATIp;
-						}
-					}
-				}
-#endif
-
-
-#ifndef ASF_DO_INC_CHECKSUM
-				if (iph->ihl != 5) /* Options */
-#endif
-				{
-					/* Hardware does not handle this, so we do incremental checksum */
-					if (iph->protocol == IPPROTO_UDP) {
-						q = ((unsigned short int *) ptrhdrOffset) + 3;
-					} else { /*if (iph->protocol == IPPROTO_TCP) */
-						q = ((unsigned short int *) ptrhdrOffset) + 8;
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-						if (ulOrgSeqNum != ntohl(ptcph->seq))
-							inet_proto_csum_replace4(q, skb,
-										 htonl(ulOrgSeqNum), ptcph->seq, 1);
-
-						if (ulOrgAckNum != ntohl(ptcph->ack_seq))
-							inet_proto_csum_replace4(q, skb,
-										 htonl(ulOrgAckNum), ptcph->ack_seq, 1);
-#endif
-					}
-
-					inet_proto_csum_replace4(q, skb, flow->ulSrcIp, flow->ulSrcNATIp, 1);
-					inet_proto_csum_replace4(q, skb, flow->ulDestIp, flow->ulDestNATIp, 1);
-					inet_proto_csum_replace4(q, skb, flow->ulPorts, flow->ulNATPorts, 0);
-				}
-#ifndef ASF_DO_INC_CHECKSUM
-				else {
-					skb->ip_summed = CHECKSUM_PARTIAL;
-				}
-#endif
-			} else {
-
-#ifndef ASF_DO_INC_CHECKSUM
-				if (iph->ihl != 5) /* Options */
-#endif
-				{
-					if (iph->protocol == IPPROTO_TCP) {
-						skb_set_transport_header(skb, iphlen);
-						q = (unsigned short int *) ptrhdrOffset;
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-						if (ulOrgSeqNum != ntohl(ptcph->seq))
-							inet_proto_csum_replace4(q + 8, skb, htonl(ulOrgSeqNum), ptcph->seq, 1);
-						if (ulOrgAckNum != ntohl(ptcph->ack_seq))
-							inet_proto_csum_replace4(q + 8, skb, htonl(ulOrgAckNum), ptcph->ack_seq, 1);
-#endif
-					}
-				}
-			}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			/* flow->l2blob_len > 0 && flow->odev != NULL
 			from this point onwards */
@@ -1811,6 +1826,7 @@ gen_indications:
 					default:
 						break;
 				}
+
 			}
 			return;
 		} else {
@@ -2623,6 +2639,18 @@ ASF_void_t ASFFFPRegisterCallbackFns(ASFFFPCallbackFns_t *pFnList)
 }
 EXPORT_SYMBOL(ASFFFPRegisterCallbackFns);
 
+ASF_void_t ASFFFPUpdateL2blobConfig(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity_t configIdentity)
+{
+	asf_vsg_info_t  *vsg;
+
+	vsg = asf_ffp_get_vsg_info_node(ulVSGId);
+	if (!vsg)
+		return;
+	vsg->configIdentity.l2blobConfig.ulL2blobMagicNumber = configIdentity.l2blobConfig.ulL2blobMagicNumber;
+}
+EXPORT_SYMBOL(ASFFFPUpdateL2blobConfig);
+
+
 
 ASF_void_t ASFFFPUpdateConfigIdentity(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity_t configIdentity)
 {
@@ -2634,18 +2662,6 @@ ASF_void_t ASFFFPUpdateConfigIdentity(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity
 	vsg->configIdentity = configIdentity;
 }
 EXPORT_SYMBOL(ASFFFPUpdateConfigIdentity);
-
-
-ASF_void_t ASFFFPUpdateL2blobConfig(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity_t configIdentity)
-{
-	asf_vsg_info_t  *vsg;
-
-	vsg = asf_ffp_get_vsg_info_node(ulVSGId);
-	if (!vsg)
-		return;
-	vsg->configIdentity.l2blobConfig.ulL2blobMagicNumber = configIdentity.l2blobConfig.ulL2blobMagicNumber;
-}
-EXPORT_SYMBOL(ASFFFPUpdateL2blobConfig);
 
 
 ASF_uint32_t ASFFFPBindInterfaceToZone(ASF_uint32_t ulVSGId, ASF_uint32_t ulCommonInterfaceId, ASF_uint32_t ulZoneId)
@@ -3007,6 +3023,7 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 			flow->configIdentity.l2blobConfig.ulL2blobMagicNumber =
 				p->u.l2blob.ulL2blobMagicNumber;
 			flow->configIdentity.l2blobConfig.bl2blobRefreshSent = 0;
+
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			asf_debug("{%u, %u} blob(%d) = %pM%pM...%02X%02X\n",
 				  flow->id.ulArg1, flow->id.ulArg2,
