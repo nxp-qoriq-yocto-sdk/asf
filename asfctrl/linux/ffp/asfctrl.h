@@ -189,8 +189,12 @@ extern struct net_device *__vlan_get_real_dev(struct net_device *dev,
 typedef void (*asfctrl_fwd_l2blob_update)(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
 					T_UINT32 ulDeviceID);
+typedef void (*asfctrl_fwd_l3_route_flush_t)(void);
+typedef void (*asfctrl_fwd_l3_route_add_t)(void);
 
-extern void asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob);
+extern void  asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob,
+					asfctrl_fwd_l3_route_add_t route_add,
+					asfctrl_fwd_l3_route_flush_t  route_flush );
 
 #endif
 

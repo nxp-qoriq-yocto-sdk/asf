@@ -384,13 +384,11 @@ static int __init asfctrl_linux_fwd_init(void)
 				" not supported in ASFFWD\n");
 		return -1;
 	}
-	/* Register With Linux networking Framework. */
-	/* L3 Hooks */
-	route_hook_register(&asfctrl_fwd_l3_route_add,
-				&asfctrl_fwd_l3_route_flush);
 	/* Register Callback function with ASF control layer to
-	   get L2blob information update */
-	asfctrl_register_fwd_func(&asfctrl_fwd_l2blob_update_fn);
+	get L2blob information, route add event and flush events */
+	asfctrl_register_fwd_func(&asfctrl_fwd_l2blob_update_fn,
+				&asfctrl_fwd_l3_route_add,
+				&asfctrl_fwd_l3_route_flush);
 
 	ASFCTRL_DBG("ASF Control Module - Forward Loaded\n");
 	return 0;
@@ -411,8 +409,8 @@ static void __exit asfctrl_linux_fwd_exit(void)
 	/* De-register Callback functins with FWD module */
 	ASFFWDRegisterCallbackFns(&asfctrl_Cbs);
 
-	route_hook_unregister();
-	asfctrl_register_fwd_func(NULL);
+	asfctrl_register_fwd_func(NULL, NULL, NULL);
+
 	ASFCTRL_DBG("ASF Control Module - Forward Unloaded \n");
 }
 

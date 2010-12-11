@@ -48,7 +48,14 @@ enum {
 #define ASF_MAX_L2BLOB_LEN	(28)
 
 #define ASF_MAX_L2BLOB_REFRESH_PKT_CNT	(0)
-#define ASF_MAX_L2BLOB_REFRESH_TIME	(3*60*60)
+#define ASF_MAX_L2BLOB_REFRESH_TIME	(3*60)
+
+#define	ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT	(10*HZ)
+
+
+#define ASF_L2BLOB_REFRESH_NORMAL	(1)
+#define ASF_L2BLOB_REFRESH_RET_PKT_STK	(2)
+#define ASF_L2BLOB_REFRESH_DROP_PKT	(3) 
 
 typedef char     ASF_char8_t;
 typedef unsigned int ASF_uint32_t;
@@ -608,10 +615,16 @@ ASF_uint32_t ASFFFPRuntime (
 ASF_void_t ASFFFPRegisterCallbackFns(ASFFFPCallbackFns_t *pFnList);
 
 
+typedef struct ASFFFPL2blobConfig_s {
+        ASF_uint32_t    ulL2blobMagicNumber;
+	ASF_uint32_t	ulOldL2blobJiffies;
+	ASF_boolean_t	bl2blobRefreshSent;
+} ASFFFPL2blobConfig_t;
+
 typedef struct ASFFFPConfigIdentityInfo_s {
 	/* VSG configuration magic number that needs to be associated for the flow. */
 	ASF_uint32_t    ulConfigMagicNumber;
-
+	ASFFFPL2blobConfig_t	l2blobConfig;		
 } ASFFFPConfigIdentity_t;
 
 
@@ -803,6 +816,8 @@ typedef struct ASFFFPUpdateFlowParams_s {
 			/* Path MTU to be used for packets for the flow. */
 			ASF_uint32_t ulPathMTU;
 
+			ASF_uint32_t    ulL2blobMagicNumber;
+
 			ASF_uint16_t bTxVlan:1, bUpdatePPPoELen:1;
 
 			ASF_uint16_t usTxVlanId;
@@ -841,6 +856,8 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 				     ASF_void_t      *pIpsecOpaque);
 
 ASF_void_t ASFFFPUpdateConfigIdentity(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity_t configIdentity);
+
+ASF_void_t ASFFFPUpdateL2blobConfig(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity_t configIdentity);
 
 
 

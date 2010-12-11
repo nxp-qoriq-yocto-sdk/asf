@@ -71,12 +71,22 @@ ASFCap_t  	g_cap;
 uint32_t asfctrl_vsg_config_id;
 EXPORT_SYMBOL(asfctrl_vsg_config_id);
 
+uint32_t asfctrl_vsg_l2blobconfig_id;
+EXPORT_SYMBOL(asfctrl_vsg_l2blobconfig_id);
+
 #ifdef ASFCTRL_FWD_FP_SUPPORT
 asfctrl_fwd_l2blob_update  fn_fwd_l2blob_update;
+asfctrl_fwd_l3_route_flush_t  fn_fwd_l3_route_flush;
+asfctrl_fwd_l3_route_add_t  fn_fwd_l3_route_add;
 
-void asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob)
+
+void asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob,
+ 				asfctrl_fwd_l3_route_add_t route_add,
+				asfctrl_fwd_l3_route_flush_t  route_flush )
 {
 	fn_fwd_l2blob_update = p_l2blob;
+ 	fn_fwd_l3_route_flush = route_flush;
+ 	fn_fwd_l3_route_add   = route_add;
 }
 EXPORT_SYMBOL(asfctrl_register_fwd_func);
 #endif
@@ -114,6 +124,40 @@ ASF_void_t  asfctrl_invalidate_sessions(void)
 }
 EXPORT_SYMBOL(asfctrl_invalidate_sessions);
 
+ASF_void_t asfctrl_l3_route_add(void)
+{
+	ASFCTRL_FUNC_ENTRY;
+#ifdef ASFCTRL_FWD_FP_SUPPORT
+ 	if ( fn_fwd_l3_route_add )
+ 			fn_fwd_l3_route_add();
+#endif
+ 	ASFCTRL_FUNC_EXIT
+}
+
+ASF_void_t  asfctrl_invalidate_l2blob(void)
+{
+	ASFFFPConfigIdentity_t cmd;
+	ASFCTRL_FUNC_ENTRY;
+
+	asfctrl_vsg_l2blobconfig_id += 1;
+	cmd.l2blobConfig.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
+	ASFFFPUpdateL2blobConfig(ASF_DEF_VSG, cmd);
+
+	ASFCTRL_FUNC_EXIT;
+}
+
+ASF_void_t asfctrl_l3_route_flush(void)
+{
+	ASFCTRL_FUNC_ENTRY;
+
+	asfctrl_invalidate_l2blob();
+
+#ifdef ASFCTRL_FWD_FP_SUPPORT
+ 	if ( fn_fwd_l3_route_flush )
+ 			fn_fwd_l3_route_flush();
+#endif
+ 	ASFCTRL_FUNC_EXIT
+}
 int asf_ip_send(struct sk_buff *skb)
 {
 	struct dst_entry *dst = skb_dst(skb);
@@ -465,6 +509,8 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 		cmd.u.l2blob.ulDeviceId = asfctrl_dev_get_cii(dev);
 		cmd.u.l2blob.ulPathMTU = pData->ulPathMTU;
 
+		cmd.u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id; 
+
 		/* need to include PPPOE+PPP header if any */
 		cmd.u.l2blob.l2blobLen = hh_len;
 
@@ -586,10 +632,17 @@ static int __init asfctrl_init(void)
 	cmd.ulConfigMagicNumber = asfctrl_vsg_config_id;
 	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
 
+        cmd.l2blobConfig.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
+        ASFFFPUpdateL2blobConfig(ASF_DEF_VSG, cmd);
+
+
 	ASFFFPRegisterCallbackFns(&asfctrl_Cbs);
 
 	register_netdevice_notifier(&asfctrl_dev_notifier);
 	devfp_register_tx_hook(asfctrl_dev_fp_tx_hook);
+
+	route_hook_register(&asfctrl_l3_route_add,
+				&asfctrl_l3_route_flush);
 
 	asfctrl_sysfs_init();
 
@@ -615,7 +668,11 @@ static void __exit asfctrl_exit(void)
 		asfctrl_linux_unregister_ffp();
 
 	asfctrl_sysfs_exit();
+
+	route_hook_unregister();
+ 
 	devfp_register_tx_hook(NULL);
+
 	unregister_netdevice_notifier(&asfctrl_dev_notifier);
 
 	for (ii = 0; ii < ASFCTRL_MAX_IFACES; ii++) {
