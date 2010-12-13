@@ -1750,14 +1750,6 @@ gen_indications:
 					else
 						memset(&ind.other_stats, 0, sizeof(ind.other_stats));
 
-					if (flow->pInacRefreshTmr)
-						asfTimerStop(ASF_FFP_INAC_REFRESH_TMR_ID,
-								0, flow->pInacRefreshTmr);
-
-					if (oth_flow && oth_flow->pInacRefreshTmr)
-						asfTimerStop(ASF_FFP_INAC_REFRESH_TMR_ID,
-								0, oth_flow->pInacRefreshTmr);
-
 					ffpCbFns.pFnFlowTcpSpecialPkts(ulVsgId, &ind);
 				}
 			}
