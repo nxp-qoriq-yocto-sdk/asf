@@ -810,12 +810,16 @@ static inline int fwd_entry_copy_info(ASFFWDCacheEntry_t *pInfo,
 	return ASFFWD_RESPONSE_SUCCESS;
 }
 
+/* Cache will be allocated in advance at init time
+   & will be used during On Demand cleaning as a reserved
+   Cache Memory */
+fwd_cache_t	*resCache[2];
 static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 				ASFFWDCreateCacheEntry_t *p,
 				fwd_cache_t **pFlow,
 				unsigned long *pHashVal)
 {
-	fwd_cache_t	*CacheEntry;
+	fwd_cache_t	*CacheEntry, *temp;
 	unsigned long	hash;
 	fwd_bucket_t	*bkt;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -882,7 +886,10 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 		if (CacheEntry->pL2blobTmr)
 			asfTimerStop(ASF_FWD_BLOB_TMR_ID,
 					0, CacheEntry->pL2blobTmr);
-		/* Now use this as fresh Cache entry */
+		/* Now swap this with reserve Cache entry */
+		temp = CacheEntry;
+		CacheEntry = resCache[processor_id];
+		resCache[processor_id] = temp;
 #else
 		asf_print("Cache entry table Full for vsg %d!\n", vsg);
 		return ASFFWD_RESPONSE_FAILURE;
@@ -1635,6 +1642,10 @@ static int __init asf_fwd_init(void)
 	asf_gstats = get_asf_gstats();
 
 	spin_lock_init(&fwd_entry_count_lock);
+	/* Allocate the Reserved Cache Memory */
+	resCache[0] = fwd_cache_alloc();
+	resCache[1] = fwd_cache_alloc();
+
 	return err;
 }
 
@@ -1665,7 +1676,10 @@ static void __exit asf_fwd_exit(void)
 			   for context switching */
 			del_timer(&fwd_aging_table[i][j].flush_timer);
 	}
+
 	asf_print("Destroying existing Cache table!\n");
+	fwd_cache_free(resCache[0]);
+	fwd_cache_free(resCache[1]);
 	asf_fwd_destroy_cache_table();
 
 	asf_print("Waiting for all CPUs to finish existing packets!\n");
