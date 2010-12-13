@@ -55,7 +55,7 @@ enum {
 
 #define ASF_L2BLOB_REFRESH_NORMAL	(1)
 #define ASF_L2BLOB_REFRESH_RET_PKT_STK	(2)
-#define ASF_L2BLOB_REFRESH_DROP_PKT	(3) 
+#define ASF_L2BLOB_REFRESH_DROP_PKT	(3)
 
 typedef char     ASF_char8_t;
 typedef unsigned int ASF_uint32_t;
@@ -625,7 +625,7 @@ typedef struct ASFFFPConfigIdentityInfo_s {
 	ASF_uint32_t bL2blobMagicNumber:1;
 	/* VSG configuration magic number that needs to be associated for the flow. */
 	ASF_uint32_t    ulConfigMagicNumber;
-	ASFFFPL2blobConfig_t	l2blobConfig;		
+	ASFFFPL2blobConfig_t	l2blobConfig;
 } ASFFFPConfigIdentity_t;
 
 

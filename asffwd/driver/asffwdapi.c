@@ -868,8 +868,7 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 			fwd_aging_table[processor_id]
 						[vsg].pTail = CacheEntry->aPrev;
 			CacheEntry->aPrev->aNext = NULL;
-		}
-		else {
+		} else {
 			fwd_aging_table[processor_id][vsg].pHead = NULL;
 			fwd_aging_table[processor_id][vsg].pTail = NULL;
 			asfTimerStop(ASF_FWD_EXPIRY_TMR_ID,

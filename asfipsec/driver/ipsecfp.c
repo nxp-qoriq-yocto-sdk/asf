@@ -1747,8 +1747,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	}
 
 
-	if (iph->tot_len > pSA->odev->mtu)
-	{
+	if (iph->tot_len > pSA->odev->mtu) {
 		/* Need to fragment the packet */
 		ASFIPSEC_PRINT("Need to fragment the packet and send it out ");
 		skb->cb[SECFP_OUTB_FRAG_REQD] = 1;
@@ -3393,26 +3392,26 @@ void secfp_updateBitMap(inSA_t *pSA, struct sk_buff *skb)
 		skb->cb[SECFP_SABITMAP_REMAIN_INDEX]);
 
 	switch (skb->cb[SECFP_SABITMAP_INFO_INDEX]) {
-		case 1:
-			pSA->pWinBitMap[(usSize - 1) - skb->cb[
-				SECFP_SABITMAP_COEF_INDEX]] |=
-			((u32)1 << skb->cb[SECFP_SABITMAP_REMAIN_INDEX]);
-			break;
-		case  2:
-			IGW_SAD_SET_BIT_IN_WINDOW(pSA, *(unsigned int *)&(skb->cb[SECFP_SABITMAP_DIFF_INDEX]),
-						  usSize, uiCount,
-						  ucCo_Efficient, ucRemainder);
-			pSA->ulLastSeqNum = *(unsigned int *)&(skb->cb[SECFP_SEQNUM_INDEX]);
-			break;
-		case 3:
-			IGW_SAD_SET_BIT_IN_WINDOW(pSA, *(unsigned int *)&(skb->cb[SECFP_SABITMAP_DIFF_INDEX]),
-						  usSize, uiCount,
-						  ucCo_Efficient, ucRemainder);
-			pSA->ulHOSeqNum++;
-			break;
-		default:
-			ASFIPSEC_WARN("Error in updating SA Bitmap ");
-			break;
+	case 1:
+		pSA->pWinBitMap[(usSize - 1) - skb->cb[
+			SECFP_SABITMAP_COEF_INDEX]] |=
+		((u32)1 << skb->cb[SECFP_SABITMAP_REMAIN_INDEX]);
+		break;
+	case  2:
+		IGW_SAD_SET_BIT_IN_WINDOW(pSA, *(unsigned int *)&(skb->cb[SECFP_SABITMAP_DIFF_INDEX]),
+					  usSize, uiCount,
+					  ucCo_Efficient, ucRemainder);
+		pSA->ulLastSeqNum = *(unsigned int *)&(skb->cb[SECFP_SEQNUM_INDEX]);
+		break;
+	case 3:
+		IGW_SAD_SET_BIT_IN_WINDOW(pSA, *(unsigned int *)&(skb->cb[SECFP_SABITMAP_DIFF_INDEX]),
+					  usSize, uiCount,
+					  ucCo_Efficient, ucRemainder);
+		pSA->ulHOSeqNum++;
+		break;
+	default:
+		ASFIPSEC_WARN("Error in updating SA Bitmap ");
+		break;
 	}
 
 	ASFIPSEC_DEBUG("Bitmap update variables: pSA->pWinBitMap = 0x%8x",

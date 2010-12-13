@@ -169,9 +169,9 @@ ASF_void_t asfctrl_l3_route_flush(void)
 
 #ifdef ASFCTRL_FWD_FP_SUPPORT
 	if (fn_fwd_l3_route_flush)
- 			fn_fwd_l3_route_flush();
+			fn_fwd_l3_route_flush();
 #endif
- 	ASFCTRL_FUNC_EXIT
+	ASFCTRL_FUNC_EXIT
 }
 int asf_ip_send(struct sk_buff *skb)
 {
@@ -524,7 +524,7 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 		cmd.u.l2blob.ulDeviceId = asfctrl_dev_get_cii(dev);
 		cmd.u.l2blob.ulPathMTU = pData->ulPathMTU;
 
-		cmd.u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id; 
+		cmd.u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
 
 		/* need to include PPPOE+PPP header if any */
 		cmd.u.l2blob.l2blobLen = hh_len;
@@ -686,7 +686,7 @@ static void __exit asfctrl_exit(void)
 	asfctrl_sysfs_exit();
 
 	route_hook_unregister();
- 
+
 	devfp_register_tx_hook(NULL);
 
 	unregister_netdevice_notifier(&asfctrl_dev_notifier);
