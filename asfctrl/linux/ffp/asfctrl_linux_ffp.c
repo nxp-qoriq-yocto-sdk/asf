@@ -187,6 +187,8 @@ ASF_void_t asfctrl_fnRuntime(
 	{
 		ASFFFPCreateFlowsResp_t *pInfo =
 			(ASFFFPCreateFlowsResp_t *)pResp;
+		/* Just to remove the warning */
+		pInfo = pInfo;
 
 		ASFCTRL_INFO("CreateFlows Response (Result %d) hash %d\n",
 			ntohl(pInfo->iResult), pInfo->ulHashVal);
@@ -197,6 +199,7 @@ ASF_void_t asfctrl_fnRuntime(
 	{
 		ASFFFPDeleteFlowsResp_t *pInfo =
 			(ASFFFPDeleteFlowsResp_t *)pResp;
+		pInfo = pInfo;
 
 		ASFCTRL_INFO("DeleteFlows Response (Result %d)\n",
 			ntohl(pInfo->iResult));

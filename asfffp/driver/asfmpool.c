@@ -222,7 +222,7 @@ int asfCreatePool(char *name, unsigned int ulNumGlobalPoolEntries,
 	struct asf_poolInfo_s *ptr;
 	struct asf_poolLinkNode_s *pLinkNode;
 	struct asf_pool_s *poolPtr = NULL;
-	int ii, numPool, jj, poolAlloced = 0;
+	int ii, numPool = 0, jj, poolAlloced = 0;
 	unsigned char *cptr;
 
 	asf_mpool_debug("%s - name %s NumGbl %d NumMax %d PerCpu %d DataSize %d\n",

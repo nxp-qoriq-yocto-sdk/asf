@@ -137,9 +137,9 @@ module_param(asf_l2blob_refresh_interval, int, 0644);
 MODULE_PARM_DESC(asf_l2blob_refresh_interval,
 	"Periodic interval at which L2 blob refresh indication to be generated");
 #endif
-module_param(asf_reasm_hash_list_size, int, 0644);
+module_param(asf_reasm_hash_list_size, ulong, 0644);
 MODULE_PARM_DESC(asf_reasm_hash_list_size, "Size of reassembly hash table");
-module_param(asf_reasm_num_cbs, int, 0644);
+module_param(asf_reasm_num_cbs, ulong, 0644);
 MODULE_PARM_DESC(asf_reasm_num_cbs,
 				"Maximum number of Reassembly context blocks per VSG");
 
@@ -1131,15 +1131,15 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	int			bSpecialIndication = 0,
 				bFlowValidate = 0;
-	unsigned int		ulTcpState;
+	unsigned int		ulTcpState = 0;
 	unsigned int		fragCnt;
 	asf_vsg_info_t		*vsgInfo;
 	ASFFFPGlobalStats_t     *gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
 	ASFFFPVsgStats_t	*vstats;
 	ASFFFPFlowStats_t	*flow_stats;
-	unsigned long		ulOrgSeqNum, ulOrgAckNum, ulLogId;
+	unsigned long		ulOrgSeqNum = 0, ulOrgAckNum = 0, ulLogId;
 	int			iRetVal;
-	struct tcphdr		*ptcph;
+	struct tcphdr		*ptcph = NULL;
 #endif
 	int			tot_len;
 	unsigned long int       *ptrhdrOffset;

@@ -389,7 +389,7 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 			asf_timer_debug("Initializing pTmrWheel\r\n");
 			pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, ii);
 			pTmrWheel->ulMaxBuckets = ulNumBuckets;
-			pTmrWheel->pBuckets = (pTmrWheel + 1);
+			pTmrWheel->pBuckets = (struct asfTmr_s **)(pTmrWheel + 1);
 			asf_timer_debug("Initialized pBuckets\r\n");
 			pTmrWheel->ulMaxRqEntries = ulNumRQEntries;
 
@@ -400,7 +400,7 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 				for_each_possible_cpu(jj)
 				{
 					pTempRq = per_cpu_ptr(pTmrWheel->pQs, jj);
-					pTempRq->pQueue = pTempRq + 1;
+					pTempRq->pQueue = (asfTmr_t **)pTempRq + 1;
 				}
 			} else {
 				asf_timer_debug("Allocation of Per CPU RQ Entries failed\r\n");

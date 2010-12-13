@@ -60,7 +60,7 @@
 #ifdef ASF_DEBUG_L2
 #define asf_debug_l2	asf_debug
 #else
-#define asf_debug_l2
+#define asf_debug_l2(fmt, arg...)
 #endif
 
 #define isprint(c)      ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || \

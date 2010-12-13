@@ -1551,7 +1551,7 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 			pTempSkb->next = NULL;
 			gfar_kfree_skb(pTempSkb);
 			if (fragCnt)
-				*fragCnt--;
+				*fragCnt -= 1;
 		}
 
 		skb->len += len;
@@ -1779,7 +1779,7 @@ static int asfSkbCopyBits(const struct sk_buff *this_skb,
 			int len)
 {
 	unsigned char *dest = (unsigned char *) to, *src;
-	struct	sk_buff *skb = this_skb;
+	const struct	sk_buff *skb = this_skb;
 	int	nbytes, begin_skip, cur_off = 0, do_copy = 0;
 	unsigned int src_len;
 
