@@ -1,31 +1,23 @@
-/* Copyright (C) 2010 Freescale Semiconductor, Inc. All Rights Reserved.
- *
+/**************************************************************************
+ * Copyright 2010 by Freescale Semiconductor, Inc.
+ * All modifications are confidential and proprietary information
+ * of Freescale Semiconductor, Inc. ALL RIGHTS RESERVED.
+ ***************************************************************************/
+/*
  * File:	asfctrl_linux_ffp.c
  *
- * Control module for Configuring ASF and integrating it with
- * Linux Networking Stack
+ * Description: Control module for Configuring ASF and integrating it with
+ * Linux Networking Stack for Firewall/NAT function
  *
  * Authors:	Arun Pathak <Arun.Pathak@freescale.com>
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation; either version 2 of the  License, or (at your
- * option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the  GNU General Public License along
- * with this program; if not, write  to the Free Software Foundation, Inc.,
- * 675 Mass Ave, Cambridge, MA 02139, USA.
- *
  */
-/*  Revision History    : 1.0
-*  Version     Date         Author              Change Description
-*  1.0        20/09/2010    Arun Pathak      Initial Development
-***************************************************************************/
+/*
+ * History
+ *  Version     Date         Author              Change Description
+ *  1.0        20/09/2010    Arun Pathak      Initial Development
+*/
+/***************************************************************************/
 #include <linux/init.h>
 #include <linux/netdevice.h>
 #include <linux/netfilter.h>

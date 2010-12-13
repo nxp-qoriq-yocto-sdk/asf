@@ -1,30 +1,22 @@
-/* Copyright (C) 2010 Freescale Semiconductor, Inc. All Rights Reserved.
- *
+/**************************************************************************
+ * Copyright 2010 by Freescale Semiconductor, Inc.
+ * All modifications are confidential and proprietary information
+ * of Freescale Semiconductor, Inc. ALL RIGHTS RESERVED.
+ ***************************************************************************/
+/*
  * File:	asfctrl.h
  *
- * Common definations for the ASF Control Module
+ * Description: Common definations for the ASF Control Module
  *
  * Authors:	Hemant Agrawal <hemant@freescale.com>
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation; either version 2 of the  License, or (at your
- * option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the  GNU General Public License along
- * with this program; if not, write  to the Free Software Foundation, Inc.,
- * 675 Mass Ave, Cambridge, MA 02139, USA.
- *
  */
-/*  Revision History    : 1.0
+/*
+ * History
 *  Version     Date         Author              Change Description
 *  1.0        20/07/2010    Hemant Agrawal      Initial Development
-***************************************************************************/
+*/
+/***************************************************************************/
 #ifndef __ASFCTRL_H__
 #define __ASFCTRL_H__
 
