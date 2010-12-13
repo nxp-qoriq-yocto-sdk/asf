@@ -622,6 +622,7 @@ typedef struct ASFFFPL2blobConfig_s {
 } ASFFFPL2blobConfig_t;
 
 typedef struct ASFFFPConfigIdentityInfo_s {
+	ASF_uint32_t bL2blobMagicNumber:1;
 	/* VSG configuration magic number that needs to be associated for the flow. */
 	ASF_uint32_t    ulConfigMagicNumber;
 	ASFFFPL2blobConfig_t	l2blobConfig;		

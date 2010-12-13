@@ -1327,8 +1327,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 			/* L2blob refersh handling for the possible change in the l2blob */
 
-			if (vsgInfo->configIdentity.l2blobConfig.ulL2blobMagicNumber
-				> flow->configIdentity.l2blobConfig.ulL2blobMagicNumber) {
+			if ((!flow->bIPsecOut) &&
+				(vsgInfo->configIdentity.l2blobConfig.ulL2blobMagicNumber >
+				flow->configIdentity.l2blobConfig.ulL2blobMagicNumber)) {
 
 				if (!flow->configIdentity.l2blobConfig.bl2blobRefreshSent) {
 					flow->configIdentity.l2blobConfig.ulOldL2blobJiffies = jiffies;
@@ -2631,19 +2632,6 @@ ASF_void_t ASFFFPRegisterCallbackFns(ASFFFPCallbackFns_t *pFnList)
 }
 EXPORT_SYMBOL(ASFFFPRegisterCallbackFns);
 
-ASF_void_t ASFFFPUpdateL2blobConfig(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity_t configIdentity)
-{
-	asf_vsg_info_t  *vsg;
-
-	vsg = asf_ffp_get_vsg_info_node(ulVSGId);
-	if (!vsg)
-		return;
-	vsg->configIdentity.l2blobConfig.ulL2blobMagicNumber = configIdentity.l2blobConfig.ulL2blobMagicNumber;
-}
-EXPORT_SYMBOL(ASFFFPUpdateL2blobConfig);
-
-
-
 ASF_void_t ASFFFPUpdateConfigIdentity(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity_t configIdentity)
 {
 	asf_vsg_info_t  *vsg;
@@ -2651,7 +2639,14 @@ ASF_void_t ASFFFPUpdateConfigIdentity(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity
 	vsg = asf_ffp_get_vsg_info_node(ulVSGId);
 	if (!vsg)
 		return;
-	vsg->configIdentity = configIdentity;
+
+	if (configIdentity.bL2blobMagicNumber) {
+		vsg->configIdentity.l2blobConfig.ulL2blobMagicNumber =
+			configIdentity.l2blobConfig.ulL2blobMagicNumber;
+	} else {
+		vsg->configIdentity.ulConfigMagicNumber =
+				configIdentity.ulConfigMagicNumber;
+	}
 }
 EXPORT_SYMBOL(ASFFFPUpdateConfigIdentity);
 

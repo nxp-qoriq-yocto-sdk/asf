@@ -155,7 +155,8 @@ ASF_void_t  asfctrl_invalidate_l2blob(void)
 
 	asfctrl_vsg_l2blobconfig_id += 1;
 	cmd.l2blobConfig.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
-	ASFFFPUpdateL2blobConfig(ASF_DEF_VSG, cmd);
+	cmd.bL2blobMagicNumber = 1;
+	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
 
 	ASFCTRL_FUNC_EXIT;
 }
@@ -646,8 +647,9 @@ static int __init asfctrl_init(void)
 	cmd.ulConfigMagicNumber = asfctrl_vsg_config_id;
 	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
 
-        cmd.l2blobConfig.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
-        ASFFFPUpdateL2blobConfig(ASF_DEF_VSG, cmd);
+	cmd.bL2blobMagicNumber = 1;
+	cmd.l2blobConfig.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
+	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
 
 
 	ASFFFPRegisterCallbackFns(&asfctrl_Cbs);
