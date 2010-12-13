@@ -253,6 +253,8 @@ ASF_void_t asfctrl_fwd_l2blob_update_fn(struct sk_buff *skb,
 	} else
 		pCacheData.u.l2blob.bTxVlan = 0;
 
+	pCacheData.u.l2blob.bUpdatePPPoELen = 0;
+
 	err = ASFFWDRuntime(ulVSGId, ASF_FWD_UPDATE_CACHE_ENTRY,
 			&pCacheData, sizeof(ASFFWDUpdateCacheEntry_t),
 			NULL, 0);

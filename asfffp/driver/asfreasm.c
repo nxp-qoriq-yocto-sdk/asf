@@ -54,7 +54,7 @@
 #include "asf.h"
 #include "asfcmn.h"
 
-/*#define ASF_REASM_DEBUG*/
+/* #define ASF_REASM_DEBUG */
 
 extern ASFFFPGlobalStats_t *asf_gstats;
 #ifdef ASF_REASM_DEBUG
@@ -131,7 +131,9 @@ extern int asf_max_vsgs;
 unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 			   unsigned int ulIndex, unsigned int ulMagicNum, unsigned int pCbArg4);
 
-int asfSkbCopyBits(const struct sk_buff *skb, int offset, void *to, int len);
+static int asfSkbCopyBits(const struct sk_buff *this_skb,
+		int offset, void *to,
+		int len);
 
 struct asf_fragInfo_s {
 	unsigned short int ulFragOffset;
@@ -1570,18 +1572,19 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 */
 
 inline int asfIpv4Fragment(struct sk_buff *skb,
-	unsigned int ulMTU, unsigned int ulDevXmitHdrLen,
-	unsigned int bDoChecksum,
-	struct net_device *dev,
-	struct sk_buff **pOutSkb)
+			   unsigned int ulMTU, unsigned int ulDevXmitHdrLen,
+			   unsigned int bDoChecksum,
+			   struct net_device *dev,
+			   struct sk_buff **pOutSkb)
 {
 	struct iphdr *iph = ip_hdr(skb);
 	unsigned int ihl = iph->ihl*4;
 	unsigned int ulReqHeadRoom = ulDevXmitHdrLen + ASF_REASM_IP_HDR_LEN;
 	struct sk_buff *skb2, *pLastSkb;
-	unsigned int bytesLeft, len, ii, ptr;
+	unsigned int bytesLeft, len, ii, ptr = 0;
 	unsigned int *pSrc, *pTgt;
 	unsigned int offset = 0;
+	unsigned int tot_len;
 	bool bNewSkb = 1;
 	struct sk_buff *pSkb, *frag;
 
@@ -1660,36 +1663,52 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 		}
 
 		if (bNewSkb) {
-			asf_reasm_debug("New Skb required \r\n");
-			*pOutSkb = NULL;
 			ulMTU -= ihl;
-			bytesLeft = iph->tot_len - ihl;
-			ptr = ihl;
+			asf_reasm_debug("Re-using incoming Skb"
+						" as first fragment.\r\n");
+			*pOutSkb = skb;
+			pLastSkb = skb;
+			/* adjust other skb pointers */
+			len = (ulMTU & ~7);
+			bytesLeft = (iph->tot_len - ihl - len);
+			/* Skb->len will be set at last as will be used
+			  asfSkbCopyBits() */
+			tot_len = len+ihl;
+			skb->tail = skb->data;
+			skb->tail += skb->len;
+			iph->frag_off |= htons(IP_MF);
+			iph->tot_len = htons(len+ihl);
+
+			if (!bDoChecksum)
+				skb->ip_summed = CHECKSUM_PARTIAL;
+			else {
+				ip_send_check(iph);
+				skb->ip_summed = CHECKSUM_UNNECESSARY;
+			}
+			asf_ip_options_fragment(skb);
+
+			offset += len;
+			ptr += (ihl + len);
+			asf_reasm_debug("bytesLeft %d, Offset %d, len %d \r\n",
+					bytesLeft, offset, len);
+			/* continue more more fragments with new allocations. */
 			while (bytesLeft > 0) {
-				asf_reasm_debug("bytesLeft = %d\r\n", bytesLeft);
-				len = (bytesLeft > ulMTU) ? ulMTU : bytesLeft;
+				asf_reasm_debug("New Skb required \r\n");
+				asf_reasm_debug("bytesLeft = %d\r\n",
+								bytesLeft);
+
+				len = (bytesLeft > ulMTU) ?  ulMTU : bytesLeft;
 				if (len < bytesLeft)
 					len &= ~7;
-#if 0
-				if (dev)
-					skb2 = gfar_new_skb(dev);
-				else
-#endif
+
 				skb2 = alloc_skb(len + ihl +
 						ulDevXmitHdrLen, GFP_ATOMIC);
-				if (skb2) {
-					if (!*pOutSkb) {
-						asf_reasm_debug("FirstSkb 0x%x",
-							skb2);
-						*pOutSkb = skb2;
-						pLastSkb = skb2;
-					} else {
-						asf_reasm_debug("Next skb 0x%x",
-							skb2);
-						pLastSkb->next = skb2;
-						pLastSkb = skb2;
 
-					}
+				if (skb2) {
+					asf_reasm_debug("Next skb\r\n");
+					pLastSkb->next = skb2;
+					pLastSkb = skb2;
+
 					skb_reserve(skb2, ulDevXmitHdrLen);
 
 					skb2->tail += (len+ihl);
@@ -1702,46 +1721,47 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					 *	Copy the packet header
 					 *	into the new buffer.
 					 */
-					pSrc = (unsigned int *)iph;
-					pTgt = (unsigned int *)skb_network_header(skb2);
+					pSrc = (unsigned int *) ip_hdr(skb);
+					pTgt = (unsigned int *) ip_hdr(skb2);
 					for (ii = 0; ii < 5; ii++)
 						pTgt[ii] = pSrc[ii];
 
-					asfSkbCopyBits(skb, ptr, skb_transport_header(skb2), len);
+					asfSkbCopyBits(skb,
+						ptr,
+						skb_transport_header(skb2),
+						len);
 
 					bytesLeft -= len;
 
 					/*
-					*	Fill in the new header fields.
-					*/
+					  *	Fill in the new header fields.
+					  */
 					iph = ip_hdr(skb2);
 					iph->frag_off = htons((offset >> 3));
 					iph->tot_len = htons(len + ihl);
 
 					if (!bDoChecksum) {
-						skb2->ip_summed = CHECKSUM_PARTIAL;
+						skb2->ip_summed =
+							CHECKSUM_PARTIAL;
 					} else {
 						ip_send_check(iph);
-						skb2->ip_summed = CHECKSUM_UNNECESSARY;
+						skb2->ip_summed =
+							CHECKSUM_UNNECESSARY;
 					}
 
-					if (offset == 0)
-						asf_ip_options_fragment(skb);
-
-
-					if (bytesLeft > 0)
-						iph->frag_off |= htons(IP_MF);
+					if (bytesLeft == 0)
+						iph->frag_off &= htons(~IP_MF);
 
 					offset += len;
 					ptr += len;
 				} else {
-					asf_reasm_debug("Skb allocation"
+					asf_reasm_debug("Skb allocatin"
 						" failed in fragmenation\r\n");
 					kfree_skb(skb);
 					return 1;
 				}
 			}
-			kfree_skb(skb);
+			skb->len = tot_len;
 			return 0;
 		}
 	}
@@ -1753,23 +1773,20 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 
 /* Copy some data bits from skb to kernel buffer. */
 
-int asfSkbCopyBits(const struct sk_buff *this_skb, int offset, void *to, int len)
+static int asfSkbCopyBits(const struct sk_buff *this_skb,
+			int offset,
+			void *to,
+			int len)
 {
 	unsigned char *dest = (unsigned char *) to, *src;
-	struct sk_buff *skb = this_skb;
-	int   src_len, nbytes, begin_skip, cur_off = 0, do_copy = 0;
+	struct	sk_buff *skb = this_skb;
+	int	nbytes, begin_skip, cur_off = 0, do_copy = 0;
+	unsigned int src_len;
 
-	asf_reasm_debug("offset %d len %d (skb->len %u iph->tot_len %u)!\n",
-			offset, len, this_skb->len, ip_hdr(this_skb)->tot_len);
+	asf_reasm_debug("offset %d len %d (skb->len %u)!\n",
+			offset, len, skb->len);
 
 	while (skb) {
-#if 0
-		if (skb == this_skb) {
-			iph = ip_hdr(skb);
-			src = skb->data+iph->ihl*4;
-			src_len = skb->len-iph->ihl*4;
-		} else
-#endif
 		{
 			src = skb->data;
 			src_len = skb->len;

@@ -367,11 +367,12 @@ inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 			asfCopyWords((unsigned int *)pSkb->data,
 					(unsigned int *)Cache->l2blob,
 					Cache->l2blob_len);
-			if (Cache->bPPPoE)
+			if (Cache->bPPPoE) {
 				/* PPPoE packet. Set Payload
 				   length in PPPoE header */
 				*((short *)&(pSkb->data[Cache->l2blob_len-4])) =
 					htons(ntohs(iph->tot_len)+2);
+			}
 
 			asf_print("skb->network_header = 0x%p, "
 				"skb->transport_header = 0x%p\r\n",
@@ -877,6 +878,7 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 		asf_print("Cache entry table Full for vsg %d!\n", vsg);
 		return ASFFWD_RESPONSE_FAILURE;
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
+		return ASFFWD_RESPONSE_FAILURE;
 	} else {
 		CacheEntry = fwd_cache_alloc();
 		/* Increment number of current cache count */
