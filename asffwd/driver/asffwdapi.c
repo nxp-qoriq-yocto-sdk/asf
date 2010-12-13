@@ -171,6 +171,15 @@ static inline void asf_fwd_cache_insert(fwd_cache_t *Cache, fwd_bucket_t *bkt)
 	spin_unlock_bh(&bkt->lock);
 }
 
+static void fwd_cache_destroy(struct rcu_head *rcu)
+{
+	fwd_cache_t	*cache = (fwd_cache_t *)rcu;
+
+	asfTimerFreeNodeMemory(cache->pL2blobTmr);
+	if (cache->bHeap)
+		kfree(cache);
+}
+
 static void fwd_cache_free_rcu(struct rcu_head *rcu)
 {
 	fwd_cache_free((fwd_cache_t *)rcu);
@@ -878,7 +887,6 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 		asf_print("Cache entry table Full for vsg %d!\n", vsg);
 		return ASFFWD_RESPONSE_FAILURE;
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
-		return ASFFWD_RESPONSE_FAILURE;
 	} else {
 		CacheEntry = fwd_cache_alloc();
 		/* Increment number of current cache count */
@@ -1014,7 +1022,10 @@ static int fwd_cmd_delete_entry(ASF_uint32_t  ulVsgId,
 		 __asf_fwd_cache_remove(CacheEntry, bkt);
 		CacheEntry->bDeleted = 1;
 		spin_unlock_bh(&bkt->lock);
+
+		spin_lock_bh(&fwd_entry_count_lock);
 		fwd_cur_entry_count--;
+		spin_unlock_bh(&fwd_entry_count_lock);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (CacheEntry->pL2blobTmr)
 			asfTimerStop(ASF_FWD_BLOB_TMR_ID,
@@ -1208,8 +1219,12 @@ unsigned int asfFwdExpiryTmrCb(unsigned int ulVsgId,
 				bkt = (fwd_bucket_t *)CacheEntry->bkt;
 				spin_lock_bh(&bkt->lock);
 				__asf_fwd_cache_remove(CacheEntry, bkt);
-				fwd_cur_entry_count--;
 				spin_unlock_bh(&bkt->lock);
+
+				spin_lock_bh(&fwd_entry_count_lock);
+				fwd_cur_entry_count--;
+				spin_unlock_bh(&fwd_entry_count_lock);
+
 				if (CacheEntry->pL2blobTmr)
 					asfTimerStop(ASF_FWD_BLOB_TMR_ID,
 						0, CacheEntry->pL2blobTmr);
@@ -1266,12 +1281,13 @@ static void asf_fwd_destroy_all_caches(void)
 		while (Cache != head) {
 			temp = Cache;
 			Cache = Cache->pNext;
-			asfTimerFreeNodeMemory(temp->pL2blobTmr);
-			if (temp->bHeap)
-				kfree(temp);
+			call_rcu((struct rcu_head *)temp,
+					fwd_cache_destroy);
 		}
 	}
+	spin_lock_bh(&fwd_entry_count_lock);
 	fwd_cur_entry_count = 0;
+	spin_unlock_bh(&fwd_entry_count_lock);
 }
 
 static void fwd_cmd_flush_table(unsigned long ulVsgId)
@@ -1309,7 +1325,6 @@ static void fwd_cmd_flush_table(unsigned long ulVsgId)
 		bkt = (fwd_bucket_t *)CacheEntry->bkt;
 		spin_lock_bh(&bkt->lock);
 		__asf_fwd_cache_remove(CacheEntry, bkt);
-		fwd_cur_entry_count--;
 		spin_unlock_bh(&bkt->lock);
 		if (CacheEntry->pL2blobTmr)
 			asfTimerStop(ASF_FWD_BLOB_TMR_ID,
@@ -1319,6 +1334,9 @@ static void fwd_cmd_flush_table(unsigned long ulVsgId)
 		/* Move to Next entry */
 		CacheEntry = CacheEntry->aNext;
 	}
+	spin_lock_bh(&fwd_entry_count_lock);
+	fwd_cur_entry_count = 0;
+	spin_unlock_bh(&fwd_entry_count_lock);
 #endif
 	return;
 }

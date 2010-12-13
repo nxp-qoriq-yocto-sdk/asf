@@ -190,7 +190,12 @@ typedef void (*asfctrl_fwd_l2blob_update)(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
 					T_UINT32 ulDeviceID);
 typedef void (*asfctrl_fwd_l3_route_flush_t)(void);
-typedef void (*asfctrl_fwd_l3_route_add_t)(void);
+typedef int (*asfctrl_fwd_l3_route_add_t)(int iif,
+					struct net_device *dev,
+					uint32_t daddr,
+					uint32_t saddr,
+					int tos,
+					void *ctx);
 
 extern void  asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob,
 					asfctrl_fwd_l3_route_add_t route_add,

@@ -124,14 +124,28 @@ ASF_void_t  asfctrl_invalidate_sessions(void)
 }
 EXPORT_SYMBOL(asfctrl_invalidate_sessions);
 
-ASF_void_t asfctrl_l3_route_add(void)
+int asfctrl_l3_route_add(
+	int iif,
+	struct net_device *dev,
+	uint32_t daddr,
+	uint32_t saddr,
+	int tos,
+	void *l2_head
+)
 {
 	ASFCTRL_FUNC_ENTRY;
 #ifdef ASFCTRL_FWD_FP_SUPPORT
  	if ( fn_fwd_l3_route_add )
- 			fn_fwd_l3_route_add();
+		return fn_fwd_l3_route_add(
+				iif,
+				dev,
+				daddr,
+				saddr,
+				tos,
+				l2_head);
 #endif
  	ASFCTRL_FUNC_EXIT
+	return 0;
 }
 
 ASF_void_t  asfctrl_invalidate_l2blob(void)
