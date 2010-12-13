@@ -616,7 +616,7 @@ ASF_void_t ASFFFPRegisterCallbackFns(ASFFFPCallbackFns_t *pFnList);
 
 
 typedef struct ASFFFPL2blobConfig_s {
-        ASF_uint32_t    ulL2blobMagicNumber;
+	ASF_uint32_t    ulL2blobMagicNumber;
 	ASF_uint32_t	ulOldL2blobJiffies;
 	ASF_boolean_t	bl2blobRefreshSent;
 } ASFFFPL2blobConfig_t;

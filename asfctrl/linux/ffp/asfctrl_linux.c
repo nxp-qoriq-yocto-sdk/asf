@@ -81,12 +81,12 @@ asfctrl_fwd_l3_route_add_t  fn_fwd_l3_route_add;
 
 
 void asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob,
- 				asfctrl_fwd_l3_route_add_t route_add,
-				asfctrl_fwd_l3_route_flush_t  route_flush )
+				asfctrl_fwd_l3_route_add_t route_add,
+				asfctrl_fwd_l3_route_flush_t  route_flush)
 {
 	fn_fwd_l2blob_update = p_l2blob;
- 	fn_fwd_l3_route_flush = route_flush;
- 	fn_fwd_l3_route_add   = route_add;
+	fn_fwd_l3_route_flush = route_flush;
+	fn_fwd_l3_route_add   = route_add;
 }
 EXPORT_SYMBOL(asfctrl_register_fwd_func);
 #endif
@@ -135,7 +135,7 @@ int asfctrl_l3_route_add(
 {
 	ASFCTRL_FUNC_ENTRY;
 #ifdef ASFCTRL_FWD_FP_SUPPORT
- 	if ( fn_fwd_l3_route_add )
+	if (fn_fwd_l3_route_add)
 		return fn_fwd_l3_route_add(
 				iif,
 				dev,
@@ -144,7 +144,7 @@ int asfctrl_l3_route_add(
 				tos,
 				l2_head);
 #endif
- 	ASFCTRL_FUNC_EXIT
+	ASFCTRL_FUNC_EXIT
 	return 0;
 }
 
@@ -168,7 +168,7 @@ ASF_void_t asfctrl_l3_route_flush(void)
 	asfctrl_invalidate_l2blob();
 
 #ifdef ASFCTRL_FWD_FP_SUPPORT
- 	if ( fn_fwd_l3_route_flush )
+	if (fn_fwd_l3_route_flush)
  			fn_fwd_l3_route_flush();
 #endif
  	ASFCTRL_FUNC_EXIT

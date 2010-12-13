@@ -1082,7 +1082,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 
 iface_not_found:
 	ASF_RCU_READ_UNLOCK(bLockFlag);
-	if(ffpCbFns.pFnInterfaceNotFound) {
+	if (ffpCbFns.pFnInterfaceNotFound) {
 		abuf.nativeBuffer = skb;
 		ffpCbFns.pFnInterfaceNotFound(abuf, ASF_SKB_FREE_FUNC, skb);
 		return AS_FP_STOLEN;
@@ -1336,9 +1336,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 					flow->configIdentity.l2blobConfig.bl2blobRefreshSent = 1;
 				}
 
-				if ( time_after(jiffies ,
+				if (time_after(jiffies ,
 					flow->configIdentity.l2blobConfig.ulOldL2blobJiffies +
-					ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT) ) {
+					ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT)) {
 					L2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
 					goto gen_indications;
 				}
@@ -1456,7 +1456,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		if (asf_l2blob_refresh_npkts &&
 			(flow_stats->ulInPkts % asf_l2blob_refresh_npkts) == 0) {
 			asf_debug_l2("Decided to send L2Blob refresh ind based on npkts\n");
-		        L2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;	
+			L2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
 		}
 		flow->ulLastPktInAt = jiffies;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -1464,7 +1464,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		if (!flow->bIPsecOut &&
 			(flow->l2blob_len == 0)) {
 			asf_debug("Generating L2blob Indication as L2blob Not found!\n");
-			L2blobRefresh = ASF_L2BLOB_REFRESH_RET_PKT_STK;	
+			L2blobRefresh = ASF_L2BLOB_REFRESH_RET_PKT_STK;
 			goto gen_indications;
 		}
 
@@ -1809,14 +1809,14 @@ gen_indications:
 					XGSTATS_INC(PktCtxL2blobInd);
 					ffpCbFns.pFnFlowRefreshL2Blob(ulVsgId, &ind);
 				}
-				switch(L2blobRefresh) {
-					case ASF_L2BLOB_REFRESH_RET_PKT_STK:
+				switch (L2blobRefresh) {
+				case ASF_L2BLOB_REFRESH_RET_PKT_STK:
 						goto ret_pkt_to_stk;
 						break;
-					case ASF_L2BLOB_REFRESH_DROP_PKT:
+				case ASF_L2BLOB_REFRESH_DROP_PKT:
 						goto drop_pkt;
 						break;
-					default:
+				default:
 						break;
 				}
 

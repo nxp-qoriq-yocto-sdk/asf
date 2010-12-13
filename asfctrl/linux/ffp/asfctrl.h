@@ -199,7 +199,7 @@ typedef int (*asfctrl_fwd_l3_route_add_t)(int iif,
 
 extern void  asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob,
 					asfctrl_fwd_l3_route_add_t route_add,
-					asfctrl_fwd_l3_route_flush_t  route_flush );
+					asfctrl_fwd_l3_route_flush_t  route_flush);
 
 #endif
 
