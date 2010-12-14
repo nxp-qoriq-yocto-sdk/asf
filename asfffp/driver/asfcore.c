@@ -1318,7 +1318,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			/* L2blob refersh handling for the possible change in the l2blob */
 
 			if ((!flow->bIPsecOut) &&
-				(vsgInfo->configIdentity.l2blobConfig.ulL2blobMagicNumber >
+				(vsgInfo->configIdentity.l2blobConfig.ulL2blobMagicNumber !=
 				flow->configIdentity.l2blobConfig.ulL2blobMagicNumber)) {
 
 				if (!flow->configIdentity.l2blobConfig.bl2blobRefreshSent) {

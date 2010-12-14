@@ -700,6 +700,9 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 	cmd.configIdentity.ulConfigMagicNumber = asfctrl_vsg_config_id;
 
+	cmd.configIdentity.l2blobConfig.ulL2blobMagicNumber =
+			asfctrl_vsg_l2blobconfig_id;
+
 	cmd.flow1.ulZoneId = ASF_DEF_ZN_ID;
 
 	if (cmd.flow1.tuple.ucProtocol == IPPROTO_TCP) {

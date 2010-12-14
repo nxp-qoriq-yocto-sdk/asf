@@ -133,6 +133,7 @@ static inline int asfctrl_skb_is_dummy(struct sk_buff *skb)
 }
 
 extern uint32_t asfctrl_vsg_config_id;
+extern uint32_t asfctrl_vsg_l2blobconfig_id;
 
 extern int asf_ip_send(struct sk_buff *skb);
 extern T_INT32 asfctrl_create_dev_map(struct net_device *dev,
