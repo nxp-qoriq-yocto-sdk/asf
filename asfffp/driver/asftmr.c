@@ -380,7 +380,7 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 				for_each_possible_cpu(jj)
 				{
 					pTempRq = per_cpu_ptr(pTmrWheel->pQs, jj);
-					pTempRq->pQueue = (asfTmr_t **)pTempRq + 1;
+					pTempRq->pQueue = (asfTmr_t **)(pTempRq + 1);
 				}
 			} else {
 				asf_timer_debug("Allocation of Per CPU RQ Entries failed\r\n");
