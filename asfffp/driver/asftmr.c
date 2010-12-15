@@ -443,6 +443,7 @@ unsigned int asfTimerWheelDeInit(unsigned short int ulAppId, unsigned  short int
 			asfFreePerCpu(pTmrWheel->pQs);
 		}
 		asfFreePerCpu(pWheel->pTmrWheel);
+		pWheel->pTmrWheel = NULL;
 	}
 	pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].pFn = NULL;
 	return ASF_TMR_SUCCESS;
