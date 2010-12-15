@@ -74,7 +74,7 @@ MODULE_LICENSE("GPL");
 char *asf_version = "asf-rel-0.1.0";
 /* Initilization Parameters */
 int asf_enable;
-int ffp_max_flows = 64*1024;
+int ffp_max_flows = 128*1024;
 int asf_max_vsgs = ASF_MAX_VSGS;
 int asf_max_ifaces = ASF_MAX_IFACES;
 int ffp_hash_buckets = 8*1024;
