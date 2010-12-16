@@ -47,6 +47,8 @@ extern int asf_enable;
 #define ASF_MAX_POOL_NAME_LEN 32
 #define ASF_MAX_RETURNS 10
 
+#define ASF_MIN_POOL_ENTRIES            (10)
+
 struct asf_poolInfo_s {
 	dma_addr_t paddr;
 	unsigned long *vaddr;
@@ -218,6 +220,19 @@ int asfCreatePool(char *name, unsigned int ulNumGlobalPoolEntries,
 	asf_mpool_debug("%s - name %s NumGbl %d NumMax %d PerCpu %d DataSize %d\n",
 			__FUNCTION__, name, ulNumGlobalPoolEntries, ulNumMaxEntries,
 			ulPerCoreEntries, ulDataSize);
+
+
+	ulNumGlobalPoolEntries = (ulNumGlobalPoolEntries < ASF_MIN_POOL_ENTRIES) ?
+					ASF_MIN_POOL_ENTRIES :
+					ulNumGlobalPoolEntries;
+
+	ulNumMaxEntries = (ulNumMaxEntries < ASF_MIN_POOL_ENTRIES) ?
+					ASF_MIN_POOL_ENTRIES :
+					ulNumMaxEntries;
+
+	ulPerCoreEntries = (ulPerCoreEntries < ASF_MIN_POOL_ENTRIES) ?
+					ASF_MIN_POOL_ENTRIES :
+					ulPerCoreEntries;
 
 	for_each_possible_cpu(ii)
 	{

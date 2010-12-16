@@ -75,6 +75,10 @@ MODULE_PARM_DESC(fwd_l2blob_refresh_interval, "Time interval after which"\
 module_param(fwd_hash_buckets, int, 0644);
 MODULE_PARM_DESC(fwd_hash_buckets, "Maximum number of buckets"\
 						" in FWD Hash table");
+
+module_param(fwd_max_entry, int, 0644);
+MODULE_PARM_DESC(fwd_max_entry, "Maximum number of FWD flow entries");
+
 static volatile unsigned int  fwd_cur_entry_count;
 spinlock_t	fwd_entry_count_lock;
 static unsigned int  fwd_cache_pool_id = -1;
