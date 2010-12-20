@@ -147,8 +147,8 @@ typedef struct ASFVlanDevArray_s {
 	struct ASFNetDevEntry_s *pArray[ASF_VLAN_ARY_LEN];
 } ASFVlanDevArray_t;
 
-#define ASF_INVALID_VSG	(~0)
-#define ASF_INVALID_ZONE	(~0)
+#define ASF_INVALID_VSG		0xFFFFFFFF
+#define ASF_INVALID_ZONE	0xFFFFFFFF
 
 typedef struct ASFNetDevEntry_s {
 	struct rcu_head	 rcu;

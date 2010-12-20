@@ -325,7 +325,7 @@ static inline void asfFwdSendLog(fwd_cache_t *Cache,
 				unsigned long ulMsgId,
 				unsigned long ulHashVal)
 {
-	return asfFwdSendLogEx(Cache, ulMsgId, (ASF_uchar8_t *)"", ulHashVal);
+	asfFwdSendLogEx(Cache, ulMsgId, (ASF_uchar8_t *)"", ulHashVal);
 }
 
 inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
@@ -440,7 +440,8 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 
 			anDev = ASFNetDev(skb->dev);
 			abuf.nativeBuffer = skb;
-			fwdCbFns.pFnCacheEntryNotFound(anDev->ulVSGId,
+			if (anDev)
+				fwdCbFns.pFnCacheEntryNotFound(anDev->ulVSGId,
 						anDev->ulCommonInterfaceId,
 						abuf,
 						ASF_SKB_FREE_FUNC, skb);
@@ -1530,16 +1531,13 @@ static void asf_fwd_destroy_cache_table(void)
 	synchronize_rcu();
 
 	asf_print("DestroyPool ExpiryTimerPool\n");
-	if (asfDestroyPool(fwd_expiry_timer_pool_id) != 0)
-		asf_err("failed to destroy expiry timer mpool\n");
+	asfDestroyPool(fwd_expiry_timer_pool_id);
 
 	asf_print("DestroyPool BlobTimerPool\n");
-	if (asfDestroyPool(fwd_blob_timer_pool_id) != 0)
-		asf_err("failed to destroy blob timer mpool\n");
+	asfDestroyPool(fwd_blob_timer_pool_id);
 
 	asf_debug("DestroyPool FWDCachePool\n");
-	if (asfDestroyPool(fwd_cache_pool_id) != 0)
-		asf_debug("failed to destroy FWD Cache mpool\n");
+	asfDestroyPool(fwd_cache_pool_id);
 
 	asf_debug("Waiting for all CPUs to finish existing RCU callbacks!\n");
 	synchronize_rcu();

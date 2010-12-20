@@ -762,7 +762,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	ASFFFPGlobalStats_t     *gstats;
-	ASFFFPVsgStats_t	*vstats;
 	int			bCsumVerify = 0;
 #endif
 	int			bLockFlag;
@@ -1057,10 +1056,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	vstats = asfPerCpuPtr(asf_vsg_stats, smp_processor_id()) + anDev->ulVSGId;
-#endif
-
 	abuf.nativeBuffer = skb;
 	ASFFFPProcessAndSendPkt(anDev->ulVSGId,
 			anDev->ulCommonInterfaceId,
@@ -1114,8 +1109,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	struct iphdr		*iph;
 	ffp_flow_t		*flow;
 	unsigned long		ulHashVal;
-	unsigned int		trhlen;
-	unsigned int		iphlen;
+	unsigned short int	trhlen;
+	unsigned short int	iphlen;
 	unsigned short int      *q;
 	int			L2blobRefresh = 0;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -1355,12 +1350,14 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 		} else if (iph->protocol == IPPROTO_TCP) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			int     optlen, tcp_data_len;
+			int     optlen;
+			unsigned short  tcp_data_len;
 			ffp_flow_t      *oth_flow;
 #endif
 
 			XGSTATS_INC(TcpPkts);
-			trhlen = ((*(ptrhdrOffset + 3) & 0xf0000000) >> 28) * 4;
+			trhlen = (unsigned short)((*(ptrhdrOffset + 3) &
+							0xf0000000) >> 28) * 4;
 			/* Invalid length check
 			   Length indicated in IPhdr - header length < expected transport header length
 			   Length as indicated in skb - ip hder - ethernet header < expected transport header length

@@ -227,7 +227,6 @@ int asfReasmInit(void)
 	struct asf_reasmHashList_s *ptr;
 	struct asf_reasmCbPtrArray_s *ptr1;
 	int ii, numVSG;
-	unsigned int ulOffset;
 
 	get_random_bytes(&asf_reasmRandValue_g, sizeof(asf_reasmRandValue_g));
 
@@ -267,7 +266,6 @@ int asfReasmInit(void)
 	asf_ReasmCbPtrIndexArray = asfAllocPerCpu(sizeof(struct asf_reasmCbPtrArray_s));
 
 	if (asf_ReasmCbPtrIndexArray) {
-		ulOffset = 0;
 		for_each_possible_cpu(ii)
 		{
 			ptr1 = asfPerCpuPtr(asf_ReasmCbPtrIndexArray, ii);
