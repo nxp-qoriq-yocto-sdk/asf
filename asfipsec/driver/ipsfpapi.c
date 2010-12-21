@@ -1027,7 +1027,7 @@ ASF_void_t ASFIPSecGetFirstNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 	struct SPDCILinkNode_s  *pCINode;
 	struct SPDCILinkNode_s **pList;
 	SPDOutContainer_t *pOutContainer;
-	SPDInContainer_t   *pInContainer;
+/*	SPDInContainer_t   *pInContainer; Commented for klocworks */
 	int ulCount = 0;
 	int bVal = in_softirq();
 
@@ -1077,7 +1077,9 @@ ASF_void_t ASFIPSecGetFirstNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 				pSPDContainers->containerData[ulCount].pSPDDetails->policyAction = pOutContainer->action;
 				/*  pSPDContainers->containerData[ulCount].pSPDDetails = pOutContainer; */
 			} else {
-				pInContainer = (SPDInContainer_t *) ptrIArray_getData(&(secfp_InDB), pCINode->ulIndex);
+			/*	Commenting the klocworks warning
+				pInContainer = (SPDInContainer_t *)
+				ptrIArray_getData(&(secfp_InDB), pCINode->ulIndex); */
 				/* Filling of SPD Details */
 				pSPDContainers->containerData[ulCount].ulSPDContainerIndex = pCINode->ulIndex;
 			/*pSPDContainers->containerData[ulCount].pSPDDetails->
@@ -1110,7 +1112,7 @@ ASF_void_t  ASFIPSecGetNextNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 	struct SPDCILinkNode_s  *pCINode;
 	struct SPDCILinkNode_s **pList;
 	SPDOutContainer_t *pOutContainer;
-	SPDInContainer_t   *pInContainer;
+/*	SPDInContainer_t   *pInContainer; Commented for klocworks */
 	int ulCount = 0;
 	int bVal = in_softirq();
 
@@ -1168,7 +1170,9 @@ ASF_void_t  ASFIPSecGetNextNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 				pSPDContainers->containerData[ulCount].pSPDDetails->policyAction = pOutContainer->action;
 				/*  pSPDContainers->containerData[ulCount].pSPDDetails = pOutContainer; */
 			} else {
-				pInContainer = (SPDInContainer_t *) ptrIArray_getData(&(secfp_InDB), pCINode->ulIndex);
+			/*	Commenting the klocworks warning
+				pInContainer = (SPDInContainer_t *)
+					ptrIArray_getData(&(secfp_InDB), pCINode->ulIndex); */
 				/* Filling of SPD Details */
 				pSPDContainers->containerData[ulCount].ulSPDContainerIndex = pCINode->ulIndex;
 			/*pSPDContainers->containerData[ulCount].pSPDDetails->
@@ -1203,7 +1207,7 @@ ASF_void_t ASFGetExactSPDContainers(ASFIPSecGetContainerParams_t   *pParams,
 	struct SPDCILinkNode_s  *pCINode;
 	struct SPDCILinkNode_s **pList;
 	SPDOutContainer_t *pOutContainer;
-	SPDInContainer_t   *pInContainer;
+/*	SPDInContainer_t   *pInContainer; Commented for klocworks */
 	int ulCount = 0;
 	int bVal = in_softirq();
 
@@ -1260,7 +1264,9 @@ ASF_void_t ASFGetExactSPDContainers(ASFIPSecGetContainerParams_t   *pParams,
 				pSPDContainers->containerData[ulCount].pSPDDetails->policyAction = pOutContainer->action;
 				/*  pSPDContainers->containerData[ulCount].pSPDDetails = pOutContainer; */
 			} else {
-				pInContainer = (SPDInContainer_t *) ptrIArray_getData(&(secfp_InDB), pCINode->ulIndex);
+			/*	Commenting the klocworks warning
+				pInContainer = (SPDInContainer_t *)
+					ptrIArray_getData(&(secfp_InDB), pCINode->ulIndex); */
 				/* Filling of SPD Details */
 				pSPDContainers->containerData[ulCount].ulSPDContainerIndex = pCINode->ulIndex;
 			/*pSPDContainers->containerData[ulCount].pSPDDetails->

@@ -242,34 +242,34 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 
 	ASFIPSecGlobalQueryStats(&Outparams);
 	printk(KERN_INFO" \nERRORS:");
-	printk(KERN_INFO"%lu (Does not enough tail room to continue)",
+	printk(KERN_INFO"%u (Does not enough tail room to continue)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT9]);
-	printk(KERN_INFO"%lu (No of packets Invalid ESP)",
+	printk(KERN_INFO"%u (No of packets Invalid ESP)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT10]);
-	printk(KERN_INFO"%lu (Decrypted Protocol != IPV4)",
+	printk(KERN_INFO"%u (Decrypted Protocol != IPV4)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT11]);
-	printk(KERN_INFO"%lu (Invalid Pad length)",
+	printk(KERN_INFO"%u (Invalid Pad length)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
-	printk(KERN_INFO"%lu (Inbound Submission to SEC failed)",
+	printk(KERN_INFO"%u (Inbound Submission to SEC failed)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
-	printk(KERN_INFO"%lu (Invalid sequence number )",
+	printk(KERN_INFO"%u (Invalid sequence number )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT1]);
-	printk(KERN_INFO"%lu (Anti-replay window check failed )",
+	printk(KERN_INFO"%u (Anti-replay window check failed )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
-	printk(KERN_INFO"%lu (Replay packet )",
+	printk(KERN_INFO"%u (Replay packet )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT16]);
-	printk(KERN_INFO"%lu (ICV Comp Failed )",
+	printk(KERN_INFO"%u (ICV Comp Failed )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT17]);
-	printk(KERN_INFO"%lu (Crypto Operation Failed )",
+	printk(KERN_INFO"%u (Crypto Operation Failed )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
-	printk(KERN_INFO"%lu (Anti Replay window -- Drop the packet )",
+	printk(KERN_INFO"%u (Anti Replay window -- Drop the packet )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT19]);
-	printk(KERN_INFO"%lu (Verification of SA Selectross Failed )",
+	printk(KERN_INFO"%u (Verification of SA Selectross Failed )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT20]);
-	printk(KERN_INFO"%lu (Packet size is > Path MTU and"\
+	printk(KERN_INFO"%u (Packet size is > Path MTU and"\
 		"fragment bit set in SA or packet )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT21]);
-	printk(KERN_INFO"%lu (Fragmentation Failed )",
+	printk(KERN_INFO"%u (Fragmentation Failed )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 
 	return 0;
@@ -572,7 +572,6 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 
 int secfp_register_proc(void)
 {
-	struct proc_dir_entry   *proc_file;
 
 	/* register sysctl tree */
 	secfp_proc_header = register_sysctl_table(secfp_proc_root_table);
@@ -585,37 +584,37 @@ int secfp_register_proc(void)
 	if (secfp_dir == NULL)
 		return -ENOMEM;
 
-	proc_file = create_proc_read_entry(
+	create_proc_read_entry(
 					SECFP_PROC_GLOBAL_STATS_NAME,
 					0444, secfp_dir,
 					display_secfp_proc_global_stats,
 					NULL);
 
-	proc_file = create_proc_read_entry(
+	create_proc_read_entry(
 					SECFP_PROC_GLOBAL_ERROR_NAME,
 					0444, secfp_dir,
 					display_secfp_proc_global_errors,
 					NULL);
 
-	proc_file = create_proc_read_entry(
+	create_proc_read_entry(
 					SECFP_PROC_OUT_SPD,
 					0444, secfp_dir,
 					display_secfp_proc_out_spd,
 					NULL);
 
-	proc_file = create_proc_read_entry(
+	create_proc_read_entry(
 					SECFP_PROC_IN_SPD,
 					0444, secfp_dir,
 					display_secfp_proc_in_spd,
 					NULL);
 
-	proc_file = create_proc_read_entry(
+	create_proc_read_entry(
 					SECFP_PROC_OUT_SA,
 					0444, secfp_dir,
 					display_secfp_proc_out_sa,
 					NULL);
 
-	proc_file = create_proc_read_entry(
+	create_proc_read_entry(
 					SECFP_PROC_IN_SA,
 					0444, secfp_dir,
 					display_secfp_proc_in_sa,

@@ -149,18 +149,18 @@ indices within the tunnel */
 SecTunnelIface_t **secFP_TunnelIfaces;
 spinlock_t secfp_TunnelIfaceCIIndexListLock;
 
-static unsigned int ulSPDCILinkNodePoolId_g = -1;
-static unsigned int ulSPDOutContainerPoolId_g = -1;
-static unsigned int ulOutSelListPoolId_g = -1;
-static unsigned int ulSASelPoolId_g = -1;
-static unsigned int ulOutSAPoolId_g = -1;
-static unsigned int ulOutSAl2blobPoolId_g = -1;
-static unsigned int ulSPDInContainerPoolId_g = -1;
-static unsigned int ulSPDInSelTblIndexLinkNodePoolId_g = -1;
-static unsigned int ulSPDInSPIValLinkNodePoolId_g = -1;
-static unsigned int ulInSelListPoolId_g = -1;
-static unsigned int ulInSAPoolId_g = -1;
-static unsigned int ulSPDOutSALinkNodePoolId_g = -1;
+static int SPDCILinkNodePoolId_g = -1;
+static int SPDOutContainerPoolId_g = -1;
+static int OutSelListPoolId_g = -1;
+static int SASelPoolId_g = -1;
+static int OutSAPoolId_g = -1;
+static int OutSAl2blobPoolId_g = -1;
+static int SPDInContainerPoolId_g = -1;
+static int SPDInSelTblIndexLinkNodePoolId_g = -1;
+static int SPDInSPIValLinkNodePoolId_g = -1;
+static int InSelListPoolId_g = -1;
+static int InSAPoolId_g = -1;
+static int SPDOutSALinkNodePoolId_g = -1;
 
 unsigned int   *pulVSGMagicNumber;
 unsigned int ulTimeStamp_g;
@@ -467,46 +467,47 @@ static int secfp_InitMemPools(void)
 	ulMaxNumber = (ulMaxSPDContainers_g * 2) / 10;
 	if (asfCreatePool("SPDCILinkNodePool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(struct SPDCILinkNode_s),
-			  &ulSPDCILinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulSPDCILinkNodePoolId_g");
+			  &SPDCILinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for SPDCILinkNodePoolId_g");
 		return 1;
 	}
 	ulMaxNumber = ulMaxSPDContainers_g / 10;
 	if (asfCreatePool("SPDOutContainerPool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(SPDOutContainer_t),
-			  &ulSPDOutContainerPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulSPDOutContainerPoolId_g");
+			  &SPDOutContainerPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed"
+				" for SPDOutContainerPoolId_g");
 		return 1;
 	}
 	ulMaxNumber = ulMaxSupportedIPSecSAs_g / 10;
 	if (asfCreatePool("OutSelListPool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(OutSelList_t),
-			  &ulOutSelListPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulOutSelListPoolId_g");
+			  &OutSelListPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for OutSelListPoolId_g");
 		return 1;
 	}
 
 	ulMaxNumber = (ulMaxSupportedIPSecSAs_g * 8) / 10;
 	if (asfCreatePool("SASelPoolId", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(SASel_t),
-			  &ulSASelPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulSASelPoolId_g");
+			  &SASelPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for SASelPoolId_g");
 		return 1;
 	}
 
 	ulMaxNumber = ulMaxSupportedIPSecSAs_g / 10;
 	if (asfCreatePool("OutSAPool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(outSA_t),
-			  &ulOutSAPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulOutSAPoolId_g");
+			  &OutSAPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for OutSAPoolId_g");
 		return 1;
 	}
 
 	if (asfCreatePool("secfpBlobTimer", ulMaxNumber,
 			  ulMaxNumber, (ulMaxNumber/2),
 			  sizeof(asfTmr_t),
-			  &ulOutSAl2blobPoolId_g)) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulOutSAl2blobPoolId_g");
+			  &OutSAl2blobPoolId_g)) {
+		ASFIPSEC_ERR("asfCreatePool failed for OutSAl2blobPoolId_g");
 		return 1;
 	}
 
@@ -519,7 +520,7 @@ static int secfp_InitMemPools(void)
 
 	if (asfTimerAppRegister(ASF_SECFP_BLOB_TMR_ID, 0,
 				asfsecfpBlobTmrCb,
-				ulOutSAl2blobPoolId_g)) {
+				OutSAl2blobPoolId_g)) {
 		ASFIPSEC_ERR("Error in Registering L2blob Timer\n");
 		return 1;
 	}
@@ -527,44 +528,47 @@ static int secfp_InitMemPools(void)
 	ulMaxNumber = ulMaxSPDContainers_g / 10;
 	if (asfCreatePool("SPDInContainerPool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(SPDInContainer_t),
-			  &ulSPDInContainerPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulSPDInContainerPoolId_g");
+			  &SPDInContainerPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for SPDInContainerPoolId_g");
 		return 1;
 	}
 
 	ulMaxNumber = ulMaxSupportedIPSecSAs_g / 10;
 	if (asfCreatePool("SPDInSelTblIndexLinkNode", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(SPDInSelTblIndexLinkNode_t),
-			  &ulSPDInSelTblIndexLinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulSPDInSelTblIndexLinkNodePool_g");
+			  &SPDInSelTblIndexLinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for"
+			" SPDInSelTblIndexLinkNodePool_g");
 		return 1;
 	}
 	ulMaxNumber = ulMaxSupportedIPSecSAs_g / 10;
 	if (asfCreatePool("SPDInSPIValLinkNodePool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(SPDInSPIValLinkNode_t),
-			  &ulSPDInSPIValLinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulSPDInSPIValLinkNodePoolId_g");
+			  &SPDInSPIValLinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for"
+				" SPDInSPIValLinkNodePoolId_g");
 		return 1;
 	}
 	ulMaxNumber = ulMaxSupportedIPSecSAs_g / 10;
 	if (asfCreatePool("InSelListPool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(InSelList_t),
-			  &ulInSelListPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulInSelListPoolId_g");
+			  &InSelListPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for InSelListPoolId_g");
 		return 1;
 	}
 	ulMaxNumber = ulMaxSupportedIPSecSAs_g / 10;
 	if (asfCreatePool("InSAPool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(inSA_t),
-			  &ulInSAPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulInSAPoolId_g");
+			  &InSAPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for =InSAPoolId_g");
 		return 1;
 	}
 	ulMaxNumber = ulMaxSupportedIPSecSAs_g / 10;
 	if (asfCreatePool("SPDOutSALinkNodePool", ulMaxNumber, ulMaxNumber,
 			  ulMaxNumber/2, sizeof(SPDOutSALinkNode_t),
-			  &ulSPDOutSALinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfCreatePool failed for ulSPDOutSALinkNodePoolId_g");
+			  &SPDOutSALinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfCreatePool failed for"
+				" SPDOutSALinkNodePoolId_g");
 		return 1;
 	}
 
@@ -590,58 +594,63 @@ void secfp_DeInitInSATable(void)
 
 void secfp_DeInitMemPools(void)
 {
-	if ((ulSPDOutSALinkNodePoolId_g != -1)
-		&& asfDestroyPool(ulSPDOutSALinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDOutSALinkNodePoolId_g");
-	}
-	if ((ulInSAPoolId_g != -1)
-		&& asfDestroyPool(ulInSAPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulInSAPoolId_g");
-	}
-	if ((ulInSelListPoolId_g != -1)
-		&& asfDestroyPool(ulInSelListPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulInSelListPoolId_g");
-	}
-	if ((ulSPDInSPIValLinkNodePoolId_g != -1)
-		&& asfDestroyPool(ulSPDInSPIValLinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDInSPIValLinkNodePoolId_g");
-	}
-	if ((ulSPDInSelTblIndexLinkNodePoolId_g != -1)
-		&& asfDestroyPool(ulSPDInSelTblIndexLinkNodePoolId_g) != 0) {
+	if ((SPDOutSALinkNodePoolId_g != -1)
+		&& asfDestroyPool(SPDOutSALinkNodePoolId_g) != 0) {
 		ASFIPSEC_ERR("asfDestroyPool failed for"
-			"ulSPDInSelTblIndexLinkNodePoolId_g");
+				" SPDOutSALinkNodePoolId_g");
 	}
-	if ((ulSPDInContainerPoolId_g != -1)
-		&& asfDestroyPool(ulSPDInContainerPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDInContainerPoolId_g");
+	if ((InSAPoolId_g != -1)
+		&& asfDestroyPool(InSAPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for InSAPoolId_g");
 	}
-	if (ulOutSAl2blobPoolId_g != -1) {
+	if ((InSelListPoolId_g != -1)
+		&& asfDestroyPool(InSelListPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for InSelListPoolId_g");
+	}
+	if ((SPDInSPIValLinkNodePoolId_g != -1)
+		&& asfDestroyPool(SPDInSPIValLinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for"
+				" SPDInSPIValLinkNodePoolId_g");
+	}
+	if ((SPDInSelTblIndexLinkNodePoolId_g != -1)
+		&& asfDestroyPool(SPDInSelTblIndexLinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for"
+			"SPDInSelTblIndexLinkNodePoolId_g");
+	}
+	if ((SPDInContainerPoolId_g != -1)
+		&& asfDestroyPool(SPDInContainerPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for"
+				" SPDInContainerPoolId_g");
+	}
+	if (OutSAl2blobPoolId_g != -1) {
 		asfTimerWheelDeInit(ASF_SECFP_BLOB_TMR_ID, 0);
-		if (asfDestroyPool(ulOutSAl2blobPoolId_g) != 0)
-			ASFIPSEC_ERR("asfDestroyPool failed for ulOutSAl2blobPoolId_g");
+		if (asfDestroyPool(OutSAl2blobPoolId_g) != 0)
+			ASFIPSEC_ERR("asfDestroyPool failed for"
+				" OutSAl2blobPoolId_g");
 	}
 
 	synchronize_rcu();
 
-	if ((ulOutSAPoolId_g != -1)
-		&& asfDestroyPool(ulOutSAPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulOutSAPoolId_g");
+	if ((OutSAPoolId_g != -1)
+		&& asfDestroyPool(OutSAPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for OutSAPoolId_g");
 	}
-	if ((ulSASelPoolId_g != -1)
-		&& asfDestroyPool(ulSASelPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSASelPoolId_g");
+	if ((SASelPoolId_g != -1)
+		&& asfDestroyPool(SASelPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for SASelPoolId_g");
 	}
-	if ((ulOutSelListPoolId_g != -1)
-		&& asfDestroyPool(ulOutSelListPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulOutSelListPoolId_g");
+	if ((OutSelListPoolId_g != -1)
+		&& asfDestroyPool(OutSelListPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for OutSelListPoolId_g");
 	}
-	if ((ulSPDOutContainerPoolId_g != -1)
-		&& asfDestroyPool(ulSPDOutContainerPoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDOutContainerPoolId_g");
+	if ((SPDOutContainerPoolId_g != -1)
+		&& asfDestroyPool(SPDOutContainerPoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for"
+			" SPDOutContainerPoolId_g");
 	}
-	if ((ulSPDCILinkNodePoolId_g != -1)
-		&& asfDestroyPool(ulSPDCILinkNodePoolId_g) != 0) {
-		ASFIPSEC_ERR("asfDestroyPool failed for ulSPDCILinkNodePoolId_g");
+	if ((SPDCILinkNodePoolId_g != -1)
+		&& asfDestroyPool(SPDCILinkNodePoolId_g) != 0) {
+		ASFIPSEC_ERR("asfDestroyPool failed for SPDCILinkNodePoolId_g");
 	}
 	ASFIPSEC_PRINT("Waiting for all CPUs to finish existing RCU callbacks!\n");
 	synchronize_rcu();
@@ -758,7 +767,7 @@ static inline struct SPDCILinkNode_s *secfp_allocSPDCILinkNode(void)
 {
 	struct SPDCILinkNode_s *pNode;
 	char  bHeap;
-	pNode = (struct SPDCILinkNode_s *)  asfGetNode(ulSPDCILinkNodePoolId_g,
+	pNode = (struct SPDCILinkNode_s *)  asfGetNode(SPDCILinkNodePoolId_g,
 							 &bHeap);
 	if (pNode && bHeap) {
 		pNode->bHeap = bHeap;
@@ -769,7 +778,7 @@ static inline struct SPDCILinkNode_s *secfp_allocSPDCILinkNode(void)
 static void secfp_freeSDPCILinkNode(struct rcu_head *pData)
 {
 	struct SPDCILinkNode_s *pNode = (struct SPDCILinkNode_s *)  (pData);
-	asfReleaseNode(ulSPDCILinkNodePoolId_g, pNode, pNode->bHeap);
+	asfReleaseNode(SPDCILinkNodePoolId_g, pNode, pNode->bHeap);
 
 }
 
@@ -779,7 +788,7 @@ static inline SPDOutContainer_t *secfp_allocSPDOutContainer(void)
 	SPDOutContainer_t *pContainer;
 	char bHeap;
 
-	pContainer = (SPDOutContainer_t *)  asfGetNode(ulSPDOutContainerPoolId_g,
+	pContainer = (SPDOutContainer_t *)  asfGetNode(SPDOutContainerPoolId_g,
 							 &bHeap);
 	if (pContainer && bHeap) {
 		pContainer->bHeap = bHeap;
@@ -790,7 +799,7 @@ static inline SPDOutContainer_t *secfp_allocSPDOutContainer(void)
 static void secfp_freeSPDOutContainer(struct rcu_head *rcu)
 {
 	SPDOutContainer_t *pContainer = (SPDOutContainer_t *)  rcu;
-	asfReleaseNode(ulSPDOutContainerPoolId_g, pContainer, pContainer->bHeap);
+	asfReleaseNode(SPDOutContainerPoolId_g, pContainer, pContainer->bHeap);
 }
 
 
@@ -801,13 +810,13 @@ static void secfp_cleanupSelList(OutSelList_t *pSelList)
 
 	for (pSel = pSelList->srcSel.pNext; pSel != NULL; pSel = pTmpSel) {
 		pTmpSel = pSel->pNext;
-		asfReleaseNode(ulSASelPoolId_g, pSel, pSel->bHeap);
+		asfReleaseNode(SASelPoolId_g, pSel, pSel->bHeap);
 	}
 	for (pSel = pSelList->destSel.pNext; pSel != NULL; pSel = pTmpSel) {
 		pTmpSel = pSel->pNext;
-		asfReleaseNode(ulSASelPoolId_g, pSel, pSel->bHeap);
+		asfReleaseNode(SASelPoolId_g, pSel, pSel->bHeap);
 	}
-	asfReleaseNode(ulOutSelListPoolId_g, pSelList, pSelList->bHeap);
+	asfReleaseNode(OutSelListPoolId_g, pSelList, pSelList->bHeap);
 }
 
 /* Out SA Sel Set alloc/free routines */
@@ -823,7 +832,7 @@ static void  secfp_addOutSelSet(outSA_t *pSA,
 	char bHeap;
 
 
-	pSA->pSelList = (OutSelList_t *)  asfGetNode(ulOutSelListPoolId_g, &bHeap);
+	pSA->pSelList = (OutSelList_t *) asfGetNode(OutSelListPoolId_g, &bHeap);
 	if (pSA->pSelList == NULL) {
 		GlobalErrors.ulResourceNotAvailable++;
 		ASFIPSEC_WARN("secfp_addOutSelSet: Allocation of SASelList failed");
@@ -845,7 +854,8 @@ static void  secfp_addOutSelSet(outSA_t *pSA,
 			/* Memory for the 1st selector is allocated as part of pSAList*/
 			pNewSel = &(pSA->pSelList->srcSel);
 		} else {
-			pNewSel = (struct SASel_s *)  asfGetNode(ulSASelPoolId_g, &bHeap);
+			pNewSel = (struct SASel_s *)
+					asfGetNode(SASelPoolId_g, &bHeap);
 			if (pNewSel && bHeap) {
 				pNewSel->bHeap = bHeap;
 			}
@@ -874,12 +884,13 @@ static void  secfp_addOutSelSet(outSA_t *pSA,
 
 	for (pPrevSel = NULL, pTmpSel = pDstSel;
 		pTmpSel != NULL;
-		pTmpSel = pTmpSel->pNext, pNewSel = NULL) {
+		pTmpSel = pTmpSel->pNext) {
 		if (pTmpSel == pDstSel) {
 			/* Memory for the 1st selector is allocated as part of pSAList*/
 			pNewSel = &(pSA->pSelList->destSel);
 		} else {
-			pNewSel = (struct SASel_s *)  asfGetNode(ulSASelPoolId_g, &bHeap);
+			pNewSel = (struct SASel_s *)
+					asfGetNode(SASelPoolId_g, &bHeap);
 			if (pNewSel && bHeap) {
 				pNewSel->bHeap = bHeap;
 			}
@@ -913,7 +924,7 @@ static inline outSA_t *secfp_allocOutSA(void)
 	outSA_t *pSA;
 	char	bHeap;
 
-	pSA = (outSA_t *) asfGetNode(ulOutSAPoolId_g, &bHeap);
+	pSA = (outSA_t *) asfGetNode(OutSAPoolId_g, &bHeap);
 	if (pSA && bHeap) {
 		pSA->bHeap = bHeap;
 	}
@@ -929,7 +940,7 @@ static void secfp_freeOutSA(struct rcu_head *pData)
 	if (pSA->pSelList) {
 		secfp_cleanupSelList(pSA->pSelList);
 	}
-	asfReleaseNode(ulOutSAPoolId_g, pSA, pSA->bHeap);
+	asfReleaseNode(OutSAPoolId_g, pSA, pSA->bHeap);
 }
 
 /* In container alloc/free routine */
@@ -937,7 +948,8 @@ static inline SPDInContainer_t *secfp_allocSPDInContainer(void)
 {
 	SPDInContainer_t *pContainer;
 	char  bHeap;
-	pContainer = (SPDInContainer_t *)  asfGetNode(ulSPDInContainerPoolId_g, &bHeap);
+	pContainer = (SPDInContainer_t *)
+		asfGetNode(SPDInContainerPoolId_g, &bHeap);
 	if (pContainer && bHeap) {
 		pContainer->bHeap = bHeap;
 	}
@@ -947,7 +959,7 @@ static inline SPDInContainer_t *secfp_allocSPDInContainer(void)
 static void secfp_freeSPDInContainer(struct rcu_head *rcu)
 {
 	SPDInContainer_t *pContainer = (SPDInContainer_t *)  rcu;
-	asfReleaseNode(ulSPDInContainerPoolId_g, pContainer, pContainer->bHeap);
+	asfReleaseNode(SPDInContainerPoolId_g, pContainer, pContainer->bHeap);
 
 }
 
@@ -955,7 +967,7 @@ static void secfp_freeSPDInContainer(struct rcu_head *rcu)
 static void secfp_freeLinkNode(struct rcu_head *rcu)
 {
 	SPDInSelTblIndexLinkNode_t *pNode = (SPDInSelTblIndexLinkNode_t *)  rcu;
-	asfReleaseNode(ulSPDInSelTblIndexLinkNodePoolId_g, pNode, pNode->bHeap);
+	asfReleaseNode(SPDInSelTblIndexLinkNodePoolId_g, pNode, pNode->bHeap);
 }
 
 static SPDInSelTblIndexLinkNode_t  *secfp_allocLinkNode(void)
@@ -963,8 +975,8 @@ static SPDInSelTblIndexLinkNode_t  *secfp_allocLinkNode(void)
 	SPDInSelTblIndexLinkNode_t *pNode;
 	char  bHeap;
 
-	pNode = (SPDInSelTblIndexLinkNode_t *)  asfGetNode(ulSPDInSelTblIndexLinkNodePoolId_g,
-							   &bHeap);
+	pNode = (SPDInSelTblIndexLinkNode_t *)
+			asfGetNode(SPDInSelTblIndexLinkNodePoolId_g, &bHeap);
 	if (pNode && bHeap) {
 		pNode->bHeap = bHeap;
 	}
@@ -977,7 +989,7 @@ static SPDInSPIValLinkNode_t *secfp_allocSPILinkNode(void)
 	SPDInSPIValLinkNode_t   *pNode;
 	char  bHeap;
 
-	pNode = (SPDInSPIValLinkNode_t *)  asfGetNode(ulSPDInSPIValLinkNodePoolId_g,
+	pNode = (SPDInSPIValLinkNode_t *)  asfGetNode(SPDInSPIValLinkNodePoolId_g,
 							&bHeap);
 	if (pNode && bHeap) {
 		pNode->bHeap = bHeap;
@@ -988,7 +1000,7 @@ static SPDInSPIValLinkNode_t *secfp_allocSPILinkNode(void)
 static void secfp_freeSPILinkNode(struct rcu_head *pNode)
 {
 	SPDInSPIValLinkNode_t *pLinkNode = (SPDInSPIValLinkNode_t *)  pNode;
-	asfReleaseNode(ulSPDInSPIValLinkNodePoolId_g,
+	asfReleaseNode(SPDInSPIValLinkNodePoolId_g,
 		pLinkNode, pLinkNode->bHeap);
 }
 
@@ -1101,16 +1113,16 @@ void secfp_freeInSelSet(struct rcu_head *pData)
 		pTempSel = (pList->pSrcSel);
 		while (pTempSel) {
 			pTempNextSel = pTempSel->pNext;
-			asfReleaseNode(ulSASelPoolId_g, pTempSel, pTempSel->bHeap);
+			asfReleaseNode(SASelPoolId_g, pTempSel, pTempSel->bHeap);
 			pTempSel = pTempNextSel;
 		}
 		pTempSel = (pList->pDestSel);
 		while (pTempSel) {
 			pTempNextSel = pTempSel->pNext;
-			asfReleaseNode(ulSASelPoolId_g, pTempSel, pTempSel->bHeap);
+			asfReleaseNode(SASelPoolId_g, pTempSel, pTempSel->bHeap);
 			pTempSel = pTempNextSel;
 		}
-		asfReleaseNode(ulInSelListPoolId_g, pList, pList->bHeap);
+		asfReleaseNode(InSelListPoolId_g, pList, pList->bHeap);
 	}
 }
 /* This function secfp_createInSelSet creates and populates Selector set */
@@ -1128,7 +1140,7 @@ SPDInSelTblIndexLinkNode_t *secfp_updateInSelSet(
 	unsigned int ulIndex;
 	char bHeap;
 
-	pList = (InSelList_t *)  asfGetNode(ulInSelListPoolId_g, &bHeap);
+	pList = (InSelList_t *)  asfGetNode(InSelListPoolId_g, &bHeap);
 	if (pList) {
 		if (bHeap)
 			pList->bHeap = bHeap;
@@ -1136,7 +1148,7 @@ SPDInSelTblIndexLinkNode_t *secfp_updateInSelSet(
 		pPrevSel = NULL;
 		bFail = FALSE;
 		for (pTempSel = pSrcSel; pTempSel != NULL; pTempSel = pTempSel->pNext) {
-			pNewSel = (SASel_t *)  asfGetNode(ulSASelPoolId_g, &bHeap);
+			pNewSel = (SASel_t *)  asfGetNode(SASelPoolId_g, &bHeap);
 			if (pNewSel) {
 				if (bHeap)
 					pNewSel->bHeap = bHeap;
@@ -1159,7 +1171,7 @@ SPDInSelTblIndexLinkNode_t *secfp_updateInSelSet(
 		if (bFail != TRUE) {
 			pPrevSel = NULL;
 			for (pTempSel = pDstSel; pTempSel != NULL; pTempSel = pTempSel->pNext) {
-				pNewSel = (SASel_t *)  asfGetNode(ulSASelPoolId_g, &bHeap);
+				pNewSel = (SASel_t *)  asfGetNode(SASelPoolId_g, &bHeap);
 				if (pNewSel) {
 					if (bHeap)
 						pNewSel->bHeap = bHeap;
@@ -1243,7 +1255,7 @@ static inline inSA_t *secfp_allocInSA(unsigned int AntiReplayWin)
 	inSA_t *pSA;
 	char   bHeap;
 
-	pSA = (inSA_t *)  asfGetNode(ulInSAPoolId_g, &bHeap);
+	pSA = (inSA_t *)  asfGetNode(InSAPoolId_g, &bHeap);
 	if (pSA) {
 		if (bHeap)
 			pSA->bHeap = bHeap;
@@ -1252,7 +1264,7 @@ static inline inSA_t *secfp_allocInSA(unsigned int AntiReplayWin)
 					sizeof(unsigned int)), GFP_ATOMIC);
 			if (!pSA->pWinBitMap) {
 				ASFIPSEC_WARN("Memory allocation for Replay Window failed");
-				asfReleaseNode(ulInSAPoolId_g, pSA, pSA->bHeap);
+				asfReleaseNode(InSAPoolId_g, pSA, pSA->bHeap);
 				return NULL;
 			}
 		}
@@ -1266,7 +1278,7 @@ static void secfp_freeInSA(struct rcu_head *rcu_data)
 	if (pSA->pWinBitMap) {
 		kfree(pSA->pWinBitMap);
 	}
-	asfReleaseNode(ulInSAPoolId_g, pSA, pSA->bHeap);
+	asfReleaseNode(InSAPoolId_g, pSA, pSA->bHeap);
 }
 
 
@@ -1456,7 +1468,7 @@ SPDOutSALinkNode_t *secfp_allocOutSALinkNode(void)
 {
 	SPDOutSALinkNode_t *pOutSALinkNode;
 	char			bHeap;
-	pOutSALinkNode = (SPDOutSALinkNode_t *)  asfGetNode(ulSPDOutSALinkNodePoolId_g,
+	pOutSALinkNode = (SPDOutSALinkNode_t *)  asfGetNode(SPDOutSALinkNodePoolId_g,
 								&bHeap);
 	if (pOutSALinkNode && bHeap) {
 		pOutSALinkNode->bHeap = bHeap;
@@ -1467,7 +1479,7 @@ SPDOutSALinkNode_t *secfp_allocOutSALinkNode(void)
 void secfp_freeOutSALinkNode(struct rcu_head *rcu)
 {
 	SPDOutSALinkNode_t *pOutSALinkNode = (SPDOutSALinkNode_t *)  rcu;
-	asfReleaseNode(ulSPDOutSALinkNodePoolId_g, pOutSALinkNode, pOutSALinkNode->bHeap);
+	asfReleaseNode(SPDOutSALinkNodePoolId_g, pOutSALinkNode, pOutSALinkNode->bHeap);
 }
 
 static void secfp_addOutSALinkNode(SPDOutContainer_t *pContainer,
@@ -1636,11 +1648,10 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	char *pUDPHdr;
 	int ii;
 	AsfSPDPolicyPPStats_t   *pIPSecPolicyPPStats;
-	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	ASF_IPSecTunEndAddr_t  TunAddress;
 
 	pIpHdrInSA = (unsigned int *)  &(pSA->ipHdrInfo.hdrdata.iphv4);
-
+	org_iphdr = (struct iphdr *) pIpHdrInSA;
 	/* Outer IP already has the TOS and the length field */
 	/* Since length and TOS bits are already set, copy the rest */
 
@@ -1681,10 +1692,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	pSA->ulPkts[smp_processor_id()]++;
 	pSA->ulBytes[smp_processor_id()] += iph->tot_len - pSA->ulSecHdrLen;
 	pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);
-	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPolicyPPStats->NumOutBoundOutPkts++;
-	pIPSecPPGlobalStats->ulTotOutProcPkts++;
-	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
 
 	/* Update the skb fields */
 	skb->len += pSA->ulSecLenIncrease;
@@ -1795,9 +1803,8 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 {
 	struct iphdr *iph, *org_iphdr;
 	int ii;
-	unsigned short usPadLen;
-	unsigned short usLastByte;
-	unsigned int ulLoSeqNum, ulHiSeqNum, usNatOverHead;
+	unsigned short usPadLen, usNatOverHead, usLastByte;
+	unsigned int ulLoSeqNum, ulHiSeqNum;
 	struct sk_buff *pHeadSkb, *pTailSkb;
 
 	pTailSkb = pHeadSkb = skb1;
@@ -1862,8 +1869,10 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	iph = (struct iphdr *)  (*pOuterIpHdr);
 
 	/* Total length = Outer IP hdr + Sec hdr len (inclusive of IV) + payload len + padding length + Trailer len */
-	iph->tot_len = org_iphdr->tot_len + usNatOverHead + pSA->ulSecHdrLen + pSA->ulSecLenIncrease /* SECFP_IP_HDR_LEN */
-			+ usPadLen + SECFP_ESP_TRAILER_LEN ;
+	iph->tot_len = org_iphdr->tot_len + usNatOverHead +
+				(unsigned short)pSA->ulSecHdrLen +
+				(unsigned short)pSA->ulSecLenIncrease
+				+ usPadLen + SECFP_ESP_TRAILER_LEN ;
 	iph->tos = org_iphdr->tos;
 
 
@@ -2393,9 +2402,9 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 			ptr = *(unsigned int *)  &(skb->cb[SECFP_SKB_SG_DMA_INDEX]);
 		} else {
 			ptr = *(unsigned int *)  &(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
-			if (skb->prev) {
+			/*if (skb->prev) {
 				ptr2 = *(unsigned int *)  &(skb->cb[SECFP_SKB_SG_DMA_INDEX]);
-			}
+			} Commented for klocwork warning*/
 		}
 	}
 		ASFIPSEC_PRINT("ptr = 0x%x",  ptr);
@@ -2843,7 +2852,6 @@ int secfp_try_fastPathOutv4 (
 	unsigned int *pOuterIpHdr;
 	struct sk_buff *pNextSkb;
 	SPDOutContainer_t *pContainer;
-	char bScatterGatherList = SECFP_NO_SCATTER_GATHER;
 	struct sk_buff *skb = skb1;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	AsfSPDPolicyPPStats_t   *pIPSecPolicyPPStats;
@@ -2851,7 +2859,10 @@ int secfp_try_fastPathOutv4 (
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASF_boolean_t	bRevalidate = FALSE;
 	struct talitos_desc *desc = NULL;
+#ifdef SECFP_SG_SUPPORT
+	char bScatterGatherList = SECFP_NO_SCATTER_GATHER;
 	unsigned char secout_sg_flag;
+#endif
 	unsigned short usPadLen = 0;
 
 	rcu_read_lock();
@@ -3015,8 +3026,10 @@ int secfp_try_fastPathOutv4 (
 		} /* Handled all cases where there is either a fragment list or length is > Path MTU */
 #endif /* SECFP_SG_SUPPORT */
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+#ifdef SECFP_SG_SUPPORT
 		secout_sg_flag = SECFP_OUT|bScatterGatherList;
 		ASFIPSEC_DEBUG("outV4: bScatterGather = %d", bScatterGatherList);
+#endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		for (; skb != NULL; skb = pNextSkb)
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -3057,11 +3070,13 @@ int secfp_try_fastPathOutv4 (
 			skb->cb[SECFP_REF_INDEX] = 2;
 			desc = secfp_desc_alloc();
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifdef SECFP_SG_SUPPORT
 			if ((secout_sg_flag & SECFP_SCATTER_GATHER)
 				== SECFP_SCATTER_GATHER)
 				secfp_prepareOutDescriptorWithFrags(skb, pSA,
 							desc, 0);
 			else
+#endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 				secfp_prepareOutDescriptor(skb, pSA, desc, 0);
 
@@ -3092,11 +3107,13 @@ int secfp_try_fastPathOutv4 (
 				/* 2nd iteration required ICV */
 				skb->cb[SECFP_REF_INDEX]++;
 				desc = secfp_desc_alloc();
+#ifdef SECFP_SG_SUPPORT
 				if ((secout_sg_flag & SECFP_SCATTER_GATHER)
 						== SECFP_SCATTER_GATHER)
 					secfp_prepareOutDescriptorWithFrags(skb,
 						pSA, desc, 1);
 				else
+#endif
 					secfp_prepareOutDescriptor(skb, pSA, desc, 1);
 
 				if (secfp_talitos_submit(pdev, desc,
@@ -3198,6 +3215,8 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 	struct iphdr *iph;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
+	pIPSecPPGlobalStats->ulTotInProcPkts++;
 	secfp_desc_free(desc);
 	skb->cb[SECFP_REF_INDEX]--;
 	if (skb->cb[SECFP_REF_INDEX]) {
@@ -3932,7 +3951,7 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 static inline void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb /*, unsigned char *pOrgEthHdr */)
 {
 	struct iphdr *iph;
-	u32 tos;
+	u8 tos;
 
 	skb_reset_network_header(pHeadSkb);
 
@@ -4002,6 +4021,8 @@ void secfp_inCompleteWithFrags(struct device *dev,
 	unsigned int ulCommonInterfaceId, ulBeforeTrimLen;
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
+	pIPSecPPGlobalStats->ulTotInProcPkts++;
 
 	ASFIPSEC_DEBUG("InComplete: iteration=%d, desc=0x%x, err = %d"
 			" refIndex = %d\n",
@@ -4206,6 +4227,8 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 	ASFIPSEC_FENTRY;
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
+	pIPSecPPGlobalStats->ulTotInProcPkts++;
 	memset(&IPSecOpque, 0 , sizeof(IPSecOpque));
 
 	ASFIPSEC_DEBUG("InComplete: iteration=%d, desc=0x%x, err = %d"
@@ -5350,10 +5373,14 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	unsigned int ulHashVal = usMaxInSAHashTaleSize_g;
 	unsigned int *pCurICVLoc = 0, *pNewICVLoc = 0;
 	unsigned int fragCnt = 0;
-	int ii, kk;
-	struct sk_buff *pHeadSkb, *pTailSkb, *pTailPrevSkb = 0;
+	int kk;
+	struct sk_buff *pHeadSkb, *pTailSkb;
+#ifdef SECFP_SG_SUPPORT
+	struct sk_buff *pTailPrevSkb = 0;
+	int ii;
 	unsigned int ulICVInPrevFrag;
 	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr, *pNewICVLocBytePtr;
+#endif
 	bool bScatterGather;
 	unsigned int len;
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
@@ -5525,6 +5552,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		ulLowerBoundSeqNum = 0;
 		if (pSA->SAParams.bAuth) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifdef SECFP_SG_SUPPORT
 			if (unlikely(pTailSkb->len < SECFP_ICV_LEN)) {
 				/* pTailPrevSkb gets initialized in the case of fragments; This case comes
 				   into picture only when we have fragments */
@@ -5603,7 +5631,9 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 						pCurICVLocBytePtrInPrevFrag[ii];
 
 				}
-			} else {
+			} else
+#endif
+			{
 				if (pSA->SAParams.bDoAntiReplayCheck) {
 					pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
 					if (pSA->SAParams.ucAuthAlgo == SECFP_HMAC_AES_XCBC_MAC) {
@@ -5681,11 +5711,13 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		pHeadSkb->cb[SECFP_REF_INDEX] = 2;
 		desc = secfp_desc_alloc();
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifdef SECFP_SG_SUPPORT
 		if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 			== SECFP_SCATTER_GATHER)
 			secfp_prepareInDescriptorWithFrags(pHeadSkb, pSA,
 						desc, 0);
 		else
+#endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 
@@ -5717,11 +5749,13 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		if (pSA->option[1] != SECFP_NONE) {
 			pHeadSkb->cb[SECFP_REF_INDEX]++;
 			desc = secfp_desc_alloc();
+#ifdef SECFP_SG_SUPPORT
 			if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 				== SECFP_SCATTER_GATHER)
 				secfp_prepareInDescriptorWithFrags(pHeadSkb,
 						pSA, desc, 0);
 			else
+#endif
 				secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 
 			if (secfp_talitos_submit(pdev, desc,
@@ -7258,7 +7292,7 @@ void secfp_freeSelSet(SASel_t  *pSel)
 	SASel_t   *pTempSel;
 	while (pSel) {
 		pTempSel = pSel->pNext;
-		asfReleaseNode(ulSASelPoolId_g, pSel, pSel->bHeap);
+		asfReleaseNode(SASelPoolId_g, pSel, pSel->bHeap);
 		pSel = pTempSel;
 	}
 }
@@ -7277,7 +7311,7 @@ unsigned int secfp_copySrcAndDestSelSet(
 	ucSelFlags = SECFP_SA_XPORT_SELECTOR | SECFP_SA_SRCPORT_SELECTOR | SECFP_SA_SRCIPADDR_SELECTOR |
 			SECFP_SA_DESTPORT_SELECTOR | SECFP_SA_DESTIPADDR_SELECTOR;
 
-	pNewSel = *pSrcSel = (struct SASel_s *)asfGetNode(ulSASelPoolId_g, &bHeap);
+	pNewSel = *pSrcSel = (struct SASel_s *)asfGetNode(SASelPoolId_g, &bHeap);
 	if (pNewSel && bHeap) {
 		pNewSel->bHeap = bHeap;
 	}
@@ -7299,7 +7333,7 @@ unsigned int secfp_copySrcAndDestSelSet(
 			}
 			pNewSel->ucNumSelectors = jj;
 			pPrevSel = pNewSel;
-			pNewSel = (struct SASel_s *)asfGetNode(ulSASelPoolId_g, &bHeap);
+			pNewSel = (struct SASel_s *)asfGetNode(SASelPoolId_g, &bHeap);
 			if (pNewSel && bHeap) {
 				pNewSel->bHeap = bHeap;
 			}
@@ -7357,7 +7391,7 @@ unsigned int secfp_copySrcAndDestSelSet(
 	}
 	pNewSel->ucNumSelectors = jj;
 
-	*pDstSel = pNewSel =  (struct SASel_s *)asfGetNode(ulSASelPoolId_g, &bHeap);
+	*pDstSel = pNewSel =  (struct SASel_s *)asfGetNode(SASelPoolId_g, &bHeap);
 	if (pNewSel && bHeap) {
 		pNewSel->bHeap = bHeap;
 	}
@@ -7380,7 +7414,7 @@ unsigned int secfp_copySrcAndDestSelSet(
 			}
 			pNewSel->ucNumSelectors = jj;
 			pPrevSel = pNewSel;
-			pNewSel = (struct SASel_s *)asfGetNode(ulSASelPoolId_g, &bHeap);
+			pNewSel = (struct SASel_s *)asfGetNode(SASelPoolId_g, &bHeap);
 			if (pNewSel && bHeap) {
 				pNewSel->bHeap = bHeap;
 			}
