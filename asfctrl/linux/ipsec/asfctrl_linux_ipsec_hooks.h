@@ -48,11 +48,15 @@ enum alg_type {
 
 #define XFRM_DIR(dir)  (dir ? "OUT" : "IN")
 
-void init_container_indexes(void);
-void init_sa_indexes(void);
+void init_container_indexes(bool init);
+void init_sa_indexes(bool init);
 inline int free_container_index(int index, int cont_dir);
+int is_policy_offloadable(struct xfrm_policy *xp);
 
-int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb, struct xfrm_policy *xp);
+int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb, struct xfrm_state *xfrm);
+
+int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb, struct xfrm_state *xfrm);
+
 int asfctrl_xfrm_dec_hook(
 		struct xfrm_policy *xp,
 		struct xfrm_state *xfrm,

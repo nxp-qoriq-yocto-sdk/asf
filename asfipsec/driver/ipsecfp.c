@@ -2803,6 +2803,7 @@ static inline outSA_t  *secfp_findOutSA(
 		ASFIPSEC_FEXIT;
 		return pSA;
 	} else {
+		ASFIPSEC_WARN("SPD - Magic Number mismatch ");
 		/* Send packet to control plane : We don't have right SPD pointer */
 		return NULL;
 	}
@@ -2866,8 +2867,6 @@ int secfp_try_fastPathOutv4 (
 	unsigned short usPadLen = 0;
 
 	rcu_read_lock();
-
-	skb1->pkt_type = PACKET_FASTROUTE;
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotOutRecvPkts++;
@@ -3250,7 +3249,8 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 		ASFIPSEC_DEBUG("");
 #endif
 		if (!skb->cb[SECFP_OUTB_FRAG_REQD]) {
-			skb->pkt_type = 6;
+			skb->pkt_type = PACKET_FASTROUTE;
+			skb->asf = 1;
 			if (asfDevHardXmit(skb->dev, skb) != 0) {
 				kfree_skb(skb);
 				return;
@@ -3293,11 +3293,11 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 
 					for (; pOutSkb != NULL; pOutSkb = pTempSkb) {
 						pTempSkb = pOutSkb->next;
-						pOutSkb->pkt_type = 6;
 						iph = ip_hdr(pOutSkb);
 						pOutSkb->next = NULL;
 
 						pOutSkb->pkt_type = PACKET_FASTROUTE;
+						pOutSkb->asf = 1;
 						pOutSkb->data -= pSA->ulL2BlobLen;
 						pOutSkb->len += pSA->ulL2BlobLen;
 
@@ -7178,7 +7178,7 @@ unsigned int secfp_DeleteInSA(unsigned int  ulVSGId,
 }
 
 
-ASF_void_t  ASFIPSecEncryptAndSendPkt  (ASF_uint32_t ulVSGId,
+ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 					ASF_uint32_t ulTunnelId,
 					ASF_uint32_t ulSPDContainerIndex,
 					ASF_uint32_t ulSPDMagicNumber,
@@ -7190,7 +7190,6 @@ ASF_void_t  ASFIPSecEncryptAndSendPkt  (ASF_uint32_t ulVSGId,
 					ASF_void_t	*freeArg)
 {
 	ASFFFPIpsecInfo_t  SecInfo;
-	unsigned int ulVsgId = ulVSGId;
 	struct sk_buff *skb;
 	unsigned char bHomogenous = 1;
 	unsigned int ulSAIndex;
@@ -7203,7 +7202,7 @@ ASF_void_t  ASFIPSecEncryptAndSendPkt  (ASF_uint32_t ulVSGId,
 		local_bh_disable();
 
 	pOutContainer = (SPDOutContainer_t *)(ptrIArray_getData(&(secfp_OutDB),
-								ulSPDContainerIndex));
+							ulSPDContainerIndex));
 
 	if (!pOutContainer) {
 		if (pFreeFn)
@@ -7216,8 +7215,8 @@ ASF_void_t  ASFIPSecEncryptAndSendPkt  (ASF_uint32_t ulVSGId,
 	if (pOutContainer->SPDParams.bOnlySaPerDSCP) {
 		ulSAIndex = ulMaxSupportedIPSecSAs_g;
 	} else {
-		pOutSALinkNode = secfp_findOutSALinkNode(pOutContainer, daddr.ipv4addr,
-							 ucProtocol, ulSPI);
+		pOutSALinkNode = secfp_findOutSALinkNode(pOutContainer,
+				daddr.ipv4addr, ucProtocol, ulSPI);
 		if (!pOutSALinkNode) {
 			ASFIPSEC_PRINT("SA not found");
 			if (pFreeFn)
@@ -7234,21 +7233,26 @@ ASF_void_t  ASFIPSecEncryptAndSendPkt  (ASF_uint32_t ulVSGId,
 	SecInfo.outContainerInfo.ulTunnelId = ulTunnelId;
 	SecInfo.outContainerInfo.ulTimeStamp = ulTimeStamp_g;
 	SecInfo.outContainerInfo.configIdentity.ulVSGConfigMagicNumber =
-	pulVSGMagicNumber[ulVSGId];
+			pulVSGMagicNumber[ulVsgId];
 	SecInfo.outContainerInfo.configIdentity.ulTunnelConfigMagicNumber =
-	secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber;
+		secFP_TunnelIfaces[ulVsgId][ulTunnelId].ulTunnelMagicNumber;
 	SecInfo.outSAInfo.ulSAIndex = ulSAIndex;
-	SecInfo.outSAInfo.ulSAMagicNumber = ptrIArray_getMagicNum(&secFP_OutSATable, ulSAIndex);
+	SecInfo.outSAInfo.ulSAMagicNumber =
+		ptrIArray_getMagicNum(&secFP_OutSATable, ulSAIndex);
 
 	if (bHomogenous) {
 		skb = (struct sk_buff *)Buffer.nativeBuffer;
 	} else {
-		/* NEEDS */
+		/* TODO NEEDS */
+		if (pFreeFn)
+			(pFreeFn)(freeArg);
+		goto ret_stk;
 	}
 	if (secfp_try_fastPathOutv4(ulVsgId, skb, &SecInfo) == 0) {
 		if (pFreeFn)
 			(pFreeFn)(freeArg);
 	}
+ret_stk:
 	if (!bVal)
 		local_bh_enable();
 	return;
@@ -7272,7 +7276,7 @@ ASF_void_t	ASFIPSecDecryptAndSendPkt(ASF_uint32_t ulVSGId,
 	if (bHomogenous) {
 		skb = (struct sk_buff *)Buffer.nativeBuffer;
 	} else {
-		/* NEEDS */
+		/* TODO NEEDS */
 	}
 	secfp_try_fastPathInv4(skb, 0, ulVSGId, ulCommonInterfaceId);
 	if (!bVal)

@@ -1008,7 +1008,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	skb->protocol = usEthType;
 	/*skb->pkt_type = ?? */
 	skb->data += x_hh_len;
-	/* skb->len -= x_hh_len; */
 	skb->len = iph->tot_len;
 	skb_set_transport_header(skb, iph->ihl*4);
 
@@ -1564,7 +1563,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 					skb, &flow->ipsecInfo) != 0) {
 					goto gen_indications;
 				}
-			}
+			} else
+				goto drop_pkt;
+
 		}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
 
@@ -1604,7 +1605,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						iph = ip_hdr(pSkb);
 
 						pSkb->pkt_type = PACKET_FASTROUTE;
-
+						pSkb->asf = 1;
 						/* make following unconditional*/
 						if (flow->bVLAN)
 							pSkb->vlan_tci = flow->tx_vlan_id;
@@ -2433,11 +2434,11 @@ EXPORT_SYMBOL(ASFUnBindDeviceToVSG);
 ASF_uint32_t ASFRemove(ASF_void_t)
 {
 	/* TBD: Implement this function */
+	asf_enable = 0;
 
 	/* it should cleanup the  forwarding flows as well.*/
 	asf_ffp_cleanup_all_flows();
 
-	asf_enable = 0;
 	return ASF_SUCCESS;
 }
 EXPORT_SYMBOL(ASFRemove);

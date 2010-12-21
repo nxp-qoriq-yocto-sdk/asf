@@ -95,6 +95,8 @@ void asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info   p_flow,
 	fn_ipsec_get_flow4 = p_flow;
 	fn_ipsec_l2blob_update = p_l2blob;
 	fn_ipsec_vsg_magic_update = p_vsgmagic;
+
+	asfctrl_invalidate_sessions();
 	ASFCTRL_FUNC_EXIT;
 }
 EXPORT_SYMBOL(asfctrl_register_ipsec_func);

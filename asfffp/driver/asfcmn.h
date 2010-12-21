@@ -85,9 +85,6 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 }
 
 /* Initialization Parameters */
-#define ASF_INVALID_VSG	(~0)
-#define ASF_INVALID_ZONE	(~0)
-
 #define ASF_NUM_OF_TIMERS  6
 
 #define ASF_FFP_BLOB_TMR_ID	(0)

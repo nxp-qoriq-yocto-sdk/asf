@@ -63,7 +63,8 @@ struct asf_ipsec_callbackfn_s asf_sec_fns = {
 		asfctrl_xfrm_enc_hook,
 		asfctrl_xfrm_dec_hook,
 		NULL,
-		asfctrl_xfrm_encrypt_n_send
+		asfctrl_xfrm_encrypt_n_send,
+		asfctrl_xfrm_decrypt_n_send
 };
 /* function_prototypes */
 
@@ -90,7 +91,7 @@ ASF_void_t asfctrl_ipsec_fn_NoInSA(ASF_uint32_t ulVsgId,
 		local_bh_enable();
 }
 
-ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t  ulVsgId,
+ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 				ASFFFPFlowTuple_t *tuple,
 				ASFBuffer_t Buffer,
 				genericFreeFn_f pFreeFn,
@@ -99,22 +100,38 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t  ulVsgId,
 				ASF_uchar8_t bRevalidate)
 {
 	struct sk_buff  *skb;
+	struct iphdr *iph;
 	int bVal = in_softirq();
-	ASFCTRL_FUNC_TRACE;
+
 	if (!bVal)
 		local_bh_disable();
 
-	skb = AsfBuf2Skb(Buffer);
+	ASFCTRL_FUNC_ENTRY;
 
-	/* Send the pacekt up for normal path IPsec processing. (after the NAT)
-		has to be special function */
-#if 0
+	skb = AsfBuf2Skb(Buffer);
+	iph = ip_hdr(skb);
+
+	/* Send the packet up for normal path IPsec processing
+		(after the NAT) has to be special function */
+#if 1
+	if (0 != ip_route_input(skb, iph->daddr, iph->saddr, 0, skb->dev)) {
+		ASFCTRL_INFO("Route not found for dst %x ",
+			iph->daddr);
+		pFreeFn(Buffer.nativeBuffer);
+		return;
+	}
+	ASFCTRL_INFO("Route found for dst %x ", iph->daddr);
+	skb->dev = skb_dst(skb)->dev;
+
+	ASFCTRL_INFO("NO OUT SA Found Sending Packet Up");
+
+	skb->pkt_type = PACKET_HOST;
 	if (NET_RX_DROP == ip_forward_asf_packet(skb))
 			pFreeFn(Buffer.nativeBuffer);
-#endif
-	ASFCTRL_ERR("NO OUT SA Found Drop packet");
+#else
+	ASFCTRL_WARN("NO OUT SA Found Drop packet");
 	pFreeFn(Buffer.nativeBuffer);
-
+#endif
 	if (bRevalidate)
 		ASFCTRL_DBG("Revalidation is required");
 
@@ -468,6 +485,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 				struct flowi fl)
 {
 	struct xfrm_policy *pol_out = 0, *pol_in = 0;
+	int err = 0;
 	ASFFFPIpsecContainerInfo_t *outInfo;
 	ASFFFPIpsecContainerInfo_t *inInfo;
 
@@ -479,6 +497,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 	pol_in = xfrm_policy_check_flow(net, &fl, AF_INET, FLOW_DIR_IN);
 
 	if (pol_out) {
+		err = is_policy_offloadable(pol_out);
 		outInfo = &(ipsecInInfo->outContainerInfo);
 		*ipsec_in = ASF_FALSE;
 		*ipsec_out = ASF_TRUE;
@@ -495,6 +514,8 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 				outInfo->ulSPDContainerId);
 	}
 	if (pol_in) {
+		if (!err)
+			err = is_policy_offloadable(pol_in);
 		inInfo = &(ipsecInInfo->inContainerInfo);
 		*ipsec_out = ASF_FALSE;
 		*ipsec_in = ASF_TRUE;
@@ -511,10 +532,8 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 				inInfo->ulSPDContainerId);
 
 	}
-	return 1;
+	return err;
 }
-
-
 
 static int __init asfctrl_linux_ipsec_init(void)
 {
@@ -595,8 +614,8 @@ static int __init asfctrl_linux_ipsec_init(void)
 	asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info_fn,
 				asfctrl_ipsec_l2blob_update_fn,
 				asfctrl_ipsec_update_vsg_magic_number);
-	init_container_indexes();
-	init_sa_indexes();
+	init_container_indexes(1);
+	init_sa_indexes(1);
 	ASFCTRL_DBG("ASF Control Module - IPsec Loaded\n");
 	return 0;
 }

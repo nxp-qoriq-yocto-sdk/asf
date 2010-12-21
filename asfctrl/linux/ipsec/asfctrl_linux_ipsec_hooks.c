@@ -53,10 +53,12 @@ struct sa_node {
 	__be32 spi;
 	__be32 iifindex;
 	__be32 container_id;
-	uintptr_t asf_cookie;
+	__be32 con_magic_num;
 };
 static struct sa_node sa_table[2][SECFP_MAX_SAS];
-static atomic_t current_sa_index[2];
+static int current_sa_index[2];
+static int current_sa_count[2];
+static spinlock_t sa_table_lock;
 
 static const struct algo_info
 algo_types[MAX_ALGO_TYPE][MAX_AUTH_ENC_ALGO] = {
@@ -92,51 +94,71 @@ void asfctrl_generic_free(ASF_void_t *freeArg)
 }
 
 /**** Container Indices ***/
+static spinlock_t cont_lock;
 static T_BOOL containers_ids[MAX_POLICY_CONT_ID][ASFCTRL_MAX_SPD_CONTAINERS];
-static atomic_t current_index[MAX_POLICY_CONT_ID];
+static int current_index[MAX_POLICY_CONT_ID];
 
-void init_container_indexes(void)
+
+void init_container_indexes(bool init)
 {
+	if (init)
+		spin_lock_init(&cont_lock);
+	else
+		spin_lock(&cont_lock);
+
 	memset(containers_ids[ASF_OUT_CONTANER_ID], 0,
 		sizeof(T_BOOL) * ASFCTRL_MAX_SPD_CONTAINERS);
 
 	memset(containers_ids[ASF_IN_CONTANER_ID], 0,
 		sizeof(T_BOOL) * ASFCTRL_MAX_SPD_CONTAINERS);
 
-	atomic_set(&current_index[ASF_OUT_CONTANER_ID], 1);
-	atomic_set(&current_index[ASF_IN_CONTANER_ID], 1);
+	current_index[ASF_OUT_CONTANER_ID] = 1;
+	current_index[ASF_IN_CONTANER_ID] = 1;
+
+	if (!init)
+		spin_unlock(&cont_lock);
+
 }
 
 static inline int alloc_container_index(int cont_dir)
 {
-	int i, cur_id = atomic_read(&current_index[cont_dir]);
+	int i, cur_id;
+
+	spin_lock(&cont_lock);
+	cur_id = current_index[cont_dir];
 	if (containers_ids[cont_dir][cur_id - 1] == 0) {
 		containers_ids[cont_dir][cur_id - 1] = 1;
-		atomic_inc(&current_index[cont_dir]);
-		if (atomic_read(&current_index[cont_dir]) >
-					asfctrl_max_policy_cont)
-			atomic_set(&current_index[cont_dir], 0);
+		current_index[cont_dir]++;
+		if (current_index[cont_dir] > asfctrl_max_policy_cont)
+			current_index[cont_dir] = 1;
 
-		return cur_id;
+		i = cur_id;
+		goto ret_id;
 	}
 
 	for (i = 1; i <= asfctrl_max_policy_cont; i++) {
 		if (containers_ids[cont_dir][i - 1] == 0) {
 			containers_ids[cont_dir][i - 1] = 1;
-			atomic_set(&current_index[cont_dir], i + 1);
-			if (atomic_read(&current_index[cont_dir]) >
-				asfctrl_max_policy_cont)
-				atomic_set(&current_index[cont_dir], 1);
-			return i;
+			if (i == asfctrl_max_policy_cont)
+				current_index[cont_dir] = 1;
+			else
+				current_index[cont_dir] = i + 1;
+			goto ret_id;
 		}
 	}
-	return -1;
+	i = -1;
+ret_id:
+	spin_unlock(&cont_lock);
+	return i;
 }
 
 inline int free_container_index(int index, int cont_dir)
 {
 	if (index > 0 && index <= asfctrl_max_policy_cont) {
+		spin_lock(&cont_lock);
 		containers_ids[cont_dir][index - 1] = 0;
+		spin_unlock(&cont_lock);
+
 		return 0;
 	}
 	return -1;
@@ -151,116 +173,141 @@ static inline int verify_container_index(int index, int cont_dir)
 	return -1;
 }
 
-void init_sa_indexes(void)
+void init_sa_indexes(bool init)
 {
+	if (init)
+		spin_lock_init(&sa_table_lock);
+	else
+		spin_lock(&sa_table_lock);
+
 	/* cleaning up the SA Table*/
 	memset(sa_table, 0, sizeof(struct sa_node)*2*SECFP_MAX_SAS);
 
-	/* TBD: Make them atomic */
-	atomic_set(&current_sa_index[IN_SA], 0);
-	atomic_set(&current_sa_index[OUT_SA], 0);
+	current_sa_index[IN_SA] = 1;
+	current_sa_index[OUT_SA] = 1;
+	current_sa_count[IN_SA] = 0;
+	current_sa_count[OUT_SA] = 0;
+
+	if (!init)
+		spin_unlock(&sa_table_lock);
 }
 
-static inline int alloc_sa_index(int dir)
+static inline int match_sa_index_no_lock(struct xfrm_state *xfrm, int dir)
 {
-	int i, cur_id = atomic_read(&current_sa_index[dir]);
-	if (sa_table[dir][cur_id].status == 0) {
-		sa_table[dir][cur_id].status = 1;
-
-		atomic_inc(&current_sa_index[dir]);
-		if (atomic_read(&current_sa_index[dir]) == asfctrl_max_sas)
-			atomic_set(&current_sa_index[dir], 0);
-
-		return cur_id;
-	}
-
-	for (i = 0; i < asfctrl_max_sas; i++) {
-		if (sa_table[dir][i].status == 0) {
-			sa_table[dir][i].status = 1;
-			atomic_set(&current_sa_index[dir], i + 1);
-			if (atomic_read(&current_sa_index[dir]) == asfctrl_max_sas)
-				atomic_set(&current_sa_index[dir], 0);
-			return i;
-		}
-	}
-	return -1;
-}
-
-static inline int free_sa_index(int index, int dir)
-{
-	if (index > 0 && index < asfctrl_max_sas) {
-		sa_table[dir][index].status = 0;
+	if (xfrm->asf_sa_cookie
+		&& (xfrm->asf_sa_cookie <= asfctrl_max_sas)
+		&& (sa_table[dir][xfrm->asf_sa_cookie - 1].status)
+		&& (sa_table[dir][xfrm->asf_sa_cookie - 1].con_magic_num ==
+			asfctrl_vsg_ipsec_cont_magic_id)) {
+		ASFCTRL_INFO("SA offloaded");
 		return 0;
 	}
 	return -1;
 }
 
-/* tbd - this will not work for DSCP based SAs*/
-static inline int get_sa_index(struct xfrm_state *xfrm, int direction)
+static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 {
-	int i;
-	ASFCTRL_TRACE("SA-TABLE: saddr 0x%x daddr 0x%x spi 0x%x",
-		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi);
+	int cur_id;
+	spin_lock(&sa_table_lock);
 
-	if (direction != IN_SA && direction != OUT_SA) {
-		ASFCTRL_ERR("direction %d", direction);
-		return -EINVAL;
+	if (!match_sa_index_no_lock(xfrm, dir)) {
+		ASFCTRL_INFO("SA already allocated");
+		goto ret_unlock;
 	}
 
-	for (i = 0; i < asfctrl_max_sas; i++) {
-		ASFCTRL_DBG("SA-TABLE-%d: saddr 0x%x daddr 0x%x spi 0x%x",
-			sa_table[direction][i].status,
-			sa_table[direction][i].saddr_a4,
-			sa_table[direction][i].daddr_a4,
-			sa_table[direction][i].spi);
+	cur_id = current_sa_index[dir];
+	if (sa_table[dir][cur_id - 1].status == 0) {
+		sa_table[dir][cur_id - 1].status = 1;
 
-		if (sa_table[direction][i].status
-		&& (xfrm->props.saddr.a4 == sa_table[direction][i].saddr_a4)
-		&& (xfrm->id.daddr.a4 == sa_table[direction][i].daddr_a4)
-		&& (xfrm->id.spi == sa_table[direction][i].spi))
-				return i;
+		current_sa_index[dir]++;
+		current_sa_count[dir]++;
+
+		if (current_sa_index[dir] > asfctrl_max_sas)
+			current_sa_index[dir] = 1;
+		spin_unlock(&sa_table_lock);
+		return cur_id;
+	} else if (current_sa_count[dir] < asfctrl_max_sas) {
+
+		for (cur_id = 0; cur_id < asfctrl_max_sas; cur_id++) {
+			if (sa_table[dir][cur_id].status == 0) {
+				sa_table[dir][cur_id].status = 1;
+
+				current_sa_index[dir] = cur_id + 1;
+				current_sa_count[dir]++;
+				if (current_sa_index[dir] > asfctrl_max_sas)
+					current_sa_index[dir] = 1;
+				spin_unlock(&sa_table_lock);
+				return cur_id;
+			}
+		}
 	}
+	ASFCTRL_WARN("Maximum SAs are offloaded, Not anymore (%d)",
+		current_sa_count[dir]);
+ret_unlock:
+	spin_unlock(&sa_table_lock);
 	return -EINVAL;
 }
 
-static inline int validate_policy_info(struct xfrm_policy *xp)
+static inline int free_sa_index(struct xfrm_state *xfrm, int dir)
+{
+	int err = -EINVAL;
+	ASFCTRL_TRACE("SA-TABLE: saddr 0x%x daddr 0x%x spi 0x%x",
+		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi);
+
+	spin_lock(&sa_table_lock);
+
+	if (sa_table[dir][xfrm->asf_sa_cookie - 1].status) {
+		sa_table[dir][xfrm->asf_sa_cookie - 1].status = 0;
+		current_sa_count[dir]--;
+		err = 0;
+	}
+	spin_unlock(&sa_table_lock);
+
+	return err;
+}
+
+int is_policy_offloadable(struct xfrm_policy *xp)
 {
 	struct xfrm_tmpl 	*tmpl;
 
 	ASFCTRL_FUNC_ENTRY;
 	if (!xp) {
-		ASFCTRL_ERR("Invalid Policy Pointer");
+		ASFCTRL_WARN("Invalid Policy Pointer");
 		return -EINVAL;
 	}
 	if (xp->action != XFRM_POLICY_ALLOW) {
-		ASFCTRL_ERR("Not a IPSEC policy");
+		ASFCTRL_WARN("Not a IPSEC policy");
+		return -EINVAL;
+	}
+	if (xp->xfrm_nr > 1) {
+		ASFCTRL_WARN("Multiple Transforms not supported");
 		return -EINVAL;
 	}
 	tmpl = &(xp->xfrm_vec[0]);
-	if (xp->xfrm_nr > 1) {
-		ASFCTRL_ERR("Multiple Transforms not supported");
+	if (!tmpl) {
+		ASFCTRL_WARN("NULL IPSEC Template");
 		return -EINVAL;
 	}
 	if (tmpl->mode != XFRM_MODE_TUNNEL) {
-		ASFCTRL_ERR("IPSEC Transport Mode not supported");
+		ASFCTRL_WARN("IPSEC Transport Mode not supported");
 		return -EINVAL;
 	}
 	if (tmpl->id.proto != IPPROTO_ESP) {
-		ASFCTRL_ERR("Non ESP protocol not supported");
+		ASFCTRL_WARN("Non ESP protocol not supported");
 		return -EINVAL;
 	}
 	if (tmpl->calgos != 0) {
-		ASFCTRL_ERR("Compression is not supported");
+		ASFCTRL_WARN("Compression is not supported");
 		return -EINVAL;
 	}
 	ASFCTRL_FUNC_EXIT;
 	return 0;
 }
 
-static inline int validate_sa_info(struct xfrm_state *xfrm)
+static inline int is_sa_offloadable(struct xfrm_state *xfrm)
 {
 	if (!xfrm) {
-		ASFCTRL_ERR("Invalid Pointer");
+		ASFCTRL_WARN("Invalid Pointer");
 		return -EINVAL;
 	}
 	/* lifetime in byte or packet is not supported
@@ -269,7 +316,7 @@ static inline int validate_sa_info(struct xfrm_state *xfrm)
 		xfrm->lft.soft_packet_limit != XFRM_INF ||
 		xfrm->lft.hard_byte_limit != XFRM_INF ||
 		xfrm->lft.hard_packet_limit != XFRM_INF) {
-		ASFCTRL_ERR("Data Based lifetime is not supported");
+		ASFCTRL_WARN("Data Based lifetime is not supported");
 		return -EINVAL;
 	}
 	return 0;
@@ -282,7 +329,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (validate_policy_info(xp))
+	if (is_policy_offloadable(xp))
 		return -EINVAL;
 
 	if (dir == OUT_SA) {
@@ -292,7 +339,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 		if (xp->asf_cookie &&
 			!(verify_container_index(xp->asf_cookie,
 					ASF_OUT_CONTANER_ID))) {
-			ASFCTRL_ERR("Policy is already offloaded cookie = %x",
+			ASFCTRL_WARN("Policy is already offloaded cookie = %x",
 				xp->asf_cookie);
 			goto fn_return;
 		} else {
@@ -304,7 +351,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 				outSPDContainer.ulMagicNumber =
 					asfctrl_vsg_ipsec_cont_magic_id;
 			} else {
-				ASFCTRL_ERR("No OUT free containder index");
+				ASFCTRL_WARN("No OUT free containder index");
 				goto err;
 			}
 		}
@@ -332,7 +379,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 		if (xp->asf_cookie &&
 			!(verify_container_index(xp->asf_cookie,
 					ASF_IN_CONTANER_ID))) {
-			ASFCTRL_ERR("Policy is already offloaded cookie = %x",
+			ASFCTRL_WARN("Policy is already offloaded cookie = %x",
 				xp->asf_cookie);
 			goto fn_return;
 		} else {
@@ -345,7 +392,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 					asfctrl_vsg_ipsec_cont_magic_id;
 
 			} else {
-				ASFCTRL_ERR("No IN free containder index");
+				ASFCTRL_WARN("No IN free containder index");
 				goto err;
 			}
 		}
@@ -388,7 +435,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 	ASFCTRL_FUNC_ENTRY;
 
 	if (xp->asf_cookie) {
-		ASFCTRL_ERR("Not offloaded policy");
+		ASFCTRL_WARN("Not offloaded policy");
 		return -EINVAL;
 	}
 	if (dir == OUT_SA) {
@@ -444,21 +491,25 @@ int asfctrl_xfrm_update_policy(struct xfrm_policy *xp, int ifindex)
 
 int asfctrl_xfrm_flush(void)
 {
+	int err = 0;
 	ASFCTRL_FUNC_TRACE;
-	init_container_indexes();
-	/* Changing the VSG Magic Number of Policy Delete */
-	asfctrl_invalidate_sessions();
 	/* Changing the IPSEC Container Magic Number */
 	asfctrl_vsg_ipsec_cont_magic_id++;
-	return ASFIPSecFlushContainers(ASF_DEF_VSG, ASF_DEF_IPSEC_TUNNEL_ID);
+
+	/* Changing the VSG Magic Number of Policy Delete */
+	asfctrl_invalidate_sessions();
+
+	err = ASFIPSecFlushContainers(ASF_DEF_VSG, ASF_DEF_IPSEC_TUNNEL_ID);
+
+	init_container_indexes(0);
+	return err;
 }
 
 int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 {
 	uint32_t handle;
-	int i, sa_id, ret = -EINVAL;
+	int sa_id, ret = -EINVAL;
 	struct xfrm_selector *sel = NULL;
-/*	struct net *xfrm_net = xs_net(xfrm);*/
 	ASFIPSecRuntimeAddOutSAArgs_t outSA;
 	ASF_IPSecSASelector_t   outSASel;
 	ASF_IPSecSelectorSet_t srcSel, dstSel;
@@ -466,26 +517,9 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (xfrm->asf_sa_cookie) {
-		for (i = 0; i < asfctrl_max_sas; i++)
-			if (sa_table[OUT_SA][i].asf_cookie ==
-				xfrm->asf_sa_cookie) {
-				/*already offloaded, no need to add SA*/
-				sa_table[OUT_SA][i].ref_count++;
-				ASFCTRL_ERR("\n already offloaded SA ");
-				goto err;
-			}
-		if (i == asfctrl_max_sas) {
-			ASFCTRL_ERR("SA offloaded with Junk cookie");
-			xfrm->asf_sa_cookie = 0;
-		}
-	}
-
-	sa_id = alloc_sa_index(OUT_SA);
-	if (sa_id < 0) {
-		ASFCTRL_ERR("Maximum SAs are offloaded, Not anymore");
+	sa_id = alloc_sa_index(xfrm, OUT_SA);
+	if (sa_id <= 0)
 		return sa_id;
-	}
 
 	memset(&outSA, 0, sizeof(ASFIPSecRuntimeAddOutSAArgs_t));
 
@@ -551,7 +585,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		ret = asfctrl_alg_getbyname(xfrm->aalg->alg_name,
 					AUTHENTICATION);
 		if (ret == -EINVAL) {
-			ASFCTRL_ERR("Auth algorithm not supported");
+			ASFCTRL_WARN("Auth algorithm not supported");
 			return ret;
 		}
 		SAParams.authAlgo = ret;
@@ -562,7 +596,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	if (xfrm->ealg) {
 		ret = asfctrl_alg_getbyname(xfrm->ealg->alg_name, ENCRYPTION);
 		if (ret == -EINVAL) {
-			ASFCTRL_ERR("Encryption algorithm not supported");
+			ASFCTRL_WARN("Encryption algorithm not supported");
 			return ret;
 		}
 		SAParams.encAlgo = ret;
@@ -630,15 +664,16 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			&handle, sizeof(uint32_t));
 
 	xfrm->asf_sa_direction = OUT_SA;
-	xfrm->asf_sa_cookie = (uintptr_t)xfrm;
+	xfrm->asf_sa_cookie = sa_id;
 
 	sa_table[OUT_SA][sa_id].saddr_a4 = xfrm->props.saddr.a4;
 	sa_table[OUT_SA][sa_id].daddr_a4 = xfrm->id.daddr.a4;
 	sa_table[OUT_SA][sa_id].spi = xfrm->id.spi;
-	sa_table[OUT_SA][sa_id].asf_cookie = (uintptr_t)xfrm;
 	sa_table[OUT_SA][sa_id].container_id = outSA.ulSPDContainerIndex;
 	sa_table[OUT_SA][sa_id].ref_count++;
+	sa_table[OUT_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
 /*tbd	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
+
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x OUT-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
 		outSA.ulSPDContainerIndex);
@@ -646,14 +681,12 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASFCTRL_FUNC_EXIT;
 
 	return 0;
-err:
-	return -EINVAL;
 }
 
 int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 {
 	uint32_t handle;
-	int i, sa_id, ret = -EINVAL;
+	int sa_id, ret = -EINVAL;
 	struct xfrm_selector *sel;
 
 	ASFIPSecRuntimeAddInSAArgs_t inSA;
@@ -663,26 +696,9 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (xfrm->asf_sa_cookie) {
-		for (i = 0; i < asfctrl_max_sas; i++)
-			if (sa_table[IN_SA][i].asf_cookie ==
-				xfrm->asf_sa_cookie) {
-				/*already offloaded, no need to add SA*/
-				sa_table[OUT_SA][i].ref_count++;
-				ASFCTRL_ERR("\n already offloaded SA ");
-				goto err;
-			}
-		if (i == asfctrl_max_sas) {
-			ASFCTRL_ERR("SA offloaded with Junk cookie");
-			xfrm->asf_sa_cookie = 0;
-		}
-	}
-
-	sa_id = alloc_sa_index(IN_SA);
-	if (sa_id < 0) {
-		ASFCTRL_ERR("Maximum SAs are offloaded, Not anymore");
+	sa_id = alloc_sa_index(xfrm, IN_SA);
+	if (sa_id <= 0)
 		return sa_id;
-	}
 
 	memset(&inSA, 0, sizeof(ASFIPSecRuntimeAddInSAArgs_t));
 	memset(&inSASel, 0, sizeof(ASF_IPSecSASelector_t));
@@ -752,7 +768,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		ret = asfctrl_alg_getbyname(xfrm->aalg->alg_name,
 					AUTHENTICATION);
 		if (ret == -EINVAL) {
-			ASFCTRL_ERR("Auth algorithm not supported");
+			ASFCTRL_WARN("Auth algorithm not supported");
 			return ret;
 		}
 		SAParams.authAlgo = ret;
@@ -763,7 +779,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	if (xfrm->ealg) {
 		ret = asfctrl_alg_getbyname(xfrm->ealg->alg_name, ENCRYPTION);
 		if (ret == -EINVAL) {
-			ASFCTRL_ERR("Encryption algorithm not supported");
+			ASFCTRL_WARN("Encryption algorithm not supported");
 			return ret;
 		}
 		SAParams.encAlgo = ret;
@@ -827,21 +843,20 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			&handle, sizeof(uint32_t));
 
 	xfrm->asf_sa_direction = IN_SA;
-	xfrm->asf_sa_cookie = (uintptr_t)xfrm;
+	xfrm->asf_sa_cookie = sa_id;
 
 	sa_table[IN_SA][sa_id].saddr_a4 = xfrm->props.saddr.a4;
 	sa_table[IN_SA][sa_id].daddr_a4 = xfrm->id.daddr.a4;
 	sa_table[IN_SA][sa_id].spi = xfrm->id.spi;
-	sa_table[IN_SA][sa_id].asf_cookie = (uintptr_t)xfrm;
 	sa_table[IN_SA][sa_id].container_id = inSA.ulInSPDContainerIndex;
 	sa_table[IN_SA][sa_id].ref_count++;
 /*	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
+	sa_table[IN_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
 
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x IN-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
 		inSA.ulInSPDContainerIndex);
 
-err:
 	ASFCTRL_FUNC_EXIT;
 	return 0;
 }
@@ -854,16 +869,16 @@ int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 	ASFCTRL_FUNC_TRACE;
 
 	if (!xfrm) {
-		ASFCTRL_ERR("NULL Pointer");
+		ASFCTRL_WARN("NULL Pointer");
 		return -EINVAL;
 	}
 
-	if (validate_sa_info(xfrm))
+	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
 
 	xp = xfrm_state_policy_mapping(xfrm);
 	if (!xp || !xp->asf_cookie) {
-		ASFCTRL_ERR("Policy not offloaded for this SA");
+		ASFCTRL_WARN("Policy not offloaded for this SA");
 		return -EINVAL;
 	}
 
@@ -874,57 +889,34 @@ int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 	return -EINVAL;
 }
 
-
-int asfctrl_xfrm_update_enc_stream(struct xfrm_state *xfrm)
-{
-	ASFCTRL_FUNC_TRACE;
-	return 0;
-}
-
-/*This will add a new entry into the inSA table. */
-int asfctrl_xfrm_update_dec_stream(struct xfrm_state *xfrm)
-{
-	ASFCTRL_FUNC_TRACE;
-	return 0;
-}
-
-
-int asfctrl_xfrm_update_sa(struct xfrm_state *xfrm)
-{
-	ASFCTRL_FUNC_TRACE;
-
-	ASFCTRL_ERR("************* CHECK *************");
-	if (!xfrm->asf_sa_cookie)
-		return 0;
-
-	if (xfrm->asf_sa_direction == OUT_SA)
-		return asfctrl_xfrm_update_enc_stream(xfrm);
-	else
-		return asfctrl_xfrm_update_dec_stream(xfrm);
-}
-
 int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 {
-	int ret;
+	int cont_id, dir;
 	int handle;
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (!xfrm->asf_sa_cookie)
-		return 0;
-
-	ret = get_sa_index(xfrm, xfrm->asf_sa_direction);
-	if (ret < 0) {
-		ASFCTRL_ERR("Not an offloaded SA?=%d\n", ret);
-		return ret;
+	if (!xfrm->asf_sa_cookie || xfrm->asf_sa_cookie > asfctrl_max_sas) {
+		ASFCTRL_WARN("Not an offloaded SA");
+		return -1;
 	}
+	dir = xfrm->asf_sa_direction;
 
-	if (xfrm->asf_sa_direction == OUT_SA) {
+	spin_lock(&sa_table_lock);
+
+	if (match_sa_index_no_lock(xfrm, dir) < 0) {
+		ASFCTRL_WARN("Not an offloaded SA -1");
+		return -1;
+	}
+	cont_id = sa_table[dir][xfrm->asf_sa_cookie - 1].container_id;
+	spin_unlock(&sa_table_lock);
+
+	if (dir == OUT_SA) {
 		ASFIPSecRuntimeDelOutSAArgs_t delSA;
 		ASFCTRL_INFO("Delete Encrypt SA");
 
 		delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-		delSA.ulSPDContainerIndex = sa_table[OUT_SA][ret].container_id;
+		delSA.ulSPDContainerIndex = cont_id;
 		delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
 		delSA.ucProtocol = ASF_IPSEC_PROTOCOL_ESP;
@@ -938,13 +930,13 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 			sizeof(ASFIPSecRuntimeDelOutSAArgs_t),
 			&handle, sizeof(uint32_t));
 
-	} else if (xfrm->asf_sa_direction == IN_SA) {
+	} else {
 		ASFIPSecRuntimeDelInSAArgs_t delSA;
 
 		ASFCTRL_INFO("Delete Decrypt SA");
 
 		delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-		delSA.ulSPDContainerIndex = sa_table[IN_SA][ret].container_id;
+		delSA.ulSPDContainerIndex = cont_id;
 		delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
 		delSA.ucProtocol = ASF_IPSEC_PROTOCOL_ESP;
@@ -956,10 +948,9 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 			sizeof(ASFIPSecRuntimeDelInSAArgs_t),
 			&handle, sizeof(uint32_t));
 	}
-
-	free_sa_index(ret, xfrm->asf_sa_direction);
+	free_sa_index(xfrm, dir);
 	xfrm->asf_sa_cookie = 0;
-	xfrm->asf_sa_direction = 0;
+
 	ASFCTRL_FUNC_EXIT;
 	return 0;
 }
@@ -967,7 +958,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 int asfctrl_xfrm_flush_sa(void)
 {
 	ASFCTRL_FUNC_TRACE;
-	init_sa_indexes();
+	init_sa_indexes(0);
 
 	if (ASFIPSecFlushAllSA(ASF_DEF_VSG,
 		ASF_DEF_IPSEC_TUNNEL_ID)) {
@@ -986,16 +977,16 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (validate_policy_info(xp))
+	if (is_policy_offloadable(xp))
 		return -EINVAL;
 
-	if (validate_sa_info(xfrm))
+	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
 
 	/* Check if Container is already configured down. */
 	if (xp->asf_cookie && !(verify_container_index(xp->asf_cookie,
 					ASF_OUT_CONTANER_ID))) {
-		ASFCTRL_ERR("Policy is already offloaded cookie = %x",
+		ASFCTRL_WARN("Policy is already offloaded cookie = %x",
 			xp->asf_cookie);
 		goto sa_check;
 	} else {
@@ -1011,7 +1002,7 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 			outSPDContainer.ulMagicNumber =
 				asfctrl_vsg_ipsec_cont_magic_id;
 		} else {
-			ASFCTRL_ERR("No free containder index");
+			ASFCTRL_WARN("No free containder index");
 			goto err;
 		}
 		outSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
@@ -1040,25 +1031,32 @@ err:
 	return -EINVAL;
 }
 
-int asfctrl_xfrm_dec_hook(struct xfrm_policy *xp,
+int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 		struct xfrm_state *xfrm,
 		struct flowi *fl, int ifindex)
 {
 	int i;
 	int 	handle;
+	struct xfrm_policy *xp = pol;
 
-	ASFCTRL_FUNC_ENTRY;
-
-	if (validate_policy_info(xp))
+	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
 
-	if (validate_sa_info(xfrm))
+	if (!xp) {
+		xp = xfrm_state_policy_mapping(xfrm);
+		if (!xp) {
+			ASFCTRL_WARN("Policy not found for this SA");
+			return -EINVAL;
+		}
+	}
+
+	if (is_policy_offloadable(xp))
 		return -EINVAL;
 
 	/* Check if Container is already configured down. */
 	if (xp->asf_cookie && !(verify_container_index(xp->asf_cookie,
 					ASF_IN_CONTANER_ID))) {
-		ASFCTRL_ERR("Policy is already offloaded cookie = %x",
+		ASFCTRL_WARN("Policy is already offloaded cookie = %x",
 			xp->asf_cookie);
 		goto sa_check;
 	} else {
@@ -1073,7 +1071,7 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *xp,
 			inSPDContainer.ulMagicNumber =
 				asfctrl_vsg_ipsec_cont_magic_id;
 		} else {
-			ASFCTRL_ERR("No free containder index");
+			ASFCTRL_WARN("No free containder index");
 			goto err;
 		}
 		inSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
@@ -1102,44 +1100,89 @@ err:
 	return -EINVAL;
 }
 
-/*tbd - to be completed*/
-/* Need to set it properly in Linux networking Stack*/
 int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
-		struct xfrm_policy *xp)
+		struct xfrm_state *xfrm)
 {
-	struct xfrm_tmpl	*tmpl;
 	ASFBuffer_t Buffer;
 	ASF_IPAddr_t daddr;
+	int sa_id, cont_id;
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (validate_policy_info(xp))
-		return -EINVAL;
+	ASFCTRL_WARN("Packet received spi =0x%x", xfrm->id.spi);
+	sa_id = xfrm->asf_sa_cookie;
 
-	if (!xp->asf_cookie) {
-		ASFCTRL_ERR("Policy not offloaded");
+	spin_lock(&sa_table_lock);
+	if (match_sa_index_no_lock(xfrm, OUT_SA) < 0) {
+		ASFCTRL_INFO("SA offloaded with Junk cookie");
+		xfrm->asf_sa_cookie = 0;
+		spin_unlock(&sa_table_lock);
 		return -EINVAL;
 	}
 
-	tmpl = &xp->xfrm_vec[0];
-
 	Buffer.nativeBuffer = skb;
 	daddr.bIPv4OrIPv6 = 0;
-	daddr.ipv4addr = tmpl->id.daddr.a4;
+	daddr.ipv4addr = xfrm->id.daddr.a4;
+	cont_id = sa_table[OUT_SA][sa_id].container_id;
+
+	spin_unlock(&sa_table_lock);
+
+	skb_dst_drop(skb);
 
 	ASFIPSecEncryptAndSendPkt(ASF_DEF_VSG,
 			ASF_DEF_IPSEC_TUNNEL_ID,
-			xp->asf_cookie,
+			cont_id,
 			asfctrl_vsg_ipsec_cont_magic_id,
-			tmpl->id.spi,
+			xfrm->id.spi,
 			daddr,
-			tmpl->id.proto,
+			ASF_IPSEC_PROTOCOL_ESP,
 			Buffer,
 			asfctrl_generic_free,
 			skb);
 
 	ASFCTRL_FUNC_EXIT;
-	return -EINVAL;
+	return 0;
+}
+
+int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
+		struct xfrm_state *xfrm)
+{
+	ASFBuffer_t Buffer;
+	T_INT32 cii;
+	struct net_device *dev = skb->dev;
+
+	ASFCTRL_FUNC_ENTRY;
+
+	ASFCTRL_WARN("Packet received spi =0x%x", xfrm->id.spi);
+
+	spin_lock(&sa_table_lock);
+	if (match_sa_index_no_lock(xfrm, IN_SA) < 0) {
+		ASFCTRL_INFO("SA offloaded with Junk cookie");
+		xfrm->asf_sa_cookie = 0;
+		spin_unlock(&sa_table_lock);
+		return -EINVAL;
+	}
+	spin_unlock(&sa_table_lock);
+
+	cii = asfctrl_dev_get_cii(dev);
+
+	ASFCTRL_INFO("Pkt received data = 0x%x, net = 0x%x, skb->len = %d",
+		(unsigned int)skb->data,
+		(unsigned int)skb_network_header(skb), skb->len);
+
+	Buffer.nativeBuffer = skb;
+
+	skb->len += sizeof(struct iphdr);
+	skb->data -= sizeof(struct iphdr);
+	skb_dst_drop(skb);
+	ASFIPSecDecryptAndSendPkt(ASF_DEF_VSG,
+			Buffer,
+			asfctrl_generic_free,
+			skb,
+			cii);
+
+	ASFCTRL_FUNC_EXIT;
+	return 0;
 }
 
 static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
@@ -1147,7 +1190,7 @@ static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
 	ASFCTRL_FUNC_TRACE;
 
 	if (!x && (c->event != XFRM_MSG_FLUSHSA)) {
-		ASFCTRL_ERR("Null SA passed.");
+		ASFCTRL_WARN("Null SA passed.");
 		return 0;
 	}
 #ifdef ASFCTRL_IPSEC_DEBUG
@@ -1179,7 +1222,7 @@ static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
 	case XFRM_MSG_NEWAE: /* not yet supported */
 		break;
 	default:
-		ASFCTRL_ERR("XFRM_MSG_UNKNOWN: SA event %d\n", c->event);
+		ASFCTRL_WARN("XFRM_MSG_UNKNOWN: SA event %d\n", c->event);
 		break;
 	}
 	ASFCTRL_FUNC_EXIT;
@@ -1197,7 +1240,7 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 		return 0;
 	}
 	if (!xp && (c->event != XFRM_MSG_FLUSHPOLICY)) {
-		ASFCTRL_ERR("Null Policy.");
+		ASFCTRL_WARN("Null Policy.");
 		return 0;
 	}
 
@@ -1226,7 +1269,7 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 		asfctrl_xfrm_flush();
 		break;
 	default:
-		ASFCTRL_ERR("Unknown policy event %d\n", c->event);
+		ASFCTRL_WARN("Unknown policy event %d\n", c->event);
 		break;
 	}
 	ASFCTRL_FUNC_EXIT;

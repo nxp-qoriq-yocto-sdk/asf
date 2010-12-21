@@ -352,6 +352,7 @@ inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 			iph = ip_hdr(pSkb);
 
 			pSkb->pkt_type = PACKET_FASTROUTE;
+			pSkb->asf = 1;
 			pSkb->vlan_tci = Cache->tx_vlan_id;
 
 			ip_decrease_ttl(iph);

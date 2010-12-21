@@ -283,12 +283,11 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 	struct iphdr *iph;
 	struct tcphdr *tcph;
 	struct udphdr *udph;
-	uint32_t	result;
+	int	result;
 	struct net_device *dev;
 	uint32_t uldestIp;
 	uint16_t usdport;
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
-	ASFFFPCreateFlowsInfo_t cmd1;
 	bool bIPsecIn = 0, bIPsecOut = 0;
 	struct flowi fl_out;
 #endif
@@ -365,6 +364,8 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 
 	result = ipt_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
 			net->ipv4.iptable_filter);
+	kfree_skb(skb);
+
 	switch (result) {
 	case NF_ACCEPT:
 		{
@@ -395,72 +396,67 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 				ASFCTRL_ERR("Flow modification failure");
 		}
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
-	{
-		uint32_t orig_sip = ct_tuple_orig->src.u3.ip;
-		uint32_t orig_dip = ct_tuple_orig->dst.u3.ip;
-		uint16_t orig_sport = ct_tuple_orig->src.u.tcp.port;
-		uint16_t orig_dport = ct_tuple_orig->dst.u.tcp.port;
-		uint8_t orig_prot = ct_tuple_orig->dst.protonum;
-
-		memset(&cmd, 0, sizeof(cmd));
-		memset(&cmd1, 0, sizeof(cmd1));
-
-		/* Fill command for flow 1 */
-		cmd1.flow1.tuple.ucProtocol = orig_prot;
-		cmd1.flow1.tuple.ulDestIp = orig_dip;
-		cmd1.flow1.tuple.ulSrcIp = orig_sip;
-		cmd1.flow1.tuple.usDestPort = orig_dport;
-		cmd1.flow1.tuple.usSrcPort = orig_sport;
-
-#ifdef ASFCTRL_IPSEC_FP_SUPPORT
 		if (fn_ipsec_get_flow4) {
+			ASFFFPIpsecInfo_t ipsecInInfo;
+
+			memset(&cmd, 0, sizeof(cmd));
+
 			memset(&fl_out, 0, sizeof(fl_out));
-			fl_out.fl_ip_sport = orig_sport;
-			fl_out.fl_ip_dport = orig_dport;
-			fl_out.proto = orig_prot;
-			fl_out.fl4_dst = orig_dip;
-			fl_out.fl4_src = orig_sip;
+			fl_out.fl_ip_sport = ct_tuple_reply->dst.u.tcp.port;
+			fl_out.fl_ip_dport = ct_tuple_reply->src.u.tcp.port;
+			fl_out.proto = ct_tuple_orig->dst.protonum;
+			fl_out.fl4_dst = ct_tuple_reply->src.u3.ip;
+			fl_out.fl4_src = ct_tuple_reply->dst.u3.ip;
 			fl_out.fl4_tos = 0;
 
-			dev = dev_get_by_name(&init_net, "lo");
-			net = dev_net(dev);
-			fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
-				&(cmd1.flow1.ipsecInInfo), net, fl_out);
-		}
-#endif
-		cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
-		cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
-		cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
-		cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
-		cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
+			result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
+				&ipsecInInfo, net, fl_out);
+			if (result) {
+				ASFCTRL_INFO("IPSEC Not Offloadable for flow");
+				goto delete_flow;
+			}
+			cmd.u.ipsec.ipsecInfo = ipsecInInfo;
+			cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
+			cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
+			cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
+			cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
+			cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
 
-		cmd.u.ipsec.ipsecInfo = cmd1.flow1.ipsecInInfo;
-		cmd.u.ipsec.bIPsecIn = bIPsecIn ? 1 : 0;
-		cmd.u.ipsec.bIPsecOut = bIPsecOut ? 1 : 0;
-		cmd.u.ipsec.bIn = cmd.u.ipsec.bOut = 1;
-		cmd.ulZoneId = ASF_DEF_ZN_ID;
-		cmd.bIPsecConfigIdentityUpdate = 1;
-		cmd.u.fwConfigIdentity.ulConfigMagicNumber =
-				asfctrl_vsg_config_id;
+			cmd.bIPsecConfigIdentityUpdate = 1;
 
-		if (ASFFFPRuntime(ASF_DEF_VSG,
-			ASF_FFP_MODIFY_FLOWS,
-			&cmd, sizeof(cmd), NULL, 0) ==
-			ASFFFP_RESPONSE_SUCCESS) {
+			cmd.u.ipsec.bIPsecIn = bIPsecIn ? 1 : 0;
+			cmd.u.ipsec.bIPsecOut = bIPsecOut ? 1 : 0;
+			cmd.u.ipsec.bIn = cmd.u.ipsec.bOut = 1;
+			cmd.ulZoneId = ASF_DEF_ZN_ID;
+
+			cmd.u.fwConfigIdentity.ulConfigMagicNumber =
+					asfctrl_vsg_config_id;
+			ASFCTRL_INFO("Configured tunnel ID is %d ",
+				ipsecInInfo.outContainerInfo.ulTunnelId);
+			if (ASFFFPRuntime(ASF_DEF_VSG,
+				ASF_FFP_MODIFY_FLOWS,
+				&cmd, sizeof(cmd), NULL, 0) ==
+				ASFFFP_RESPONSE_SUCCESS) {
 				ASFCTRL_INFO("Flow modified successfully");
-		} else {
+			} else {
 				ASFCTRL_WARN("Flow modification failure");
+			}
 		}
-	}
 #endif
 		break;
 		}
 	case NF_DROP:
 		{
+			goto delete_flow;
+		}
+	}
+	ASFCTRL_FUNC_EXIT;
+	return;
+delete_flow:
+	{
 		ASFFFPDeleteFlowsInfo_t cmd;
 
 		memset(&cmd, 0, sizeof(cmd));
-
 
 		cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
 		cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
@@ -468,10 +464,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
 		cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
 
-
 		cmd.ulZoneId = ASF_DEF_ZN_ID;
-
-
 
 		if (ASFFFPRuntime(ASF_DEF_VSG,
 			ASF_FFP_DELETE_FLOWS,
@@ -480,8 +473,6 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 				ASFCTRL_INFO("Flow deleted successfully");
 		} else {
 				ASFCTRL_ERR("Flow deletion failure");
-		}
-		break;
 		}
 	}
 	ASFCTRL_FUNC_EXIT;
@@ -555,6 +546,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	struct nf_conntrack_tuple *ct_tuple_orig, *ct_tuple_reply;
 	struct net_device *dev;
 	struct net *net = NULL;
+	int result = 0;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -749,10 +741,12 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 		dev = dev_get_by_name(&init_net, "lo");
 		net = dev_net(dev);
-		fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
-			&(cmd.flow1.ipsecInInfo),
-			net,
-			fl_out);
+		result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
+			&(cmd.flow1.ipsecInInfo), net, fl_out);
+		if (result) {
+			ASFCTRL_INFO("IPSEC Not Offloadable for flow 1");
+			return result;
+		}
 	}
 #endif
 	cmd.flow1.bIPsecIn = bIPsecIn ? 1 : 0;
@@ -801,11 +795,12 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		fl_in.fl4_src = reply_sip;
 		fl_in.fl4_tos = 0;
 
-
-		fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
-				&(cmd.flow2.ipsecInInfo),
-				net,
-				fl_in);
+		result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
+			&(cmd.flow2.ipsecInInfo), net, fl_in);
+		if (result) {
+			ASFCTRL_INFO("IPSEC Not Offloadable for flow 2");
+			return result;
+		}
 	}
 #endif
 	cmd.flow2.bIPsecIn = bIPsecIn ? 1 : 0;
@@ -840,7 +835,6 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			flow1_dip = cmd.flow1.tuple.ulDestIp;
 			flow2_dip = cmd.flow2.tuple.ulDestIp;
 		}
-
 
 		asf_linux_XmitL2blobDummyPkt(0, 0, &cmd.flow1.tuple,
 					cmd.flow1.tuple.ulSrcIp,
