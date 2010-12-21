@@ -463,6 +463,7 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 		pSAData->u.l2blob.usTxVlanId = vlan_tx_tag_get(skb);
 	} else
 		pSAData->u.l2blob.bTxVlan = 0;
+	pSAData->u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
 	ASFIPSecRuntime(ulVSGId, ASF_IPSEC_RUNTIME_MOD_OUTSA, pSAData,
 			sizeof(ASFIPSecRuntimeModOutSAArgs_t), NULL, 0);
 	return;
@@ -475,6 +476,7 @@ void asfctrl_ipsec_update_vsg_magic_number(void)
 	ASFCTRL_FUNC_TRACE;
 	VSGMagicInfo.ulVSGId = ASF_DEF_VSG;
 	VSGMagicInfo.ulVSGMagicNumber = asfctrl_vsg_config_id;
+	VSGMagicInfo.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
 	ASFIPSecUpdateVSGMagicNumber(&VSGMagicInfo);
 	return ;
 }
@@ -541,6 +543,7 @@ static int __init asfctrl_linux_ipsec_init(void)
 	ASFCap_t  asf_cap;
 	ASFIPSecInitConfigIdentity_t  confId;
 	unsigned int *ulVSGMagicNumber;
+	unsigned int *ulVSGL2blobMagicNumber;
 	unsigned int **ulTunnelMagicNumber;
 	int i, j;
 
@@ -561,6 +564,8 @@ static int __init asfctrl_linux_ipsec_init(void)
 	}
 	ulVSGMagicNumber = kzalloc(sizeof(unsigned int *) * ASF_MAX_NUM_VSG,
 				GFP_KERNEL);
+	ulVSGL2blobMagicNumber =
+		kzalloc(sizeof(unsigned int *) * ASF_MAX_NUM_VSG, GFP_KERNEL);
 	ulTunnelMagicNumber = kzalloc(sizeof(unsigned int *) * ASF_MAX_NUM_VSG,
 				GFP_KERNEL);
 	for (i = 0; i < ASF_MAX_NUM_VSG; i++)
@@ -579,16 +584,19 @@ static int __init asfctrl_linux_ipsec_init(void)
 	confId.ulMaxTunnels = ASF_MAX_TUNNEL;
 	for (i = 0; i < ASF_MAX_NUM_VSG; i++) {
 		ulVSGMagicNumber[i] = asfctrl_vsg_config_id;
+		ulVSGL2blobMagicNumber[i] = asfctrl_vsg_l2blobconfig_id;
 		for (j = 0; j < ASF_MAX_TUNNEL; j++)
 			ulTunnelMagicNumber[i][j] =
 				ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM;
 	}
 	confId.pulVSGMagicNumber = ulVSGMagicNumber;
+	confId.pulVSGL2blobMagicNumber = ulVSGL2blobMagicNumber;
 	confId.pulTunnelMagicNumber = ulTunnelMagicNumber;
 
 	ASFIPSecInitConfigIdentity(&confId);
 
 	kfree(ulVSGMagicNumber);
+	kfree(ulVSGL2blobMagicNumber);
 	for (i = 0; i < ASF_MAX_NUM_VSG; i++)
 		kfree(ulTunnelMagicNumber[i]);
 	kfree(ulTunnelMagicNumber);

@@ -163,6 +163,7 @@ static int InSAPoolId_g = -1;
 static int SPDOutSALinkNodePoolId_g = -1;
 
 unsigned int   *pulVSGMagicNumber;
+unsigned int   *pulVSGL2blobMagicNumber;
 unsigned int ulTimeStamp_g;
 static inline inSA_t  *secfp_findInv4SA(unsigned int ulVSGId,
 					unsigned char ucProto,
@@ -582,6 +583,13 @@ int secfp_InitConfigIdentitiy(void)
 		ASFIPSEC_ERR("Memory allocation failed for pulVSGMagicNumber");
 		return 1;
 	}
+	pulVSGL2blobMagicNumber = kzalloc(sizeof(unsigned int) * ulMaxVSGs_g,
+					GFP_KERNEL);
+	if (pulVSGL2blobMagicNumber == NULL) {
+		ASFIPSEC_ERR("Memory allocation fail for pulVSGL2blobMagicNo");
+		return 1;
+	}
+
 	return 0;
 }
 
@@ -658,10 +666,12 @@ void secfp_DeInitMemPools(void)
 
 void secfp_DeInitConfigIdentitiy(void)
 {
-	if (pulVSGMagicNumber) {
-		kfree(pulVSGMagicNumber);
-		pulVSGMagicNumber =  NULL;
-	}
+	kfree(pulVSGMagicNumber);
+	pulVSGMagicNumber =  NULL;
+
+	kfree(pulVSGL2blobMagicNumber);
+	pulVSGL2blobMagicNumber =  NULL;
+
 }
 
 void secfp_deInit(void)
@@ -1649,6 +1659,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	int ii;
 	AsfSPDPolicyPPStats_t   *pIPSecPolicyPPStats;
 	ASF_IPSecTunEndAddr_t  TunAddress;
+	bool	bl2blobRefresh = 0;
 
 	pIpHdrInSA = (unsigned int *)  &(pSA->ipHdrInfo.hdrdata.iphv4);
 	org_iphdr = (struct iphdr *) pIpHdrInSA;
@@ -1704,6 +1715,26 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 	/* Update L2 Blob information and send pkt out */
 	if (pSA->bl2blob) {
+		if (pulVSGL2blobMagicNumber[ulVSGId] !=
+			pSA->l2blobConfig.ulL2blobMagicNumber) {
+			ASFIPSEC_PRINT("L2blob Magic Num Mismatch %d != %d ",
+				pulVSGL2blobMagicNumber[ulVSGId],
+				pSA->l2blobConfig.ulL2blobMagicNumber);
+			if (!pSA->l2blobConfig.bl2blobRefreshSent) {
+				pSA->l2blobConfig.ulOldL2blobJiffies = jiffies;
+				pSA->l2blobConfig.bl2blobRefreshSent = 1;
+			}
+
+			if (time_after(jiffies,
+				pSA->l2blobConfig.ulOldL2blobJiffies +
+				ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT)) {
+				bl2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
+				goto send_l2blob;
+			}
+
+			bl2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
+		}
+
 		skb->data -= pSA->ulL2BlobLen;
 		skb->len += pSA->ulL2BlobLen;
 
@@ -1724,6 +1755,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		skb_set_network_header(skb, pSA->ulL2BlobLen);
 		skb_set_transport_header(skb, (20 + pSA->ulL2BlobLen));
 	} else {
+ret_pkt:
 		ASFIPSEC_DEBUG("OutSA - L2blob info not available");
 		/* Update the ethernet header */
 		skb->data -= ETH_HLEN;
@@ -1757,8 +1789,13 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	/* set up the Skb dev pointer */
 	skb->dev = pSA->odev;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	if (ASFIPSecCbFn.pFnRefreshL2Blob &&
-		((pSA->ulPkts[0] + pSA->ulPkts[1]) % ulL2BlobRefreshPktCnt_g == 0)) {
+send_l2blob:
+	if (ASFIPSecCbFn.pFnRefreshL2Blob) {
+		if (bl2blobRefresh ||
+			(ulL2BlobRefreshPktCnt_g &&
+			((pSA->ulPkts[0] + pSA->ulPkts[1])
+				% ulL2BlobRefreshPktCnt_g == 0))) {
+		ASFIPSEC_PRINT("Sending L2blob Refresh");
 		TunAddress.IP_Version = 4;
 		TunAddress.dstIP.bIPv4OrIPv6 = 0;
 		TunAddress.srcIP.bIPv4OrIPv6 = 0;
@@ -1771,7 +1808,10 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 			ptrIArray_getMagicNum(&(secfp_OutDB),
 				ulSPDContainerIndex), &TunAddress,
 			pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
+		}
 	}
+	if (bl2blobRefresh == ASF_L2BLOB_REFRESH_DROP_PKT)
+		goto ret_pkt;
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 }
 
@@ -6580,6 +6620,8 @@ unsigned int secfp_createOutSA(
 				local_bh_enable();
 			return SECFP_FAILURE;
 		}
+		memset(&(pSA->l2blobConfig), 0, sizeof(ASFFFPL2blobConfig_t));
+
 		TunAddress.IP_Version = 4;
 		TunAddress.dstIP.bIPv4OrIPv6 = 0;
 		TunAddress.srcIP.bIPv4OrIPv6 = 0;
@@ -6681,6 +6723,9 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 					return SECFP_FAILURE;
 				}
 				pOutSA->bl2blob = TRUE;
+				pOutSA->l2blobConfig.ulL2blobMagicNumber =
+					pModSA->u.l2blob.ulL2blobMagicNumber;
+				pOutSA->l2blobConfig.bl2blobRefreshSent = 0;
 			}
 			if (!bVal)
 				local_bh_enable();

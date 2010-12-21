@@ -69,6 +69,7 @@ extern SecTunnelIface_t **secFP_TunnelIfaces;
 extern spinlock_t secfp_TunnelIfaceCIIndexListLock;
 
 extern unsigned int    *pulVSGMagicNumber;
+extern unsigned int    *pulVSGL2blobMagicNumber;
 extern unsigned int  **pulTunnelMagicNumber;
 extern unsigned int ulTimeStamp_g;
 extern void secfp_removeCINodeFromTunnelList(unsigned int ulVSGId,
@@ -646,11 +647,15 @@ ASF_void_t  ASFIPSecUpdateVSGMagicNumber(ASFIPSecUpdateVSGMagicNumber_t *pVSGMag
 		ASFIPSEC_DEBUG("Invalid VSG Id = %u\r\n", pVSGMagicInfo->ulVSGId);
 		return;
 	}
-	pulVSGMagicNumber[pVSGMagicInfo->ulVSGId] = pVSGMagicInfo->ulVSGMagicNumber;
+	pulVSGMagicNumber[pVSGMagicInfo->ulVSGId] =
+		pVSGMagicInfo->ulVSGMagicNumber;
+	pulVSGL2blobMagicNumber[pVSGMagicInfo->ulVSGId] =
+		pVSGMagicInfo->ulL2blobMagicNumber;
 	ulTimeStamp_g++;
 }
 
-ASF_void_t  ASFIPSecUpdateTunnelMagicNumber(ASFIPSecUpdateTunnelMagicNumber_t *pTunnelMagicInfo)
+ASF_void_t  ASFIPSecUpdateTunnelMagicNumber(
+	ASFIPSecUpdateTunnelMagicNumber_t *pTunnelMagicInfo)
 {
 	if (pTunnelMagicInfo == NULL) {
 		ASFIPSEC_DEBUG("Input argument is null");
@@ -660,18 +665,21 @@ ASF_void_t  ASFIPSecUpdateTunnelMagicNumber(ASFIPSecUpdateTunnelMagicNumber_t *p
 	SECFP_IS_VSG_ID_INVALID(pTunnelMagicInfo->ulVSGId)
 	{
 		GlobalErrors.ulInvalidVSGId++;
-		ASFIPSEC_DEBUG("Invalid VSG Id = %u\r\n", pTunnelMagicInfo->ulVSGId);
+		ASFIPSEC_DEBUG("Invalid VSG Id = %u\n",
+			pTunnelMagicInfo->ulVSGId);
 		return;
 	}
 
 	SECFP_IS_TUNNEL_ID_INVALID(pTunnelMagicInfo->ulTunnelId)
 	{
 		GlobalErrors.ulInvalidTunnelId++;
-		ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n", pTunnelMagicInfo->ulTunnelId);
+		ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\n",
+			pTunnelMagicInfo->ulTunnelId);
 		return;
 	}
-	secFP_TunnelIfaces[pTunnelMagicInfo->ulVSGId][pTunnelMagicInfo->ulTunnelId].ulTunnelMagicNumber =
-	pTunnelMagicInfo->ulTunnelMagicNumber;
+	secFP_TunnelIfaces[pTunnelMagicInfo->ulVSGId][
+		pTunnelMagicInfo->ulTunnelId].ulTunnelMagicNumber =
+					pTunnelMagicInfo->ulTunnelMagicNumber;
 
 	ulTimeStamp_g++;
 
@@ -1889,12 +1897,17 @@ ASF_void_t  ASFIPSecInitConfigIdentity(ASFIPSecInitConfigIdentity_t  *pConfigIde
 	ASF_uint32_t ii, kk;
 
 	if (pConfigIdentity &&
-	    (pConfigIdentity->ulMaxVSGs <= ulMaxVSGs_g) &&
-	    (pConfigIdentity->ulMaxTunnels <= ulMaxTunnels_g)) {
+		(pConfigIdentity->ulMaxVSGs <= ulMaxVSGs_g) &&
+		(pConfigIdentity->ulMaxTunnels <= ulMaxTunnels_g)) {
 		if (pConfigIdentity->pulVSGMagicNumber)
 			for (ii = 0; ii < pConfigIdentity->ulMaxVSGs; ii++)
 				pulVSGMagicNumber[ii] =
 					pConfigIdentity->pulVSGMagicNumber[ii];
+		if (pConfigIdentity->pulVSGL2blobMagicNumber)
+			for (ii = 0; ii < pConfigIdentity->ulMaxVSGs; ii++)
+				pulVSGL2blobMagicNumber[ii] =
+					pConfigIdentity->pulVSGL2blobMagicNumber[ii];
+
 		if (pConfigIdentity->pulTunnelMagicNumber)
 			for (ii = 0; ii < pConfigIdentity->ulMaxVSGs; ii++)
 				if (pConfigIdentity->pulTunnelMagicNumber[ii])

@@ -530,6 +530,7 @@ typedef struct ASFIPSecRuntimeModOutSAArgs_s {
 			ASF_uint16_t ulDeviceID;
 			ASF_uint16_t bTxVlan:1, bUpdatePPPoELen:1;
 			ASF_uint16_t usTxVlanId;
+			ASF_uint32_t ulL2blobMagicNumber;
 		} l2blob;
 	} u;
 } ASFIPSecRuntimeModOutSAArgs_t;
@@ -571,6 +572,7 @@ typedef struct ASFIPSecRuntimeSetFlowL2BlobArgs_s {
 typedef struct ASFIPSecUpdateVSGMagicNumber_s {
 	ASF_uint32_t  ulVSGId;
 	ASF_uint32_t  ulVSGMagicNumber;
+	ASF_uint32_t  ulL2blobMagicNumber;
 } ASFIPSecUpdateVSGMagicNumber_t;
 
 typedef struct ASFIPSecUpdateTunnelMagicNumber_s {
@@ -583,6 +585,7 @@ typedef struct ASFIPSecInitConfigIdentity_s {
 	ASF_uint32_t  ulMaxVSGs;
 	ASF_uint32_t  ulMaxTunnels;
 	ASF_uint32_t  *pulVSGMagicNumber;
+	ASF_uint32_t  *pulVSGL2blobMagicNumber;
 	ASF_uint32_t  **pulTunnelMagicNumber;
 } ASFIPSecInitConfigIdentity_t;
 

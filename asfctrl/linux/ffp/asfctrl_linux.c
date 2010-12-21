@@ -154,6 +154,10 @@ ASF_void_t  asfctrl_invalidate_l2blob(void)
 	cmd.bL2blobMagicNumber = 1;
 	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
 
+#ifdef ASFCTRL_IPSEC_FP_SUPPORT
+	if (fn_ipsec_vsg_magic_update)
+		fn_ipsec_vsg_magic_update();
+#endif
 	ASFCTRL_FUNC_EXIT;
 }
 
