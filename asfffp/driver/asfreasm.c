@@ -1654,7 +1654,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			  asfSkbCopyBits() */
 			tot_len = len+ihl;
 			skb->tail = skb->data;
-			skb->tail += skb->len;
+			skb->tail += tot_len;
 			iph->frag_off |= htons(IP_MF);
 			iph->tot_len = htons(len+ihl);
 
@@ -1719,6 +1719,9 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					iph->frag_off = htons((offset >> 3));
 					iph->tot_len = htons(len + ihl);
 
+					if (bytesLeft == 0)
+						iph->frag_off &= htons(~IP_MF);
+
 					if (!bDoChecksum) {
 						skb2->ip_summed =
 							CHECKSUM_PARTIAL;
@@ -1727,9 +1730,6 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 						skb2->ip_summed =
 							CHECKSUM_UNNECESSARY;
 					}
-
-					if (bytesLeft == 0)
-						iph->frag_off &= htons(~IP_MF);
 
 					offset += len;
 					ptr += len;

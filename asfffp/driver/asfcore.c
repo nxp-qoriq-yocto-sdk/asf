@@ -97,13 +97,13 @@ extern unsigned long asf_reasm_num_cbs;
 
 module_param(asf_enable, bool, 0644);
 MODULE_PARM_DESC(asf_enable, "Enable or disable ASF upon loading");
-module_param(ffp_max_flows, int, 0644);
+module_param(ffp_max_flows, int, 0444);
 MODULE_PARM_DESC(ffp_max_flows, "Maximum number of FFP flows");
-module_param(asf_max_vsgs, int, 0644);
+module_param(asf_max_vsgs, int, 0444);
 MODULE_PARM_DESC(asf_max_vsgs, "Maximum number of VSGs");
-module_param(asf_max_ifaces, int, 0644);
+module_param(asf_max_ifaces, int, 0444);
 MODULE_PARM_DESC(asf_max_ifaces, "Maximum number of interfaces");
-module_param(ffp_hash_buckets, int, 0644);
+module_param(ffp_hash_buckets, int, 0444);
 MODULE_PARM_DESC(ffp_hash_buckets,
 			"Number of hash buckets in FFP flow hash table");
 module_param(asf_l2blob_refresh_interval, int, 0644);
@@ -127,9 +127,9 @@ module_param(asf_l2blob_refresh_interval, int, 0644);
 MODULE_PARM_DESC(asf_l2blob_refresh_interval,
 	"Periodic interval at which L2 blob refresh indication to be generated");
 #endif
-module_param(asf_reasm_hash_list_size, ulong, 0644);
+module_param(asf_reasm_hash_list_size, ulong, 0444);
 MODULE_PARM_DESC(asf_reasm_hash_list_size, "Size of reassembly hash table");
-module_param(asf_reasm_num_cbs, ulong, 0644);
+module_param(asf_reasm_num_cbs, ulong, 0444);
 MODULE_PARM_DESC(asf_reasm_num_cbs,
 				"Maximum number of Reassembly context blocks per VSG");
 
