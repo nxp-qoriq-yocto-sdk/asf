@@ -3129,7 +3129,7 @@ unsigned int asfFfpBlobTmrCb(unsigned int ulVSGId,
 	if (asf_enable) {
 		flow = ffp_flow_by_id_ex(ulIndex, ulMagicNum);
 		if (flow) {
-			if (ffpCbFns.pFnFlowRefreshL2Blob) {
+			if (!flow->bIPsecOut && ffpCbFns.pFnFlowRefreshL2Blob) {
 				ASFFFPFlowL2BlobRefreshCbInfo_t ind;
 
 				ind.flowTuple.ulSrcIp = flow->ulSrcIp;

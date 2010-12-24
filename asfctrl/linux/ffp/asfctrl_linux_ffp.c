@@ -429,8 +429,6 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			cmd.u.ipsec.bIn = cmd.u.ipsec.bOut = 1;
 			cmd.ulZoneId = ASF_DEF_ZN_ID;
 
-			cmd.u.fwConfigIdentity.ulConfigMagicNumber =
-					asfctrl_vsg_config_id;
 			ASFCTRL_INFO("Configured tunnel ID is %d ",
 				ipsecInInfo.outContainerInfo.ulTunnelId);
 			if (ASFFFPRuntime(ASF_DEF_VSG,
@@ -544,7 +542,7 @@ static int32_t asfctrl_destroy_session(struct nf_conn *ct_event)
 static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 {
 	struct nf_conntrack_tuple *ct_tuple_orig, *ct_tuple_reply;
-	struct net_device *dev;
+	struct net_device *dev = NULL;
 	struct net *net = NULL;
 	int result = 0;
 
@@ -745,6 +743,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			&(cmd.flow1.ipsecInInfo), net, fl_out);
 		if (result) {
 			ASFCTRL_INFO("IPSEC Not Offloadable for flow 1");
+			dev_put(dev);
 			return result;
 		}
 	}
@@ -797,6 +796,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 		result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
 			&(cmd.flow2.ipsecInInfo), net, fl_in);
+		dev_put(dev);
 		if (result) {
 			ASFCTRL_INFO("IPSEC Not Offloadable for flow 2");
 			return result;

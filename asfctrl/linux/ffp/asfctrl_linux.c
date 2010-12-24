@@ -139,7 +139,7 @@ int asfctrl_l3_route_add(
 				tos,
 				l2_head);
 #endif
-	ASFCTRL_FUNC_EXIT
+	ASFCTRL_FUNC_EXIT;
 	return 0;
 }
 
@@ -171,7 +171,7 @@ ASF_void_t asfctrl_l3_route_flush(void)
 	if (fn_fwd_l3_route_flush)
 			fn_fwd_l3_route_flush();
 #endif
-	ASFCTRL_FUNC_EXIT
+	ASFCTRL_FUNC_EXIT;
 }
 int asf_ip_send(struct sk_buff *skb)
 {

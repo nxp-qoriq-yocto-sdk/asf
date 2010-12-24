@@ -431,13 +431,20 @@ static int secfp_InitInSATable(void)
 
 
 unsigned int asfsecfpBlobTmrCb(unsigned int ulVSGId,
-				 unsigned int ulIndex, unsigned int ulMagicNum, unsigned int ulSPDContainerIndex)
+				unsigned int ulIndex, unsigned int ulMagicNum,
+				unsigned int ulSPDContainerIndex)
 {
 	outSA_t  *pSA;
 	ASF_IPSecTunEndAddr_t  TunAddress;
 
 	pSA = ptrIArray_getData(&secFP_OutSATable, ulIndex);
+	ASFIPSEC_DEBUG("SEC L2blob Timer pSA = %x, SPI=0x%x",
+				 pSA, pSA->SAParams.ulSPI);
+
 	if (pSA) {
+		ASFIPSEC_DEBUG("SEC L2blob Magic(index=%d) %d = %d ", ulIndex,
+			ptrIArray_getMagicNum(&secFP_OutSATable, ulIndex),
+			ulMagicNum);
 		if (ASFIPSecCbFn.pFnRefreshL2Blob
 		&& (ptrIArray_getMagicNum(&secFP_OutSATable, ulIndex) ==
 			ulMagicNum)) {
@@ -1971,8 +1978,8 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 
 	/* Alright sequence number will be either the right one in extended sequence number
 		support or it will be set to 0 */
-
-	*(unsigned int *)  &(pTailSkb->tail[0]) = ulHiSeqNum;
+		if (pSA->SAParams.bUseExtendedSequenceNumber)
+			*(unsigned int *)  &(pTailSkb->tail[0]) = ulHiSeqNum;
 
 	/* Finished handling the SEC Header */
 	/* Now prepare the IV Data */
@@ -6635,7 +6642,7 @@ unsigned int secfp_createOutSA(
 			ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, ulTunnelId,
 				ulSPDContainerIndex, ulMagicNumber, &TunAddress,
 				pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
-		if (!ulL2BlobRefreshTimeInSec_g) {
+		if (ulL2BlobRefreshTimeInSec_g) {
 			pSA->pL2blobTmr = asfTimerStart(
 					ASF_SECFP_BLOB_TMR_ID, 0,
 					ulL2BlobRefreshTimeInSec_g,
@@ -6674,7 +6681,7 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 
 	pOutContainer = (SPDOutContainer_t *)(ptrIArray_getData(&(secfp_OutDB),
 								pModSA->ulSPDContainerIndex));
-
+	ASFIPSEC_DEBUG("Change Type = %d", pModSA->ucChangeType);
 	if (pOutContainer) {
 		if (pOutContainer->SPDParams.bOnlySaPerDSCP) {
 			for (ii = usDscpStart; ii < usDscpEnd; ii++) {

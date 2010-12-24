@@ -488,8 +488,12 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 			pOutSA =
 				(outSA_t *) ptrIArray_getData(&secFP_OutSATable,
 					pOutSALinkNode->ulSAIndex);
-			if (pOutSA)
+			if (pOutSA) {
 				print_SAParams(&pOutSA->SAParams);
+				printk(KERN_INFO"L2BlobLen = %d, Magic = %d\n",
+				pOutSA->ulL2BlobLen,
+				pOutSA->l2blobConfig.ulL2blobMagicNumber);
+			}
 		}
 		printk(KERN_INFO"\n");
 	}
