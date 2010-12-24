@@ -1082,7 +1082,7 @@ ret_pkt:
 	return AS_FP_STOLEN;
 
 drop_pkt:
-	kfree_skb(skb);
+	ASFSkbFree(skb);
 	asf_debug("drop_pkt LABEL\n");
 	ASF_RCU_READ_UNLOCK(bLockFlag);
 	return AS_FP_STOLEN;
@@ -1622,8 +1622,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #if 1
 
 						if (pSkb->data < pSkb->head) {
-							printk("SKB's head > data ptr .. UNDER PANIC!!!\n");
-							kfree_skb(pSkb);
+							asf_debug("SKB's head > data ptr .. UNDER PANIC!!!\n");
+							ASFSkbFree(pSkb);
 							continue;
 						}
 #endif
@@ -1648,7 +1648,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 						if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 							asf_debug("Error in transmit: Should not happen\r\n");
-							kfree_skb(pSkb);
+							asf_debug(pSkb);
 						}
 
 					}
@@ -1702,7 +1702,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			if (asfDevHardXmit(skb->dev, skb)) {
 				XGSTATS_INC(DevXmitErr);
 				asf_debug("Error in transmit: may happen as we don't check for gfar free desc\n");
-				kfree_skb(skb);
+				asf_debug(skb);
 			}
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)

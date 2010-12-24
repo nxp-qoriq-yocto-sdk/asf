@@ -362,7 +362,7 @@ inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 
 			if (pSkb->data < pSkb->head) {
 				asf_err("SKB's head > data ptr... PANIC !!\n");
-				kfree_skb(pSkb);
+				ASFSkbFree(pSkb);
 				continue;
 			}
 
@@ -388,7 +388,7 @@ inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 			vstats->ulOutBytes += pSkb->len;
 			if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 				asf_warn("Error in Xmit: may happen\r\n");
-				kfree_skb(pSkb);
+				ASFSkbFree(pSkb);
 			}
 
 		}
@@ -567,7 +567,7 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 			if (0 != asfDevHardXmit(skb->dev, skb)) {
 				asf_err("Error in transmit: may happen as "
 					"we don't check for gfar free desc\n");
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 			}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutBytes += skb->len;

@@ -309,7 +309,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 	if (!bVal)
 		local_bh_disable();
 	/* Generate Dummy packet */
-	skb = alloc_skb(1024, GFP_ATOMIC);
+	skb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (skb) {
 		struct iphdr *iph;
 		ASF_uint32_t *pData;
@@ -329,7 +329,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 			ASFCTRL_DBG("\n Route not found for dst %x"\
 			"local host: %d", address->dstIP.ipv4addr,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
-			kfree_skb(skb);
+			ASFKernelSkbFree(skb);
 			return ;
 		}
 

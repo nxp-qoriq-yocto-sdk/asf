@@ -70,7 +70,7 @@ static T_INT32 asf_linux_XmitL2blobDummyPkt(
 
 	ASFCTRL_FUNC_ENTRY;
 
-	skb = alloc_skb(1024, GFP_ATOMIC);
+	skb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (!skb)
 		return T_FAILURE;
 
@@ -82,7 +82,7 @@ static T_INT32 asf_linux_XmitL2blobDummyPkt(
 			uldestIp,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
 		dev_put(dev);
-		kfree_skb(skb);
+		ASFKernelSkbFree(skb);
 		return T_FAILURE;
 	}
 	dev_put(dev);
@@ -318,7 +318,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		}
 	}
 
-	skb = alloc_skb(1024, GFP_ATOMIC);
+	skb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (!skb) {
 		ASFCTRL_ERR("SKB allocation failed");
 		return;
@@ -332,7 +332,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			uldestIp,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
 		dev_put(dev);
-		kfree_skb(skb);
+		ASFKernelSkbFree(skb);
 		return;
 	}
 	dev_put(dev);
@@ -364,7 +364,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 
 	result = ipt_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
 			net->ipv4.iptable_filter);
-	kfree_skb(skb);
+	ASFKernelSkbFree(skb);
 
 	switch (result) {
 	case NF_ACCEPT:

@@ -67,7 +67,7 @@ static T_INT32 asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 	struct	sk_buff *skb;
 	int	ret;
 
-	skb = alloc_skb(1024, GFP_ATOMIC);
+	skb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (skb) {
 		asfctrl_fwd_L2blobPktData_t *pData;
 		struct iphdr *iph;
@@ -82,7 +82,7 @@ static T_INT32 asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 				" dst %x local host : %d", tpl->ulDestIp,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
 			dev_put(dev);
-			kfree_skb(skb);
+			ASFKernelSkbFree(skb);
 			return T_FAILURE;
 		}
 		dev_put(dev);

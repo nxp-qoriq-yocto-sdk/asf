@@ -44,9 +44,6 @@ extern ASFFFPGlobalStats_t *asf_gstats;
 #define asf_reasm_debug(fmt, args...)
 #endif
 
-#if 0
-extern struct sk_buff *gfar_new_skb(struct net_device *dev);
-#endif
 
 #define TRUE 1
 #define FALSE 0
@@ -391,12 +388,6 @@ void asfReasmDeInit(void)
 		cb4 = pReasmCb->cb4;	\
 	} while (0)
 
-#if 0
-static int gfar_kfree_skb(struct sk_buff *skb);
-#else
-#define gfar_kfree_skb(skb) kfree_skb(skb)
-#endif
-
 
 void asfReasmCleanCb(struct rcu_head  *rcu)
 {
@@ -410,7 +401,7 @@ void asfReasmCleanCb(struct rcu_head  *rcu)
 	for (pFrag = pCb->fragList; pFrag != NULL;  pFrag = pNextFrag) {
 		for (skb = pFrag->pHeadSkb; skb != NULL; skb = pTempSkb) {
 			pTempSkb = skb->next;
-			gfar_kfree_skb(skb);
+			ASF_gfar_kfree_skb(skb);
 		}
 		pNextFrag = pFrag->next;
 		if (pFrag->bHeap != 2) /* part of Cb itself; so don't release it to mempool */
@@ -763,7 +754,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 	if (unlikely((pCb->ulNumFrags+1) >
 		     asf_reasmCfg[pCb->ulVSGId].ulMaxFragCnt)) {
 		asf_reasm_debug("Number of fragments exceeded\r\n");
-		kfree_skb(skb);
+		ASFSkbFree(skb);
 		gstats->ulErrIpHdr++;
 		return NULL;
 	}
@@ -774,7 +765,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 		if (unlikely(pCb->ulTotLen)) {
 			if (pCb->ulTotLen != (*pOffset + *pLen)) {
 				asf_reasm_debug("Last fragment length different: pCb->ulTotalLen = %d, *pOffset =%d, *pLen = %d\r\n", pCb->ulTotLen, *pOffset, *pLen);
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				gstats->ulErrIpHdr++;
 				return NULL;
 			}
@@ -802,7 +793,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 		if (unlikely(((*pOffset >= pFragPrev->ulFragOffset)
 			      && ((ulSegMap) <= (pFragPrev->ulSegMap))))) {
 			asf_reasm_debug("IPREASM_SYSMSGID_OVERLAP_IPFRAG_8\r\n");
-			kfree_skb(skb);
+			ASFSkbFree(skb);
 			gstats->ulErrIpHdr++;
 			return NULL;
 		} else if (unlikely((*pOffset <= pFragPrev->ulFragOffset) &&
@@ -817,7 +808,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 			*pOffset += pFragPrev->ulSegMap;
 			*pLen -= pFragPrev->ulLen;
 			if (*pLen == 0) {
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				return NULL;
 			}
 			ulSegMap = *pOffset + *pLen;
@@ -846,7 +837,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 				*pLen -= updateLen;
 				ulSegMap = *pOffset + *pLen;
 				if (*pLen == 0) {
-					kfree_skb(skb);
+					ASFSkbFree(skb);
 					return NULL;
 				}
 			}
@@ -863,7 +854,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 			      (pFrag->next->ulSegMap < ulSegMap) :
 			      (pFrag->ulSegMap < ulSegMap) : FALSE))) {
 			asf_reasm_debug("Complete overlap over a set of fragments\r\n");
-			kfree_skb(skb);
+			ASFSkbFree(skb);
 			return NULL;
 		}
 
@@ -878,7 +869,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 			*pLen -= updateLen;
 			ulSegMap = *pOffset + *pLen;
 			if (*pLen == 0) {
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				return NULL;
 			}
 			*option = ASF_ADJUST_NEXTFRAG;
@@ -895,7 +886,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 		*pLen -= updateLen;
 		ulSegMap = *pOffset + *pLen;
 		if (*pLen == 0) {
-			kfree_skb(skb);
+			ASFSkbFree(skb);
 			asf_reasm_debug("Dropping fragment \r\n");
 			return NULL;
 		}
@@ -974,7 +965,7 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 			asf_reasm_debug("Returning New fragment \r\n");
 		} else {
 			asf_reasm_debug("Allocation of new frag failed\r\n");
-			gfar_kfree_skb(skb);
+			ASF_gfar_kfree_skb(skb);
 			return NULL;
 		}
 	}
@@ -1165,7 +1156,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 					  &ihl, ulVSGId))) {
 		asf_reasm_debug("Fragment Integrity check failed\r\n");
 		/* Free the skb */
-		kfree_skb(skb);
+		ASFSkbFree(skb);
 		return NULL;
 	}
 
@@ -1379,7 +1370,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 			}
 		}
 	} else {
-		kfree_skb(skb);
+		ASFSkbFree(skb);
 		asf_reasm_debug("Out of memory \r\n");
 		return NULL;
 	}
@@ -1420,7 +1411,7 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 		skb = pTempSkb;
 		bAlloc = 0;
 	} else {
-		skb = alloc_skb((ulTotalLen+ulExtraLen), GFP_ATOMIC);
+		skb = ASFSkbAlloc((ulTotalLen+ulExtraLen), GFP_ATOMIC);
 		if (skb) {
 			skb_reserve(skb, ulHeadRoom);
 			memcpy(skb->data, pTempSkb->data, pTempSkb->len);
@@ -1453,7 +1444,7 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 				if (frag == NULL)
 					asf_reasm_debug("Still need to copy: %d but frag is NULL\r\n", ulBytesToCopy);
 				if (bAlloc)
-					kfree_skb(skb);
+					ASFSkbFree(skb);
 				/* Nothing to be done to *pSkb */
 			}
 			break;
@@ -1466,14 +1457,14 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 			asf_reasm_debug("Alloced new buffer, so freeing up the old one\r\n");
 			/* Ok we alloced a new skb */
 			/* Go ahead adn free the passed one in pTempSkb*/
-			kfree_skb(pTempSkb);
+			ASFSkbFree(pTempSkb);
 		} else {
 			/* Need to free the old skb's fraglist */
 			asf_reasm_debug("Freeing up pTempSkb->frag_list\r\n");
 			for (frag = skb_shinfo(pTempSkb)->frag_list; frag != NULL; frag = frag1) {
 				frag1 = frag->next;
 				frag->next = NULL;
-				kfree_skb(frag);
+				ASFSkbFree(frag);
 			}
 
 			skb_shinfo(pTempSkb)->frag_list = NULL;
@@ -1528,7 +1519,7 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 			pTempSkb = skb_shinfo(skb)->frag_list;
 			skb_shinfo(skb)->frag_list = pTempSkb->next;
 			pTempSkb->next = NULL;
-			gfar_kfree_skb(pTempSkb);
+			ASF_gfar_kfree_skb(pTempSkb);
 			if (fragCnt)
 				*fragCnt -= 1;
 		}
@@ -1545,8 +1536,11 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 
 /* ulMTU - to be used for fragmentation
    ulDevXmitHdrLen : buffer space to be reserved for L2 header
-   bDoChecksum : whether to do IP header checksum or not. For the cases where firewall returns packet to stack or when IPsec red side fragmentation is enabled, this will be set to TRUE
-   dev - is used to allocate skb from (gfar_new_skb) (Optional, otherwise, allocated using alloc_skb
+   bDoChecksum : whether to do IP header checksum or not.
+   For the cases where firewall returns packet to stack or when
+   IPsec red side fragmentation is enabled, this will be set to TRUE
+   dev - is used to allocate skb from (ASF_gfar_new_skb) (Optional,
+   otherwise, allocated using alloc_skb
   **pOutSkb - chain of skb ip fragments
 */
 
@@ -1680,7 +1674,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				if (len < bytesLeft)
 					len &= ~7;
 
-				skb2 = alloc_skb(len + ihl +
+				skb2 = ASFSkbAlloc(len + ihl +
 						ulDevXmitHdrLen, GFP_ATOMIC);
 
 				if (skb2) {
@@ -1734,9 +1728,9 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					offset += len;
 					ptr += len;
 				} else {
-					asf_reasm_debug("Skb allocatin"
+					asf_reasm_debug("Skb allocation"
 						" failed in fragmenation\r\n");
-					kfree_skb(skb);
+					ASFSkbFree(skb);
 					return 1;
 				}
 			}
@@ -1745,7 +1739,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 		}
 	}
 	asf_reasm_debug("default error case!\n");
-	kfree_skb(skb);
+	ASFSkbFree(skb);
 	*pOutSkb = NULL;
 	return 1;
 }

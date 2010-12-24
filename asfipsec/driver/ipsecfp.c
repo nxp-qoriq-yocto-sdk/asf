@@ -208,6 +208,11 @@ void secfp_desc_free(struct talitos_desc *desc)
 	}
 }
 
+ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
+{
+	ASFSkbFree(freeArg);
+}
+
 /* DUMMY FUNCTIONS */
 int try_fastroute_fwnat(struct sk_buff *skb, struct net_device *dev,
 			int length)
@@ -2965,7 +2970,7 @@ int secfp_try_fastPathOutv4 (
 			if (skb_shinfo(skb1)->frag_list) {
 				if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
 					ASFIPSEC_WARN("asflLinearize failed");
-					kfree_skb(skb1);
+					ASFSkbFree(skb1);
 					rcu_read_unlock();
 					return 1; /* DOUBT */
 				}
@@ -3009,7 +3014,7 @@ int secfp_try_fastPathOutv4 (
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
 					ASFIPSEC_DEBUG("Trying to flatten the data failed");
-					kfree_skb(skb1);
+					ASFSkbFree(skb1);
 					return 1;
 				}
 				skb_shinfo(skb1)->frag_list = NULL;
@@ -3057,7 +3062,7 @@ int secfp_try_fastPathOutv4 (
 							ASFIPSEC_DEBUG("IP packet fits into 2 fragments");
 							ASFIPSEC_DEBUG("Current packet does not have a fragments, but  will be fragmented subsequently ");
 							/* Temporary holder for the extra fragment */
-							skb1->prev = gfar_new_skb(pSA->odev);
+							skb1->prev = ASF_gfar_new_skb(pSA->odev);
 							if (skb1->prev) {
 								ASFIPSEC_DEBUG("Allocated skb->prev");
 								skb_reserve(skb1->prev, ETH_HLEN + SECFP_IP_HDR_LEN);
@@ -3145,7 +3150,7 @@ int secfp_try_fastPathOutv4 (
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
 
 				skb->data_len = 0;
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				secfp_desc_free(desc);
 				rcu_read_unlock();
 				return 1;
@@ -3178,7 +3183,7 @@ int secfp_try_fastPathOutv4 (
 
 						/* So, we can release it */
 						skb->data_len = 0;
-						kfree_skb(skb);
+						ASFSkbFree(skb);
 					}
 					secfp_desc_free(desc);
 					/* Increment statistics */
@@ -3199,7 +3204,7 @@ int secfp_try_fastPathOutv4 (
 				/* Some error happened in the c/b. Free the skb */
 				ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
 				skb->data_len = 0;
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				rcu_read_unlock();
 				return 1;
 			}
@@ -3214,7 +3219,7 @@ int secfp_try_fastPathOutv4 (
 		if (skb_shinfo(skb1)->frag_list) {
 			if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
 				ASFIPSEC_DEBUG("asflLinearize failed");
-				kfree_skb(skb1);
+				ASFSkbFree(skb1);
 				return 1;
 			}
 			skb_reset_network_header(skb1);
@@ -3226,7 +3231,8 @@ int secfp_try_fastPathOutv4 (
 		else
 			bSPDContainerPresent = 0;
 			ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer,
-				ASFSkbFree, skb1, bSPDContainerPresent, bRevalidate);
+				secfp_SkbFree, skb1, bSPDContainerPresent,
+				bRevalidate);
 		return 1;
 	}
 	return 0;
@@ -3304,7 +3310,7 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 			skb->pkt_type = PACKET_FASTROUTE;
 			skb->asf = 1;
 			if (asfDevHardXmit(skb->dev, skb) != 0) {
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				return;
 			}
 		} else {
@@ -3386,20 +3392,20 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 #endif
 						if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
 							ASFIPSEC_WARN("Error in transmit: Should not happen");
-							kfree_skb(pOutSkb);
+							ASFSkbFree(pOutSkb);
 						}
 					}
 					rcu_read_unlock();
 					return;
 				} else {
 					ASFIPSEC_WARN("Magic number mismatch");
-					kfree_skb(skb);
+					ASFSkbFree(skb);
 					rcu_read_unlock();
 					return;
 				}
 			} else {
 				ASFIPSEC_DEBUG("SA Not found");
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				rcu_read_unlock();
 				return;
 			}
@@ -3407,7 +3413,7 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 	} else {
 		skb->data_len = 0;
 		ASFIPSEC_WARN("error = %d DROP PKT ", error);
-		kfree_skb(skb);
+		ASFSkbFree(skb);
 	}
 }
 
@@ -3899,7 +3905,7 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 			inneriph = (struct iphdr *)(pHeadSkb->data);
 			if (asfReasmLinearize(&pHeadSkb, inneriph->tot_len, 1400+32, 1100+32)) {
 				ASFIPSEC_WARN(" skb->linearize failed ");
-				kfree_skb(pHeadSkb);
+				ASFSkbFree(pHeadSkb);
 				rcu_read_unlock();
 				return 1;
 			}
@@ -3907,7 +3913,7 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 			inneriph = (struct iphdr *)(pHeadSkb->data);
 			if (unlikely(pHeadSkb->len < ((inneriph->ihl*4) + SECFP_ESP_HDR_LEN))) {
 				ASFIPSEC_WARN("ESP header length is invalid len = %d ",   pHeadSkb->len);
-				kfree_skb(pHeadSkb);
+				ASFSkbFree(pHeadSkb);
 				rcu_read_unlock();
 				return 1;
 			}
@@ -4108,7 +4114,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 			skb1->prev = NULL;
 			secfp_unmap_descs(skb1);
 			secfp_desc_free(desc);
-			kfree_skb(skb1);
+			ASFSkbFree(skb1);
 			return;
 		}
 	} else {
@@ -4168,14 +4174,14 @@ void secfp_inCompleteWithFrags(struct device *dev,
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT18);
 			}
 			rcu_read_unlock();
-			kfree_skb(pHeadSkb);
+			ASFSkbFree(pHeadSkb);
 			return;
 		}
 
 		/* In the 2nd iteration if pTailSkb len is 0, we can go ahead and release it */
 		if ((unsigned int)(skb1->prev) == SECFP_IN_GATHER_NO_SCATTER) {
 			/* Hint says, we made 2 buffers into one, so go ahead and eliminate frag_list completely */
-			kfree_skb(skb_shinfo(skb1)->frag_list);
+			ASFSkbFree(skb_shinfo(skb1)->frag_list);
 			skb_shinfo(skb1)->frag_list = NULL;
 			pTailSkb = skb1; /* For any further manipulations in the code */
 		} else {
@@ -4192,7 +4198,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 						;
 					pTailSkb->next = NULL;
 				}
-				kfree_skb(pTempSkb);
+				ASFSkbFree(pTempSkb);
 			}
 		}
 		/* We have no requirement for the hint field anymore, let us clean up */
@@ -4205,14 +4211,14 @@ void secfp_inCompleteWithFrags(struct device *dev,
 		ulBeforeTrimLen = pHeadSkb->data_len;
 		if (secfp_inCompleteCheckAndTrimPkt(pHeadSkb, pTailSkb, &pHeadSkb->data_len, &ucNextProto)) {
 			ASFIPSEC_WARN("Packet check failed");
-			kfree_skb(pHeadSkb);
+			ASFSkbFree(pHeadSkb);
 			return;
 		}
 
 		if ((skb_shinfo(pHeadSkb)->frag_list) && (pHeadSkb->len < SECFP_TRANSPORT_HEADER_LEN)) {
 			if (!asfReasmPullBuf(pHeadSkb, SECFP_TRANSPORT_HEADER_LEN, &ulFragCnt)) {
 				ASFIPSEC_WARN("asfReasmPullBuf Failed");
-				kfree_skb(pHeadSkb);
+				ASFSkbFree(pHeadSkb);
 				return;
 			}
 		}
@@ -4220,7 +4226,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 		if (pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX]) {
 			if (secfp_inCompleteSAProcess(&pHeadSkb, &IPSecOpqaue, &ulCommonInterfaceId, ulBeforeTrimLen)) {
 				ASFIPSEC_WARN("secfp_inCompleteSAProcess: Error ");
-				kfree_skb(pHeadSkb);
+				ASFSkbFree(pHeadSkb);
 				return;
 			}
 			ASFIPSEC_DEBUG("inComplete: Exiting SA related processing");
@@ -4318,7 +4324,7 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 				skb->end - skb->head);
 		skb->data_len = 0;
 		skb->next = NULL;
-		kfree_skb(skb);
+		ASFSkbFree(skb);
 		return;
 	} else {
 		if (secfp_inHandleICVCheck(desc,  skb)) {
@@ -4350,7 +4356,7 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 					skb->end - skb->head);
 				skb->data_len = 0;
 				skb->next = NULL;
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				return;
 			}
 		}
@@ -4381,7 +4387,7 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 			ASFIPSEC_DEBUG("Due to prior operation failure, skb has to be dropped");
 			skb->data_len = 0;
 			skb->next = NULL;
-			kfree_skb(skb);
+			ASFSkbFree(skb);
 			return;
 		}
 #ifdef ASFIPSEC_DEBUG_FRAME
@@ -4400,7 +4406,7 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 
 		if (secfp_inCompleteCheckAndTrimPkt(skb, skb, &ulTempLen, &ucNextProto)) {
 			ASFIPSEC_WARN("secfp_incompleteCheckAndTrimPkt failed");
-			kfree_skb(skb);
+			ASFSkbFree(skb);
 			return;
 		}
 
@@ -4408,7 +4414,7 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 			iRetVal =  secfp_inCompleteSAProcess(&skb, &IPSecOpque, &ulCommonInterfaceId, ulBeforeTrimLen);
 			if (iRetVal == 1) {
 				ASFIPSEC_WARN("secfp_inCompleteSAProcess failed");
-				kfree_skb(skb);
+				ASFSkbFree(skb);
 				return;
 			} else if (iRetVal == 2) {
 				ASFIPSEC_DEBUG("Absorbed by frag process");
@@ -4429,12 +4435,9 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 			/* Homogenous buffer */
 			Buffer.nativeBuffer = skb;
 			ASFFFPProcessAndSendPkt(
-						 *(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
-						 ulCommonInterfaceId,
-						 Buffer,
-						 ASFSkbFree,
-						 skb,
-						 &IPSecOpque);
+				*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
+				ulCommonInterfaceId, Buffer, secfp_SkbFree,
+				skb, &IPSecOpque);
 		} else {
 			ASFIPSEC_DEBUG("Stub function: Need to handle IPv6 ");
 			return;
@@ -5448,7 +5451,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		if (ulVSGId == ulMaxVSGs_g) {
 			ASFIPSEC_DEBUG("Stub: Need to send packet up for VSG determination");
 			ASFIPSEC_DEBUG("Need to call registered callback function ");
-			kfree_skb(skb1);
+			ASFSkbFree(skb1);
 			return 1; /* Send it up to Stack */
 		}
 	}
@@ -5470,7 +5473,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		iph = ip_hdr(skb1);
 		if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
 			ASFIPSEC_WARN("skb->linearize failed ");
-			kfree_skb(skb1);
+			ASFSkbFree(skb1);
 			return 1;
 		}
 		skb_reset_network_header(skb1);
@@ -5482,7 +5485,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 
 		if (unlikely(skb1->len < ((iph->ihl*4) + SECFP_ESP_HDR_LEN))) {
 			ASFIPSEC_WARN("ESP header length is invalid len = %d ",   skb1->len);
-			kfree_skb(skb1);
+			ASFSkbFree(skb1);
 			return 1;
 		}
 	}
@@ -5538,7 +5541,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 				(unsigned int) skb1->dev);
 			if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
 				ASFIPSEC_WARN("skb->linearize failed");
-				kfree_skb(skb1);
+				ASFSkbFree(skb1);
 				rcu_read_unlock();
 				return 1;
 			}
@@ -5584,7 +5587,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			asfFillLogInfo(&AsfLogInfo, pSA);
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT10]);
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT10);
-			kfree_skb(pHeadSkb);
+			ASFSkbFree(pHeadSkb);
 			rcu_read_unlock();
 			return 1;
 		}
@@ -5788,7 +5791,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
 			pHeadSkb->data_len = 0;
 			secfp_desc_free(desc);
-			kfree_skb(pHeadSkb);
+			ASFSkbFree(pHeadSkb);
 			rcu_read_unlock();
 			/* Increment statistics */
 			return 1;
@@ -5820,7 +5823,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 				pHeadSkb->cb[SECFP_REF_INDEX] -= 2 ;
 				if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
 					/* CB finished */
-					kfree_skb(pHeadSkb);
+					ASFSkbFree(pHeadSkb);
 				} else {
 					pHeadSkb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
 				}
@@ -5844,7 +5847,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			ASFIPSEC_TRACE;
 			pHeadSkb->data_len = 0;
 			/* CB already finished processing the skb & there was an error*/
-			kfree_skb(pHeadSkb);
+			ASFSkbFree(pHeadSkb);
 		}
 		/* Assumes successful processing of the Buffer */
 		pSA->ulBytes[smp_processor_id()] += len;
@@ -5860,7 +5863,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		/* Homogenous buffer */
 		Buffer.nativeBuffer = skb1;
 		if (ASFIPSecCbFn.pFnNoInSA)
-			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, ASFSkbFree,
+			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
 				skb1, ulCommonInterfaceId);
 		return 1;
 	}
@@ -5922,7 +5925,7 @@ int secfp_CheckInPkt(
 		} else {
 			ASFIPSEC_DEBUG("Stored SPD not matched");
 		}
-		kfree_skb(skb);
+		ASFSkbFree(skb);
 		IPSecPPGlobalStats_g[smp_processor_id()].ulTotInProcPkts++;
 		IPSecPPGlobalStats_g[smp_processor_id()].ulTotInProcSecPkts++;
 		return 1;
@@ -5933,13 +5936,14 @@ callverify:
 	Buffer.nativeBuffer = skb;
 	if (ASFIPSecCbFn.pFnVerifySPD)
 		ASFIPSecCbFn.pFnVerifySPD(*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
-				  pIPSecOpque->ulInSPDContainerId,
-				  pIPSecOpque->ulInSPDMagicNumber,
-				  *(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]),
-				  pIPSecOpque->ucProtocol,
-				  pIPSecOpque->DestAddr,
-				  Buffer,
-				  ASFSkbFree, skb, bRevalidate, ulCommonInterfaceId);
+				pIPSecOpque->ulInSPDContainerId,
+				pIPSecOpque->ulInSPDMagicNumber,
+				*(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]),
+				pIPSecOpque->ucProtocol,
+				pIPSecOpque->DestAddr,
+				Buffer,
+				secfp_SkbFree,
+				skb, bRevalidate, ulCommonInterfaceId);
 	return 1;
 }
 /************* Beginning of API Function and inner functions used by API****************
@@ -7343,11 +7347,6 @@ ASF_void_t	ASFIPSecDecryptAndSendPkt(ASF_uint32_t ulVSGId,
 }
 EXPORT_SYMBOL(ASFIPSecDecryptAndSendPkt);
 
-ASF_void_t ASFSkbFree(ASF_void_t   *freeArg)
-{
-	kfree_skb((struct sk_buff *)freeArg);
-}
-
 void secfp_freeSelSet(SASel_t  *pSel)
 {
 	SASel_t   *pTempSel;
@@ -7881,7 +7880,7 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 	struct flowi fl;
 	struct in_device *in_dev;
 
-	pSkb = alloc_skb(1024, GFP_ATOMIC);
+	pSkb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
 
 	if (pSkb) {
 		pSkb->data += 60;
@@ -7918,7 +7917,7 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		fl.fl4_src =  0;
 		fl.fl4_tos = 0;
 		if (ip_route_output_key(&init_net, &pRt, &fl)) {
-			kfree_skb(pSkb);
+			ASFKernelSkbFree(pSkb);
 			return 1;
 		}
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
@@ -7927,7 +7926,7 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		pSkb->dev = skb_dst(pSkb)->dev;
 		in_dev = (struct in_device *)(pSkb->dev->ip_ptr);
 		if ((in_dev == NULL) || (in_dev->ifa_list == NULL)) {
-			kfree_skb(pSkb);
+			ASFKernelSkbFree(pSkb);
 			return 1;
 		}
 		iph->saddr = htonl(in_dev->ifa_list->ifa_local);
@@ -7937,14 +7936,14 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		else if (skb_dst(pSkb)->neighbour)
 			skb_dst(pSkb)->neighbour->output(pSkb);
 		else
-			kfree_skb(pSkb);
+			ASFKernelSkbFree(pSkb);
 #else
 		pskb->dev = pSkb->dst->dev;
 		ip_rt_put(pRt);
 		pSkb->dev = skb_dst(pSkb)->dev;
 		in_dev = (struct in_device *)pSkb->dev->ip_ptr;
 		if ((in_dev == NULL) || (in_dev->ifa_list == NULL)) {
-			kfree_skb(pSkb);
+			ASFKernelSkbFree(pSkb);
 			return 1;
 		}
 		iph->saddr = htonl(in_dev->ifa_list->ifa_local);
@@ -7954,7 +7953,7 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		else if ((pSkb->dst->neighbour)
 			pSkb->dst->neighbour->output(pSb);
 		else
-			kfree_skb(pSkb);
+			ASFKernelSkbFree(pSkb);
 #endif
 
 	}

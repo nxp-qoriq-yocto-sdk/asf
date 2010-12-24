@@ -184,7 +184,7 @@ int asf_ip_send(struct sk_buff *skb)
 		return dst->neighbour->output(skb);
 
 	ASFCTRL_DBG(" Packet send failure");
-	kfree_skb(skb);
+	ASFKernelSkbFree(skb);
 
 	ASFCTRL_FUNC_EXIT;
 	return -EINVAL;
@@ -565,7 +565,7 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 #endif
 	}
 drop:
-	kfree_skb(skb);
+	ASFKernelSkbFree(skb);
 	ASFCTRL_FUNC_EXIT;
 	return AS_FP_STOLEN;
 }

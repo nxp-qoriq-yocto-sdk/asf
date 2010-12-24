@@ -641,8 +641,6 @@ extern int secfp_try_fastPathInv4(struct sk_buff *skb1,
 extern void secfp_inCompleteWithFrags(struct device *dev,
 		struct talitos_desc *desc, void *context, int err);
 
-extern struct sk_buff *gfar_new_skb(struct net_device *dev);
-
 int secfp_init(void);
 void secfp_deInit(void);
 int secfp_register_proc(void);
@@ -697,7 +695,6 @@ unsigned int secfp_ModifyInSA(unsigned int long ulVSGId,
 unsigned int secfp_SetDPDInSA(unsigned int long ulVSGId,
 				ASFIPSecRuntimeSetDPDArgs_t *pSetDPD);
 
-ASF_void_t ASFSkbFree(ASF_void_t   *freeArg);
 unsigned int secfp_createOutSA(
 				unsigned int  ulVSGId,
 				unsigned int  ulTunnelId,

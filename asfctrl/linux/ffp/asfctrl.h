@@ -55,7 +55,13 @@
 
 #define DEFVAL_INACTIVITY_DIVISOR	(4)
 
-#define AsfBuf2Skb(a)   ((struct sk_buff *)(a.nativeBuffer))
+#define AsfBuf2Skb(a)	((struct sk_buff *)(a.nativeBuffer))
+#define ASFKernelSkbAlloc	alloc_skb
+#define ASFSkbAlloc		alloc_skb
+
+#define ASFKernelSkbFree(freeArg)	kfree_skb((struct sk_buff *)freeArg)
+#define ASFSkbFree(freeArg)		kfree_skb((struct sk_buff *)freeArg)
+
 
 ASF_void_t  asfctrl_fnNoFlowFound(
 				ASF_uint32_t ulVSGId,
