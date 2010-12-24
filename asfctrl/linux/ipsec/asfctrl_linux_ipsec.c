@@ -474,6 +474,7 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 		pSAData->u.l2blob.usTxVlanId = vlan_tx_tag_get(skb);
 	} else
 		pSAData->u.l2blob.bTxVlan = 0;
+	pSAData->u.l2blob.bUpdatePPPoELen = 0;
 	pSAData->u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
 	ASFIPSecRuntime(ulVSGId, ASF_IPSEC_RUNTIME_MOD_OUTSA, pSAData,
 			sizeof(ASFIPSecRuntimeModOutSAArgs_t), NULL, 0);
