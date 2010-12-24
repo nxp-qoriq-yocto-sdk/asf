@@ -2992,6 +2992,7 @@ int secfp_try_fastPathOutv4 (
 					TRUE, skb1->dev, &skb))) {
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
+					rcu_read_unlock();
 					return 1;
 				}
 			}
@@ -3015,6 +3016,7 @@ int secfp_try_fastPathOutv4 (
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
 					ASFIPSEC_DEBUG("Trying to flatten the data failed");
 					ASFSkbFree(skb1);
+					rcu_read_unlock();
 					return 1;
 				}
 				skb_shinfo(skb1)->frag_list = NULL;
@@ -3046,6 +3048,7 @@ int secfp_try_fastPathOutv4 (
 							TRUE, skb1->dev, &skb))) {
 						ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 						ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
+						rcu_read_unlock();
 						return 1;
 						}
 				} else{
@@ -3270,7 +3273,7 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
-	pIPSecPPGlobalStats->ulTotInProcPkts++;
+	pIPSecPPGlobalStats->ulTotOutProcPkts++;
 
 	ASFIPSEC_DEBUG(" Entry");
 	secfp_desc_free(desc);
@@ -5089,9 +5092,9 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT15);
 				AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID5;
-				ASFIPSEC_WARN("Anti-replay window check failed");
 				snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
-					"Anti-replay window check failed #1");
+					"Anti-replay window check failed for ESN");
+				ASFIPSEC_WARN(aMsg);
 				AsfLogInfo.aMsg = aMsg;
 				asfFillLogInfo(&AsfLogInfo, pSA);
 				/* Update SA Statistics */
@@ -5103,8 +5106,8 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 			usRemainder	= uiDiff & 31; /* or uiDiff % 32 */
 			if ((pSA->pWinBitMap[(usSize - 1) - usCo_Efficient]) &
 				((unsigned int)1 << usRemainder)) {
-				ASFIPSEC_WARN("Replay packet");
-				snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "replay Packet");
+				snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "replay Packet for ESN");
+				ASFIPSEC_WARN(aMsg);
 				AsfLogInfo.aMsg = aMsg;
 				AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID6;
 				asfFillLogInfo(&AsfLogInfo, pSA);
@@ -5139,10 +5142,9 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 					/* sequence number is lesser than
 					 * last seen highest sequence number */
 					uiDiff = pSA->ulLastSeqNum - ulSeqNum;
-					if (uiDiff > pSA->SAParams.
-							AntiReplayWin) {
-						ASFIPSEC_WARN("Anti-replay window check failed#2");
+					if (uiDiff > pSA->SAParams.AntiReplayWin) {
 						snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Anti-replay window check failed #2");
+						ASFIPSEC_WARN(aMsg);
 						AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID5;
 						AsfLogInfo.aMsg = aMsg;
 						asfFillLogInfo(&AsfLogInfo, pSA);
@@ -5160,8 +5162,8 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 						usCo_Efficient]) &
 						((unsigned int)1 <<
 						 usRemainder)) {
-						ASFIPSEC_DEBUG("Replay packeti#2");
 						snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "replay Packet");
+						ASFIPSEC_WARN(aMsg);
 						AsfLogInfo.aMsg = aMsg;
 						asfFillLogInfo(&AsfLogInfo, pSA);
 						AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID6;
@@ -5201,11 +5203,11 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 				/* sequence number is in the right hand side window */
 				uiDiff =  pSA->ulLastSeqNum + (SECFP_MAX_32BIT_VALUE - ulSeqNum);
 				if (uiDiff >= pSA->SAParams.AntiReplayWin) {
-					ASFIPSEC_WARN("Anti-replay window check failed#3");
 					AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID5;
 					/* Update SA Statistics */
 					snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
 					"Anti-replay window check failed #3");
+					ASFIPSEC_WARN(aMsg);
 					AsfLogInfo.aMsg = aMsg;
 					asfFillLogInfo(&AsfLogInfo, pSA);
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
@@ -5219,8 +5221,8 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 				if ((pSA->pWinBitMap[(usSize - 1) -
 							usCo_Efficient]) &
 					((unsigned int)1 << usRemainder)) {
-					ASFIPSEC_DEBUG("Replay packet#3");
 					snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "replay Packet");
+					ASFIPSEC_WARN(aMsg);
 					AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID6;
 					AsfLogInfo.aMsg = aMsg;
 					asfFillLogInfo(&AsfLogInfo, pSA);
@@ -5243,9 +5245,9 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 					uiDiff = pSA->ulLastSeqNum - ulSeqNum;
 					if (uiDiff >= pSA->SAParams.
 							AntiReplayWin) {
-						ASFIPSEC_WARN("Anti-replay window check failed#4");
 						/* Update SA Statistics */
 						snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Anti-replay window check failed #4");
+						ASFIPSEC_WARN(aMsg);
 						AsfLogInfo.aMsg = aMsg;
 						AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID5;
 						asfFillLogInfo(&AsfLogInfo, pSA);
@@ -5261,8 +5263,8 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 						usCo_Efficient]) &
 						((unsigned int)1 <<
 						 usRemainder)) {
-						ASFIPSEC_DEBUG("Replay packet#4");
 						snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "replay Packet");
+						ASFIPSEC_WARN(aMsg);
 						AsfLogInfo.aMsg = aMsg;
 						AsfLogInfo.ulMsgId =  ASF_IPSEC_LOG_MSG_ID6;
 						asfFillLogInfo(&AsfLogInfo, pSA);
@@ -7252,7 +7254,7 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 {
 	ASFFFPIpsecInfo_t  SecInfo;
 	struct sk_buff *skb;
-	unsigned char bHomogenous = 1;
+	unsigned char bHomogenous = SECFP_HM_BUFFER;
 	unsigned int ulSAIndex;
 	SPDOutContainer_t *pOutContainer;
 	SPDOutSALinkNode_t *pOutSALinkNode;
@@ -7304,7 +7306,7 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 	if (bHomogenous) {
 		skb = (struct sk_buff *)Buffer.nativeBuffer;
 	} else {
-		/* TODO NEEDS */
+		/* Freeing the buffer in case of hetrogeneous buffers*/
 		if (pFreeFn)
 			(pFreeFn)(freeArg);
 		goto ret_stk;
@@ -7327,7 +7329,7 @@ ASF_void_t	ASFIPSecDecryptAndSendPkt(ASF_uint32_t ulVSGId,
 					ASF_uint32_t ulCommonInterfaceId)
 {
 	struct sk_buff *skb;
-	unsigned char bHomogenous = 1;
+	unsigned char bHomogenous = SECFP_HM_BUFFER;
 
 	int bVal = in_softirq();
 
@@ -7337,9 +7339,13 @@ ASF_void_t	ASFIPSecDecryptAndSendPkt(ASF_uint32_t ulVSGId,
 	if (bHomogenous) {
 		skb = (struct sk_buff *)Buffer.nativeBuffer;
 	} else {
-		/* TODO NEEDS */
+		/* Freeing the buffer in case of hetrogeneous buffers*/
+		if (pFreeFn)
+			(pFreeFn)(freeArg);
+		goto ret_stk;
 	}
 	secfp_try_fastPathInv4(skb, 0, ulVSGId, ulCommonInterfaceId);
+ret_stk:
 	if (!bVal)
 		local_bh_enable();
 
@@ -7551,7 +7557,7 @@ static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
 	}
 	pAsfLogInfo->u.IPSecInfo.ucProtocol = pSA->SAParams.ucProtocol;
 	pAsfLogInfo->u.IPSecInfo.ulSeqNumber = pSA->ulLastSeqNum;
-	pAsfLogInfo->u.IPSecInfo.ulPathMTU = 0xffff;
+	pAsfLogInfo->u.IPSecInfo.ulPathMTU = SECFP_PRESUMED_INTERFACE_MTU;
 	pAsfLogInfo->u.IPSecInfo.ulSPI = pSA->SAParams.ulSPI;
 	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6 == 0) {
 		pAsfLogInfo->u.IPSecInfo.Address.IP_Version = 4;

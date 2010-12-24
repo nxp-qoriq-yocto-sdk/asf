@@ -27,6 +27,8 @@
 #define FALSE 0
 #define TRUE 1
 
+#define SECFP_HM_BUFFER TRUE
+
 /* DF related bits */
 #define SECFP_DF_COPY   0
 #define SECFP_DF_CLEAR  1

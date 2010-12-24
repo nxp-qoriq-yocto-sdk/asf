@@ -53,6 +53,8 @@ MODULE_AUTHOR("Freescale Semiconductor, Inc");
  */
 MODULE_DESCRIPTION(ASFCTRL_LINUX_IPSEC_DESC);
 
+#define ASFCTRL_IPSEC_SEND_TO_LINUX
+
 /* Global Variables */
 ASFIPSecCap_t g_ipsec_cap;
 uint32_t asfctrl_vsg_ipsec_cont_magic_id;
@@ -82,10 +84,14 @@ ASF_void_t asfctrl_ipsec_fn_NoInSA(ASF_uint32_t ulVsgId,
 		local_bh_disable();
 
 	skb = AsfBuf2Skb(Buffer);
-
+#ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
 	ASFCTRL_INFO("Sending packet UP ");
 	/* Send it to for normal path handling */
 	netif_receive_skb(skb);
+#else
+	ASFCTRL_WARN("NO IN SA Found Drop packet");
+	pFreeFn(Buffer.nativeBuffer);
+#endif
 
 	if (!bVal)
 		local_bh_enable();
@@ -111,9 +117,9 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	skb = AsfBuf2Skb(Buffer);
 	iph = ip_hdr(skb);
 
+#ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
 	/* Send the packet up for normal path IPsec processing
 		(after the NAT) has to be special function */
-#if 1
 	if (0 != ip_route_input(skb, iph->daddr, iph->saddr, 0, skb->dev)) {
 		ASFCTRL_INFO("Route not found for dst %x ",
 			iph->daddr);
@@ -166,6 +172,8 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	ASFCTRL_DBG("DestAddr %x protocol %x SPI %x",
 			DestAddr.ipv4addr, usProtocol, ulSPI);
 
+#ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
+
 	/*1.  find the SA (xfrm pointer) on the basis of SPI,
 	 * protcol, dest Addr */
 	net = dev_net(skb->dev);
@@ -199,7 +207,10 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 
 	/*3. send the packet to slow path */
 	netif_receive_skb(skb);
-
+#else
+	ASFCTRL_WARN("VerifySPD Fail Found Drop packet");
+	pFreeFn(Buffer.nativeBuffer);
+#endif
 	if (bRevalidate)
 		ASFCTRL_DBG("Revalidation is required");
 

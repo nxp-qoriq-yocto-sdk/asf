@@ -625,7 +625,7 @@ ASF_void_t ASFIPSecGetCapabilities(ASFIPSecCap_t *pCap)
 		pCap->ulMaxSPDContainers = ulMaxSPDContainers_g;
 		pCap->ulMaxSupportedIPSecSAs = ulMaxSupportedIPSecSAs_g;
 
-		pCap->bBufferHomogenous = 1; /* Homogenous buffer supported */
+		pCap->bBufferHomogenous = SECFP_HM_BUFFER; /* Homogenous buffer supported */
 
 		ASFIPSEC_FEXIT;
 		return;
