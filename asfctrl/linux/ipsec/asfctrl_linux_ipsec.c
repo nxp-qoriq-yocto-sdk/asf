@@ -163,7 +163,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 		local_bh_disable();
 
 	skb = AsfBuf2Skb(Buffer);
-	ASFCTRL_DBG("\n DestAddr %x protocol %x SPI %x",
+	ASFCTRL_DBG("DestAddr %x protocol %x SPI %x",
 			DestAddr.ipv4addr, usProtocol, ulSPI);
 
 	/*1.  find the SA (xfrm pointer) on the basis of SPI,

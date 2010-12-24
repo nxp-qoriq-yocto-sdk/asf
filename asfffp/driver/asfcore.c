@@ -1158,6 +1158,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	 * submitting the packet to AS */
 	/* Needed to verify checksum of the packet recieved in tunnel */
 	if (pIpsecOpaque) {
+		asf_debug(" DECRYPTED PACKET");
 		if (unlikely(iph->ihl < 5)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpHdr++;
@@ -1187,7 +1188,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		if (ip_fast_csum((u8 *)iph, iph->ihl)) {
 			gstats->ulErrCsum++;
 			XGSTATS_INC(LocalBadCsum);
-			asf_debug("Ip Checksum verification failed \r\n");
+			asf_debug("Decrypted Packet"\
+				"Ip Checksum verification failed\n");
 			goto drop_pkt;
 		}
 #endif

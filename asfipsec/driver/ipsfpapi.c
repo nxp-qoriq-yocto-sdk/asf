@@ -40,7 +40,7 @@ int  bTightlyIntegrated_g = ASF_TRUE;
 ASF_boolean_t  bNotifyPreference_g = ASF_FALSE;
 
 ASFIPSecGlobalErrorCounters_t  GlobalErrors;
-ASFIPSecCbFn_t     ASFIPSecCbFn;
+ASFIPSecCbFn_t ASFIPSecCbFn;
 
 /* Macro to validate VSGId*/
 #define SECFP_IS_VSG_ID_INVALID(ulVSGId) \
@@ -1995,15 +1995,14 @@ static int __init ASFIPSec_Init(void)
 
 	ulMaxVSGs_g = asf_cap.ulNumVSGs;
 
-	ASFIPSEC_DEBUG("Max VSGs = %u\r\n", ulMaxVSGs_g);
-	ASFIPSEC_DEBUG("Max Tunnels = %u\r\n", ulMaxTunnels_g);
-	ASFIPSEC_DEBUG("Max SPD containers = %u\r\n", ulMaxSPDContainers_g);
-	ASFIPSEC_DEBUG("Max SAs = %u\r\n", ulMaxSupportedIPSecSAs_g);
-	ASFIPSEC_DEBUG("Max InSA Hash Table Size = %u\r\n",
+	ASFIPSEC_DEBUG("Max VSGs = %u", ulMaxVSGs_g);
+	ASFIPSEC_DEBUG("Max Tunnels = %u", ulMaxTunnels_g);
+	ASFIPSEC_DEBUG("Max SPD containers = %u", ulMaxSPDContainers_g);
+	ASFIPSEC_DEBUG("Max SAs = %u", ulMaxSupportedIPSecSAs_g);
+	ASFIPSEC_DEBUG("Max InSA Hash Table Size = %u",
 					usMaxInSAHashTaleSize_g);
-	ASFIPSEC_DEBUG("Max L2Blob RefreshCnt = %u\r\n",
-					ulL2BlobRefreshPktCnt_g);
-	ASFIPSEC_DEBUG("Max L2Blob RefreshTime = %u\r\n",
+	ASFIPSEC_DEBUG("Max L2Blob RefreshCnt = %u", ulL2BlobRefreshPktCnt_g);
+	ASFIPSEC_DEBUG("Max L2Blob RefreshTime = %u",
 					ulL2BlobRefreshTimeInSec_g);
 
 	if (bFirewallCoExistence_g) {

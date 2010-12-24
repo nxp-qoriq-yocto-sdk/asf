@@ -57,14 +57,14 @@ unsigned short ASFascksum(unsigned short *pusData, unsigned short usLen);
 unsigned short ASFIpEac(unsigned int sum);  /* Carries in high order 16 bits */
 
 int secfp_try_fastPathOutv4 (
-				unsigned int ulVSGId,
-				struct sk_buff *skb,
-				ASFFFPIpsecInfo_t *pSecInfo);
+		unsigned int ulVSGId,
+		struct sk_buff *skb,
+		ASFFFPIpsecInfo_t *pSecInfo);
 
 AsfIPSecPPGlobalStats_t IPSecPPGlobalStats_g[NR_CPUS];
 AsfIPSec4GlobalPPStats_t IPSec4GblPPStats_g;
 
-static  inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
+static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
 static inline  void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA);
 
 #define ASF_ICMP_PROTO  1
@@ -434,7 +434,7 @@ unsigned int asfsecfpBlobTmrCb(unsigned int ulVSGId,
 				unsigned int ulIndex, unsigned int ulMagicNum,
 				unsigned int ulSPDContainerIndex)
 {
-	outSA_t  *pSA;
+	outSA_t *pSA;
 	ASF_IPSecTunEndAddr_t  TunAddress;
 
 	pSA = ptrIArray_getData(&secFP_OutSATable, ulIndex);
@@ -1643,8 +1643,8 @@ static inline __be16 secfp_getNextId(void)
  * prepare the packet sufficiently for SEC processing such as SEC header
  * addition, padding etc. This is done in prepareOutPacket function. Also required
  * information is copied from the inner IP header to the outer IP header
- * Then secfp_talitos_submit is called, which internally calls
- * prepareOutDescriptor and submits descriptors to the SEC block
+ * Then prepareOutDescriptor is called to prepare the descriptor. Then
+ * secfp_talitos_submit is called, which submits descriptors to the SEC block
  * While SEC is processing, finishOutPacket is called by core. This will finish
  * the remaining processing including updating the outer IP header, adjusting
  * the length, skb data, preparing the ethernet header etc.
@@ -1685,13 +1685,14 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	iph->id = secfp_getNextId();
 
 	if (!pSA->SAParams.bCopyDscp) {
-		/* We have set the DSCP value from the SA, We need to copy the ESN related from
-				the packet */
+		/* We have set the DSCP value from the SA, We need to copy
+			the ESN related from the packet */
 		iph->tos |= (unsigned char)(org_iphdr->tos & 0x1100);
 	}
 	skb->ip_summed = CHECKSUM_PARTIAL;
 
-	/* Update skb->len with ICV in the case where SA Option is set to BOTH which is ESP+Auth */
+	/* Update skb->len with ICV in the case where SA Option is set
+		to BOTH which is ESP+Auth */
 	if (pSA->SAParams.bDoUDPEncapsulationForNATTraversal) {
 		usNatOverHead = ASF_NAT_UDP_HDR_LEN;
 		pUDPHdr = ((char *) pOuterIpHdr) + SECFP_IP_HDR_LEN;
@@ -1751,14 +1752,15 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		else
 			skb->vlan_tci = 0;
 
-		asfCopyWords((unsigned int *)  skb->data,
-				(unsigned int *)  pSA->l2blob, pSA->ulL2BlobLen);
+		asfCopyWords((unsigned int *) skb->data,
+				(unsigned int *) pSA->l2blob, pSA->ulL2BlobLen);
 		if (pSA->bPPPoE) {
 			/* PPPoE packet.. Set Payload length in PPPoE header */
 			*((short *)&(skb->data[pSA->ulL2BlobLen-4])) = htons(ntohs(iph->tot_len) + 2);
 		}
 		ASFIPSEC_DEBUG("skb->network_header = 0x%x, skb->transport_header = 0x%x\r\n",
-			skb_network_header(skb), skb_transport_header(skb));
+			(unsigned int)skb_network_header(skb),
+			(unsigned int)skb_transport_header(skb));
 		skb_set_network_header(skb, pSA->ulL2BlobLen);
 		skb_set_transport_header(skb, (20 + pSA->ulL2BlobLen));
 	} else {
@@ -1767,10 +1769,11 @@ ret_pkt:
 		/* Update the ethernet header */
 		skb->data -= ETH_HLEN;
 		skb->len += ETH_HLEN;
-		*(unsigned short *)  &(skb->data[12]) = __constant_htons(ETH_P_IP);
-		*(unsigned int *)  &(skb->data[0]) = pSA->macAddr[0];
-		*(unsigned int *)  &(skb->data[4]) = pSA->macAddr[1];
-		*(unsigned int *)  &(skb->data[8]) = pSA->macAddr[2];
+		*(unsigned short *) &(skb->data[12]) =
+					 __constant_htons(ETH_P_IP);
+		*(unsigned int *) &(skb->data[0]) = pSA->macAddr[0];
+		*(unsigned int *) &(skb->data[4]) = pSA->macAddr[1];
+		*(unsigned int *) &(skb->data[8]) = pSA->macAddr[2];
 
 		/* set up the network header etc. that may be needed subsequently */
 		skb_set_network_header(skb, ETH_HLEN);
@@ -1789,7 +1792,7 @@ ret_pkt:
 	}
 
 #ifdef ASFIPSEC_DEBUG_FRAME
-	hexdump(skb->data, 64);
+	hexdump(skb->data, skb->len);
 	ASFIPSEC_PRINT("");
 #endif
 
@@ -1931,8 +1934,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 
 	/* Now get into ESP header construction */
 	/* Assign the end pointer */
-	ASFIPSEC_PRINT("PrepareOut Packet ulSecHdrLen = %d",
-				pSA->ulSecHdrLen);
+	ASFIPSEC_PRINT("PrepareOut Packet ulSecHdrLen = %d", pSA->ulSecHdrLen);
 	pHeadSkb->data -= pSA->ulSecHdrLen;
 
 	ASFIPSEC_DBGL2("After preparing sec header skb->data = 0x%x",
@@ -2890,8 +2892,8 @@ inline int secfp_try_fastPathOutv6(
  * for caller.
  */
 int secfp_try_fastPathOutv4 (
-				unsigned int ulVSGId,
-				struct sk_buff *skb1, ASFFFPIpsecInfo_t *pSecInfo) {
+		unsigned int ulVSGId,
+		struct sk_buff *skb1, ASFFFPIpsecInfo_t *pSecInfo) {
 	outSA_t *pSA ;
 	struct iphdr *iph = ip_hdr(skb1);
 #ifdef ASFIPSEC_DEBUG_FRAME
@@ -3263,6 +3265,8 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
 	pIPSecPPGlobalStats->ulTotInProcPkts++;
+
+	ASFIPSEC_DEBUG(" Entry");
 	secfp_desc_free(desc);
 	skb->cb[SECFP_REF_INDEX]--;
 	if (skb->cb[SECFP_REF_INDEX]) {
@@ -3289,8 +3293,9 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 		}
 
 #ifdef ASFIPSEC_DEBUG_FRAME
-		ASFIPSEC_DEBUG("OutComplete: Sending packet to gfar: skb = 0x%x, skb->data = 0x%x, skb->dev = 0x%x, skb->len = %d*****",
-			 skb, skb->data, skb->dev, skb->len);
+		ASFIPSEC_DEBUG("OutComplete: Sending packet to gfar:"\
+		"skb = 0x%x, skb->data = 0x%x, skb->dev = 0x%x, skb->len = %d*",
+			skb, skb->data, skb->dev, skb->len);
 		ASFIPSEC_DEBUG("out_complete : Printing SEC Header ");
 		hexdump(skb->data, skb->len);
 		ASFIPSEC_DEBUG("");

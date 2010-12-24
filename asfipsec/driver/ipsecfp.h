@@ -46,6 +46,7 @@
 #define SECFP_ICV_LEN 12
 
 /* Capacity information */
+#define SECFP_MAX_OB_SAS 600
 #define SECFP_MAX_SPI_ENTRIES 64
 #define SECFP_MAX_DSCP_SA 8
 #define SECFP_MAX_SPD_CONTAINERS   300
@@ -197,8 +198,6 @@ extern dma_addr_t talitos_dma_unmap_single(void *data,
 
 #define SECFP_UNMAP_SINGLE_DESC(data, len) \
 	talitos_dma_unmap_single(data, len, DMA_TO_DEVICE)
-
-#define SECFP_MAX_OB_SAS 600
 
 /* Definition copied into asfreasm.c */
 #define SECFP_OUTSA_TABLE_SIZE (sizeof(ptrIArry_nd_t)*SECFP_MAX_OB_SAS)
@@ -463,9 +462,9 @@ typedef struct SPDOutSALinkNode_s {
 
 typedef struct SPDOutContainer_s {
 	struct rcu_head rcu ____cacheline_aligned_in_smp;
-	SPDOutParams_t  SPDParams ;
-	AsfSPDPolPPStats_t		   PPStats;
-	spinlock_t spinlock;
+	SPDOutParams_t		SPDParams ;
+	AsfSPDPolPPStats_t	PPStats;
+	spinlock_t		spinlock;
 	union {
 		unsigned int ulSAIndex[SECFP_MAX_DSCP_SA];
 		SPDOutSALinkNode_t *pSAList;

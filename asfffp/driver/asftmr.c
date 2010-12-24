@@ -45,6 +45,9 @@
 #define ASF_TMR_MAX_APPS  ASF_NUM_OF_TIMERS
 #define ASF_TMR_MAX_INSTANCES 1
 
+#define asf_timer_print		asf_print
+#define asf_timer_warn		asf_warn
+
 #ifdef ASF_TIMER_DEBUG
 #define asf_timer_debug(fmt, args...) printk("[CPU %d line %d %s] " fmt, smp_processor_id(), __LINE__, __FUNCTION__, ##args)
 #else
@@ -139,14 +142,14 @@ unsigned int asfTimerInit(unsigned short int ulMaxApps,
 
 	pAsfTmrAppInfo = kzalloc(ulMaxApps *  sizeof(struct asfTmrAppInfo_s), GFP_KERNEL);
 	if (!pAsfTmrAppInfo) {
-		asf_timer_debug("Returned failure\r\n");
+		asf_timer_warn("Returned failure\r\n");
 		return ASF_TMR_FAILURE;
 	}
 
 	for (ii = 0; ii < ulMaxApps; ii++) {
 		pAsfTmrAppInfo[ii].pInstance = kzalloc(ulMaxTmrWheelInstancePerApp * sizeof(struct asfTmrAppInstanceInfo_s), GFP_KERNEL);
 		if (!pAsfTmrAppInfo[ii].pInstance) {
-			asf_timer_debug("kzalloc of Per Instance App Info failed\r\n");
+			asf_timer_warn("kzalloc of Per Instance App Info failed\r\n");
 			return ASF_TMR_FAILURE;
 		}
 		pAsfTmrAppInfo[ii].ulNumInstances = ulMaxTmrWheelInstancePerApp;
@@ -154,7 +157,7 @@ unsigned int asfTimerInit(unsigned short int ulMaxApps,
 
 	pAsfTmrWheelInstances = kzalloc(ulMaxApps  * sizeof(struct asfTmrWheelInfo_s), GFP_KERNEL);
 	if (!pAsfTmrWheelInstances) {
-		asf_timer_debug("Allocation for TmrWheelInstances failed\r\n");
+		asf_timer_warn("Allocation for TmrWheelInstances failed\r\n");
 		return ASF_TMR_FAILURE;
 	}
 
@@ -162,7 +165,7 @@ unsigned int asfTimerInit(unsigned short int ulMaxApps,
 		pAsfTmrWheelInstances[ii].pWheel =
 		kzalloc(ulMaxTmrWheelInstancePerApp * sizeof(struct asfTmrWheelInstance_s), GFP_KERNEL);
 		if (!pAsfTmrWheelInstances[ii].pWheel) {
-			asf_timer_debug("kzalloc of per Instance App Info failed\r\n");
+			asf_timer_warn("kzalloc of per Instance App Info failed\r\n");
 			return ASF_TMR_FAILURE;
 		}
 		pAsfTmrWheelInstances[ii].ulNumEntries = ulMaxTmrWheelInstancePerApp;
@@ -205,7 +208,7 @@ void asfTimerDisableKernelTimers(void)
 		for (ulInstanceId = 0; ulInstanceId < ASF_TMR_MAX_INSTANCES; ulInstanceId++) {
 			pWheel = &(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
 			if (pWheel) {
-				asf_timer_debug("DisKernTimers: appId %d"\
+				asf_timer_print("DisKernTimers: appId %d"\
 					"instId %d .. SET interval = 0\n",
 					ulAppId, ulInstanceId);
 				pWheel->ulTimerInterval = 0;
@@ -216,7 +219,7 @@ void asfTimerDisableKernelTimers(void)
 
 						if (timer_pending(&(pTmrWheel->timer))) {
 							iRetVal = del_timer_sync(&(pTmrWheel->timer));
-							asf_timer_debug("DisKernTimers: del_timer_sync appId %d instId %d cpuId %d result %d\n",
+							asf_timer_print("DisKernTimers: del_timer_sync appId %d instId %d cpuId %d result %d\n",
 							       ulAppId, ulInstanceId, ii, iRetVal);
 						}
 					}
@@ -338,14 +341,14 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 		return ASF_TMR_FAILURE;
 	}
 
-	asf_timer_debug("ptr %x\n", pAsfTmrWheelInstances[ulAppId].pWheel);
+	asf_timer_print("ptr %x\n", pAsfTmrWheelInstances[ulAppId].pWheel);
 	pWheel = &(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
 
 	/* Initialize the wheel information */
 	pWheel->ulInterBucketGap = ulInterBucketTmrGap;
 	pWheel->ulHalfInterBucketGap = (ulInterBucketTmrGap >> 1);
 
-	asf_timer_debug("Wheel parameters initialized\r\n");
+	asf_timer_print("Wheel parameters initialized for %x\r\n", pWheel);
 
 	switch (ucTmrType) {
 	case ASF_TMR_TYPE_MS_TMR:
@@ -355,7 +358,7 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 		pWheel->ulTimerInterval  = msecs_to_jiffies(1000 * ulInterBucketTmrGap);
 		break;
 	default:
-		asf_timer_debug("Timer type unknown: Return T_FAILURE\r\n");
+		asf_timer_warn("Timer type unknown: Return T_FAILURE\r\n");
 		break;
 	}
 
@@ -370,10 +373,11 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 			pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, ii);
 			pTmrWheel->ulMaxBuckets = ulNumBuckets;
 			pTmrWheel->pBuckets = (struct asfTmr_s **)(pTmrWheel + 1);
-			asf_timer_debug("Initialized pBuckets\r\n");
+			asf_timer_print("Initialized pBuckets Max Bucket =%d\n",
+				pTmrWheel->ulMaxBuckets);
 			pTmrWheel->ulMaxRqEntries = ulNumRQEntries;
 
-			asf_timer_debug("Initialized pQs\r\n");
+			asf_timer_print("Initialized pQs\r\n");
 			pTmrWheel->pQs = asfAllocPerCpu(sizeof(struct asfTmrRQ_s)
 							+ (sizeof(asfTmr_t *) * ulNumRQEntries));
 			if (pTmrWheel->pQs) {
@@ -383,7 +387,7 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 					pTempRq->pQueue = (asfTmr_t **)(pTempRq + 1);
 				}
 			} else {
-				asf_timer_debug("Allocation of Per CPU RQ Entries failed\r\n");
+				asf_timer_warn("Allocation of Per CPU RQ Entries failed\r\n");
 				return ASF_TMR_FAILURE;
 			}
 			asf_timer_debug("Queues initialized\r\n");
@@ -399,12 +403,12 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 			} else {
 				smp_call_function_single(ii, asfAddTimerOn, &pTmrWheel->timer, 1);
 			}
-			asf_timer_debug("Timers Added to Linux\r\n");
+			asf_timer_print("Timers Added to Linux\r\n");
 		}
 		/* Timer will be started when the first timer object gets added */
 		return ASF_TMR_SUCCESS;
 	}
-	asf_timer_debug("wheel init for app-id %d inst-id %d failed!\n",
+	asf_timer_print("wheel init for app-id %d inst-id %d failed!\n",
 			ulAppId, ulInstanceId);
 	return ASF_TMR_FAILURE;
 }
@@ -433,7 +437,7 @@ unsigned int asfTimerWheelDeInit(unsigned short int ulAppId, unsigned  short int
 
 			if (timer_pending(&(pTmrWheel->timer))) {
 				iRetVal = del_timer_sync(&(pTmrWheel->timer));
-				asf_timer_debug("del_timer_sync: appId %d instId %d cpuId %d result %d\n",
+				asf_timer_print("del_timer_sync: appId %d instId %d cpuId %d result %d\n",
 				       ulAppId, ulInstanceId, ii, iRetVal);
 			}
 
@@ -501,7 +505,7 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 	bool bInInterrupt = in_softirq();
 	ASFFFPGlobalStats_t     *gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
 
-	asf_timer_debug("TimerStart AppId %d InstId %d TOut %d carg1 %d carg2 %d\n",
+	asf_timer_print("TimerStart AppId %d InstId %d TOut %d carg1 %d carg2 %d\n",
 			ulAppId, ulInstanceId, ulTmOutVal, ulCbArg1, ulCbArg2);
 
 	if (!bInInterrupt)
@@ -512,7 +516,7 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 	if (ptmr) {
 		ptmr->bHeap = bHeap;
 	} else {
-		asf_timer_debug("Timer allocation failed\r\n");
+		asf_timer_warn("Timer allocation failed\r\n");
 		if (!bInInterrupt)
 			local_bh_enable();
 		gstats->ulErrAllocFailures++;
@@ -534,10 +538,10 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 	pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, smp_processor_id());
 
 	ptmr->ulTmOutVal = (ptmr->ulTmOutVal + pWheel->ulHalfInterBucketGap)/pWheel->ulInterBucketGap;
-	asf_timer_debug("ptmr->ulTmOutVal = %d\r\n", ptmr->ulTmOutVal);
+	asf_timer_print("ptmr->ulTmOutVal = %d\r\n", ptmr->ulTmOutVal);
 #if 1
 	if (ptmr->ulTmOutVal >= pTmrWheel->ulMaxBuckets) {
-		asf_timer_debug("Given timer value %d does not fit into any bucket: Using Max %d possible!\n",
+		asf_timer_warn("Given timer value %d does not fit into any bucket: Using Max %d possible!\n",
 				ptmr->ulTmOutVal, pTmrWheel->ulMaxBuckets);
 		ptmr->ulTmOutVal = pTmrWheel->ulMaxBuckets-1;
 		gstats->ulMiscFailures++;
@@ -554,10 +558,10 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 	}
 #endif
 	ptmr->ulBucketIndex  = (pTmrWheel->ulCurBucketIndex + 1 + ptmr->ulTmOutVal) & (pTmrWheel->ulMaxBuckets - 1);
-	asf_timer_debug("ulBucketIndex = %d\r\n", ptmr->ulBucketIndex);
+	asf_timer_print("ulBucketIndex = %d\r\n", ptmr->ulBucketIndex);
 
 	/* Add timer to the bucket  */
-	asfAddTmrToBucket(pTmrWheel,  ptmr);
+	asfAddTmrToBucket(pTmrWheel, ptmr);
 	if (!bInInterrupt)
 		local_bh_enable();
 	return ptmr;
@@ -581,13 +585,14 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 	bool bInProcess;
 	bool bInInterrupt = in_softirq();
 
-	asf_timer_debug("TimerStop: AppId %d InstId %d ptmr 0x%x\n", ulAppId, ulInstanceId, ptmr);
+	asf_timer_print("TimerStop: AppId %d InstId %d ptmr 0x%x\n",
+				 ulAppId, ulInstanceId, ptmr);
 
 	if (!bInInterrupt)
 		local_bh_disable();
 
 	if (ptmr->ulState == ASF_TMR_STOPPED) {
-		asf_timer_debug("Timer already stopped\n");
+		asf_timer_warn("Timer already stopped\n");
 		if (!bInInterrupt)
 			local_bh_enable();
 		return ASF_TMR_FAILURE;
@@ -607,7 +612,7 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 	bInProcess = ptmr->ulState & ASF_TMR_Q_IN_PROCESS;
 
 	if ((ulDiff < ASF_TMR_NEXT_FEW_BUCKETS) || (bInProcess)) {
-		asf_timer_debug("Timer to expire soon\n");
+		asf_timer_print("Timer to expire soon\n");
 #if 0
 		ptmr->bStopPeriodic  = 1;
 		if (!bInInterrupt)
@@ -619,7 +624,7 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 	if (ptmr->ulCoreId == smp_processor_id()) {
 		/* Feel free to fix the list */
 		asfRemoveTmrFromBucket(pTmrWheel,  ptmr);
-		asf_timer_debug("Removed timer from bucket... Calling asfReleaseNode\n");
+		asf_timer_print("Removed timer from bucket... Calling asfReleaseNode\n");
 		asfReleaseNode(pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].ulTmrPoolId, ptmr, ptmr->bHeap);
 
 	} else {
@@ -629,7 +634,7 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 		pRq = per_cpu_ptr(pTmrWheel->pQs, smp_processor_id());
 
 		if (unlikely(pRq->pQueue[pRq->ulWrIndex] != NULL)) {
-			asf_timer_debug("******* No space in reclaim queue; letting timer expire by itself\r\n");
+			asf_timer_warn("******* No space in reclaim queue; letting timer expire by itself\r\n");
 			ptmr->bStopPeriodic = 1; /* avoid callback function call upon expiry */
 			if (!bInInterrupt)
 				local_bh_enable();
@@ -810,7 +815,7 @@ static void asfTimerProc(unsigned long data)
 					break;
 			}
 		} else {
-			asf_timer_debug("ptmr 0x%x free: either tmr cbk asked for "/
+			asf_timer_print("ptmr 0x%x free: either tmr cbk asked for "\
 				"deletion or deletion occurred on another cpu (stop %d)",
 				ptmr, ptmr->bStopPeriodic);
 			/* Release to the memory pool */
@@ -845,7 +850,7 @@ static void asfTimerProc(unsigned long data)
 		pTmrWheel->timer.expires = jiffies + pWheel->ulTimerInterval;
 		add_timer(&pTmrWheel->timer);
 	} else {
-		asf_timer_debug("Not rescheduling timer. cpu=%d, appId %d instId %d",
+		asf_timer_print("Not rescheduling timer. cpu=%d, appId %d instId %d",
 		smp_processor_id(), ulAppId, ulInstanceId);
 	}
 }
