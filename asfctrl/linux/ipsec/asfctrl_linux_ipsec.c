@@ -118,6 +118,7 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	iph = ip_hdr(skb);
 
 #ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
+	skb->asf = 0;
 	/* Send the packet up for normal path IPsec processing
 		(after the NAT) has to be special function */
 	if (0 != ip_route_input(skb, iph->daddr, iph->saddr, 0, skb->dev)) {
@@ -132,8 +133,7 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	ASFCTRL_INFO("NO OUT SA Found Sending Packet Up");
 
 	skb->pkt_type = PACKET_HOST;
-	if (NET_RX_DROP == ip_forward_asf_packet(skb))
-			pFreeFn(Buffer.nativeBuffer);
+	ip_forward(skb);
 #else
 	ASFCTRL_WARN("NO OUT SA Found Drop packet");
 	pFreeFn(Buffer.nativeBuffer);
