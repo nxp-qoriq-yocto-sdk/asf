@@ -18,13 +18,19 @@
 
 #ifndef __ASF_GPL_CODE_H
 #define __ASF_GPL_CODE_H
+#include "asf.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 #define asfAllocPerCpu(size)	__alloc_percpu(size, 4)
 #define asfFreePerCpu(ptr)	free_percpu(ptr)
 #define asfPerCpuPtr(ptr, cpu)	per_cpu_ptr(ptr, cpu)
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #define asfDevHardXmit(dev, skb)	(dev->netdev_ops->ndo_start_xmit(skb, dev))
+#else
+extern int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev);
+#define asfDevHardXmit(dev, skb)	(gfar_fast_xmit(skb, dev))
+#endif
 
 #else
 
