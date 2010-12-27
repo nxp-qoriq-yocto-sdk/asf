@@ -271,7 +271,7 @@ int  asfctrl_fwd_l3_route_add(
 
 	ASFGetVSGMode(ASF_DEF_VSG, &mode);
 	/* If ASF is disabled or mode is not FWD, simply return */
-	if ((0 == ASFGetStatus()) || (mode == fwdMode))
+	if ((0 == ASFGetStatus()) || (mode != fwdMode))
 		return 0;
 	/*loopback dummy packet */
 	if (iif == 1) {
