@@ -1648,7 +1648,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 						if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 							asf_debug("Error in transmit: Should not happen\r\n");
-							asf_debug(pSkb);
+							ASFSkbFree(pSkb);
 						}
 
 					}
@@ -1702,7 +1702,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			if (asfDevHardXmit(skb->dev, skb)) {
 				XGSTATS_INC(DevXmitErr);
 				asf_debug("Error in transmit: may happen as we don't check for gfar free desc\n");
-				asf_debug(skb);
+				ASFSkbFree(skb);
 			}
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
