@@ -1672,7 +1672,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	int ii;
 	AsfSPDPolicyPPStats_t   *pIPSecPolicyPPStats;
 	ASF_IPSecTunEndAddr_t  TunAddress;
-	bool	bl2blobRefresh = 0;
+	unsigned short	bl2blobRefresh = 0;
 
 	pIpHdrInSA = (unsigned int *)  &(pSA->ipHdrInfo.hdrdata.iphv4);
 	org_iphdr = (struct iphdr *) pIpHdrInSA;
@@ -7994,10 +7994,7 @@ unsigned short ASFIPCkSum(char *data, unsigned short cnt)
 
 	if (((int)pUp) & 1) {
 	/* Handle odd leading byte */
-		if (swap)
-			csum = (unsigned char)(*pUp++);
-		else
-			csum = ((unsigned short)UCHAR(*pUp++) << 8);
+		csum = ((unsigned short)UCHAR(*pUp++) << 8);
 		cnt1--;
 		swap = !swap;
 	}
@@ -8014,7 +8011,6 @@ unsigned short ASFIPCkSum(char *data, unsigned short cnt)
 			csum += UCHAR(pUp[--cnt1]);
 		else
 			csum += ((unsigned short)UCHAR(pUp[--cnt1]) << 8);
-		swap = !swap;
 	}
 	sum += csum;
 
