@@ -906,6 +906,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 
 	if (match_sa_index_no_lock(xfrm, dir) < 0) {
 		ASFCTRL_WARN("Not an offloaded SA -1");
+		spin_unlock(&sa_table_lock);
 		return -1;
 	}
 	cont_id = sa_table[dir][xfrm->asf_sa_cookie - 1].container_id;
