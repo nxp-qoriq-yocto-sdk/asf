@@ -690,6 +690,7 @@ void secfp_deInit(void)
 {
 	ASFIPSEC_PRINT("DeInitializing Sec FP ");
 
+	ASFFFPRegisterIPSecFunctions(NULL, NULL, NULL, NULL);
 	secfp_DeInitInSelTable();
 	secfp_DeInitInSATable();
 
@@ -760,11 +761,6 @@ int secfp_init(void)
 		return SECFP_FAILURE;
 	}
 
-	ASFFFPRegisterIPSecFunctions(secfp_try_fastPathInv4,
-					secfp_try_fastPathOutv4,
-					secfp_CheckInPkt,
-					NULL);
-
 	memset(&IPSecPPGlobalStats_g, 0x0, sizeof(IPSecPPGlobalStats_g));
 	memset(&IPSec4GblPPStats_g, 0x0, sizeof(IPSec4GblPPStats_g));
 	memset(aNonIkeMarker_g, 0, ASF_IPSEC_MAX_NON_IKE_MARKER_LEN);
@@ -779,6 +775,11 @@ int secfp_init(void)
 
 		if (desc_cache == NULL)
 			return -ENOMEM;
+
+	ASFFFPRegisterIPSecFunctions(secfp_try_fastPathInv4,
+					secfp_try_fastPathOutv4,
+					secfp_CheckInPkt,
+					NULL);
 
 	return SECFP_SUCCESS;
 }
