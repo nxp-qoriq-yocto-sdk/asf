@@ -1792,7 +1792,13 @@ ret_pkt:
 	if (iph->tot_len > pSA->odev->mtu) {
 		/* Need to fragment the packet */
 		ASFIPSEC_PRINT("Need to fragment the packet and send it out ");
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		skb->cb[SECFP_OUTB_FRAG_REQD] = 1;
+#else
+		skb->cb[SECFP_OUTB_FRAG_REQD] = 1;
+		skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
+		/*Not supporting frag in ASF_MINIMUM code,drop the packet*/
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 	} else {
 		skb->cb[SECFP_OUTB_FRAG_REQD] = 0;
 	}
@@ -5465,7 +5471,9 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		}
 		iph = ip_hdr(skb1);
 	}
+#endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	if (((ip_hdr(skb1)->frag_off) & SECFP_MF_OFFSET_FLAG_NET_ORDER)) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		skb_reset_network_header(skb1);
 		skb1 = asfIpv4Defrag(ulVSGId, skb1, NULL, NULL, NULL, &fragCnt);
 		if (skb1 == NULL) {
@@ -5491,8 +5499,12 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			ASFSkbFree(skb1);
 			return 1;
 		}
-	}
+#else
+		ASFIPSEC_WARN("Fragmented Packets Not supported in this mode");
+		ASFSkbFree(skb1);
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
+	}
+
 	rcu_read_lock();
 	SECFP_EXTRACT_PKTINFO(skb1, iph, (iph->ihl*4), ulSPI, ulSeqNum)
 	pSA = secfp_findInv4SA(ulVSGId, iph->protocol, ulSPI, iph->daddr, &ulHashVal);
