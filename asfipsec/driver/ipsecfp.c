@@ -1729,6 +1729,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 	/* Update L2 Blob information and send pkt out */
 	if (pSA->bl2blob) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (pulVSGL2blobMagicNumber[ulVSGId] !=
 			pSA->l2blobConfig.ulL2blobMagicNumber) {
 			ASFIPSEC_PRINT("L2blob Magic Num Mismatch %d != %d ",
@@ -1748,7 +1749,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 			bl2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
 		}
-
+#endif
 		skb->data -= pSA->ulL2BlobLen;
 		skb->len += pSA->ulL2BlobLen;
 
