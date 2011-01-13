@@ -39,7 +39,6 @@ asf-y := asfproc.o \
 	    asftcp.o \
 	    asfreasm.o \
 	    asfcore.o \
-	    gplcode.o \
 
 
 #obj-$(CONFIG_GIANFAR) += gianfar_driver.o

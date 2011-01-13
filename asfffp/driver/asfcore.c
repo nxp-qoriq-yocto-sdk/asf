@@ -54,6 +54,7 @@
 #include <linux/sysctl.h>
 #include <gianfar.h>
 
+
 #include "gplcode.h"
 #include "asf.h"
 #include "asfcmn.h"
@@ -652,28 +653,6 @@ int asf_process_ip_options(struct sk_buff *skb, struct net_device *dev, struct i
 {
 	struct ip_options *opt;
 
-	skb->protocol = eth_type_trans(skb, skb->dev);
-
-	if (skb_cow(skb, skb_headroom(skb))) {
-		asf_debug("IPOPT -- skb_cow failed -- drop packet\n");
-		return -1;
-	}
-
-	if (skb_dst(skb) == NULL) {
-		int err = ip_route_input(skb, iph->daddr, iph->saddr, iph->tos, dev);
-		if (unlikely(err))
-			return -1;
-	}
-
-	opt = &(IPCB(skb)->opt);
-	opt->optlen = (unsigned char)(iph->ihl*4 - sizeof(struct iphdr));
-	asf_debug("calling asf_ip_options_compile: skb->cb 0x%x opt 0x%x optlen %d tot_len %d\n",
-		  skb->cb, opt, opt->optlen, ntohs(iph->tot_len));
-
-	if (asf_ip_options_compile(dev_net(dev), opt, skb, iph)) {
-		asf_debug("IPOPT -- options_compile failed -- drop packet\n");
-		return -1;
-	}
 	return 0;
 }
 EXPORT_SYMBOL(asf_process_ip_options);

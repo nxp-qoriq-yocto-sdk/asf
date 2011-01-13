@@ -203,6 +203,12 @@ unsigned int asf_reasmPools[ASF_MAX_REASM_POOLS];
 
 unsigned int asf_reasmIPv4_Id[NR_CPUS];
 
+void asf_ip_options_fragment(struct sk_buff  *skb)
+{
+	skb = skb;
+	return;
+}
+
 
 unsigned int asfReasmGetNextId(void)
 {
