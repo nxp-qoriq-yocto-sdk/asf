@@ -9,9 +9,9 @@
 include $(KERNEL_PATH)/.config
 PWD=$(shell pwd)
 
-CC	= $(CROSS_PREFIX)gcc
-AR	= $(CROSS_PREFIX)ar
-LD	= $(CROSS_PREFIX)ld
+CC	= $(CROSS_COMPILE)gcc
+AR	= $(CROSS_COMPILE)ar
+LD	= $(CROSS_COMPILE)ld
 EXTRA_CFLAGS := -mno-spe -mspe=no -mabi=no-spe
 
 HOSTCC=/usr/bin/gcc
