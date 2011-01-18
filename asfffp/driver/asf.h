@@ -9,20 +9,11 @@
  * Authors:	Venkataraman Subhashini <B22166@freescale.com>
  *
  */
-/* The BJ3 Hash function (bj3mix)
- * is drived from (http://burtleburtle.net/bob/):
- * lookup3.c, by Bob Jenkins, May 2006, Public Domain.
- * Which is under the license "You can use this free for any purpose.  It's in
- * the public domain.  It has no warranty."
-*/
-/*
- * History
- *  Version     Date          Author              	Change Description
- * 0.1	     1 Oct 2010  Hemant Agrawal  	Added the support for BJ3 Hash
-*/
 /****************************************************************************/
 #ifndef __ASFAPI_H
 #define __ASFAPI_H
+
+#include "asfhash.h"
 
 #define ASF_MINIMUM 1
 #define ASF_LINUX 2
@@ -912,30 +903,5 @@ int ASFFFPQueryGlobalStats(ASFFFPGlobalStats_t *pStats);
 /* compute hash index based on maximum number of buckets */
 #define ASF_HINDEX(hval, hmax) (hval&(hmax-1))
 
-/* Utilities */
-#define ASF_DOBBS_MIX(a, b, c) \
-{ \
-  a -= b; a -= c; a ^= (c >> 13); \
-  b -= c; b -= a; b ^= (a << 8); \
-  c -= a; c -= b; c ^= (b >> 13); \
-  a -= b; a -= c; a ^= (c >> 12);  \
-  b -= c; b -= a; b ^= (a << 16); \
-  c -= a; c -= b; c ^= (b >> 5); \
-  a -= b; a -= c; a ^= (c >> 3);  \
-  b -= c; b -= a; b ^= (a << 10); \
-  c -= a; c -= b; c ^= (b >> 15); \
-}
-
-/* BJ3 Hash */
-#define rot(x, k) (((x)<<(k)) | ((x)>>(32-(k))))
-#define ASF_BJ3_MIX(a, b, c) \
-{ \
-	a -= c; a ^= rot(c, 4); c += b; \
-	b -= a; b ^= rot(a, 6); a += c; \
-	c -= b; c ^= rot(b, 8); b += a; \
-	a -= c; a ^= rot(c, 16); c += b; \
-	b -= a; b ^= rot(a, 19); a += c; \
-	c -= b; c ^= rot(b, 4); b += a; \
-}
 
 #endif
