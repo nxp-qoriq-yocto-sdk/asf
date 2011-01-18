@@ -1,7 +1,5 @@
 /**************************************************************************
- * Copyright 2010 by Freescale Semiconductor, Inc.
- * All modifications are confidential and proprietary information
- * of Freescale Semiconductor, Inc. ALL RIGHTS RESERVED.
+ * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfctrl.h
