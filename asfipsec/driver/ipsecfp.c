@@ -6665,6 +6665,7 @@ unsigned int secfp_createOutSA(
 			ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, ulTunnelId,
 				ulSPDContainerIndex, ulMagicNumber, &TunAddress,
 				pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (ulL2BlobRefreshTimeInSec_g) {
 			pSA->pL2blobTmr = asfTimerStart(
 					ASF_SECFP_BLOB_TMR_ID, 0,
@@ -6676,6 +6677,7 @@ unsigned int secfp_createOutSA(
 				ASFIPSEC_WARN("asfTimerStart failed");
 			}
 		}
+#endif
 		ASFIPSEC_DEBUG("returned success");
 		return SECFP_SUCCESS;
 	} else {
