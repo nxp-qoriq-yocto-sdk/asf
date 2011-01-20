@@ -582,8 +582,8 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 gen_indications:
 			/* skip all other indications if cache_end indication
 			is going to be sent */
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (unlikely(bL2blobRefresh)) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				if (!Cache->bDeleted &&
 					fwdCbFns.pFnCacheEntryRefreshL2Blob) {
 					ASFFWDCacheEntryL2BlobRefreshCbInfo_t
@@ -603,9 +603,9 @@ gen_indications:
 					fwdCbFns.pFnCacheEntryRefreshL2Blob
 								(ulVsgId, &ind);
 				}
+#endif
 				goto ret_pkt_to_stk;
 			}
-#endif
 			return;
 		} else {
 			/* drop the packet here */
