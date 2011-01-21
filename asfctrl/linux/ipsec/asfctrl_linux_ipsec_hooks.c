@@ -545,7 +545,10 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
 			: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
 
-	SAParams.replayWindowSize = xfrm->props.replay_window;
+	if (xfrm->props.replay_window < 32)
+		SAParams.replayWindowSize = 32;
+	else
+		SAParams.replayWindowSize = xfrm->props.replay_window;
 	ASFCTRL_INFO("Out Replay window size = %d ", xfrm->props.replay_window);
 
 #else
@@ -726,7 +729,10 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.bDoAntiReplayCheck =
 		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
 			: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
-	SAParams.replayWindowSize = xfrm->props.replay_window;
+	if (xfrm->props.replay_window < 32)
+		SAParams.replayWindowSize = 32;
+	else
+		SAParams.replayWindowSize = xfrm->props.replay_window;
 	ASFCTRL_INFO("In  Replay window size = %d ", xfrm->props.replay_window);
 
 #else
