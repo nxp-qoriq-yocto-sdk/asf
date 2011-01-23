@@ -237,7 +237,6 @@ void asfTimerFreeNodeMemory(asfTmr_t *tmr)
 }
 EXPORT_SYMBOL(asfTimerFreeNodeMemory);
 
-/* DeInit routine: TBD */
 void  asfTimerDeInit(void)
 {
 	int ii;
@@ -439,8 +438,6 @@ unsigned int asfTimerWheelDeInit(unsigned short int ulAppId, unsigned  short int
 				       ulAppId, ulInstanceId, ii, iRetVal);
 			}
 
-			/* TODO: Need to clean up the reclamation queue */
-
 			/* Need to clean up the buckets */
 			asfFreePerCpu(pTmrWheel->pQs);
 		}
@@ -537,24 +534,13 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 
 	ptmr->ulTmOutVal = (ptmr->ulTmOutVal + pWheel->ulHalfInterBucketGap)/pWheel->ulInterBucketGap;
 	asf_timer_print("ptmr->ulTmOutVal = %d\r\n", ptmr->ulTmOutVal);
-#if 1
 	if (ptmr->ulTmOutVal >= pTmrWheel->ulMaxBuckets) {
 		asf_timer_warn("Given timer value %d does not fit into any bucket: Using Max %d possible!\n",
 				ptmr->ulTmOutVal, pTmrWheel->ulMaxBuckets);
 		ptmr->ulTmOutVal = pTmrWheel->ulMaxBuckets-1;
 		gstats->ulMiscFailures++;
 	}
-#else
-	if (ptmr->ulTmOutVal > pTmrWheel->ulMaxBuckets) {
-		asf_timer_debug("Given timer value does not fit into any bucket: ulTmOutVal =%d, \r\n",
-				ptmr->ulTmOutVal);
-		asfReleaseNode(pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].ulTmrPoolId, ptmr, bHeap);
-		if (!bInInterrupt)
-			local_bh_enable();
-		gstats->ulMiscFailures++;
-		return NULL;
-	}
-#endif
+
 	ptmr->ulBucketIndex  = (pTmrWheel->ulCurBucketIndex + 1 + ptmr->ulTmOutVal) & (pTmrWheel->ulMaxBuckets - 1);
 	asf_timer_print("ulBucketIndex = %d\r\n", ptmr->ulBucketIndex);
 
@@ -609,15 +595,9 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 	referenced by any existing pointer. */
 	bInProcess = ptmr->ulState & ASF_TMR_Q_IN_PROCESS;
 
-	if ((ulDiff < ASF_TMR_NEXT_FEW_BUCKETS) || (bInProcess)) {
+	if ((ulDiff < ASF_TMR_NEXT_FEW_BUCKETS) || (bInProcess))
 		asf_timer_print("Timer to expire soon\n");
-#if 0
-		ptmr->bStopPeriodic  = 1;
-		if (!bInInterrupt)
-			local_bh_enable();
-		return ASF_TMR_FAILURE;
-#endif
-	}
+
 	/* Else check if the the bucket belongs to this CPU */
 	if (ptmr->ulCoreId == smp_processor_id()) {
 		/* Feel free to fix the list */
@@ -647,59 +627,6 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 }
 
 EXPORT_SYMBOL(asfTimerStop);
-
-#if 0 /* Currently we don't support restart  */
-unsigned int asfTimerRestart(unsigned int ulAppId,
-			     unsigned int ulInstanceId, asfTmr_t *ptmr)
-{
-
-	struct asfTmrWheelInstance_s *pWheel;
-	struct asfTmrWheelPerCore_s *pTmrWheel;
-	struct asfTmrRQ_s *pRq;
-	unsigned int ulDiff;
-	bool bInProcess;
-	bool bInInterrupt = in_softirq();
-	unsigned int ulTmrVal = (ptmr->ulTimeOutVal + pWheel->ulHalfInterBucketGap)/pWheel->ulInterBucketGap;
-
-	if (!bInInterrupt)
-		local_bh_disable();
-
-	if (ulTmrVal > pTmrWheel->ulMaxBuckets) {
-		asf_timer_debug("Restart failed: as tmr value exceeds time span in the timer\r\n");
-		if (!bInInterrupt)
-			local_bh_enable();
-		return ASF_TMR_FAILURE;
-	}
-
-	pWheel = &(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
-	pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, ptmr->ulCoreId);
-
-	ulDiff = (ptmr->ulBucket > pTmrWheel->ulCurBucketIndex) ?
-		 (ptmr->ulBucket - pTmrWheel->ulCurBucketIndex) :
-		 (pTmrWheel->ulNumBuckets - pTmrWheel->ulCurBucketIndex) + ptmr->ulBucket;
-
-	bInProcess = ptmr->ulState & ASF_TMR_Q_IN_PROCESS;
-
-	if (bInProcess) {
-		asf_timer_debug("Timer expiry under progress soon\r\n");
-
-		if ((ulDiff < ASF_TMR_NEXT_BUCKET) || (bInProcess)) {
-			asf_timer_debug("Timer to expire soon\r\n");
-			ptmr->ulState = (ptmr->ulState & (ASF_TMR_Q_IN_PROCESS) | ASF_TMR_STOPPED);
-			if (!bInInterrupt)
-				local_bh_enable();
-			return ASF_TMR_FAILURE;
-		} else {
-			ptmr->ulState = (bInProcess | ASF_TMR_RESTARTED);
-			ptmr->ulNextBucketIndex  = (pTmrWheel->ulCurBucketIndex + ptmr->ulTmOutVal) & (pTmrWheel->ulMaxBuckets - 1);
-		}
-		if (!bInInterrupt)
-			local_bh_enable();
-		return ASF_TMR_SUCCESS;
-
-	}
-}
-#endif
 
 /*
  * Function Name : asfTimerDelete

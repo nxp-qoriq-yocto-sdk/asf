@@ -457,15 +457,6 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 		cache_stats = &Cache->stats;
 		cache_stats->ulInPkts++;
 		cache_stats->ulInBytes += (skb->mac_len + skb->len);
-#if 0
-/* Only timer based L2 blob refresh  is supported in current release */
-		if (fwd_l2blob_refresh_npkts
-		&& ((cache_stats->ulInPkts % fwd_l2blob_refresh_npkts) == 0)) {
-			asf_print("Decided to send L2Blob "
-					"refresh ind based on npkts\n");
-			bL2blobRefresh = 1;
-		}
-#endif
 		/* Mark the Cache as most recently used in aging list */
 		if (fwd_aging_enable) {
 			int processor_id = smp_processor_id();
@@ -1649,12 +1640,6 @@ static void __exit asf_fwd_exit(void)
 	/* De-Register function pointer with ASF Main module
 	to receive packet. */
 	ASFFFPRegisterFWDFunctions(NULL, NULL);
-#if 0
-	init_waitqueue_head(&dummyWq);
-	asf_print("Sleeping for 5 seconds to be safe from pending"
-			" timer callabcks & DevFP callbacks!\n");
-	sleep_on_timeout(&dummyWq, 5*HZ);
-#endif
 	asf_fwd_unregister_proc();
 	/* Delete Flush timers */
 	for (i = 0; i < num_cpus; i++) {

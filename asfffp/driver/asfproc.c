@@ -53,11 +53,6 @@
  *	/proc/asf/flows
  *	/proc/asf/stats
  */
-/* FIXME: ASF_TCP_FIN_TIMEOUT and ASF_L2BLOB_REFRESH_INTERVAL should overridde default
- * proc handler and convert the value in to jiffies.
- * user sets the value in seconds. So multiply it with HZ to set the actual global
- * variable
- */
 enum {
 	ASF_PROC_COMMAND = 1,
 	ASF_ENABLE,
@@ -65,10 +60,6 @@ enum {
 	ASF_FFP_MAX_FLOWS,
 	ASF_FFP_MAX_VSGS,
 	ASF_FFP_HASH_BUCKETS,
-#if 0
-	ASF_TCP_FIN_TIMEOUT,
-	ASF_TCP_RST_TIMEOUT,
-#endif
 	ASF_L2BLOB_REFRESH_NPKTS,
 	ASF_L2BLOB_REFRESH_INTERVAL,
 	ASF_FFP_DEBUG_SKIP_FIRST,
@@ -202,46 +193,6 @@ static int proc_asf_enable(ctl_table *ctl, int write,
 	return ret;
 }
 
-#if 0
-static int proc_asf_auto_mode(ctl_table *ctl, int write,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
-			      struct file *filp,
-#endif
-			      void __user *buffer,
-			      size_t *lenp, loff_t *ppos)
-{
-	int old_state = asf_auto_mode, ret;
-
-	if (write)
-		asf_unregister_devfp();
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
-	ret = proc_dointvec(ctl, write, filp, buffer, lenp, ppos);
-#else
-	ret = proc_dointvec(ctl, write, buffer, lenp, ppos);
-#endif
-
-	/* reset the value to 0 or 1 */
-	if (asf_auto_mode != 0)
-		asf_auto_mode = 1;
-
-	if (asf_auto_mode != old_state) {
-		printk("ASF AutoMode state changed from %s to %s (Cleanup %s)\n",
-		       old_state ? "Enable" : "Disable",
-		       asf_auto_mode ? "Enable" : "Disable",
-		       asf_enable ? "YES" : "NO");
-		if (asf_enable) {
-			asf_ffp_cleanup_all_flows();
-		}
-	}
-
-	if (write)
-		asf_register_devfp();
-	return ret;
-}
-#endif
-
-
 static struct ctl_table asf_proc_table[] = {
 	{
 		.ctl_name       = ASF_PROC_COMMAND,
@@ -299,26 +250,6 @@ static struct ctl_table asf_proc_table[] = {
 		.proc_handler   = proc_dointvec,
 		.strategy       = sysctl_intvec,
 	} ,
-#if 0
-	{
-		.ctl_name       = ASF_TCP_FIN_TIMEOUT,
-		.procname       = "tcp_fin_timeout",
-		.data	   = &asf_tcp_fin_timeout,
-		.maxlen	 = sizeof(int),
-		.mode	   = 0644,
-		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
-	} ,
-	{
-		.ctl_name       = ASF_TCP_RST_TIMEOUT,
-		.procname       = "tcp_rst_timeout",
-		.data	   = &asf_tcp_rst_timeout,
-		.maxlen	 = sizeof(int),
-		.mode	   = 0644,
-		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
-	} ,
-#endif
 	{
 		.ctl_name       = ASF_L2BLOB_REFRESH_NPKTS,
 		.procname       = "l2blob_refresh_npkts",
@@ -384,22 +315,6 @@ EXPORT_SYMBOL(asf_dir);
 #define ASF_PROC_FLOW_STATS_NAME	"flow_stats"
 #define ASF_PROC_FLOW_DEBUG_NAME	"flow_debug"
 
-#if 0
-static int asf_proc_calc_metrics(char *page, char **start, off_t off,
-				 int count, int *eof, int len)
-{
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-}
-#endif
-
 #define GSTATS_SUM(a) (total.ul##a += gstats->ul##a)
 #define GSTATS_TOTAL(a) (unsigned long) total.ul##a
 static int display_asf_proc_global_stats(char *page, char **start,
@@ -432,13 +347,6 @@ static int display_asf_proc_global_stats(char *page, char **start,
 		GSTATS_SUM(PktsToFNP);
 	}
 
-#if 0
-	int len;
-
-	len =  sprintf(page, "PROC for global statistics not implemented yet!\n");
-
-	return asf_proc_calc_metrics(page, start, off, count, eof, len);
-#else
 	printk("IN %lu IN-MATCH %lu OUT %lu OUT-BYTES %lu\n",
 	       GSTATS_TOTAL(InPkts), GSTATS_TOTAL(InPktFlowMatches), GSTATS_TOTAL(OutPkts), GSTATS_TOTAL(OutBytes));
 
@@ -454,7 +362,6 @@ static int display_asf_proc_global_stats(char *page, char **start,
 	printk("MISC: TO-FNP %lu\n", GSTATS_TOTAL(PktsToFNP));
 
 	return 0;
-#endif
 }
 
 #ifdef ASF_FFP_XTRA_STATS
@@ -762,12 +669,10 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 			cur_entr++;
 			if (flow->l2blob_len == 0)
 				empty_l2blob++;
-#if 1
 			if (flow == flow->pNext) {
 				printk("possible infinite loop.. exiting this bucket!\n");
 				break;
 			}
-#endif
 
 			if (!display)
 				continue;
@@ -789,7 +694,6 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 				     NIPQUAD(flow->ulDestNATIp),
 				     ntohs(flow->ulNATPorts&0xffff),
 				     flow->stats.ulOutPkts);
-			/*TODO: avoid assumption of two cores above*/
 			disp_cnt++;
 			if (disp_cnt >= ffp_debug_show_count) {
 				display = 0;
@@ -844,12 +748,10 @@ static int display_asf_proc_flow_debug(char *page, char **start,
 		spin_lock_bh(&ffp_flow_table[i].lock);
 		for (flow = head->pNext; flow != head; flow = flow->pNext) {
 			total++;
-#if 1
 			if (flow == flow->pNext) {
 				printk("possible infinite loop.. exiting this bucket!\n");
 				break;
 			}
-#endif
 
 			if (!display)
 				continue;

@@ -275,7 +275,6 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 
 static void print_SPDPolPPStats(AsfSPDPolPPStats_t PPStats)
 {
-/*tbd - implement it */
 	return;
 }
 

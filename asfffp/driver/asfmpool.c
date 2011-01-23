@@ -197,7 +197,7 @@ int asfDeInitPools(void)
  * Arguments
 	 name = pool name
 	 ulNumGlobalPoolEntries = number of global pool entries
-	 ulNumMaxEntries = number of max pool entries [TBD: To enfore this ]
+	 ulNumMaxEntries = number of max pool entries
 	 ulNumPerCoreEntries = number of entries to keep per pool
 	 ulDataSize = size in bytes of the data structure
 	 numPoolId = Pointer that holds the allocated pool Id index
@@ -465,11 +465,7 @@ void asfReleaseNode(unsigned int ulNumPoolId, void *data, char bHeap)
 		asf_mpool_debug("pool: num %u  pc-max %u\n", pool->ulNumEntries, pool->ulNumPerCoreMaxEntries);
 		if ((pool->ulNumEntries + 1) <= (pool->ulNumPerCoreMaxEntries)) {
 			asf_mpool_debug("Returning to per cpu pool\r\n");
-#if 1
 			memset(pNode, 0, pool->ulDataElemSize);
-#else
-			cacheable_memzero(pNode, pool->ulDataElemSize);
-#endif
 
 			/* simplest case, release and get out */
 			pNode->pNext = pool->head;
@@ -484,11 +480,7 @@ void asfReleaseNode(unsigned int ulNumPoolId, void *data, char bHeap)
 
 			asf_mpool_debug("gpool: num %u\n", globalPool->ulNumEntries);
 
-#if 1
 			memset(pNode, 0, pool->ulDataElemSize);
-#else
-			cacheable_memzero(pNode, pool->ulDataElemSize);
-#endif
 			spin_lock(&(globalPool->lock));
 			pNode->pNext = globalPool->head;
 			globalPool->head = pNode;

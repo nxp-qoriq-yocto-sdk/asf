@@ -104,18 +104,9 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 #define ASFKernelSkbFree(freeArg) kfree_skb((struct sk_buff *)freeArg)
 #define ASFSkbFree(freeArg) kfree_skb((struct sk_buff *)freeArg)
 
-#if 0
-extern struct sk_buff *gfar_new_skb(struct net_device *dev);
-extern int gfar_kfree_skb(struct sk_buff *skb);
-
-#define ASF_gfar_new_skb	gfar_new_skb
-#define ASF_gfar_kfree_skb(freeArg) gfar_kfree_skb((struct sk_buff *)freeArg)
-#else
 #define ASF_gfar_new_skb
 #define ASF_gfar_kfree_skb	ASFSkbFree
-#endif
 
-/*tbd #define ASF_SKB_FREE_FUNC	gfar_kfree_skb*/
 static inline void asf_skb_free_func(void *obj)
 {
 	dev_kfree_skb_any((struct sk_buff *)obj);
@@ -245,38 +236,10 @@ static inline ASFNetDevEntry_t *ASFGetPPPoEDev(ASFNetDevEntry_t *pParentDev,
 }
 
 
-#if 0
-#define ASF_CII_CACHE_VALID_BIT	(0x80000000)
-static inline void asf_cii_set_cache(struct net_device *dev,
-	ASF_uint32_t ulCommonInterfaceId)
-{
-	/* Cache common interface ID in net_device pointer for ETHER interfaces
-	 * FIXME: avoid using atalk_ptr in net_device.
-	 */
-	dev->atalk_ptr =
-		(void *) (ASF_CII_CACHE_VALID_BIT | ulCommonInterfaceId);
-}
-
-static inline void asf_cii_reset_cache(struct net_device *dev)
-{
-	dev->atalk_ptr = NULL;
-}
-
-
-static inline ASF_uint32_t asf_cii_cache(struct net_device *dev)
-{
-	if (((ASF_uint32_t)dev->atalk_ptr) & ASF_CII_CACHE_VALID_BIT)
-		return (ASF_uint32_t)
-			(dev->atalk_ptr) & (~ASF_CII_CACHE_VALID_BIT) ;
-	return asf_max_ifaces;
-}
-
-#else
 /* Always use interface index as CII for ethernet interfaces */
 #define asf_cii_set_cache(dev, cii) do {} while (0)
 #define asf_cii_reset_cache(dev) do {} while (0)
 #define asf_cii_cache(dev)   (dev->ifindex)
-#endif
 
 static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 {
@@ -335,5 +298,4 @@ extern int asf_process_ip_options(
 extern  unsigned int asfReasmPullBuf(struct sk_buff *skb,
 	unsigned int len,
 	unsigned int *fragCnt);
-
 #endif

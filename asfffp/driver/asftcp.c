@@ -176,12 +176,8 @@ int asfTcpCheckForOutOfSeq(ffp_flow_t *flow, ffp_flow_t *oth_flow,
 
 		if (data_len < 1)
 			return ASF_LOG_ID_TCP_BAD_URG_PTR_BUT_NO_DATA;
-	} else if (tcph->urg_ptr) {
-		/*tcph->up = 0;
-		TODO: do this at the caller and update tcp checksum accordingly */
-
+	} else if (tcph->urg_ptr)
 		return ASF_LOG_ID_TCP_NO_URG_BIT;
-	}
 
 	return ASF_LOG_ID_DUMMY;
 }

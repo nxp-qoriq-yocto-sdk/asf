@@ -606,8 +606,6 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	}
 
 	SAParams.spi = xfrm->id.spi;
-	/*tbd - find the common interface Id or we can use some default here */
-	/* SAParams.ulCommonInterfaceId = ; */
 	SAParams.ulMtu = ASFCTRL_DEF_PMTU;
 
 	/*if UDP Encapsulation is enabled */
@@ -619,7 +617,6 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.IPsecNatInfo.usSrcPort = encap->encap_sport;
 		SAParams.IPsecNatInfo.usDstPort = encap->encap_dport;
 
-		/* tbd  -find the correct NATtV1 and V2 mappings*/
 		switch (encap->encap_type) {
 		default:
 		case UDP_ENCAP_ESPINUDP:
@@ -673,7 +670,6 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	sa_table[OUT_SA][sa_id].container_id = outSA.ulSPDContainerIndex;
 	sa_table[OUT_SA][sa_id].ref_count++;
 	sa_table[OUT_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
-/*tbd	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
 
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x OUT-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
@@ -759,8 +755,6 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.protocol = ASF_IPSEC_PROTOCOL_ESP;
 
 	SAParams.ulMtu = ASFCTRL_DEF_PMTU;
-	/*tbd - find the common interface Id or we can use some default here*/
-	/* SAParams.ulCommonInterfaceId = ; */
 
 	SAParams.TE_Addr.IP_Version = 4;
 	SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = 0;

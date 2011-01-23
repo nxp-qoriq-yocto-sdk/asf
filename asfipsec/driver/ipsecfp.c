@@ -1633,7 +1633,6 @@ static inline void secfp_updateIVData(unsigned int *pData)
  * IP header
  */
 
-/* TBD make this data structure cache aligned */
 __be16 secfp_IPv4_IDs[NR_CPUS];
 static inline __be16 secfp_getNextId(void)
 {
@@ -1954,7 +1953,6 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	*(unsigned int *)  &(pHeadSkb->data[0]) = pSA->SAParams.ulSPI;
 
 	ulHiSeqNum = 0;
-	/* TBD Sequence number */
 	if (pSA->SAParams.bDoAntiReplayCheck) {
 		if (pSA->SAParams.bUseExtendedSequenceNumber) {
 			ulLoSeqNum = atomic_inc_return(&pSA->ulLoSeqNum);
@@ -4419,7 +4417,6 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 			return;
 		}
 
-/*tbd- SM check it	if (skb->cb[SECFP_LOOKUP_SA_INDEX]) */{
 			iRetVal =  secfp_inCompleteSAProcess(&skb, &IPSecOpque, &ulCommonInterfaceId, ulBeforeTrimLen);
 			if (iRetVal == 1) {
 				ASFIPSEC_WARN("secfp_inCompleteSAProcess failed");
@@ -4430,7 +4427,6 @@ inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 				return;
 			}
 			ASFIPSEC_DEBUG("inComplete: Exiting SA related processing");
-		}
 
 		/* Packet is ready to go */
 		/* Assuming ethernet as the receiving device of original packet */
@@ -4549,13 +4545,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 					/* Set up the AES Context field - Need to validate this with soft crypto */
 
 					src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
-#if 0
-					pNounceIVCounter = (unsigned char *)
-							   (*(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) + skb->len
-								+(SECFP_APPEND_BUF_LEN_FIELD * 2) + 12);
-#else
 					pNounceIVCounter = skb->data + skb->len + SECFP_APPEND_BUF_LEN_FIELD + 12;
-#endif
 					tgt = (unsigned int *)pNounceIVCounter;
 
 					/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte
@@ -4656,13 +4646,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 				/* Set up the AES Context field - Need to validate this with soft crypto */
 
 				src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
-#if 0
-				pNounceIVCounter = (unsigned char *)
-						   (*(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) + skb->len
-							+(SECFP_APPEND_BUF_LEN_FIELD * 2));
-#else
 				pNounceIVCounter = skb->data + skb->len + SECFP_APPEND_BUF_LEN_FIELD + 12;
-#endif
 				tgt = (unsigned int *)pNounceIVCounter;
 
 				/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte

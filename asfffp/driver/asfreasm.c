@@ -21,10 +21,6 @@
 #include <linux/crypto.h>
 #include <linux/skbuff.h>
 #include <linux/route.h>
-#if 0
-#include "../crypto/talitos.h"
-#include "../crypto/ipsecfp.h"
-#endif
 #include "asfparry.h"
 #include "asfmpool.h"
 #include "asftmr.h"
@@ -51,15 +47,10 @@ extern ASFFFPGlobalStats_t *asf_gstats;
 #define ASF_REASM_BASE   (GFAR_SRAM_PBASE + GFAR_SRAM_SIZE  + SECFP_TOT_SRAM_SIZE)
 #endif
 
-#if 0
-#define ASF_REASM_NUM_CB_HASH_TBL_ENTRIES	(256)
-#define ASF_REASM_NUM_CBS		(1024)
-#else
 unsigned long asf_reasm_hash_list_size = 256;
 unsigned long asf_reasm_num_cbs = 1024;
 #define ASF_REASM_NUM_CB_HASH_TBL_ENTRIES (asf_reasm_hash_list_size)
 #define ASF_REASM_NUM_CBS		(asf_reasm_num_cbs)
-#endif
 
 #define ASF_NUM_FRAG_CBS_PER_REASM_CB	16
 #define ASF_REASM_NUM_FRAG_CBS		(1024 * ASF_NUM_FRAG_CBS_PER_REASM_CB)
@@ -70,11 +61,6 @@ unsigned long asf_reasm_num_cbs = 1024;
 
 #define ASF_REASM_NUM_TMR_BUCKETS 1024
 
-
-#if 0 /* Looks like not needed */
-#define NR_FRAGS_PER_CB	(2)
-#define ASF_FRAG_NUM_CBS (ASF_REASM_NUM_CBS * NR_FRAGS_PER_CB)
-#endif
 
 #define ASF_REASM_NUM_APP_INFO_VARS	4
 
@@ -89,18 +75,12 @@ unsigned long asf_reasm_num_cbs = 1024;
 #define ASF_REASM_IP_MAX_PKT_LEN 65535
 
 /* Values taken from iGateway code */
-#if 0
-#define ASF_MAX_FRAG_CNT	47
-#define ASF_MIN_FRAG_SIZE	28
-#define ASF_MAX_REASM_TIMEOUT	60
-#else
 extern int asf_reasm_timeout;
 extern int asf_reasm_maxfrags;
 extern int asf_reasm_min_fragsize;
 #define ASF_MAX_FRAG_CNT	asf_reasm_maxfrags
 #define ASF_MIN_FRAG_SIZE	asf_reasm_min_fragsize
 #define ASF_MAX_REASM_TIMEOUT	asf_reasm_timeout
-#endif
 
 extern int asf_max_vsgs;
 
@@ -271,25 +251,10 @@ int asfReasmInit(void)
 		{
 			ptr1 = asfPerCpuPtr(asf_ReasmCbPtrIndexArray, ii);
 			for (numVSG = 0; numVSG < asf_max_vsgs; numVSG++) {
-#if 0 /* def ASF_REASM_USE_L2SRAM */
-				ptr1->ptrArrayInfo[numVSG].paddr =
-				(unsigned long)
-				(ASF_REASM_BASE + ASF_REASM_HASH_TBL_SIZE)+ulOffset;
-				ptr1->ptrArrayInfo[numVSG].vaddr =
-				ioremap_flags(
-					     ptr1->ptrArrayInfo[numVSG].paddr +
-					     ulOffset,
-					     (sizeof(ptrIArry_nd_t) *
-					      ASF_REASM_NUM_CBS),
-					     PAGE_KERNEL | _PAGE_COHERENT);
-				ulOffset += sizeof(ptrIArry_nd_t) *
-					    ASF_REASM_NUM_CBS;
-
-#else
 				ptr1->ptrArrayInfo[numVSG].vaddr =
 				kzalloc((sizeof(ptrIArry_nd_t) *
 					 ASF_REASM_NUM_CBS), GFP_KERNEL);
-#endif
+
 				if (!ptr1->ptrArrayInfo[numVSG].vaddr) {
 					asf_reasm_debug("Memory allocation failed for\
 					 Holding Reassembly context blocks CB\
@@ -345,8 +310,6 @@ int asfReasmInit(void)
 	}
 	asf_reasm_debug("FragCb: PoolId = %d\r\n", asf_reasmPools[ASF_REASM_FRAG_POOL_ID_INDEX]);
 
-#if 1
-
 	/* Instantiate the timer wheel */
 	asf_reasm_debug("Instantiating timer wheels\r\n");
 
@@ -367,7 +330,7 @@ int asfReasmInit(void)
 		asfReasmDeInit();
 		return 1;
 	}
-#endif
+
 	asf_reasm_debug("Reassembly module initialized.\n");
 	return 0;
 }
@@ -375,7 +338,6 @@ int asfReasmInit(void)
 
 void asfReasmDeInit(void)
 {
-	/*TODO: implement*/
 	asfTimerWheelDeInit(ASF_REASM_TMR_ID, 0);
 	asf_reasm_debug("Not implemented!\n");
 }
@@ -553,7 +515,6 @@ static inline struct asf_reasmCb_s *asfIPv4ReasmFindOrCreateCb(
 			return pCb;
 		}
 	}
-	/* TBD Need to do max check here */
 	pCb = (struct asf_reasmCb_s *)
 	      asfGetNode(asf_reasmPools[ASF_REASM_CB_POOL_ID_INDEX], &bHeap);
 	if (pCb) {
@@ -626,16 +587,7 @@ static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 	iph = ip_hdr(skb);
 	*pIhl = ihl = iph->ihl * 4;
 
-	/*
-	 * TODO: skb->len has already excluded hh_len.
-	 * Don't use ETH_HLEN directly. Use skb->mac_len instead.
-	 */
-#if 0
-	if (unlikely((iph->ihl < 5) || (ihl > (skb->len - ETH_HLEN) ||
-					(ihl == (skb->len - ETH_HLEN)))))
-#else
 	if (unlikely((iph->ihl < 5) || (ihl >= skb->len)))
-#endif
 	{
 		asf_reasm_debug("IP Header length is invalid \r\n");
 		gstats->ulErrIpHdr++;
@@ -899,13 +851,6 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 		*option = ASF_ADJUST_NEXTFRAG;
 	}
 
-#if 0
-	if (pFragPrev) {
-		*option = ASF_ADJUST_PREVFRAG;
-	} else if (pFrag) {
-		*option = ASF_ADJUST_NEXTFRAG;
-	}
-#endif
 	if (*option == ASF_ADJUST_NONE) {
 		if (pFragPrev) {
 			if (pFragPrev->ulSegMap == *pOffset) {
@@ -1407,7 +1352,6 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 
 	if (skb_shinfo(pTempSkb)->nr_frags) {
 		asf_reasm_debug("Fragments with nr_frags not handled \r\n");
-		/* TBD */
 		return 1;
 	}
 	if (ulTotalLen  <= (pTempSkb->end - (pTempSkb->data + pTempSkb->len))) {
@@ -1424,7 +1368,6 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 			bAlloc = 1;
 		} else {
 			asf_reasm_debug("Failed to allocate skb!\n");
-			/* TBD */
 			return 1;
 		}
 	}
@@ -1501,10 +1444,6 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 	unsigned int temp_len = (len + 3) & 4;
 	struct sk_buff *pTempSkb;
 
-	/*FIXME: we may have to extract data from multiple fragments as well for
-	 * requested length of data..
-	 * Avoid assumption of first fragment having requested amount of data
-	 */
 	if ((skb->tail - (skb->data + skb->len)) >= temp_len) {
 		tgt = (unsigned int *)  (skb->data+skb->len);
 		src = (unsigned int *)  (skb_shinfo(skb)->frag_list->data);
@@ -1514,9 +1453,6 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 			src++;
 		}
 
-		/* FIXME: need to either move remaining data closer to p header or
-		 * ip header closer to remaining data.
-		 */
 		skb_shinfo(skb)->frag_list->data += len;
 		skb_shinfo(skb)->frag_list->len -= len;
 		if (skb_shinfo(skb)->frag_list->len == 0) {

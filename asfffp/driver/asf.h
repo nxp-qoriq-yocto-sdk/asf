@@ -103,7 +103,6 @@ typedef struct ASFInterfaceInfo_s {
 	ASF_uint32_t    ulDevIdentiferInPktLen;
 	ASF_uint32_t *ulRelatedIDs;
 	ASF_uint32_t    ulNumRelatedIDs;
-	/* TODO: Integrate with underlying Common Interface Id- when required*/
 } ASFInterfaceInfo_t;
 
 ASF_uint32_t ASFMapInterface(ASF_uint32_t ulCommonInterfaceId,
@@ -202,7 +201,7 @@ typedef struct ASFFFPCap_s {
 	ASF_uint32_t    ulMaxFlows ;
 
 
-	ASF_boolean_t  bHomogenousHashAlgorithm ; /* TODO: ?? */
+	ASF_boolean_t  bHomogenousHashAlgorithm ;
 
 	ASF_uint32_t    ulHashAlgoInitVal;
 

@@ -78,10 +78,6 @@ int asf_max_vsgs = ASF_MAX_VSGS;
 int asf_max_ifaces = ASF_MAX_IFACES;
 int ffp_hash_buckets = 8*1024;
 int asf_inac_divisor = 4;
-#if 0
-int asf_tcp_fin_timeout = 20;
-int asf_tcp_rst_timeout = 20;
-#endif
 int asf_l2blob_refresh_npkts = ASF_MAX_L2BLOB_REFRESH_PKT_CNT;
 int asf_l2blob_refresh_interval = ASF_MAX_L2BLOB_REFRESH_TIME;
 int asf_reasm_timeout = 60; /* in seconds ? */
@@ -108,24 +104,8 @@ MODULE_PARM_DESC(ffp_hash_buckets,
 module_param(asf_l2blob_refresh_interval, int, 0644);
 MODULE_PARM_DESC(asf_l2blob_refresh_interval,
 	"Periodic interval at which L2 blob refresh indication to be generated");
-#if 0
-module_param(asf_tcp_fin_timeout, int, 0644);
-MODULE_PARM_DESC(asf_tcp_fin_timeout,
-			"Inactivity timeout for a TCP flow after receiving FIN packet");
-module_param(asf_tcp_rst_timeout, int, 0644);
-MODULE_PARM_DESC(asf_tcp_rst_timeout,
-				"Inactivity timeout for a TCP flow after receiving RST packet");
-#endif
 module_param(asf_tcp_drop_oos, bool, 0644);
 MODULE_PARM_DESC(asf_tcp_drop_oos, "Drop TCP out of sequence packets");
-#if 0
-module_param(asf_l2blob_refresh_npkts, int, 0644);
-MODULE_PARM_DESC(asf_l2blob_refresh_npkts, "Number of packets to be processed"
-		" before generating L2 blob refresh indication");
-module_param(asf_l2blob_refresh_interval, int, 0644);
-MODULE_PARM_DESC(asf_l2blob_refresh_interval,
-	"Periodic interval at which L2 blob refresh indication to be generated");
-#endif
 module_param(asf_reasm_hash_list_size, ulong, 0444);
 MODULE_PARM_DESC(asf_reasm_hash_list_size, "Size of reassembly hash table");
 module_param(asf_reasm_num_cbs, ulong, 0444);
@@ -147,9 +127,6 @@ ASFFFPXtraGlobalStats_t *asf_xgstats;
 #endif
 asf_vsg_info_t  **asf_vsg_info;
 ASFFFPVsgStats_t *asf_vsg_stats; /* per cpu vsg stats */
-#if 0
-static unsigned long l2fw_validation_time;
-#endif
 static unsigned int  ffp_flow_pool_id = -1;
 static unsigned int  ffp_blob_timer_pool_id = -1;
 static unsigned int  ffp_inac_timer_pool_id = -1;
@@ -350,16 +327,9 @@ static inline ffp_flow_t  *asf_ffp_flow_lookup(
 
 	*pHashVal = ASFFFPComputeFlowHash1(sip, dip, ports, vsg,
 					szone, asf_ffp_hash_init_value);
-#if 0
-	printk("ASF: Hash(0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx)  = %lx (masked %lx) (hini 0x%lx)\n",
-	       iph->saddr, iph->daddr, ports, ulVsgId, ulZoneId,
-	       ulHashVal, FFP_HINDEX(ulHashVal), asf_ffp_hash_init_value);
-#endif
 
 	pHead = (ffp_flow_t *) asf_ffp_bucket_by_hash(*pHashVal);
 
-	/*todo - check rcu flow_list_for_each(flow, pHead)
-for (flow = pHead->pNext; flow != pHead; flow = rcu_deference(flow->pNext)) */
 	for (flow = pHead->pNext; flow != pHead; flow = flow->pNext) {
 		if ((flow->ulSrcIp == sip)
 		&& (flow->ulDestIp == dip)
@@ -488,16 +458,6 @@ ASFNetDevEntry_t *ASFNetDev(struct net_device *dev)
 }
 EXPORT_SYMBOL(ASFNetDev);
 
-#if 0
-static inline void asf_ffp_flow_remove(ffp_flow_t *flow, ffp_bucket_t *bkt)
-{
-	spin_lock_bh(&bkt->lock);
-	__asf_ffp_flow_remove(flow, bkt);
-	spin_unlock_bh(&bkt->lock);
-	call_rcu((struct rcu_head *)flow, ffp_flow_free_rcu);
-}
-#endif
-
 static inline void ffp_copy_flow_stats(ffp_flow_t *flow, ASFFFPFlowStats_t *stats)
 {
 	if (flow) {
@@ -545,7 +505,6 @@ int asfAdjustFragAndSendToStack(struct sk_buff *skb, ASFNetDevEntry_t *anDev)
 			bPPPoE = 1;
 	}
 
-	/* TODO: x_hh_len can be zero meaning we are not interestd in attaching extra hardware header (i.e 802.1Q/PPPOE) */
 	if (!asfIpv4Fragment(skb, anDev->ulMTU, x_hh_len, 1 /* TRUE */, dev, &pSkb)) {
 		for (; pSkb != NULL; pSkb = pTempSkb) {
 			int offset;
@@ -889,9 +848,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpHdr++;
 #endif
-			/*asfFfpSendLog(flow,
-			  ASF_LOG_ID_SHORT_IP_HDR,ulHashVal);
-			TODO: there's no flow pointer */
 			goto drop_pkt;
 		}
 	}
@@ -941,13 +897,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	if (unlikely(skb->ip_summed != CHECKSUM_UNNECESSARY)) {
 		if ((iph->frag_off) & ASF_MF_OFFSET_FLAG_NET_ORDER)
 			bCsumVerify  = 1;
-		/*
-		 *  TODO: check the capability of the underlying ethernet driver
-		 *  for RX checksum verification. ASF may drop all packets here
-		 *  if ethernet driver other than eTSEC is used.
-		 *  Or to make this generic, we can blindly go for local
-		 *  checksum verification here.
-		 */
 		if (unlikely(bCsumVerify || (iph->ihl > 5)
 			|| (iph->protocol == IPPROTO_ESP)
 			|| (iph->protocol == IPPROTO_AH))) {
@@ -1063,13 +1012,6 @@ drop_pkt:
 	asf_debug("drop_pkt LABEL\n");
 	ASF_RCU_READ_UNLOCK(bLockFlag);
 	return AS_FP_STOLEN;
-
-/*ipsec_in_proc:
-
-	TODO--- Invoke IPsec In process function
-	ASF_RCU_READ_UNLOCK(bLockFlag);
-	return AS_FP_STOLEN;
-*/
 }
 
 ASF_void_t ASFFFPProcessAndSendPkt(
@@ -1115,13 +1057,12 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 	if (NULL == anDev) {
 		asf_debug("CII %u doesn't appear to be valid\n", ulCommonInterfaceId);
-		dev_kfree_skb_any(skb);	/* FIXME: Use pFreeFn function ? */
+		dev_kfree_skb_any(skb);
 		return;
 	}
 
 	ulZoneId = anDev->ulZoneId;
 
-	/* TODO: review check for skb->len before directly accessing data */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	vstats = asfPerCpuPtr(asf_vsg_stats, smp_processor_id()) + ulVsgId;
 	vstats->ulInPkts++;
@@ -1140,14 +1081,11 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpHdr++;
 #endif
-			dev_kfree_skb_any(skb);	/* FIXME: Use pFreeFn function ? */
+			dev_kfree_skb_any(skb);
 			return;
 		}
 
-		/* TODO: use vpn hook to submit this packet to AS */
 		if (unlikely(iph->version != 4)) {
-			/*FIXME: call IPsec VPN IN hook so that it can submit
-			the packet to AS */
 			goto ret_pkt;
 		}
 
@@ -1171,17 +1109,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		}
 #endif
 
-#if 0 /* todo - how to get logical incoming device ? */
-		if (unlikely(iph->ihl > 5)) {
-			XGSTATS_INC(IpOptPkts);
-			if (asf_process_ip_options(skb, skb->dev, iph) < 0) {
-				gstats->ulErrIpHdr++;
-				XGSTATS_INC(IpOptProcFail);
-				goto drop_pkt;
-			}
-		}
-#endif
-
 		if (unlikely((iph->protocol != IPPROTO_TCP)
 			&& (iph->protocol != IPPROTO_UDP))) {
 			if (pFFPIpsecInVerifyV4(ulVsgId, skb,
@@ -1190,14 +1117,12 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				asf_debug("IPSEC must consume non UDP&TCP"\
 					" packet!!!! ERROR!!!\n");
 			}
-			return;	/* FIXME: review! */
+			return;
 		}
 	}
 #endif
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	/* TODO: how to handle fragments received on PPPoE iface and how
-	 * to remember logical device and hh_len */
 	fragCnt = 1;
 	if (unlikely((iph->frag_off) & ASF_MF_OFFSET_FLAG_NET_ORDER)) {
 		asf_display_one_frag(skb);
@@ -1211,8 +1136,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		asf_display_frags(skb, "After Defrag");
 
 		asf_debug("Defrag Completed!\n");
-
-		/* TODO: need to verify if all fragments belong to same security zone */
 
 		iph = ip_hdr(skb);
 		if (unlikely(skb->len < ((iph->ihl*4) + 8))) {
@@ -1231,7 +1154,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 				goto drop_pkt;
 			}
-			/* TBD */
 		}
 		asf_debug("DeFrag & Pull done .. proceed!! skb->len %d iph->tot_len %d fragCnt %d\n",
 			  skb->len, iph->tot_len, fragCnt);
@@ -1259,7 +1181,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			anDev->ulCommonInterfaceId,
 			(flow && flow->bIPsecIn) ? &flow->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
-			return;	/* FIXME: review! */
+			return;
 		}
 	}
 #endif
@@ -1313,10 +1235,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		q = (unsigned short *)  ptrhdrOffset;
 		if (iph->protocol == IPPROTO_UDP) {
 			XGSTATS_INC(UdpPkts);
-			/*TODO: review this condition
-			printk("UDP: skb->len %d iph->tot_len %u iphlen %d" \
-				"udph->len %d\n", skb->len, iph->tot_len,
-				iphlen, ntohs(*(q + 2))); */
 			if (((iph->tot_len-iphlen) < 8) ||
 				(ntohs(*(q + 2)) > (iph->tot_len-iphlen))) {
 				/* Udp header length is invalid */
@@ -1373,7 +1291,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				goto drop_pkt;
 			}
 
-			/* TODO: consider data in fragments also */
 			tcp_data_len = ntohs(iph->tot_len)-iphlen-trhlen;
 			asf_debug_l2("TCP_STATE_PROC: tcp_data_len = %d\n", tcp_data_len);
 
@@ -1454,30 +1371,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 			*ptrhdrOffset = flow->ulNATPorts;
 			skb_set_transport_header(skb, iphlen);
-#if 0
-			/* apply nat to all fragments */
-			if (skb_shinfo(skb)->frag_list) {
-				struct sk_buff *pSkb;
-				struct iphdr  *pIph;
-				pSkb = skb_shinfo(skb)->frag_list;
-
-				for (; pSkb; pSkb = pSkb->next) {
-					pIph = ip_hdr(pSkb);
-					if (pIph->saddr != flow->ulSrcNATIp) {
-						csum_replace4(&pIph->check,
-							pIph->saddr,
-							flow->ulSrcNATIp);
-						pIph->saddr = flow->ulSrcNATIp;
-					}
-					if (pIph->daddr != flow->ulDestNATIp) {
-						csum_replace4(&pIph->check,
-							pIph->daddr,
-							flow->ulDestNATIp);
-						pIph->daddr = flow->ulDestNATIp;
-					}
-				}
-			}
-#endif
 
 #ifndef ASF_DO_INC_CHECKSUM
 			if (iph->ihl != 5) /* Options */
@@ -1591,19 +1484,16 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						else
 							pSkb->vlan_tci = 0;
 
-						/* TODO: No need to call ip_decrease_ttl? why? */
 						ip_decrease_ttl(iph);
 
 						pSkb->data -= flow->l2blob_len;
 						pSkb->len += flow->l2blob_len;
-#if 1
 
 						if (pSkb->data < pSkb->head) {
 							asf_debug("SKB's head > data ptr .. UNDER PANIC!!!\n");
 							ASFSkbFree(pSkb);
 							continue;
 						}
-#endif
 
 						pSkb->dev = flow->odev;
 
@@ -1647,7 +1537,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			asf_debug_l2("attempting to xmit non"
 						" fragment packet\n");
 			skb->dev = flow->odev;
-			/* FIXME: ensure there's enough head room for flow->l2blob_len */
 			/* Update the MAC address information */
 			skb->len += flow->l2blob_len;
 			skb->data -= flow->l2blob_len;
@@ -1693,7 +1582,6 @@ gen_indications:
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (bSpecialIndication) {
 				/*XGSTATS_INC(FlowSpecialInd);*/
-				 /* TODO: must always be present? */
 				if (ffpCbFns.pFnFlowTcpSpecialPkts) {
 					ASFFFPFlowSpecialPacketsInfo_t  ind;
 					ffp_flow_t		      *oth_flow;
@@ -1706,7 +1594,6 @@ gen_indications:
 					ind.ulZoneId = flow->ulZoneId;
 					ind.ulHashVal = htonl(ulHashVal);
 
-					/* TODO: what about ASFwInfo */
 					ind.ASFwInfo = (ASF_uint8_t *)flow->as_flow_info;
 					ind.ulTcpState = ulTcpState;
 
@@ -1721,7 +1608,7 @@ gen_indications:
 					ffpCbFns.pFnFlowTcpSpecialPkts(ulVsgId, &ind);
 				}
 			}
-			/* TODO: FlowValidate indicaion? */
+			/* FlowValidate indicaion */
 			if (bFlowValidate) {
 				if (!flow->bDeleted && ffpCbFns.pFnFlowValidate) {
 					ASFFFPFlowValidateCbInfo_t  ind;
@@ -1734,7 +1621,6 @@ gen_indications:
 					ind.ulZoneId = flow->ulZoneId;
 					ind.ulHashVal = htonl(ulHashVal);
 
-					/* TODO: what about ASFwInfo */
 					ind.ASFwInfo =
 					(ASF_uint8_t *)flow->as_flow_info;
 
@@ -1770,7 +1656,6 @@ gen_indications:
 					ind.Buffer.linearBuffer.ulBufLen = 0;
 					ind.Buffer.nativeBuffer = NULL;
 
-					/* TODO: what to do with ASFwInfo field */
 					ind.ASFwInfo = NULL;
 
 					XGSTATS_INC(PktCtxL2blobInd);
@@ -1792,7 +1677,6 @@ gen_indications:
 		} else {
 			XGSTATS_INC(NetIfQStopped);
 			/* drop the packet here */
-			/* TODO: incr some error counter */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			flow_stats->ulInPkts--;
 #endif
@@ -1822,7 +1706,6 @@ ret_pkt_to_stk:
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulPktsToFNP++;
 #endif
-		/*TODO: count frags */
 		asfAdjustFragAndSendUp(skb, anDev);
 		return;
 	}
@@ -1854,7 +1737,6 @@ ret_pkt:
 
 		asf_debug_l2("   ret_pkt LABEL : need to adjust! (ethType 0x%04x)\n", skb->protocol);
 
-		/* TODO: Adjust PPPoE len if necessary */
 		skb->protocol = *(unsigned short *) (skb->mac_header + 12);
 		usEthType = skb->protocol;
 		if (usEthType == __constant_htons(ETH_P_8021Q))
@@ -1895,10 +1777,7 @@ ret_pkt:
 
 drop_pkt:
 	asf_debug_l2("drop_pkt LABEL\n");
-	/* TODO: we may have to iterate through frag_list and free all of them*/
-	/* TODO: ensure all fragments are also dropped. and return STOLEN
-	 always return stolen?? */
-	dev_kfree_skb_any(skb);	/*FIXME: what about pFreeFn ? */
+	dev_kfree_skb_any(skb);
 	return;
 }
 EXPORT_SYMBOL(ASFFFPProcessAndSendPkt);
@@ -2024,7 +1903,6 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 			}
 			read_lock_bh(&dev_base_lock);
 			for_each_netdev(&init_net, ndev) {
-				/*FIXME: avoid alias interfaces here */
 				if ((ndev->type == ARPHRD_ETHER) && (info->ulDevIdentiferInPktLen == ndev->addr_len)) {
 					if (!memcmp(ndev->dev_addr, info->ucDevIdentifierInPkt, ndev->addr_len)) {
 						asf_debug("ETHER iface found %s with mac %pM req-mac %pM\n",
@@ -2041,9 +1919,6 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 				goto free_and_ret_err;
 			}
 
-			/* Cache common interface ID in net_device pointer for ETHER interfaces
-			 * FIXME: avoid using atalk_ptr in net_device.
-			 */
 			asf_cii_set_cache(ndev, dev->ulCommonInterfaceId);
 
 			dev_hold(ndev);
@@ -2068,14 +1943,12 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 				if (cii >= asf_max_ifaces) {
 					asf_debug("Related CII (%u @ index %d) of Bridge iface is out of bounds (max %u)\n",
 						  cii, num, asf_max_ifaces);
-					/* FIXME: detach from previous entries */
 					goto free_and_ret_err;
 				}
 
 				attached_dev = asf_ifaces[cii];
 				if (!attached_dev) {
 					asf_debug("Attached iface of Bridge iface not found (CII %u)\n", cii);
-					/* FIXME: detach from previous entries */
 					goto free_and_ret_err;
 				}
 
@@ -2083,15 +1956,10 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 				    && (attached_dev->ulDevType != ASF_IFACE_TYPE_VLAN)) {
 					asf_debug("Attached iface (type %u) is not suitable for Bridge iface.\n",
 						  attached_dev->ulDevType);
-					/* FIXME: detach from previous entries */
 					goto free_and_ret_err;
 				}
 				attached_dev->pBrIfaceNext = dev->pBrIfaceNext;
 				attached_dev->pBridgeDev = dev;
-				/*
-				 * FIXME: we should use call_rcu to free this node as
-				 *  reader might start accessing bridge entry
-				 */
 				dev->pBrIfaceNext = attached_dev;
 			}
 			asf_ifaces[dev->ulCommonInterfaceId] = dev;
@@ -2156,7 +2024,6 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 			dev->pParentDev = parent_dev;
 			ASFInsertVlanDev(parent_dev, usVlanId, dev);
 
-			/* FIXME: use rcu assign operation??!! */
 			asf_ifaces[dev->ulCommonInterfaceId] = dev;
 		}
 		break;
@@ -2200,7 +2067,6 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 			dev->pPPPoENext = parent_dev->pPPPoENext;
 			parent_dev->pPPPoENext = dev;
 
-			/* FIXME: use rcu assign operation??!! */
 			asf_ifaces[dev->ulCommonInterfaceId] = dev;
 
 		}
@@ -2263,10 +2129,6 @@ ASF_void_t  asfDestoryAllVlanChildren(ASFNetDevEntry_t *dev)
 	ASF_uint16_t    usVlanId;
 	ASF_uint32_t    count;
 
-	/* TODO: crude way.. may be maintain a list as well.
-	 * However must be fast enough as long as VLAN IDs are
-	 * not scattered.
-	 */
 	count = dev->pVlanDevArray->ulNumVlans;
 	for (usVlanId = 0; usVlanId < ASF_VLAN_ARY_LEN; usVlanId++) {
 		if (dev->pVlanDevArray->pArray[usVlanId]) {
@@ -2412,7 +2274,6 @@ EXPORT_SYMBOL(ASFUnBindDeviceToVSG);
 
 ASF_uint32_t ASFRemove(ASF_void_t)
 {
-	/* TBD: Implement this function */
 	asf_enable = 0;
 
 	/* it should cleanup the  forwarding flows as well.*/
@@ -2424,7 +2285,6 @@ EXPORT_SYMBOL(ASFRemove);
 
 ASF_uint32_t ASFDeploy(ASF_void_t)
 {
-	/* TBD: Implement this function */
 	asf_enable = 1;
 	return ASF_SUCCESS;
 }
@@ -2441,7 +2301,6 @@ ASF_uint32_t ASFSetReasmParams(ASF_uint32_t ulVSGId, ASFReasmParams_t *p)
 	vsg->ulReasmMaxFrags = p->ulReasmMaxFrags;
 	vsg->ulReasmMinFragSize = p->ulReasmMinFragSize;
 
-/* TODO: make this VSG specific --	asfReasmInitConfig(); */
 	return ASF_SUCCESS;
 }
 EXPORT_SYMBOL(ASFSetReasmParams);
@@ -2548,8 +2407,6 @@ ASF_uint32_t ASFFFPRuntime (
 				resp.ulZoneId = ((ASFFFPDeleteFlowsInfo_t *) args)->ulZoneId;
 				resp.ulHashVal = ulHashVal;
 				resp.iResult = (iResult == 0) ? ASFFFP_RESPONSE_SUCCESS : ASFFFP_RESPONSE_FAILURE;
-
-				/* FIXME: flow1Stats and flow2Stats */
 
 				ffpCbFns.pFnRuntime(ulVSGId, cmd, pReqIdentifier, ulReqIdentifierlen,
 						    &resp, sizeof(resp));
@@ -2671,10 +2528,6 @@ EXPORT_SYMBOL(ASFFFPSetTcpCtrlParams);
 
 static inline int ffp_flow_copy_info(ASFFFPFlowInfo_t *pInfo, ffp_flow_t *flow)
 {
-	/* TODO:
-	 * pInfo->tuple.ucprotocol
-	 * protocol should be either TCP or UDP */
-
 	flow->ulSrcIp = pInfo->tuple.ulSrcIp;
 	flow->ulDestIp = pInfo->tuple.ulDestIp;
 	flow->ulPorts = (pInfo->tuple.usSrcPort << 16)|pInfo->tuple.usDestPort;
@@ -2756,8 +2609,6 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 		memcpy(&flow2->configIdentity, &p->configIdentity, sizeof(flow2->configIdentity));
 
 		flow1->ulLastPktInAt = flow2->ulLastPktInAt = jiffies;
-
-		/* TODO: what to do with ASFWInfo field */
 
 		index1 = ptrIArray_add(&ffp_ptrary, flow1);
 		if (index1 > ffp_ptrary.nr_entries)
@@ -2960,7 +2811,6 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 
 			flow->odev = dev->ndev;
 
-			/* TODO: Find outDev ???  */
 			if (p->u.l2blob.l2blobLen > ASF_MAX_L2BLOB_LEN) {
 				asf_debug_l2("bloblen %d > MAX %d\n", p->u.l2blob.l2blobLen, ASF_MAX_L2BLOB_LEN);
 				return ASFFFP_RESPONSE_FAILURE;
@@ -3134,12 +2984,8 @@ unsigned int asfFfpBlobTmrCb(unsigned int ulVSGId,
 				ind.Buffer.linearBuffer.ulBufLen = 0;
 				ind.Buffer.nativeBuffer = NULL;
 
-
-				/* TODO: what to do with ASFwInfo field */
-
 				XGSTATS_INC(TmrCtxL2blobInd);
 				ffpCbFns.pFnFlowRefreshL2Blob(flow->ulVsgId, &ind);
-				/*TODO: what's the use of ret val */
 			}
 			return 0;
 		}
@@ -3191,7 +3037,6 @@ unsigned int asfFfpInacRefreshTmrCb(unsigned int ulVSGId,
 			ind.ulInactiveTime = htonl(ulIdleTime);
 			ind.ulHashVal = htonl(ulHashVal);
 			ffp_copy_flow_stats(flow1, &ind.flow_stats);
-			/* TODO: what to do with ASFwInfo */
 			ind.ASFwInfo = (ASF_uint8_t *)flow1->as_flow_info;
 			XGSTATS_INC(TmrCtxInacInd);
 			ffpCbFns.pFnFlowActivityRefresh(flow1->ulVsgId, &ind);
@@ -3220,14 +3065,10 @@ static int asf_ffp_init_flow_table()
 	int		i;
 	unsigned int	max_num;
 
-	/* TODO: handle error conditions properly to cleanup
-		allocated memory */
-
 	/* 10% of actual max value */
 	max_num = ffp_max_flows/10;
 	get_random_bytes(&asf_ffp_hash_init_value, sizeof(asf_ffp_hash_init_value));
 
-	/* TODO: how do we calculate various limits based on ffp_max_flows ? */
 	if (asfCreatePool("FfpFlow", max_num,
 			  max_num, (max_num/2),
 			  sizeof(ffp_flow_t),
@@ -3257,7 +3098,6 @@ static int asf_ffp_init_flow_table()
 
 	asf_print("Instantiating blob timer wheels\n");
 
-	/* TODO: check interBucketGap value */
 	if (asfTimerWheelInit(ASF_FFP_BLOB_TMR_ID, 0,
 			      ffp_hash_buckets, ASF_TMR_TYPE_SEC_TMR,
 			      ASF_FFP_BLOB_TIME_INTERVAL, ASF_FFP_NUM_RQ_ENTRIES) == 1) {
@@ -3294,14 +3134,8 @@ static int asf_ffp_init_flow_table()
 	}
 	asf_print("Initializing pointer array!\n");
 	/* initialize pointer array */
-#if 0  /*def ASF_FFP_USE_SRAM */
-	addr = (unsigned long)(ASF_FFP_SRAM_BASE);
-	node = ioremap_flags(addr,
-			     (sizeof(ptrIArry_nd_t)*ffp_max_flows),
-			     PAGE_KERNEL | _PAGE_COHERENT);
-#else
 	node = kzalloc((sizeof(ptrIArry_nd_t)*ffp_max_flows), GFP_KERNEL);
-#endif
+
 	if (NULL == node) {
 		return -ENOMEM;
 	}
@@ -3319,7 +3153,6 @@ static int asf_ffp_init_flow_table()
 #endif
 	if (NULL == ffp_flow_table) {
 		asf_err("Unable to allocate memory for ffp_flow_table");
-		/*tbd - need better cleanup and allocation */
 		ptrIArray_cleanup(&ffp_ptrary);
 		return -ENOMEM;
 	}
@@ -3460,7 +3293,6 @@ ASF_uint32_t ASFSetVSGMode(ASF_uint32_t ulVSGId, ASF_Modes_t  mode)
 
 	if (mode == fwdMode) {
 		asf_ffp_cleanup_all_flows();
-		/*tbd take a lock */
 		asf_print("Setting FWD Mode for VSG [%d]\n", ulVSGId);
 		vsg_info->curMode = fwdMode;
 
@@ -3511,8 +3343,6 @@ ASF_uint32_t ASFEnableVSGFunctions(ASF_uint32_t ulVSGId, ASF_Functions_t funcs)
 		asf_err("VSGId[=%d] IPSEC Function Not Available", ulVSGId);
 		return  ASF_FAILURE;
 	}
-	/* tbd take a RCU Lock
-	enable IPSEC functionality */
 	return ASF_SUCCESS;
 }
 EXPORT_SYMBOL(ASFEnableVSGFunctions);
@@ -3530,9 +3360,6 @@ ASF_uint32_t ASFDisableVSGFunctions(ASF_uint32_t ulVSGId, ASF_Functions_t funcs)
 		asf_err("VSGId[=%d] IPSEC Function Not Enabled", ulVSGId);
 		return  ASF_FAILURE;
 	}
-	/*tbd take a RCU Lock
-	disable IPSEC functionality
-	cleanup the IPSEC database */
 	return ASF_SUCCESS;
 }
 EXPORT_SYMBOL(ASFDisableVSGFunctions);
@@ -3583,8 +3410,6 @@ static int __init asf_init(void)
 		return -1;
 	}
 
-	/* FIXME: free allocated memory on error conditions during initialization */
-
 	asfTimerInit(ASF_NUM_OF_TIMERS, 1);
 	asf_debug("Initializing mpool module\n");
 	if (asfInitPools() != 0) {
@@ -3630,10 +3455,6 @@ static int __init asf_init(void)
 		asf_err("Failed to allocate per-cpu memory for VSG statistics\n");
 		return -ENOMEM;
 	}
-#if 0
-	l2fw_validation_time = jiffies;
-#endif
-
 
 	asf_debug("Registering PROC entries\n");
 	asf_register_proc();
@@ -3664,12 +3485,6 @@ static void __exit asf_exit(void)
 
 	asf_debug("Unregister PROC entries\n");
 	asf_unregister_proc();
-
-#if 0
-	init_waitqueue_head(&dummyWq);
-	printk("Sleeping for 5 seconds to be safe from pending timer callabcks & DevFP callbacks!\n");
-	sleep_on_timeout(&dummyWq, 5*HZ);
-#endif
 
 	asf_print("Destroying existing flow table!\n");
 	asf_ffp_destroy_flow_table();
