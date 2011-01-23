@@ -2,7 +2,7 @@
 # * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
 # ***************************************************************************/
 #/*
-# * File:	makefile
+# * File:	Makefile
 # *
 # * Authors:	Hemant Agrawal <hemant@freescale.com>
 # *

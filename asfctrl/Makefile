@@ -2,21 +2,19 @@
 # * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
 # ***************************************************************************/
 #/*
-# * File:	makefile
+# * File:	Makefile
+# *
+# * Authors:	Hemant Agrawal <hemant@freescale.com>
+# *
 # *
 # */
-
-#------------------------------------------------------------------------------
-#  Include Definitions
-#------------------------------------------------------------------------------
 .PHONY: all
 all: build
 
 build:
-	make -w -C driver -f Makefile
+	make -w -C linux -f Makefile
 
 #--------------------------------------------------------------
 .PHONY: clean
 clean:
-	make -w -C driver -f Makefile clean
-
+	make -w -C linux -f Makefile clean
