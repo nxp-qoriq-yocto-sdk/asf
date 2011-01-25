@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * This file implements the hook used to offload the security

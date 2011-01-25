@@ -1,6 +1,3 @@
-/**************************************************************************
- * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
- ***************************************************************************/
 /* The BJ3 Hash function (bj3mix)
  * is drived from (http://burtleburtle.net/bob/):
  * lookup3.c, by Bob Jenkins, May 2006, Public Domain.

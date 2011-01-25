@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * Author:	Sandeep Malik <Sandeep.Malik@freescale.com>

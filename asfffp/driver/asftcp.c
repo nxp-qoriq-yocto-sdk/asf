@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asftcp.c
@@ -181,12 +181,3 @@ int asfTcpCheckForOutOfSeq(ffp_flow_t *flow, ffp_flow_t *oth_flow,
 
 	return ASF_LOG_ID_DUMMY;
 }
-
-
-
-
-/*
-		optlen = tcph->doff*4-20;
-
-*/
-
