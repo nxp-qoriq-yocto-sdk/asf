@@ -177,7 +177,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	net = dev_net(skb->dev);
 	daddr.a4 = (DestAddr.ipv4addr);
 	family = AF_INET;
-	x = xfrm_state_lookup(net, &daddr, ulSPI, usProtocol, family);
+	x = xfrm_state_lookup(net, 0, &daddr, ulSPI, usProtocol, family);
 	if (x == NULL) {
 		ASFCTRL_WARN("Unable to get the match SPD"\
 			"for the decrypted packet");

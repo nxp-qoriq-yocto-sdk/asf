@@ -1049,6 +1049,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	unsigned long		ulZoneId;
 	struct sk_buff		*skb;
 	ASFNetDevEntry_t	*anDev;
+	struct netdev_queue *txq = NULL;
+	u16 q_idx = 0;
+
 	ACCESS_XGSTATS();
 
 	skb = (struct sk_buff *) Buffer.nativeBuffer;
@@ -1440,8 +1443,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 		}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
-
-		if (0 == netif_queue_stopped(flow->odev)) {
+		q_idx = skb_tx_hash(flow->odev, skb);
+		skb_set_queue_mapping(skb, q_idx);
+		txq = netdev_get_tx_queue(flow->odev, q_idx);
+		if (0 == netif_tx_queue_stopped(txq)) {
 			asf_debug_l2("attempting to xmit the packet\n");
 			/*skb_set_network_header(skb, hh_len); */
 

@@ -195,103 +195,73 @@ static int proc_asf_enable(ctl_table *ctl, int write,
 
 static struct ctl_table asf_proc_table[] = {
 	{
-		.ctl_name       = ASF_PROC_COMMAND,
 		.procname       = "command",
 		.data	   = asf_proc_cmdbuf,
 		.maxlen	 = sizeof(asf_proc_cmdbuf),
 		.mode	   = 0644,
 		.proc_handler   = proc_asf_proc_exec_cmd,
-		.strategy       = &sysctl_string
 	} ,
 	{
-		.ctl_name       = ASF_ENABLE,
 		.procname       = "enable",
 		.data	   = &asf_enable,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0644,
 		.proc_handler   = proc_asf_enable,
-		.strategy       = sysctl_intvec,
 	} ,
-/*
 	{
-		.ctl_name       = ASF_AUTO_MODE,
-		.procname       = "auto_mode",
-		.data	   = &asf_auto_mode,
-		.maxlen	 = sizeof(int),
-		.mode	   = 0644,
-		.proc_handler   = proc_asf_auto_mode,
-		.strategy       = sysctl_intvec,
-	},
-*/
-	{
-		.ctl_name       = ASF_FFP_MAX_FLOWS,
 		.procname       = "ffp_max_flows",
 		.data	   = &ffp_max_flows,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0444,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = ASF_FFP_MAX_VSGS,
 		.procname       = "ffp_max_vsgs",
 		.data	   = &asf_max_vsgs,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0444,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = ASF_FFP_HASH_BUCKETS,
 		.procname       = "ffp_hash_buckets",
 		.data	   = &ffp_hash_buckets,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0444,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = ASF_L2BLOB_REFRESH_NPKTS,
 		.procname       = "l2blob_refresh_npkts",
 		.data	   = &asf_l2blob_refresh_npkts,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = ASF_L2BLOB_REFRESH_INTERVAL,
 		.procname       = "l2blob_refresh_interval",
 		.data	   = &asf_l2blob_refresh_interval,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = ASF_FFP_DEBUG_SKIP_FIRST,
 		.procname       = "ffp_debug_show_index",
 		.data	   = &ffp_debug_show_index,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = ASF_FFP_DEBUG_SHOW_COUNT,
 		.procname       = "ffp_debug_show_count",
 		.data	   = &ffp_debug_show_count,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{}
 } ;
 
 static struct ctl_table asf_proc_root_table[] = {
 	{
-		.ctl_name       = CTL_ASF,
 		.procname       = "asf",
 		.mode	   = 0555,
 		.child	  = asf_proc_table,

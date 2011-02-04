@@ -109,49 +109,39 @@ static int proc_asf_fwd_aging_enable(ctl_table *ctl, int write,
 
 static struct ctl_table asf_fwd_proc_table[] = {
 	{
-		.ctl_name       = ASF_FWD_AGING_ENABLE,
 		.procname       = "aging_enable",
 		.data           = &fwd_aging_enable,
 		.maxlen         = sizeof(int),
 		.mode           = 0644,
 		.proc_handler   = proc_asf_fwd_aging_enable,
-		.strategy       = sysctl_intvec,
 	},
 	{
-		.ctl_name       = ASF_FWD_EXP_TIMEOUT,
 		.procname       = "cache_expiry_interval",
 		.data           = &fwd_expiry_timeout,
 		.maxlen         = sizeof(int),
 		.mode           = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	},
 	{
-		.ctl_name       = ASF_FWD_L2BLOB_REFRESH_NPKTS,
 		.procname       = "l2blob_refresh_npkts",
 		.data           = &fwd_l2blob_refresh_npkts,
 		.maxlen         = sizeof(int),
 		.mode           = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	},
 	{
-		.ctl_name       = ASF_FWD_L2BLOB_REFRESH_INTERVAL,
 		.procname       = "l2blob_refresh_interval",
 		.data           = &fwd_l2blob_refresh_interval,
 		.maxlen         = sizeof(int),
 		.mode           = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	},
 	{
-		.ctl_name       = ASF_FWD_MAX_ENTRY,
 		.procname       = "max_num_entry",
 		.data           = &fwd_max_entry,
 		.maxlen         = sizeof(int),
 		.mode           = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	},
 	{}
 };
@@ -159,7 +149,6 @@ static struct ctl_table asf_fwd_proc_table[] = {
 
 static struct ctl_table asf_fwd_proc_root_table[] = {
 	{
-		.ctl_name       = ASF_FWD,
 		.procname       = "fwd",
 		.mode           = 0555,
 		.child          = asf_fwd_proc_table,
@@ -176,7 +165,7 @@ int asf_fwd_register_proc(void)
 {
 	const struct ctl_path asf_fwd_path[] = {
 	{ .procname = asf_proc_header->ctl_table->procname,
-	.ctl_name = asf_proc_header->ctl_table->ctl_name, },
+	},
 	{} };
 
 	/* register sysctl tree */

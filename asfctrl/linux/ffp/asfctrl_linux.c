@@ -657,7 +657,7 @@ static int __init asfctrl_init(void)
 	register_netdevice_notifier(&asfctrl_dev_notifier);
 	devfp_register_tx_hook(asfctrl_dev_fp_tx_hook);
 
-	route_hook_register(&asfctrl_l3_route_add,
+	route_hook_fn_register(&asfctrl_l3_route_add,
 				&asfctrl_l3_route_flush);
 
 	asfctrl_sysfs_init();
@@ -685,7 +685,7 @@ static void __exit asfctrl_exit(void)
 
 	asfctrl_sysfs_exit();
 
-	route_hook_unregister();
+	route_hook_fn_unregister();
 
 	devfp_register_tx_hook(NULL);
 

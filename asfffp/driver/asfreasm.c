@@ -1621,7 +1621,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					asf_reasm_debug("Next skb\r\n");
 					pLastSkb->next = skb2;
 					pLastSkb = skb2;
-
+					skb2->queue_mapping = skb->queue_mapping;
 					skb_reserve(skb2, ulDevXmitHdrLen);
 
 					skb2->tail += (len+ihl);

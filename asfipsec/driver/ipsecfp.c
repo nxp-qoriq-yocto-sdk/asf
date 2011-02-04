@@ -3275,6 +3275,9 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 	outSA_t *pSA;
 	struct iphdr *iph;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
+	struct netdev_queue *txq = NULL;
+	u16 q_idx = 0;
+
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
 	pIPSecPPGlobalStats->ulTotOutProcPkts++;
@@ -3316,6 +3319,8 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 		if (!skb->cb[SECFP_OUTB_FRAG_REQD]) {
 			skb->pkt_type = PACKET_FASTROUTE;
 			skb->asf = 1;
+			q_idx = skb_tx_hash(skb->dev, skb);
+			skb_set_queue_mapping(skb, q_idx);
 			if (asfDevHardXmit(skb->dev, skb) != 0) {
 				ASFSkbFree(skb);
 				return;
@@ -3367,6 +3372,8 @@ void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 						pOutSkb->len += pSA->ulL2BlobLen;
 
 						pOutSkb->dev = pSA->odev;
+						q_idx = skb_tx_hash(pSA->odev, skb);
+						skb_set_queue_mapping(skb, q_idx);
 #ifdef ASFIPSEC_DEBUG_FRAME
 						ASFIPSEC_DEBUG("Next skb = 0x%x",  pTempSkb);
 						ASFIPSEC_DEBUG("Frag : skb = 0x%x, skb->data = 0x%x, skb->dev = 0x%x, skb->len = %d*****",

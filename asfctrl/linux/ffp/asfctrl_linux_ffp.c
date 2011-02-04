@@ -881,8 +881,8 @@ static int asfctrl_conntrack_event(unsigned int events, struct nf_ct_event *ptr)
 			ASFCTRL_INFO("UDP flow");
 			asfctrl_offload_session(ct);
 		}
-	} else if (events & (1 << IPCT_STATUS)) {
-		ASFCTRL_INFO("IPCT_STATUS!");
+	} else if (events & (1 << IPCT_ASSURED)) {
+		ASFCTRL_INFO("IPCT_ASSURED!");
 		/* Offload the connection if status is assured */
 		if ((ct_tuple->dst.protonum == IPPROTO_TCP) &&
 			(ct->status & IPS_ASSURED)) {

@@ -21,6 +21,7 @@
 #include "ipsfpapi.h"
 #include "ipsecfp.h"
 #include "ipseccmn.h"
+#include <linux/proc_fs.h>
 
 /*
  * Implement following proc
@@ -81,74 +82,59 @@ static int proc_secfp_proc_exec_cmd(ctl_table *ctl, int write,
 
 static struct ctl_table secfp_proc_table[] = {
 	{
-		.ctl_name       = SECFP_PROC_COMMAND,
 		.procname       = "command",
 		.data	   = secfp_proc_cmdbuf,
 		.maxlen	 = sizeof(secfp_proc_cmdbuf),
 		.mode	   = 0644,
 		.proc_handler   = proc_secfp_proc_exec_cmd,
-		.strategy       = &sysctl_string
 	} ,
 	{
-		.ctl_name       = SECFP_MAX_TUNNELS,
 		.procname       = "ulMaxTunnels_g",
 		.data	   = &ulMaxTunnels_g,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0444,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = SECFP_MAX_VSGS,
 		.procname       = "ulMaxVSGs_g",
 		.data	   = &ulMaxVSGs_g,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0444,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = SECFP_MAX_SPD,
 		.procname       = "ulMaxSPDContainers_g",
 		.data	   = &ulMaxSPDContainers_g,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0444,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name	= SECFP_MAX_SA,
 		.procname	= "ulMaxSupportedIPSecSAs_g",
 		.data	   = &ulMaxSupportedIPSecSAs_g,
 		.maxlen  = sizeof(int),
 		.mode	   = 0444,
 		.proc_handler	= proc_dointvec,
-		.strategy	= sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = SECFP_L2BLOB_REFRESH_NPKTS,
 		.procname       = "ulL2BlobRefreshPktCnt_g",
 		.data	   = &ulL2BlobRefreshPktCnt_g,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{
-		.ctl_name       = SECFP_L2BLOB_REFRESH_INTERVAL,
 		.procname       = "ulL2BlobRefreshTimeInSec_g",
 		.data	   = &ulL2BlobRefreshTimeInSec_g,
 		.maxlen	 = sizeof(int),
 		.mode	   = 0644,
 		.proc_handler   = proc_dointvec,
-		.strategy       = sysctl_intvec,
 	} ,
 	{}
 } ;
 
 static struct ctl_table secfp_proc_root_table[] = {
 	{
-		.ctl_name       = 2222,
 		.procname       = "asfipsec",
 		.mode	   = 0555,
 		.child	  = secfp_proc_table,
