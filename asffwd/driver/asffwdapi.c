@@ -410,6 +410,9 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 	int			bL2blobRefresh = 0;
 	struct sk_buff		*skb ;
 	struct iphdr		*iph ;
+	struct netdev_queue *txq = NULL;
+	u16 q_idx = 0;
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	ASFFFPGlobalStats_t	*gstats;
 	ASFFFPVsgStats_t	*vstats;
@@ -503,7 +506,10 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 		}
 		asf_print("L2blob Info found! out dev %p\n", Cache->odev);
 
-		if (0 == netif_queue_stopped(Cache->odev)) {
+		q_idx = skb_tx_hash(Cache->odev, skb);
+		skb_set_queue_mapping(skb, q_idx);
+		txq = netdev_get_tx_queue(Cache->odev, q_idx);
+		if (0 == netif_tx_queue_stopped(txq)) {
 			asf_print("attempting to xmit the packet\n");
 			asf_print("----------------------------------------\n");
 			asf_print("len = %d,  data_len = %d, mac_len = %d, "
