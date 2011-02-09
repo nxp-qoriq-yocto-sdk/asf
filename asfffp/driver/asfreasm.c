@@ -1576,6 +1576,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 		}
 
 		if (bNewSkb) {
+			int headroom = skb_headroom(skb);
 			ulMTU -= ihl;
 			asf_reasm_debug("Re-using incoming Skb"
 						" as first fragment.\r\n");
@@ -1615,14 +1616,14 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					len &= ~7;
 
 				skb2 = ASFSkbAlloc(len + ihl +
-						ulDevXmitHdrLen, GFP_ATOMIC);
+						headroom, GFP_ATOMIC);
 
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
 					pLastSkb->next = skb2;
 					pLastSkb = skb2;
 					skb2->queue_mapping = skb->queue_mapping;
-					skb_reserve(skb2, ulDevXmitHdrLen);
+					skb_reserve(skb2, headroom);
 
 					skb2->tail += (len+ihl);
 					skb2->len = (len+ihl);
