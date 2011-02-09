@@ -1407,6 +1407,11 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #ifndef ASF_DO_INC_CHECKSUM
 			else {
 				skb->ip_summed = CHECKSUM_PARTIAL;
+
+				if (iph->protocol == IPPROTO_TCP)
+					tcp_hdr(skb)->check = 0;
+				else if (iph->protocol == IPPROTO_UDP)
+					udp_hdr(skb)->check = 0;
 			}
 #endif
 		} else {
