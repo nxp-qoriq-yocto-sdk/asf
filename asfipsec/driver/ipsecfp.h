@@ -22,6 +22,8 @@
 #include <linux/ipv6.h>
 #include <talitos.h>
 
+#include "ipseccaam.h"
+
 #define FALSE 0
 #define TRUE 1
 
@@ -180,12 +182,12 @@
 	descPtr->j_extent = extent;\
 }
 
+#ifndef CONFIG_P1010_RDB
 #define SECFP_SET_DESC_PTR(a, b, c, d)\
 	(a).len = cpu_to_be16(b);\
 	(a).ptr = cpu_to_be32(lower_32_bits((c)));\
 	(a).eptr = cpu_to_be32(upper_32_bits((c)));\
 	(a).j_extent = d;
-
 
 extern dma_addr_t talitos_dma_map_single(void *data,
 			unsigned int len, int dir);
@@ -198,6 +200,12 @@ extern dma_addr_t talitos_dma_unmap_single(void *data,
 
 #define SECFP_UNMAP_SINGLE_DESC(data, len) \
 	talitos_dma_unmap_single(data, len, DMA_TO_DEVICE)
+#else
+#define SECFP_DMA_MAP_SINGLE(data, len, dir) (0)
+#define SECFP_DMA_UNMAP_SINGLE(data, len, dir) (0)
+#define SECFP_UNMAP_SINGLE_DESC(data, len) (0)
+#endif
+
 
 /* Definition copied into asfreasm.c */
 #define SECFP_OUTSA_TABLE_SIZE (sizeof(ptrIArry_nd_t)*SECFP_MAX_OB_SAS)
@@ -356,6 +364,9 @@ typedef struct inSA_s {
 	unsigned int ulLastSeqNum;
 	unsigned int *pWinBitMap;
 	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
+#ifdef CONFIG_P1010_RDB
+	struct caam_ctx ctx;
+#else
 	__be32 desc_hdr_template;
 	__be32    hdr_Auth_template_0; /* when proto is AH and
 					  only Auth needs to be performed*/
@@ -363,7 +374,7 @@ typedef struct inSA_s {
 					  algorithm is set */
 	dma_addr_t	AuthKeyDmaAddr;
 	dma_addr_t    EncKeyDmaAddr;
-
+#endif
 	unsigned int validIpPktLen; /* Sum of ESP or AH header + IP header
 					 IF ESP
 					 + CipherIV Len +
@@ -519,13 +530,16 @@ typedef struct secTunnelIface_s {
 	unsigned int		ulTunnelMagicNumber;
 } SecTunnelIface_t;
 
-
 typedef struct outSA_s {
 	struct rcu_head rcu;
 	SAParams_t SAParams;
 	SPDOutParams_t SPDParams;
 	int chan;
 	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS]; /* Hardware option AES_CBC or BOTH or only encryption etc. */
+
+#ifdef CONFIG_P1010_RDB
+	struct caam_ctx ctx;
+#else
 	__be32 desc_hdr_template;
 	__be32    hdr_Auth_template_0; /* when proto is AH and
 					  only Auth needs to be performed*/
@@ -533,6 +547,7 @@ typedef struct outSA_s {
 					  algorithm is set */
 	dma_addr_t	AuthKeyDmaAddr;
 	dma_addr_t    EncKeyDmaAddr;
+#endif
 	struct {
 		bool bIpVersion; /* 0-IPv4 or 1-IPv6 */
 		union {
@@ -620,16 +635,30 @@ typedef struct secfp_ivInfo_s {
 /* to satisfy the compiler */
 struct talitos_desc;
 
+#ifndef CONFIG_P1010_RDB
 extern  void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pSA, struct talitos_desc *, unsigned int);
 extern  void secfp_prepareInDescriptor(struct sk_buff *skb, void *pSA, struct talitos_desc *, unsigned int);
-void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
-					void *pData, struct talitos_desc *desc, unsigned int ulIndex);
-void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
-					 struct talitos_desc *desc, unsigned int ulOptionIndex);
 extern inline void secfp_outComplete(struct device *dev,
 		struct talitos_desc *desc, void *context, int error);
 extern inline void secfp_inComplete(struct device *dev,
 		struct talitos_desc *desc, void *context, int err);
+#else
+extern  void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pSA,
+					void *, unsigned int);
+extern  void secfp_prepareInDescriptor(struct sk_buff *skb, void *pSA,
+					void *, unsigned int);
+extern inline void secfp_outComplete(struct device *dev,
+		void *desc, int error, void *context);
+extern inline void secfp_inComplete(struct device *dev,
+		void *desc, int err, void *context);
+#endif
+
+void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
+					void *pData, struct talitos_desc *desc,
+					unsigned int ulIndex);
+void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
+					 struct talitos_desc *desc,
+					unsigned int ulOptionIndex);
 extern inline void secfp_inv6Complete(struct talitos_desc *desc, struct sk_buff *context, int err);
 extern int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev);
 extern int try_fastroute_fwnat(struct sk_buff *skb, struct net_device *dev, int length);
