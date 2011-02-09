@@ -1653,7 +1653,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					iph = ip_hdr(skb2);
 					iph->frag_off = htons((offset >> 3));
 					iph->tot_len = htons(len + ihl);
-
+					iph->frag_off |= htons(IP_MF);
 					if (bytesLeft == 0)
 						iph->frag_off &= htons(~IP_MF);
 
