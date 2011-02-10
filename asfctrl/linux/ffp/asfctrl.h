@@ -176,11 +176,6 @@ extern struct net_device *ppp_asf_get_parent_dev(struct net_device *pDev,
 							T_UINT16 *pSessId);
 #endif
 
-#ifdef CONFIG_VLAN_8021Q
-extern struct net_device *__vlan_get_real_dev(struct net_device *dev,
-						u16 *vlan_id);
-#endif
-
 #ifdef ASFCTRL_FWD_FP_SUPPORT
 
 typedef void (*asfctrl_fwd_l2blob_update)(struct sk_buff *skb,
