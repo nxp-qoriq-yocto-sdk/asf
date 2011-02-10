@@ -30,7 +30,7 @@
 #include <net/dst.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <net/route.h>
-
+#include <8021q/vlan.h>
 #include "../../../asfffp/driver/asf.h"
 #include "asfctrl.h"
 
@@ -63,6 +63,16 @@ EXPORT_SYMBOL(asfctrl_vsg_config_id);
 
 uint32_t asfctrl_vsg_l2blobconfig_id;
 EXPORT_SYMBOL(asfctrl_vsg_l2blobconfig_id);
+
+#ifdef CONFIG_VLAN_8021Q
+static inline struct net_device *
+__vlan_get_real_dev(struct net_device *dev, u16 *vlan_id)
+{
+	if (vlan_id)
+		*vlan_id = vlan_dev_info(dev)->vlan_id;
+		return vlan_dev_info(dev)->real_dev;
+}
+#endif
 
 #ifdef ASFCTRL_FWD_FP_SUPPORT
 asfctrl_fwd_l2blob_update  fn_fwd_l2blob_update;
