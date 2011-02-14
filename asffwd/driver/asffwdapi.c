@@ -351,7 +351,8 @@ inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 
 			pSkb->pkt_type = PACKET_FASTROUTE;
 			pSkb->asf = 1;
-			pSkb->vlan_tci = Cache->tx_vlan_id;
+			if (Cache->bVLAN)
+				pSkb->vlan_tci = Cache->tx_vlan_id;
 
 			ip_decrease_ttl(iph);
 
@@ -553,7 +554,8 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 			asfCopyWords((unsigned int *)skb->data,
 					(unsigned int *)Cache->l2blob,
 					Cache->l2blob_len);
-			skb->vlan_tci = Cache->tx_vlan_id;
+			if (Cache->bVLAN)
+				skb->vlan_tci = Cache->tx_vlan_id;
 			skb->pkt_type = PACKET_FASTROUTE;
 			skb->asf = 1;
 
