@@ -537,6 +537,7 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 				/* Fragmentation Needed, so do it */
 				asfFragmentAndSendPkt(Cache, skb, iph,
 						cache_stats, gstats, vstats);
+				txq->trans_start = jiffies;
 #endif
 				goto gen_indications;
 			}
@@ -561,11 +562,13 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 
 			asf_print("invoke hard_start_xmit skb-packet"
 					" (blob_len %d)\n", Cache->l2blob_len);
+			txq->trans_start = jiffies;
 			if (0 != asfDevHardXmit(skb->dev, skb)) {
 				asf_err("Error in transmit: may happen as "
 					"we don't check for gfar free desc\n");
 				ASFSkbFree(skb);
 			}
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutBytes += skb->len;
 			vstats->ulOutBytes += skb->len;

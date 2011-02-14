@@ -1527,6 +1527,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 							asf_debug("Error in transmit: Should not happen\r\n");
 							ASFSkbFree(pSkb);
 						}
+						txq->trans_start = jiffies;
 
 					}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -1580,6 +1581,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				asf_debug("Error in transmit: may happen as we don't check for gfar free desc\n");
 				ASFSkbFree(skb);
 			}
+			txq->trans_start = jiffies;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutPkts++;
