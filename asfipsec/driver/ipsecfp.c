@@ -707,9 +707,22 @@ void secfp_deInit(void)
 	secfp_DeInitInContainerTable();
 	secfp_DeInitTunnelIfaces();
 	secfp_DeInitOutSATable();
-	if (desc_cache)
-		kmem_cache_destroy(desc_cache);
 
+	if (desc_cache) {
+		void *desc;
+		u32 current_edesc, i;
+
+		for (i = 0; i < NR_CPUS; i++) {
+			current_edesc = curr_desc[i];
+			while (current_edesc) {
+				desc = desc_rec_queue[i][current_edesc - 1];
+				kmem_cache_free(desc_cache, desc);
+				current_edesc--;
+			}
+		}
+
+		kmem_cache_destroy(desc_cache);
+	}
 }
 
 int secfp_init(void)
