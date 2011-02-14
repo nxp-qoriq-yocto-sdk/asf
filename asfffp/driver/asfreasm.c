@@ -32,6 +32,7 @@
 /* #define ASF_REASM_DEBUG */
 
 extern ASFFFPGlobalStats_t *asf_gstats;
+extern struct sk_buff *gfar_new_skb(struct net_device * dev);
 #ifdef ASF_REASM_DEBUG
 #define asf_reasm_debug(fmt, args...) printk("[CPU %d line %d %s] " fmt, smp_processor_id(), __LINE__, __FUNCTION__, ##args)
 #else
@@ -1615,15 +1616,13 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				if (len < bytesLeft)
 					len &= ~7;
 
-				skb2 = ASFSkbAlloc(len + ihl +
-						headroom, GFP_ATOMIC);
-
+				skb2 = gfar_new_skb(skb->dev);
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
+					skb2->skb_owner = NULL;
 					pLastSkb->next = skb2;
 					pLastSkb = skb2;
 					skb2->queue_mapping = skb->queue_mapping;
-					skb_reserve(skb2, headroom);
 
 					skb2->tail += (len+ihl);
 					skb2->len = (len+ihl);
@@ -1671,7 +1670,11 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				} else {
 					asf_reasm_debug("Skb allocation"
 						" failed in fragmenation\r\n");
-					ASFSkbFree(skb);
+					pLastSkb = skb;
+					while (pLastSkb) {
+						pLastSkb = pLastSkb->next;
+						ASFSkbFree(pLastSkb);
+					}
 					return 1;
 				}
 			}
