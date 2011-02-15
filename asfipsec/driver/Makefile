@@ -32,6 +32,9 @@ else
 EXTRA_CFLAGS += -DASF_FEATURE_OPTION=1
 endif
 
+KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asffwd/driver/Module.symvers
+export KBUILD_EXTRA_SYMBOLS
+
 EXTRA_CFLAGS += -DCONFIG_ASF=1 -DCONFIG_AS_FASTPATH=1 -I$(KERNEL_PATH)/net/bridge
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/drivers/net
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/drivers/crypto -I$(KERNEL_PATH)/drivers/crypto/caam -I$(KERNEL_PATH)/drivers/crypto/caam/dcl
