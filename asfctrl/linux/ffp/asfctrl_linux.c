@@ -302,7 +302,7 @@ T_INT32 asfctrl_create_dev_map(struct net_device *dev, T_INT32 bForce)
 		struct net_device  *pdev;
 		ASF_uint32_t       relIds[1];
 
-		pdev = ppp_asf_get_parent_dev(dev, &usPPPoESessId);
+		pdev = ppp_get_parent_dev(dev, &usPPPoESessId);
 		if (!pdev) {
 			ASFCTRL_ERR("PPPoE %s parent device not found\n",
 					dev->name);

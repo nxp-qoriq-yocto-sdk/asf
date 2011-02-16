@@ -172,7 +172,7 @@ extern asfctrl_ipsec_get_flow_info fn_ipsec_get_flow4;
 
 extern void asfctrl_invalidate_sessions(void);
 #ifdef CONFIG_PPPOE
-extern struct net_device *ppp_asf_get_parent_dev(struct net_device *pDev,
+extern struct net_device *ppp_get_parent_dev(struct net_device *pDev,
 							T_UINT16 *pSessId);
 #endif
 
