@@ -1670,10 +1670,11 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				} else {
 					asf_reasm_debug("Skb allocation"
 						" failed in fragmenation\r\n");
-					pLastSkb = skb;
-					while (pLastSkb) {
-						pLastSkb = pLastSkb->next;
-						ASFSkbFree(pLastSkb);
+					skb2 = skb;
+					while (skb2) {
+						pLastSkb = skb2->next;
+						ASFSkbFree(skb2);
+						skb2 = pLastSkb;
 					}
 					return 1;
 				}
