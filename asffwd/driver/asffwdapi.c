@@ -498,6 +498,14 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 			}
 			Cache->ulLastPktInAt = jiffies;
 		}
+		/* Handle IP options */
+		if (unlikely(iph->ihl > 5)) {
+			if (asf_process_ip_options(skb, skb->dev, iph) < 0) {
+				gstats->ulErrIpHdr++;
+				XGSTATS_INC(IpOptProcFail);
+				goto drop_pkt;
+			}
+		}
 #endif
 		if (Cache->l2blob_len == 0) {
 			asf_print("Generating L2blob Indication"

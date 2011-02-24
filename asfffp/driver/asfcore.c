@@ -608,7 +608,17 @@ static inline void asfFfpSendLog(ffp_flow_t *flow, unsigned long ulMsgId, unsign
 
 int asf_process_ip_options(struct sk_buff *skb, struct net_device *dev, struct iphdr *iph)
 {
-	struct ip_options *opt;
+	if (skb_dst(skb) == NULL) {
+		int err = ip_route_input(skb, iph->daddr, iph->saddr,
+					 iph->tos, dev);
+		if (unlikely(err))
+			return -1;
+	}
+
+	if (ip_rcv_options(skb))
+		return -1;
+
+	ip_forward_options(skb);
 
 	return 0;
 }
@@ -833,23 +843,12 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		goto ret_pkt;
 	}
 
-	if (unlikely(iph->ihl != 5)) {
-		if (likely(iph->ihl > 5)) {
-			XGSTATS_INC(IpOptPkts);
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			if (asf_process_ip_options(skb, skb->dev, iph) < 0) {
-				gstats->ulErrIpHdr++;
-				XGSTATS_INC(IpOptProcFail);
-				goto drop_pkt;
-			}
-#endif
-		} else {
+	if (unlikely(iph->ihl < 5)) {
 		/* IP Header Length is < 5... PKT HDR ERROR */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpHdr++;
 #endif
 			goto drop_pkt;
-		}
 	}
 
 	len = ntohs(iph->tot_len);
@@ -1232,6 +1231,15 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				}
 
 				L2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
+			}
+		}
+
+		/* Handle IP options */
+		if (unlikely(iph->ihl > 5)) {
+			if (asf_process_ip_options(skb, skb->dev, iph) < 0) {
+				gstats->ulErrIpHdr++;
+				XGSTATS_INC(IpOptProcFail);
+				goto drop_pkt;
 			}
 		}
 #endif
