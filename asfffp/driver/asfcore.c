@@ -1463,13 +1463,13 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			asf_debug_l2("attempting to xmit the packet\n");
 			/*skb_set_network_header(skb, hh_len); */
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			/* flow->l2blob_len > 0 && flow->odev != NULL
 			from this point onwards */
 			if (((((skb->len + flow->l2blob_len) >
 				(flow->odev->mtu + ETH_HLEN))
 				&& (skb->len > flow->pmtu))) ||
 				(skb_shinfo(skb)->frag_list)) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				struct sk_buff *pSkb, *pTempSkb;
 
 				XGSTATS_INC(FragAndXmit);
@@ -1547,8 +1547,11 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 					printk("asfcore.c:%d - asfIpv4Fragment returned NULL!!\n", __LINE__);
 				}
 				goto gen_indications;
-			}
+#else /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
+				/* Fragmentation in case of ASF_MINIMUM */
+				goto ret_pkt_to_stk;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
+			}
 			XGSTATS_INC(NormalXmit);
 			asf_debug_l2("decreasing TTL\n");
 			ip_decrease_ttl(iph);
