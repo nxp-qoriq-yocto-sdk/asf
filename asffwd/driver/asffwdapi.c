@@ -546,8 +546,11 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 				asfFragmentAndSendPkt(Cache, skb, iph,
 						cache_stats, gstats, vstats);
 				txq->trans_start = jiffies;
-#endif
 				goto gen_indications;
+#else
+				/* fragmentation in case of ASF_MINIMUM */
+				goto ret_pkt_to_stk;
+#endif
 			}
 
 			asf_print("decreasing TTL\n");
