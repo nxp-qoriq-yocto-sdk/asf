@@ -37,7 +37,8 @@ enum {
 #define ASF_L2BLOB_REFRESH_RET_PKT_STK	(2)
 #define ASF_L2BLOB_REFRESH_DROP_PKT	(3)
 
-typedef char     ASF_char8_t;
+typedef char	ASF_char8_t;
+typedef unsigned long ASF_uint64_t;
 typedef unsigned int ASF_uint32_t;
 typedef unsigned char ASF_uchar8_t;
 typedef unsigned char ASF_uint8_t;
@@ -158,15 +159,12 @@ typedef struct ASFFWDCacheEntryTuple_s {
 
 
 typedef struct ASFFFPL2blobConfig_s {
-	ASF_uint32_t	ulL2blobMagicNumber;
-	ASF_uint32_t	ulOldL2blobJiffies;
 	ASF_boolean_t	bl2blobRefreshSent;
+	ASF_uint32_t	ulL2blobMagicNumber;
+	ASF_uint64_t	ulOldL2blobJiffies;
 } ASFFFPL2blobConfig_t;
 
 /****** Firewall API (FFP API) **********/
-
-
-
 
 typedef enum {
 	ASFFFP_RESPONSE_SUCCESS = 0,	/* Success */

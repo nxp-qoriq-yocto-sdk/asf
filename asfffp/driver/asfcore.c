@@ -1083,12 +1083,13 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpHdr++;
 #endif
-			dev_kfree_skb_any(skb);
+			pFreeFn(skb);
 			return;
 		}
 
 		if (unlikely(iph->version != 4)) {
-			goto ret_pkt;
+			asf_debug("Bad iph-version =%d", iph->version);
+			goto drop_pkt;
 		}
 
 		/* Do ip header length checks if the packet is received thru IPsec */
@@ -1110,16 +1111,15 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			goto drop_pkt;
 		}
 #endif
-
 		if (unlikely((iph->protocol != IPPROTO_TCP)
 			&& (iph->protocol != IPPROTO_UDP))) {
-			if (pFFPIpsecInVerifyV4(ulVsgId, skb,
-				anDev->ulCommonInterfaceId, NULL,
-				pIpsecOpaque) == 0) {
-				asf_debug("IPSEC must consume non UDP&TCP"\
-					" packet!!!! ERROR!!!\n");
+			if (pFFPIpsecInVerifyV4) {
+				pFFPIpsecInVerifyV4(ulVsgId, skb,
+				anDev->ulCommonInterfaceId, NULL, pIpsecOpaque);
+				return;
 			}
-			return;
+			asf_err("Non supported Decrypted packet!!! ERROR!!!\n");
+			goto drop_pkt;
 		}
 	}
 #endif
@@ -1178,11 +1178,12 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		asf_ffp_hash_init_value, flow ? "FOUND" : "NOT FOUND");
 
 #ifdef ASF_IPSEC_FP_SUPPORT
-	if (pIpsecOpaque /*&& pFFPIpsecInVerifyV4 */) {
+	if (pIpsecOpaque) {
 		if (pFFPIpsecInVerifyV4(ulVsgId, skb,
 			anDev->ulCommonInterfaceId,
 			(flow && flow->bIPsecIn) ? &flow->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
+			asf_warn("IPSEC InVerify Failed\n");
 			return;
 		}
 	}
@@ -1734,7 +1735,6 @@ ret_pkt_to_stk:
 	}
 	/* proceed with ret_pkt labelled code for non-frag pkt */
 
-ret_pkt:
 	if (ffpCbFns.pFnNoFlowFound) {
 		ASFBuffer_t	abuf;
 

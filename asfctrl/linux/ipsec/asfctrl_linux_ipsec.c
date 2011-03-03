@@ -344,10 +344,10 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 
 		skb_dst_set(skb, dst_clone(&rt->u.dst));
 
-		ASFCTRL_DBG("\n Route found for dst %x ",
+		ASFCTRL_DBG("Route found for dst %x ",
 					address->dstIP.ipv4addr);
 		skb->dev = skb_dst(skb)->dev;
-		ASFCTRL_DBG("\ndevname is skb->devname: %s", skb->dev->name);
+		ASFCTRL_DBG("devname is skb->devname: %s", skb->dev->name);
 		skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
 		skb_reset_network_header(skb);
 		skb_put(skb, sizeof(struct iphdr));
@@ -511,7 +511,6 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 	if (pol_out) {
 		err = is_policy_offloadable(pol_out);
 		outInfo = &(ipsecInInfo->outContainerInfo);
-		*ipsec_in = ASF_FALSE;
 		*ipsec_out = ASF_TRUE;
 		outInfo->ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		outInfo->ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
@@ -529,7 +528,6 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 		if (!err)
 			err = is_policy_offloadable(pol_in);
 		inInfo = &(ipsecInInfo->inContainerInfo);
-		*ipsec_out = ASF_FALSE;
 		*ipsec_in = ASF_TRUE;
 		inInfo->ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		inInfo->ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
@@ -544,6 +542,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 				inInfo->ulSPDContainerId);
 
 	}
+	ASFCTRL_DBG("IPSEC : In =%d, Out =%d", *ipsec_in, *ipsec_out);
 	return err;
 }
 

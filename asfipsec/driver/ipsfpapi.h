@@ -240,6 +240,8 @@ typedef enum asfIPSecGlobalPPStats {
 	ASF_IPSEC_PP_GBL_CNT20, /*Verification of SA Selectross Failed  */
 	ASF_IPSEC_PP_GBL_CNT21, /* Packet size is > Path MTU and fragment bit set in SA or packet  */
 	ASF_IPSEC_PP_GBL_CNT22, /*Fragmentation Failed 78*/
+	ASF_IPSEC_PP_GBL_CNT23, /*In SA Not Found*/
+	ASF_IPSEC_PP_GBL_CNT24, /*Out SA not Found*/
 	ASF_IPSEC_PP_GBL_CNT_MAX
 } asfIPSecGlobalPPStats_e;
 

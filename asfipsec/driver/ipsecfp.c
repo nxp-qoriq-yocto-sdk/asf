@@ -2173,29 +2173,28 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		"Updated skb->data = 0x%x",
 		pSA->ulSecLenIncrease, SECFP_IP_HDR_LEN, (int)skb->data);
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	if (pulVSGL2blobMagicNumber[ulVSGId] !=
+		pSA->l2blobConfig.ulL2blobMagicNumber) {
+		ASFIPSEC_PRINT("L2blob Magic Num Mismatch %d != %d ",
+			pulVSGL2blobMagicNumber[ulVSGId],
+			pSA->l2blobConfig.ulL2blobMagicNumber);
+		if (!pSA->l2blobConfig.bl2blobRefreshSent) {
+			pSA->l2blobConfig.ulOldL2blobJiffies = jiffies;
+			pSA->l2blobConfig.bl2blobRefreshSent = 1;
+		}
+		if (time_after(jiffies,
+			pSA->l2blobConfig.ulOldL2blobJiffies +
+			ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT)) {
+			bl2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
+			goto send_l2blob;
+		}
+
+		bl2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
+	}
+#endif
 	/* Update L2 Blob information and send pkt out */
 	if (pSA->bl2blob) {
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-		if (pulVSGL2blobMagicNumber[ulVSGId] !=
-			pSA->l2blobConfig.ulL2blobMagicNumber) {
-			ASFIPSEC_PRINT("L2blob Magic Num Mismatch %d != %d ",
-				pulVSGL2blobMagicNumber[ulVSGId],
-				pSA->l2blobConfig.ulL2blobMagicNumber);
-			if (!pSA->l2blobConfig.bl2blobRefreshSent) {
-				pSA->l2blobConfig.ulOldL2blobJiffies = jiffies;
-				pSA->l2blobConfig.bl2blobRefreshSent = 1;
-			}
-
-			if (time_after(jiffies,
-				pSA->l2blobConfig.ulOldL2blobJiffies +
-				ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT)) {
-				bl2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
-				goto send_l2blob;
-			}
-
-			bl2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
-		}
-#endif
 		skb->data -= pSA->ulL2BlobLen;
 		skb->len += pSA->ulL2BlobLen;
 
@@ -2344,6 +2343,8 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	} else {
 		usPadLen = 0;
 	}
+	ASFIPSEC_DEBUG("Total Len = %d +2(ESP TRAILER), padLen=%d",
+				org_iphdr->tot_len, usPadLen);
 
 	/* Forming the ESP packet */
 	usLastByte = usPadLen << 8 | SECFP_PROTO_IP;
@@ -2505,6 +2506,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData, struct talitos
 
 		ASFIPSEC_DBGL2("ptr = 0x%x",  ptr);
 	}
+	desc->hdr_lo = 0;
 	switch (pSA->option[ulOptionIndex]) {
 	case SECFP_AUTH:
 		{
@@ -2616,7 +2618,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData, struct talitos
 					   pSA->SAParams.AuthKeyLen,
 					   pSA->AuthKeyDmaAddr,
 					   0);
-			ASFIPSEC_DBGL2("AuthkeyLen %d AuthKeyDmaAddr %x\n",
+			ASFIPSEC_DBGL2("AuthkeyLen %d AuthKeyDmaAddr 0x%x\n",
 				pSA->SAParams.AuthKeyLen,
 				pSA->AuthKeyDmaAddr);
 			ASFIPSEC_DBGL2("ulSecHdrLen = %d Auth Only data :"
@@ -2625,7 +2627,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData, struct talitos
 					   pSA->ulSecHdrLen,
 					   ptr,
 					   0);
-			ASFIPSEC_DBGL2("ulSecHdrLen %d ptr %x\n",
+			ASFIPSEC_DBGL2("ulSecHdrLen %d ptr 0c%x\n",
 				pSA->ulSecHdrLen, ptr);
 			ASFIPSEC_DBGL2("IVSize = %d, IVdataptr=0x%x, ",
 				pSA->SAParams.ulIvSize, ptr+SECFP_ESP_HDR_LEN);
@@ -2639,7 +2641,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData, struct talitos
 					   pSA->SAParams.EncKeyLen,
 					   pSA->EncKeyDmaAddr,
 					   0);
-			ASFIPSEC_DBGL2("EnckeyLen %d EncKeyDmaAddr %x\n",
+			ASFIPSEC_DBGL2("EnckeyLen %d EncKeyDmaAddr 0c%x\n",
 				pSA->SAParams.EncKeyLen, pSA->EncKeyDmaAddr);
 
 			ASFIPSEC_DBGL2("Input data setup at 0x%x: len = %d",
@@ -3293,59 +3295,59 @@ static inline outSA_t  *secfp_findOutSA(
 
 	ASFIPSEC_DEBUG("Valid Container found pContainer = 0x%x",
 			(unsigned int) pContainer);
-
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	/* Check the container magic value */
 	if (ptrIArray_getMagicNum(&(secfp_OutDB),
-				  pSecInfo->outContainerInfo.ulSPDContainerId) ==
+				pSecInfo->outContainerInfo.ulSPDContainerId) !=
 		pSecInfo->outContainerInfo.ulSPDMagicNumber) {
-
-		ASFIPSEC_DEBUG("SA within Container : Container Matched SA=%d ",
-			pSecInfo->outSAInfo.ulSAIndex);
-		if ((pSecInfo->outSAInfo.ulSAIndex == ulMaxSupportedIPSecSAs_g) ||
-			(ptrIArray_getMagicNum(&secFP_OutSATable, pSecInfo->outSAInfo.ulSAIndex)
-			!= pSecInfo->outSAInfo.ulSAMagicNumber)) {
-			/* Either we don't have the SA or our magic numbers are different */
-			if (pContainer->SPDParams.bOnlySaPerDSCP) {
-				if (pContainer->SAHolder.ulSAIndex[tos] != ulMaxSupportedIPSecSAs_g) {
-					/* We don't have the SA yet, Get it from global table  */
-					pSecInfo->outSAInfo.ulSAIndex = pContainer->SAHolder.ulSAIndex[tos];
-
-					ASFIPSEC_DEBUG("Found SA ");
-				} else {
-					ASFIPSEC_DEBUG("Matching DSCP Based SA"\
-						"could not be found");
-					return NULL;
-
-				}
-			} else {
-				/* Handle SA Selector case */
-				pOutSALinkNode = secfp_cmpPktSelWithSelSet(pContainer, skb);
-				if (!pOutSALinkNode) {
-					ASFIPSEC_DEBUG("Matching Sel Set Not SA Not found ");
-					ASFIPSEC_DEBUG("Send packet to CP ");
-					return NULL;
-				}
-				ASFIPSEC_DEBUG("Got the SA = %d", pOutSALinkNode->ulSAIndex);
-				/* We don't have the SA yet, Get it from global table  */
-				pSecInfo->outSAInfo.ulSAIndex = pOutSALinkNode->ulSAIndex;
-			}
-
-			/* Now update our magic number from Global table */
-			pSecInfo->outSAInfo.ulSAMagicNumber =
-			ptrIArray_getMagicNum(&secFP_OutSATable, pSecInfo->outSAInfo.ulSAIndex);
-
-		}
-
-		/* If we reached here, we have the SA in our cache */
-		pSA = (outSA_t *)  ptrIArray_getData(&secFP_OutSATable, pSecInfo->outSAInfo.ulSAIndex);
-
-		ASFIPSEC_FEXIT;
-		return pSA;
-	} else {
 		ASFIPSEC_WARN("SPD - Magic Number mismatch ");
 		/* Send packet to control plane : We don't have right SPD pointer */
 		return NULL;
 	}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+
+	ASFIPSEC_DEBUG("SA within Container : Container Matched SA=%d ",
+		pSecInfo->outSAInfo.ulSAIndex);
+	if ((pSecInfo->outSAInfo.ulSAIndex == ulMaxSupportedIPSecSAs_g) ||
+		(ptrIArray_getMagicNum(&secFP_OutSATable, pSecInfo->outSAInfo.ulSAIndex)
+		!= pSecInfo->outSAInfo.ulSAMagicNumber)) {
+		/* Either we don't have the SA or our magic numbers are different */
+		if (pContainer->SPDParams.bOnlySaPerDSCP) {
+			if (pContainer->SAHolder.ulSAIndex[tos] != ulMaxSupportedIPSecSAs_g) {
+				/* We don't have the SA yet, Get it from global table  */
+				pSecInfo->outSAInfo.ulSAIndex = pContainer->SAHolder.ulSAIndex[tos];
+
+				ASFIPSEC_DEBUG("Found SA ");
+			} else {
+				ASFIPSEC_DEBUG("Matching DSCP Based SA"\
+					"could not be found");
+				return NULL;
+
+			}
+		} else {
+			/* Handle SA Selector case */
+			pOutSALinkNode = secfp_cmpPktSelWithSelSet(pContainer, skb);
+			if (!pOutSALinkNode) {
+				ASFIPSEC_DEBUG("Matching Sel Set Not SA Not found ");
+				ASFIPSEC_DEBUG("Send packet to CP ");
+				return NULL;
+			}
+			ASFIPSEC_DEBUG("Got the SA = %d", pOutSALinkNode->ulSAIndex);
+			/* We don't have the SA yet, Get it from global table  */
+			pSecInfo->outSAInfo.ulSAIndex = pOutSALinkNode->ulSAIndex;
+		}
+
+		/* Now update our magic number from Global table */
+		pSecInfo->outSAInfo.ulSAMagicNumber =
+		ptrIArray_getMagicNum(&secFP_OutSATable, pSecInfo->outSAInfo.ulSAIndex);
+
+	}
+
+	/* If we reached here, we have the SA in our cache */
+	pSA = (outSA_t *)  ptrIArray_getData(&secFP_OutSATable, pSecInfo->outSAInfo.ulSAIndex);
+
+	ASFIPSEC_FEXIT;
+	return pSA;
 }
 
 /*
@@ -3435,11 +3437,15 @@ int secfp_try_fastPathOutv4 (
 		ip_decrease_ttl(iph);
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-		usPadLen = (iph->tot_len + SECFP_ESP_TRAILER_LEN)
-				& (pSA->SAParams.ulBlockSize - 1);
-		usPadLen = (usPadLen == 0) ? 0 : pSA->SAParams.ulBlockSize - usPadLen;
+		if (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL) {
+			usPadLen = (iph->tot_len + SECFP_ESP_TRAILER_LEN)
+					& (pSA->SAParams.ulBlockSize - 1);
+			usPadLen = (usPadLen == 0) ? 0 : pSA->SAParams.ulBlockSize - usPadLen;
+		} else
+			usPadLen = 0;
 #ifndef SECFP_SG_SUPPORT
 		if ((iph->tot_len > (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen))) || (skb_shinfo(skb1)->frag_list)) {
+			ASFIPSEC_DEBUG("Fragmentation activated");
 			if (((iph->frag_off & IP_DF) && (pSA->SAParams.bRedSideFragment)) ||
 				((!pSA->SAParams.bRedSideFragment) && ((pSA->SAParams.handleDf == SECFP_DF_SET) ||
 								   ((iph->frag_off & IP_DF) && (pSA->SAParams.handleDf == SECFP_DF_COPY))))) {
@@ -3655,6 +3661,7 @@ int secfp_try_fastPathOutv4 (
 			}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (pSA->option[1] != SECFP_NONE) {
+				ASFIPSEC_DEBUG("2nd Iteration");
 				/* 2nd iteration required ICV */
 				skb->cb[SECFP_REF_INDEX]++;
 				desc = secfp_desc_alloc();
@@ -3703,6 +3710,7 @@ int secfp_try_fastPathOutv4 (
 			nr_frags = skb_shinfo(skb)->nr_frags;
 			ASFIPSEC_PRINT("nf_frags after finish function = %d", nr_frags);
 #endif
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			skb->cb[SECFP_REF_INDEX]--;
 			if (skb->cb[SECFP_REF_INDEX] == 0) {
 				/* Some error happened in the c/b. Free the skb */
@@ -3712,32 +3720,36 @@ int secfp_try_fastPathOutv4 (
 				rcu_read_unlock();
 				return 1;
 			}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		}
 		rcu_read_unlock();
 		return 1;
-	} else if (ASFIPSecCbFn.pFnNoOutSA) {
-		ASF_uchar8_t  bSPDContainerPresent;
-		ASFBuffer_t Buffer;
-		/* Homogenous buffer */
-		rcu_read_unlock();
-		if (skb_shinfo(skb1)->frag_list) {
-			if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
-				ASFIPSEC_DEBUG("asflLinearize failed");
-				ASFSkbFree(skb1);
-				return 1;
+	} else {
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
+		if (ASFIPSecCbFn.pFnNoOutSA) {
+			ASF_uchar8_t  bSPDContainerPresent;
+			ASFBuffer_t Buffer;
+			/* Homogenous buffer */
+			rcu_read_unlock();
+			if (skb_shinfo(skb1)->frag_list) {
+				if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
+					ASFIPSEC_DEBUG("asflLinearize failed");
+					ASFSkbFree(skb1);
+					return 1;
+				}
+				skb_reset_network_header(skb1);
 			}
-			skb_reset_network_header(skb1);
-		}
 
-		Buffer.nativeBuffer = skb1;
-		if (pContainer)
-			bSPDContainerPresent = 1;
-		else
-			bSPDContainerPresent = 0;
+			Buffer.nativeBuffer = skb1;
+			if (pContainer)
+				bSPDContainerPresent = 1;
+			else
+				bSPDContainerPresent = 0;
 			ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer,
-				secfp_SkbFree, skb1, bSPDContainerPresent,
-				bRevalidate);
-		return 1;
+					secfp_SkbFree, skb1, bSPDContainerPresent,
+					bRevalidate);
+			return 1;
+		}
 	}
 	return 0;
 }
@@ -3776,7 +3788,6 @@ void secfp_outComplete(struct device *dev, void *desc,
 	outSA_t *pSA;
 	struct iphdr *iph;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
-	struct netdev_queue *txq = NULL;
 	u16 q_idx = 0;
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
@@ -3785,6 +3796,7 @@ void secfp_outComplete(struct device *dev, void *desc,
 
 	ASFIPSEC_DEBUG(" Entry");
 	secfp_desc_free(desc);
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	skb->cb[SECFP_REF_INDEX]--;
 	if (skb->cb[SECFP_REF_INDEX]) {
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
@@ -3793,6 +3805,7 @@ void secfp_outComplete(struct device *dev, void *desc,
 			skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
 		return;
 	}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 	SECFP_UNMAP_SINGLE_DESC((void *)(*(unsigned int *)
 			&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 			skb->end - skb->head);
@@ -3930,8 +3943,8 @@ void secfp_outComplete(struct device *dev, void *desc,
 		ASFIPSEC_WARN("error = %d DROP PKT ", error);
 		ASFSkbFree(skb);
 	}
+	ASFIPSEC_TRACE;
 }
-
 
 /*
  * This function does sequence number tracking for Anti replay
@@ -4478,10 +4491,9 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 																	pOutContainer->SAHolder.ulSAIndex[ii]);
 											}
 										} else {
-
-	pOutSALinkNode = secfp_findOutSALinkNode(
-	pOutContainer, pSA->SAParams.tunnelInfo.addr.iphv4.saddr,
-	pSA->SAParams.ucProtocol, pSA->ulOutSPI);
+											pOutSALinkNode = secfp_findOutSALinkNode(
+											pOutContainer, pSA->SAParams.tunnelInfo.addr.iphv4.saddr,
+											pSA->SAParams.ucProtocol, pSA->ulOutSPI);
 											if (pOutSALinkNode) {
 												pOutSA = (outSA_t *)ptrIArray_getData(
 																	&secFP_OutSATable, pOutSALinkNode->ulSAIndex);
@@ -5013,7 +5025,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 			ASFIPSEC_DEBUG("ulIndex= %d: addr =  0x%x",
 				ulIndex, addr);
 		}
-
+		desc->hdr_lo = 0;
 		switch (pSA->option[ulIndex]) {
 		case SECFP_AUTH:
 			{
@@ -5275,11 +5287,11 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 			ASFIPSEC_DEBUG("ulIndex= %d: addr =  0x%x",
 				ulIndex, addr);
 		}
-
-			switch (pSA->option[ulIndex]) {
-			case SECFP_AUTH:
-				{
-					desc->hdr = pSA->hdr_Auth_template_0;
+		desc->hdr_lo = 0;
+		switch (pSA->option[ulIndex]) {
+		case SECFP_AUTH:
+		{
+			desc->hdr = pSA->hdr_Auth_template_0;
 
 					ASFIPSEC_DEBUG("skb->len = %d, addr = "\
 						"0x%x, SECFP_ICV_LEN =%d",
@@ -6407,6 +6419,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		ASFIPSEC_DEBUG("Inbound SA Not found ");
 		/* Homogenous buffer */
 		Buffer.nativeBuffer = skb1;
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT23]);
 		if (ASFIPSecCbFn.pFnNoInSA)
 			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
 				skb1, ulCommonInterfaceId);

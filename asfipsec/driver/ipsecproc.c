@@ -237,7 +237,7 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 	printk(KERN_INFO"%u (Inbound Submission to SEC failed)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
 	printk(KERN_INFO"%u (Invalid sequence number )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT1]);
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT14]);
 	printk(KERN_INFO"%u (Anti-replay window check failed )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
 	printk(KERN_INFO"%u (Replay packet )",
@@ -255,7 +255,10 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT21]);
 	printk(KERN_INFO"%u (Fragmentation Failed )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
-
+	printk(KERN_INFO"%u (IN SA Not Found )",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT23]);
+	printk(KERN_INFO"%u (OUT SA Not Found )\n",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
 	return 0;
 }
 
