@@ -249,7 +249,7 @@ ASF_void_t asfctrl_fnFlowTcpSpecialPkts(ASF_uint32_t ulVSGId,
 
 	case ASF_FFP_TCP_STATE_FIN_RCVD:
 		uTcpState = TCP_CONNTRACK_FIN_WAIT;
-		ulTimeout = 10*60;
+		ulTimeout = 2*60;
 		break;
 
 	case ASF_FFP_TCP_STATE_RST_RCVD:
@@ -259,7 +259,7 @@ ASF_void_t asfctrl_fnFlowTcpSpecialPkts(ASF_uint32_t ulVSGId,
 
 	case ASF_FFP_TCP_STATE_FIN_COMP:
 		uTcpState = TCP_CONNTRACK_TIME_WAIT;
-		ulTimeout = 10*60;
+		ulTimeout = 2*60;
 		break;
 	default:
 		return;
