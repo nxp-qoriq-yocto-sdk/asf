@@ -351,6 +351,8 @@ inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 
 			pSkb->pkt_type = PACKET_FASTROUTE;
 			pSkb->asf = 1;
+			skb_set_queue_mapping(pSkb, 0);
+
 			if (Cache->bVLAN)
 				pSkb->vlan_tci = Cache->tx_vlan_id;
 
@@ -411,8 +413,6 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 	int			bL2blobRefresh = 0;
 	struct sk_buff		*skb ;
 	struct iphdr		*iph ;
-	struct netdev_queue *txq = NULL;
-	u16 q_idx = 0;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	ASFFFPGlobalStats_t	*gstats;
@@ -515,10 +515,6 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 		}
 		asf_print("L2blob Info found! out dev %p\n", Cache->odev);
 
-		q_idx = skb_tx_hash(Cache->odev, skb);
-		skb_set_queue_mapping(skb, q_idx);
-		txq = netdev_get_tx_queue(Cache->odev, q_idx);
-		if (0 == netif_tx_queue_stopped(txq)) {
 			asf_print("attempting to xmit the packet\n");
 			asf_print("----------------------------------------\n");
 			asf_print("len = %d,  data_len = %d, mac_len = %d, "
@@ -545,7 +541,6 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 				/* Fragmentation Needed, so do it */
 				asfFragmentAndSendPkt(Cache, skb, iph,
 						cache_stats, gstats, vstats);
-				txq->trans_start = jiffies;
 				goto gen_indications;
 #else
 				/* fragmentation in case of ASF_MINIMUM */
@@ -570,10 +565,10 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 				skb->vlan_tci = Cache->tx_vlan_id;
 			skb->pkt_type = PACKET_FASTROUTE;
 			skb->asf = 1;
+			skb_set_queue_mapping(skb, 0);
 
 			asf_print("invoke hard_start_xmit skb-packet"
 					" (blob_len %d)\n", Cache->l2blob_len);
-			txq->trans_start = jiffies;
 			if (0 != asfDevHardXmit(skb->dev, skb)) {
 				asf_err("Error in transmit: may happen as "
 					"we don't check for gfar free desc\n");
@@ -620,13 +615,6 @@ gen_indications:
 				goto ret_pkt_to_stk;
 			}
 			return;
-		} else {
-			/* drop the packet here */
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			cache_stats->ulInPkts--;
-#endif
-			goto drop_pkt;
-		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	} else
 		gstats->ulErrTTL++;

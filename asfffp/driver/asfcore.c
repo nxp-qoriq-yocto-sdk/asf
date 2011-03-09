@@ -1048,8 +1048,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	unsigned long		ulZoneId;
 	struct sk_buff		*skb;
 	ASFNetDevEntry_t	*anDev;
-	struct netdev_queue *txq = NULL;
-	u16 q_idx = 0;
 
 	ACCESS_XGSTATS();
 
@@ -1457,10 +1455,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 		}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
-		q_idx = skb_tx_hash(flow->odev, skb);
-		skb_set_queue_mapping(skb, q_idx);
-		txq = netdev_get_tx_queue(flow->odev, q_idx);
-		if (0 == netif_tx_queue_stopped(txq)) {
 			asf_debug_l2("attempting to xmit the packet\n");
 			/*skb_set_network_header(skb, hh_len); */
 
@@ -1497,6 +1491,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 						pSkb->pkt_type = PACKET_FASTROUTE;
 						pSkb->asf = 1;
+						skb_set_queue_mapping(pSkb, 0);
+
 						/* make following unconditional*/
 						if (flow->bVLAN)
 							pSkb->vlan_tci = flow->tx_vlan_id;
@@ -1536,8 +1532,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 							asf_debug("Error in transmit: Should not happen\r\n");
 							ASFSkbFree(pSkb);
 						}
-						txq->trans_start = jiffies;
-
 					}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 					gstats->ulOutPkts += ulFrags;
@@ -1577,6 +1571,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			skb->pkt_type = PACKET_FASTROUTE;
 			skb->asf = 1;
+			skb_set_queue_mapping(skb, 0);
+
 			if (flow->bVLAN)
 				skb->vlan_tci = flow->tx_vlan_id;
 			else
@@ -1593,8 +1589,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				asf_debug("Error in transmit: may happen as we don't check for gfar free desc\n");
 				ASFSkbFree(skb);
 			}
-			txq->trans_start = jiffies;
-
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutPkts++;
 			vstats->ulOutPkts++;
@@ -1698,14 +1692,6 @@ gen_indications:
 
 			}
 			return;
-		} else {
-			XGSTATS_INC(NetIfQStopped);
-			/* drop the packet here */
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			flow_stats->ulInPkts--;
-#endif
-			goto drop_pkt;
-		}
 	} else {
 		XGSTATS_INC(Condition2);
 		asf_debug("ELSE case: flow = 0x%x iph->ver %d h_dest[0]&0x01 ="\
