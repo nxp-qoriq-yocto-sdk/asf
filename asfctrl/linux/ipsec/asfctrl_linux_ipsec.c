@@ -469,7 +469,8 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 			pSAData->u.l2blob.ulL2BlobLen);
 	if (vlan_tx_tag_present(skb)) {
 		pSAData->u.l2blob.bTxVlan = 1;
-		pSAData->u.l2blob.usTxVlanId = vlan_tx_tag_get(skb);
+		pSAData->u.l2blob.usTxVlanId = (vlan_tx_tag_get(skb)
+							| VLAN_TAG_PRESENT);
 	} else
 		pSAData->u.l2blob.bTxVlan = 0;
 	pSAData->u.l2blob.bUpdatePPPoELen = 0;

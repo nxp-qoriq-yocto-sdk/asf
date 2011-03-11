@@ -238,7 +238,8 @@ ASF_void_t asfctrl_fwd_l2blob_update_fn(struct sk_buff *skb,
 					pCacheData.u.l2blob.l2blobLen);
 	if (vlan_tx_tag_present(skb)) {
 		pCacheData.u.l2blob.bTxVlan = 1;
-		pCacheData.u.l2blob.usTxVlanId = vlan_tx_tag_get(skb);
+		pCacheData.u.l2blob.usTxVlanId = (vlan_tx_tag_get(skb)
+							| VLAN_TAG_PRESENT);
 	} else
 		pCacheData.u.l2blob.bTxVlan = 0;
 
