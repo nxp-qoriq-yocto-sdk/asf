@@ -1577,7 +1577,6 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 		}
 
 		if (bNewSkb) {
-			int headroom = skb_headroom(skb);
 			ulMTU -= ihl;
 			asf_reasm_debug("Re-using incoming Skb"
 						" as first fragment.\r\n");
