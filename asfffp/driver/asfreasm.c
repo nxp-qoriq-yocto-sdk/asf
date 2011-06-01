@@ -498,7 +498,7 @@ static inline void asfAddCbToHashList(unsigned int hashVal, struct asf_reasmCb_s
 static inline struct asf_reasmCb_s *asfIPv4ReasmFindOrCreateCb(
 							      unsigned int ulVSGId, struct sk_buff *skb,
 							      unsigned int  hashVal) {
-	struct asf_reasmCb_s *pCb;
+	struct asf_reasmCb_s *pCb, *tpCb;
 	char bHeap;
 	struct iphdr *iph = ip_hdr(skb);
 	ASFFFPGlobalStats_t     *gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
@@ -565,10 +565,30 @@ static inline struct asf_reasmCb_s *asfIPv4ReasmFindOrCreateCb(
 
 			return pCb;
 		} else {
+			int flushed_entries = 0;
 			asf_reasm_debug("Out of context blocks in Index array \r\n");
 			asfReleaseNode(asf_reasmPools[ASF_REASM_CB_POOL_ID_INDEX], pCb,
 				       bHeap);
 			gstats->ulMiscFailures++;
+			for (hashVal = 0;
+				hashVal < ASF_REASM_NUM_CB_HASH_TBL_ENTRIES - 1;
+				hashVal++) {
+					pCb = asfPerCpuPtr(asf_ReasmCbHashList,
+					smp_processor_id())->pHead[hashVal].
+						pReasmCbHead;
+					for (; pCb != NULL; pCb = tpCb) {
+						prefetchw(pCb->pNext);
+						asfTimerStop(ASF_REASM_TMR_ID,
+								0, pCb->ptmr);
+						asfRemCbFromHashList(
+							pCb->ulHashVal, pCb);
+						tpCb = pCb->pNext;
+						asfReasmDeleteCb(pCb);
+						flushed_entries++;
+						if (flushed_entries > 50)
+							return NULL;
+					}
+			}
 			return NULL;
 		}
 	}
