@@ -177,7 +177,7 @@ static inline inSA_t  *secfp_findInv4SA(unsigned int ulVSGId,
 #define SECFP_COMMON_INTERFACE_ID_POSITION   (SECFP_ESN_MARKER_POSITION + 4)
 
 struct kmem_cache *desc_cache __read_mostly;
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 struct talitos_desc *desc_rec_queue[NR_CPUS][MAX_IPSEC_RECYCLE_DESC];
 #else
 void *desc_rec_queue[NR_CPUS][MAX_IPSEC_RECYCLE_DESC];
@@ -185,7 +185,7 @@ void *desc_rec_queue[NR_CPUS][MAX_IPSEC_RECYCLE_DESC];
 
 static unsigned int curr_desc[NR_CPUS];
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 struct talitos_desc *secfp_desc_alloc(void)
 #else
 void *secfp_desc_alloc(void)
@@ -785,13 +785,13 @@ int secfp_init(void)
 	memset(aNonIkeMarker_g, 0, ASF_IPSEC_MAX_NON_IKE_MARKER_LEN);
 	memset(aNonESPMarker_g, 0, ASF_IPSEC_MAX_NON_ESP_MARKER_LEN);
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 	pdev = talitos_getdevice();
 #else
 	pdev = asf_caam_device();
 #endif
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 	desc_cache = kmem_cache_create("desc_cache",
 				sizeof(struct talitos_desc),
 				__alignof__(struct talitos_desc),
@@ -1600,7 +1600,7 @@ void secfp_sendIndToIke(outSA_t *pSA)
 	ASFIPSEC_PRINT("Stub function: needs to be filled in");
 }
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 /* Packet Processing routines */
 /* Check if IVLength required is always 8 bytes To be checked */
 /* This function reads from the SEC random number registers. If data is not available
@@ -1672,7 +1672,7 @@ static inline __be16 secfp_getNextId(void)
 	return secfp_IPv4_IDs[smp_processor_id()]++;
 }
 
-#ifdef CONFIG_P1010_RDB
+#ifdef CONFIG_ASF_SEC4x
 
 static struct ipsec_deco_dpovrd {
 #define IPSEC_ENCAP_DECO_DPOVRD_USE 0x80
@@ -2087,7 +2087,7 @@ static int secfp_createInSACaamCtx(inSA_t *pSA)
 	return 0;
 }
 
-#endif /* CONFIG_P1010_RDB */
+#endif /* CONFIG_ASF_SEC4x */
 
 /*
  * Outbound packet processing is split as follows -
@@ -2312,7 +2312,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	struct iphdr *iph, *org_iphdr;
 	int ii;
 	unsigned short usPadLen, usNatOverHead, usLastByte;
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 	unsigned int ulLoSeqNum, ulHiSeqNum;
 #endif
 	struct sk_buff *pHeadSkb, *pTailSkb;
@@ -2401,7 +2401,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	ASFIPSEC_DBGL2("After preparing sec header skb->data = 0x%x",
 			(int)pHeadSkb->data);
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 	*(unsigned int *)  &(pHeadSkb->data[0]) = pSA->SAParams.ulSPI;
 
 	ulHiSeqNum = 0;
@@ -2483,7 +2483,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
  * Function prepares the descriptors based on the encryption and authentication
  * algorithm. The prepared descriptor is submitted to SEC.
  */
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData, struct talitos_desc *desc, unsigned int ulOptionIndex)
 {
 	dma_addr_t ptr;
@@ -2920,7 +2920,7 @@ dma_addr_t secfp_prepareScatterList(struct sk_buff *skb,
 
 void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 					 struct talitos_desc *desc, unsigned int ulOptionIndex) {
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 	dma_addr_t ptr = 0, ptr2 = 0;
 	unsigned int *src, *tgt;
 	unsigned char *pNounceIVCounter;
@@ -3400,7 +3400,7 @@ int secfp_try_fastPathOutv4 (
 	ASFLogInfo_t AsfLogInfo;
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASF_boolean_t	bRevalidate = FALSE;
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
 #else
 	void *desc;
@@ -3631,7 +3631,7 @@ int secfp_try_fastPathOutv4 (
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 				secfp_prepareOutDescriptor(skb, pSA, desc, 0);
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 			if (secfp_talitos_submit(pdev, desc, secfp_outComplete,
 				(void *)skb) == -EAGAIN) {
 #else
@@ -3674,7 +3674,7 @@ int secfp_try_fastPathOutv4 (
 #endif
 					secfp_prepareOutDescriptor(skb, pSA, desc, 1);
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 			if (secfp_talitos_submit(pdev, desc, secfp_outComplete,
 				(void *)skb) == -EAGAIN) {
 #else
@@ -3775,7 +3775,7 @@ static inline void secfp_unmap_descs(struct sk_buff *skb)
  * Error is noted. If no error IV data is updated and packet submitted to ethernet
  * driver
  */
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 		void *context, int error)
 #else
@@ -4185,7 +4185,7 @@ void secfp_updateErr(struct sk_buff *skb)
  */
 static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 						  struct sk_buff *skb) {
-#ifdef CONFIG_P1010_RDB
+#ifdef CONFIG_ASF_SEC4x
 
 	skb->len -= ICV_LEN;
 
@@ -4797,7 +4797,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 		}
 	}
 }
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 inline void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 		void *context, int err)
 #else
@@ -4993,7 +4993,7 @@ inline void secfp_handleFragments(struct sk_buff *skb)
   * Prepares the descriptor based on the SA encryption/authentication
   * algorithms.
   */
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 void secfp_prepareInDescriptor(struct sk_buff *skb,
 					void *pData, struct talitos_desc *desc,
 					unsigned int ulIndex)
@@ -5252,7 +5252,7 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 				 void *pData, struct talitos_desc *desc,
 				 unsigned int ulIndex)
 {
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 	unsigned int *tgt, *src;
 	dma_addr_t addr;
 	inSA_t *pSA = (inSA_t *)pData;
@@ -6321,7 +6321,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 #endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 		if (secfp_talitos_submit(pdev, desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
 			 secfp_inCompleteWithFrags : secfp_inComplete,
@@ -6362,7 +6362,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			else
 #endif
 				secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 			if (secfp_talitos_submit(pdev, desc,
 				(secin_sg_flag & SECFP_SCATTER_GATHER)
 				? secfp_inCompleteWithFrags : secfp_inComplete,
@@ -6505,7 +6505,7 @@ callverify:
  *  All APIs to normal path return SECFP_SUCCESS upon SUCCESS and
  * SECFP_FAILURE upon FAILURE
  */
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 /* update descriptor information within SA, that can be held permanantly */
 static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 {
@@ -6656,7 +6656,7 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 #endif
 
 /* Internal routines to support Control Plane/Normal Path API */
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 {
 	SAParams_t *pSAParams = (SAParams_t *)(buff);
@@ -7184,7 +7184,7 @@ unsigned int secfp_createOutSA(
 		}
 
 		pSA->ipHdrInfo.bIpVersion = pSA->SAParams.tunnelInfo.bIPv4OrIPv6;
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 		if ((pSA->SAParams.bUseExtendedSequenceNumber) ||
 			((pSA->hdr_Auth_template_0 &  DESC_HDR_MODE0_AES_XCBS_MAC)
 			 == DESC_HDR_MODE0_AES_XCBS_MAC)) {
@@ -7305,7 +7305,7 @@ unsigned int secfp_createOutSA(
 
 		/* revisit - usAuthKeyLen or usAuthKeySize */
 		if (pSA->SAParams.bAuth) {
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 			pSA->AuthKeyDmaAddr = SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucAuthKey,
 						pSA->SAParams.AuthKeyLen,
 						DMA_TO_DEVICE);
@@ -7321,7 +7321,7 @@ unsigned int secfp_createOutSA(
 #endif
 		}
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 		if (pSA->SAParams.bEncrypt)
 			pSA->EncKeyDmaAddr = SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucEncKey,
 						pSA->SAParams.EncKeyLen,
@@ -7654,7 +7654,7 @@ unsigned int secfp_CreateInSA(
 				local_bh_enable();
 			return SECFP_FAILURE;
 		}
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 		pSA->desc_hdr_template |= DESC_HDR_DIR_INBOUND;
 		if ((pSA->SAParams.bUseExtendedSequenceNumber) ||
 			((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
@@ -7770,7 +7770,7 @@ unsigned int secfp_CreateInSA(
 		pSA->ulSecHdrLen = SECFP_ESP_HDR_LEN + pSA->SAParams.ulIvSize;
 
 		if (pSA->SAParams.bAuth) {
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 			pSA->AuthKeyDmaAddr = SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucAuthKey,
 						pSA->SAParams.AuthKeyLen,
 						DMA_TO_DEVICE);
@@ -7787,7 +7787,7 @@ unsigned int secfp_CreateInSA(
 #endif
 		}
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 		if (pSA->SAParams.bEncrypt)
 			pSA->EncKeyDmaAddr = SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucEncKey,
 						  pSA->SAParams.EncKeyLen,
