@@ -182,7 +182,7 @@
 	descPtr->j_extent = extent;\
 }
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 #define SECFP_SET_DESC_PTR(a, b, c, d)\
 	(a).len = cpu_to_be16(b);\
 	(a).ptr = cpu_to_be32(lower_32_bits((c)));\
@@ -364,7 +364,7 @@ typedef struct inSA_s {
 	unsigned int ulLastSeqNum;
 	unsigned int *pWinBitMap;
 	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
-#ifdef CONFIG_P1010_RDB
+#ifdef CONFIG_ASF_SEC4x
 	struct caam_ctx ctx;
 #else
 	__be32 desc_hdr_template;
@@ -537,7 +537,7 @@ typedef struct outSA_s {
 	int chan;
 	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS]; /* Hardware option AES_CBC or BOTH or only encryption etc. */
 
-#ifdef CONFIG_P1010_RDB
+#ifdef CONFIG_ASF_SEC4x
 	struct caam_ctx ctx;
 #else
 	__be32 desc_hdr_template;
@@ -635,7 +635,7 @@ typedef struct secfp_ivInfo_s {
 /* to satisfy the compiler */
 struct talitos_desc;
 
-#ifndef CONFIG_P1010_RDB
+#ifndef CONFIG_ASF_SEC4x
 extern  void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pSA, struct talitos_desc *, unsigned int);
 extern  void secfp_prepareInDescriptor(struct sk_buff *skb, void *pSA, struct talitos_desc *, unsigned int);
 extern inline void secfp_outComplete(struct device *dev,
