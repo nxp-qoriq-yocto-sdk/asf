@@ -122,20 +122,21 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	if (0 != ip_route_input(skb, iph->daddr, iph->saddr, 0, skb->dev)) {
 		ASFCTRL_INFO("Route not found for dst %x ",
 			iph->daddr);
-		pFreeFn(Buffer.nativeBuffer);
-		return;
+		goto drop;
 	}
 	ASFCTRL_INFO("Route found for dst %x ", iph->daddr);
-	skb->dev = skb_dst(skb)->dev;
 
-	ASFCTRL_INFO("NO OUT SA Found Sending Packet Up");
 
 	skb->pkt_type = PACKET_HOST;
+	skb->skb_iif = skb->dev->ifindex;
 	ip_forward(skb);
+	goto out;
 #else
 	ASFCTRL_WARN("NO OUT SA Found Drop packet");
-	pFreeFn(Buffer.nativeBuffer);
 #endif
+drop:
+	pFreeFn(Buffer.nativeBuffer);
+out:
 	if (bRevalidate)
 		ASFCTRL_DBG("Revalidation is required");
 
