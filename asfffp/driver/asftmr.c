@@ -571,7 +571,6 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 
 	asf_timer_print("TimerStop: AppId %d InstId %d ptmr 0x%x\n",
 				 ulAppId, ulInstanceId, ptmr);
-
 	if (!bInInterrupt)
 		local_bh_disable();
 
@@ -581,6 +580,8 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 			local_bh_enable();
 		return ASF_TMR_FAILURE;
 	}
+
+	ptmr->ulState = ASF_TMR_STOPPED;
 
 	pWheel = &(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
 	pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, ptmr->ulCoreId);
@@ -687,7 +688,6 @@ static void asfTimerProc(unsigned long data)
 		ulLastTimerExpiry[smp_processor_id()] = jiffies;
 	}
 #endif
-
 	asf_timer_debug("Timer Bucket processing: ulCurBucketIndex = %d",
 		pTmrWheel->ulCurBucketIndex);
 	ptmr = pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex];
@@ -745,9 +745,9 @@ static void asfTimerProc(unsigned long data)
 				ptmr, ptmr->bStopPeriodic);
 			/* Release to the memory pool */
 			/* invoke call_rcu, it can be released later */
-			call_rcu((struct rcu_head *)  ptmr,  asfTimerDelete);
-
-
+			if (ptmr->bStopPeriodic)
+				call_rcu((struct rcu_head *) ptmr,
+							asfTimerDelete);
 		}
 	}
 	asf_timer_debug("Reclamation Q processing:\r\n");
