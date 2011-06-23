@@ -343,8 +343,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 			return ;
 		}
 
-		skb_dst_set(skb, dst_clone(&rt->u.dst));
-
+		skb_dst_set(skb, &(rt->u.dst));
 		ASFCTRL_DBG("Route found for dst %x ",
 					address->dstIP.ipv4addr);
 		skb->dev = skb_dst(skb)->dev;
