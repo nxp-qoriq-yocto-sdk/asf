@@ -1096,8 +1096,8 @@ static inline void secfp_deleteInContainerSelList(SPDInContainer_t *pContainer,
 		if (pNode->pPrev)
 			pNode->pPrev->pNext = pNode->pNext;
 	}
-	spin_unlock(&pContainer->spinlock);
 	call_rcu((struct rcu_head *)  pNode,  secfp_freeLinkNode);
+	spin_unlock(&pContainer->spinlock);
 }
 
 /* Updates SPI value index in a linked node in the SDD In container (called when SA
@@ -1151,8 +1151,8 @@ static inline void secfp_deleteInContainerSPIList(SPDInContainer_t *pContainer,
 		if (pNode->pPrev)
 			pNode->pPrev->pNext = pNode->pNext;
 	}
-	spin_unlock(&pContainer->spinlock);
 	call_rcu((struct rcu_head *)  pNode,  secfp_freeSPILinkNode);
+	spin_unlock(&pContainer->spinlock);
 }
 
 /* Free/alloc functions for In Selector sets */
@@ -1375,8 +1375,8 @@ static inline void secfp_deleteInSAFromSPIList(inSA_t *pSA)
 			if (pTempSA->pPrev)
 				pTempSA->pPrev->pNext = pTempSA->pNext;
 		}
-		spin_unlock_bh(&secFP_InSATableLock);
 		call_rcu((struct rcu_head *)  pTempSA,  secfp_freeInSA);
+		spin_unlock_bh(&secFP_InSATableLock);
 	}
 }
 
@@ -1567,8 +1567,8 @@ static void secfp_delOutSALinkNode(SPDOutContainer_t *pContainer,
 			pOutSALinkNode->pNext->pPrev = pOutSALinkNode->pPrev;
 	}
 
-	spin_unlock_bh(&pContainer->spinlock);
 	call_rcu((struct rcu_head *)  pOutSALinkNode,  secfp_freeOutSALinkNode);
+	spin_unlock_bh(&pContainer->spinlock);
 
 }
 
@@ -6865,8 +6865,8 @@ void secfp_removeCINodeFromTunnelList(unsigned int ulVSGId,
 		if (pCINode->pPrev)
 			pCINode->pPrev->pNext = pCINode->pNext;
 	}
-	spin_unlock(&secfp_TunnelIfaceCIIndexListLock);
 	call_rcu((struct rcu_head *)pCINode,  secfp_freeSDPCILinkNode);
+	spin_unlock(&secfp_TunnelIfaceCIIndexListLock);
 }
 
 
@@ -7537,9 +7537,8 @@ unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 					ASF_IPSEC_ADD_ATOMIC_AND_ATOMIC(pContainer->PPStats.IPSecPolPPStats[Index], pOutSA->PPStats.IPSecPolPPStats[Index]);
 					ASF_IPSEC_ATOMIC_SET(pOutSA->PPStats.IPSecPolPPStats[Index], 0);
 				}
-				if (pOutSA->pL2blobTmr) {
-					asfTimerStop(ASF_SECFP_BLOB_TMR_ID, 0, pOutSA->pL2blobTmr);
-				}
+				ptrIArray_delete(&secFP_OutSATable, ulSAIndex,
+							secfp_freeOutSA);
 				memset(&pOutSA->PolicyPPStats, 0x0, sizeof(pOutSA->PolicyPPStats));
 			}
 			for (ii = usDscpStart; ii < usDscpEnd; ii++)
@@ -7567,12 +7566,11 @@ unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 						ASF_IPSEC_ATOMIC_SET(pOutSA->PPStats.IPSecPolPPStats[Index], 0);
 					}
 					memset(&pOutSA->PolicyPPStats, 0x0, sizeof(pOutSA->PolicyPPStats));
-					if (pOutSA->pL2blobTmr) {
-						asfTimerStop(ASF_SECFP_BLOB_TMR_ID, 0, pOutSA->pL2blobTmr);
-					}
 				}
 				ulSAIndex = pOutSALinkNode->ulSAIndex;
 				secfp_delOutSALinkNode(pContainer, pOutSALinkNode);
+				ptrIArray_delete(&secFP_OutSATable, ulSAIndex,
+							secfp_freeOutSA);
 			} else {
 				GlobalErrors.ulOutSANotFound++;
 				ASFIPSEC_DEBUG("secfp_findOutSALinkNode returned null");
@@ -7581,7 +7579,6 @@ unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 				return ASF_IPSEC_OUTSA_NOT_FOUND;
 			}
 		}
-		ptrIArray_delete(&secFP_OutSATable, ulSAIndex, secfp_freeOutSA);
 	} else {
 		GlobalErrors.ulSPDOutContainerNotFound++;
 		ASFIPSEC_DEBUG("SPDOutContainer not found");
