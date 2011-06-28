@@ -42,7 +42,6 @@
 #define XFRM_ACTION(act) (act ? "BLOCK" : "ALLOW")
 #define XFRM_MODE(mode) (mode ? "TUNNEL" : "TRANSPORT")
 
-
 struct sa_node {
 	__be16 status;
 	__be16 ref_count;
@@ -54,7 +53,6 @@ struct sa_node {
 	__be32 con_magic_num;
 };
 static struct sa_node sa_table[2][SECFP_MAX_SAS];
-static int current_sa_index[2];
 static int current_sa_count[2];
 static spinlock_t sa_table_lock;
 
@@ -181,8 +179,6 @@ void init_sa_indexes(bool init)
 	/* cleaning up the SA Table*/
 	memset(sa_table, 0, sizeof(struct sa_node)*2*SECFP_MAX_SAS);
 
-	current_sa_index[IN_SA] = 1;
-	current_sa_index[OUT_SA] = 1;
 	current_sa_count[IN_SA] = 0;
 	current_sa_count[OUT_SA] = 0;
 
@@ -192,13 +188,17 @@ void init_sa_indexes(bool init)
 
 static inline int match_sa_index_no_lock(struct xfrm_state *xfrm, int dir)
 {
-	if (xfrm->asf_sa_cookie
-		&& (xfrm->asf_sa_cookie <= asfctrl_max_sas)
-		&& (sa_table[dir][xfrm->asf_sa_cookie - 1].status)
-		&& (sa_table[dir][xfrm->asf_sa_cookie - 1].con_magic_num ==
+	int cur_id;
+	for (cur_id = 0; cur_id < asfctrl_max_sas; cur_id++) {
+		if ((sa_table[dir][cur_id].spi == xfrm->id.spi)
+			&& (sa_table[dir][cur_id].status)
+			&& (sa_table[dir][cur_id].con_magic_num ==
 			asfctrl_vsg_ipsec_cont_magic_id)) {
-		ASFCTRL_INFO("SA offloaded");
-		return 0;
+				xfrm->asf_sa_cookie = cur_id + 1;
+				xfrm->asf_sa_direction = dir;
+				ASFCTRL_INFO("SA offloaded");
+				return 0;
+		}
 	}
 	return -1;
 }
@@ -213,34 +213,19 @@ static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 		goto ret_unlock;
 	}
 
-	cur_id = current_sa_index[dir];
-	if (sa_table[dir][cur_id - 1].status == 0) {
-		sa_table[dir][cur_id - 1].status = 1;
+	if (current_sa_count[dir] >= asfctrl_max_sas)
+		goto ret_unlock;
 
-		current_sa_index[dir]++;
-		current_sa_count[dir]++;
-
-		if (current_sa_index[dir] > asfctrl_max_sas)
-			current_sa_index[dir] = 1;
-		spin_unlock(&sa_table_lock);
-		return cur_id;
-	} else if (current_sa_count[dir] < asfctrl_max_sas) {
-
-		for (cur_id = 0; cur_id < asfctrl_max_sas; cur_id++) {
-			if (sa_table[dir][cur_id].status == 0) {
-				sa_table[dir][cur_id].status = 1;
-
-				current_sa_index[dir] = cur_id + 1;
-				current_sa_count[dir]++;
-				if (current_sa_index[dir] > asfctrl_max_sas)
-					current_sa_index[dir] = 1;
-				spin_unlock(&sa_table_lock);
-				return cur_id;
-			}
+	for (cur_id = 0; cur_id < asfctrl_max_sas; cur_id++) {
+		if (sa_table[dir][cur_id].status == 0) {
+			sa_table[dir][cur_id].status = 1;
+			current_sa_count[dir]++;
+			spin_unlock(&sa_table_lock);
+			return cur_id;
 		}
 	}
-	ASFCTRL_WARN("Maximum SAs are offloaded, Not anymore (%d)",
-		current_sa_count[dir]);
+	ASFCTRL_WARN("\nMaximum SAs are offloaded")
+
 ret_unlock:
 	spin_unlock(&sa_table_lock);
 	return -EINVAL;
@@ -249,15 +234,20 @@ ret_unlock:
 static inline int free_sa_index(struct xfrm_state *xfrm, int dir)
 {
 	int err = -EINVAL;
+	int cookie = xfrm->asf_sa_cookie;
 	ASFCTRL_TRACE("SA-TABLE: saddr 0x%x daddr 0x%x spi 0x%x",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi);
 
 	spin_lock(&sa_table_lock);
-
-	if (sa_table[dir][xfrm->asf_sa_cookie - 1].status) {
-		sa_table[dir][xfrm->asf_sa_cookie - 1].status = 0;
-		current_sa_count[dir]--;
-		err = 0;
+	if (cookie > 0 &&  cookie <= asfctrl_max_sas) {
+		if (sa_table[dir][cookie - 1].status) {
+			sa_table[dir][cookie - 1].status = 0;
+			sa_table[dir][cookie - 1].spi = 0;
+			current_sa_count[dir]--;
+			err = 0;
+		}
+	} else {
+		ASFCTRL_WARN("\nxfrm ASF Cookie is corrupted\n");
 	}
 	spin_unlock(&sa_table_lock);
 
@@ -516,7 +506,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASFCTRL_FUNC_ENTRY;
 
 	sa_id = alloc_sa_index(xfrm, OUT_SA);
-	if (sa_id <= 0)
+	if (sa_id < 0)
 		return sa_id;
 
 	memset(&outSA, 0, sizeof(ASFIPSecRuntimeAddOutSAArgs_t));
@@ -662,7 +652,8 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			&handle, sizeof(uint32_t));
 
 	xfrm->asf_sa_direction = OUT_SA;
-	xfrm->asf_sa_cookie = sa_id;
+	xfrm->asf_sa_cookie = sa_id + 1;
+	spin_lock(&sa_table_lock);
 
 	sa_table[OUT_SA][sa_id].saddr_a4 = xfrm->props.saddr.a4;
 	sa_table[OUT_SA][sa_id].daddr_a4 = xfrm->id.daddr.a4;
@@ -670,6 +661,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	sa_table[OUT_SA][sa_id].container_id = outSA.ulSPDContainerIndex;
 	sa_table[OUT_SA][sa_id].ref_count++;
 	sa_table[OUT_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
+	spin_unlock(&sa_table_lock);
 
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x OUT-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
@@ -694,7 +686,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASFCTRL_FUNC_ENTRY;
 
 	sa_id = alloc_sa_index(xfrm, IN_SA);
-	if (sa_id <= 0)
+	if (sa_id < 0)
 		return sa_id;
 
 	memset(&inSA, 0, sizeof(ASFIPSecRuntimeAddInSAArgs_t));
@@ -841,8 +833,8 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			&handle, sizeof(uint32_t));
 
 	xfrm->asf_sa_direction = IN_SA;
-	xfrm->asf_sa_cookie = sa_id;
-
+	xfrm->asf_sa_cookie = sa_id + 1;
+	spin_lock(&sa_table_lock);
 	sa_table[IN_SA][sa_id].saddr_a4 = xfrm->props.saddr.a4;
 	sa_table[IN_SA][sa_id].daddr_a4 = xfrm->id.daddr.a4;
 	sa_table[IN_SA][sa_id].spi = xfrm->id.spi;
@@ -850,7 +842,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	sa_table[IN_SA][sa_id].ref_count++;
 /*	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
 	sa_table[IN_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
-
+	spin_unlock(&sa_table_lock);
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x IN-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
 		inSA.ulInSPDContainerIndex);
@@ -880,7 +872,7 @@ int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 		return -EINVAL;
 	}
 
-	if (xfrm->asf_sa_direction == OUT_SA)
+	if (xp->dir == OUT_SA)
 		return asfctrl_xfrm_add_outsa(xfrm, xp);
 	else
 		return asfctrl_xfrm_add_insa(xfrm, xp);
@@ -1109,7 +1101,6 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 	ASFCTRL_FUNC_ENTRY;
 
 	ASFCTRL_WARN("Packet received spi =0x%x", xfrm->id.spi);
-	sa_id = xfrm->asf_sa_cookie;
 
 	spin_lock(&sa_table_lock);
 	if (match_sa_index_no_lock(xfrm, OUT_SA) < 0) {
@@ -1119,6 +1110,7 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 		return -EINVAL;
 	}
 
+	sa_id = xfrm->asf_sa_cookie - 1;
 	Buffer.nativeBuffer = skb;
 	daddr.bIPv4OrIPv6 = 0;
 	daddr.ipv4addr = xfrm->id.daddr.a4;
@@ -1196,12 +1188,13 @@ static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
 	if (x)
 		asfctrl_xfrm_dump_state(x);
 #endif
+
 	switch (c->event) {
 	case XFRM_MSG_EXPIRE:
 		ASFCTRL_INFO("XFRM_MSG_EXPIRE Hard=%d\n", c->data.hard);
 		if (c->data.hard)
 			asfctrl_xfrm_delete_sa(x);
-		return 0;
+		break;
 	case XFRM_MSG_DELSA:
 		ASFCTRL_INFO("XFRM_MSG_DELSA");
 		asfctrl_xfrm_delete_sa(x);
@@ -1225,6 +1218,7 @@ static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
 		break;
 	}
 	ASFCTRL_FUNC_EXIT;
+
 	return 0;
 }
 
