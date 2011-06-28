@@ -42,7 +42,6 @@
 #define XFRM_ACTION(act) (act ? "BLOCK" : "ALLOW")
 #define XFRM_MODE(mode) (mode ? "TUNNEL" : "TRANSPORT")
 
-
 struct sa_node {
 	__be16 status;
 	__be16 ref_count;
@@ -54,6 +53,7 @@ struct sa_node {
 	__be32 con_magic_num;
 };
 static struct sa_node sa_table[2][SECFP_MAX_SAS];
+static int current_sa_count[2];
 static spinlock_t sa_table_lock;
 
 static const struct algo_info
@@ -179,6 +179,9 @@ void init_sa_indexes(bool init)
 	/* cleaning up the SA Table*/
 	memset(sa_table, 0, sizeof(struct sa_node)*2*SECFP_MAX_SAS);
 
+	current_sa_count[IN_SA] = 0;
+	current_sa_count[OUT_SA] = 0;
+
 	if (!init)
 		spin_unlock(&sa_table_lock);
 }
@@ -188,7 +191,9 @@ static inline int match_sa_index_no_lock(struct xfrm_state *xfrm, int dir)
 	int cur_id;
 	for (cur_id = 0; cur_id < asfctrl_max_sas; cur_id++) {
 		if ((sa_table[dir][cur_id].spi == xfrm->id.spi)
-			&& (sa_table[dir][cur_id].status)) {
+			&& (sa_table[dir][cur_id].status)
+			&& (sa_table[dir][cur_id].con_magic_num ==
+			asfctrl_vsg_ipsec_cont_magic_id)) {
 				xfrm->asf_sa_cookie = cur_id + 1;
 				xfrm->asf_sa_direction = dir;
 				ASFCTRL_INFO("SA offloaded");
@@ -208,9 +213,13 @@ static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 		goto ret_unlock;
 	}
 
+	if (current_sa_count[dir] >= asfctrl_max_sas)
+		goto ret_unlock;
+
 	for (cur_id = 0; cur_id < asfctrl_max_sas; cur_id++) {
 		if (sa_table[dir][cur_id].status == 0) {
 			sa_table[dir][cur_id].status = 1;
+			current_sa_count[dir]++;
 			spin_unlock(&sa_table_lock);
 			return cur_id;
 		}
@@ -234,6 +243,7 @@ static inline int free_sa_index(struct xfrm_state *xfrm, int dir)
 		if (sa_table[dir][cookie - 1].status) {
 			sa_table[dir][cookie - 1].status = 0;
 			sa_table[dir][cookie - 1].spi = 0;
+			current_sa_count[dir]--;
 			err = 0;
 		}
 	} else {
