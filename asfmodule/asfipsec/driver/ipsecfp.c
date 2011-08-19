@@ -77,6 +77,7 @@ static inline  void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA);
 #define ASF_ICMP_CODE_FRAG_NEEDED 4
 #define  ASF_NON_NATT_PACKET 0
 #define ASF_NATT_PACKET 1
+#define ASF_IPSEC_CONSUMED 99
 
 #define ASF_ICMP_ECHO_REPLY	0  /* Echo Reply */
 #define ASF_ICMP_QUENCH	4  /* Source Quench */
@@ -2222,6 +2223,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		skb_set_transport_header(skb, (20 + pSA->ulL2BlobLen));
 	} else {
 ret_pkt:
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
 		ASFIPSEC_DEBUG("OutSA - L2blob info not available");
 		/* Update the ethernet header */
 		skb->data -= ETH_HLEN;
@@ -3402,8 +3404,6 @@ int secfp_try_fastPathOutv4 (
 	struct sk_buff *skb = skb1;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	AsfSPDPolicyPPStats_t   *pIPSecPolicyPPStats;
-	ASFLogInfo_t AsfLogInfo;
-	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASF_boolean_t	bRevalidate = FALSE;
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
@@ -3414,13 +3414,15 @@ int secfp_try_fastPathOutv4 (
 	char bScatterGatherList = SECFP_NO_SCATTER_GATHER;
 	unsigned char secout_sg_flag;
 #endif
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	ASFLogInfo_t AsfLogInfo;
+	char aMsg[ASF_MAX_MESG_LEN + 1];
 	unsigned short usPadLen = 0;
-
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	rcu_read_lock();
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotOutRecvPkts++;
-	pIPSecPPGlobalStats->ulTotOutRecvPktsSecApply++;
 
 #ifdef ASFIPSEC_DEBUG_FRAME
 	ASFIPSEC_PRINT("*****secfp_out: Pkt received skb->len = %d,"\
@@ -3614,11 +3616,12 @@ int secfp_try_fastPathOutv4 (
 				*(unsigned int *) &(skb->cb[SECFP_SAD_SAI_INDEX]),
 				*(unsigned int *) &(skb->cb[SECFP_SAD_SAI_MAGIC_INDEX]));
 
-			ASFIPSEC_DBGL2("Before secfp_talitos_submit:"
+			ASFIPSEC_DBGL2("Before secfp-submit:"
 				"skb= 0x%x, skb->data= 0x%x, skb->dev= 0x%x\n",
 				(int)skb, (int)skb->data, (int)skb->dev);
 #ifdef ASFIPSEC_DEBUG_FRAME
-			ASFIPSEC_PRINT("secfp_out: Pkt Pre submission Processing");
+			ASFIPSEC_PRINT("secfp_out: Pkt Pre submission Processing len=%d",
+					skb->len);
 			hexdump(skb->data, skb->len);
 #endif
 			/* Keeping REF_INDEX as 2, one for the h/w
@@ -3641,6 +3644,13 @@ int secfp_try_fastPathOutv4 (
 				pSecInfo->outContainerInfo.ulSPDContainerId);
 #endif /*ASF_TERM_FP_SUPPORT */
 
+#ifdef ASFIPSEC_DEBUG_FRAME
+			ASFIPSEC_PRINT("secfp_out: Pkt Post Processing %d",
+							skb->len);
+			hexdump(skb->data, skb->len);
+#endif
+			ASFIPSEC_DEBUG("OUT-submit to SEC");
+			pIPSecPPGlobalStats->ulTotOutRecvPktsSecApply++;
 #ifndef CONFIG_ASF_SEC4x
 			if (secfp_talitos_submit(pdev, desc, secfp_outComplete,
 				(void *)skb) == -EAGAIN) {
@@ -3804,7 +3814,6 @@ void secfp_outComplete(struct device *dev, void *desc,
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
-	pIPSecPPGlobalStats->ulTotOutProcPkts++;
 
 	ASFIPSEC_DEBUG(" Entry");
 	secfp_desc_free(desc);
@@ -3850,6 +3859,7 @@ void secfp_outComplete(struct device *dev, void *desc,
 				ASFSkbFree(skb);
 				return;
 			}
+			pIPSecPPGlobalStats->ulTotOutProcPkts++;
 		} else {
 			ASFIPSEC_DEBUG("Need to call fragmentation module ");
 			/* Need to do dma unmapping for rest of the fragments */
@@ -3928,6 +3938,7 @@ void secfp_outComplete(struct device *dev, void *desc,
 
 						ASFIPSEC_DEBUG("Fragment offset field = 0x%x",   iph->frag_off);
 #endif
+						pIPSecPPGlobalStats->ulTotOutProcPkts++;
 						if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
 							ASFIPSEC_WARN("Error in transmit: Should not happen");
 							ASFSkbFree(pOutSkb);
@@ -3949,8 +3960,15 @@ void secfp_outComplete(struct device *dev, void *desc,
 			}
 		}
 	} else {
+#ifdef CONFIG_ASF_SEC4x
+		if (error) {
+			char tmp[SECFP_ERROR_STR_MAX];
+			ASFIPSEC_WARN("%08x: %s\n", error,
+				caam_jr_strstatus(tmp, error));
+		}
+#endif
 		skb->data_len = 0;
-		ASFIPSEC_WARN("error = %d DROP PKT ", error);
+		ASFIPSEC_WARN("error = %x DROP PKT ", error);
 		ASFSkbFree(skb);
 	}
 	ASFIPSEC_TRACE;
@@ -4123,18 +4141,26 @@ bool secfp_verifySASels(inSA_t *pSA, unsigned char protocol,
  * For this purpose the Out SPD container index is maintained along with the
  * In SA
  */
-void secfp_adaptPeerGW(unsigned int ulVSGId, inSA_t *pSA, unsigned int saddr)
+void secfp_adaptPeerGW(unsigned int ulVSGId, inSA_t *pSA,
+		unsigned int saddr, unsigned short usSourcePort)
 {
 	outSA_t *pOutSA = NULL;
 	SPDOutContainer_t *pOutContainer;
 	SPDOutSALinkNode_t *pOutSALinkNode;
 	ASF_IPAddr_t	  OldDstAddr;
 	ASF_IPAddr_t	  NewDstAddr;
+	unsigned short	usNewSourcePort = 0, usOldSourcePort = 0;
 	int ii;
 
 	OldDstAddr.bIPv4OrIPv6 = NewDstAddr.bIPv4OrIPv6 = 0;
 	OldDstAddr.ipv4addr =  pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
 	NewDstAddr.ipv4addr = pSA->SAParams.tunnelInfo.addr.iphv4.saddr =  saddr;
+
+	if (pSA->SAParams.bDoUDPEncapsulationForNATTraversal) {
+		usOldSourcePort = pSA->SAParams.IPsecNatInfo.usSrcPort;
+		pSA->SAParams.IPsecNatInfo.usSrcPort = usSourcePort;
+		usNewSourcePort = pSA->SAParams.IPsecNatInfo.usSrcPort;
+	}
 
 	if (pSA->ulSPDOutContainerMagicNumber == ptrIArray_getMagicNum(&secfp_OutDB,
 									 pSA->ulSPDOutContainerIndex)) {
@@ -4159,11 +4185,13 @@ void secfp_adaptPeerGW(unsigned int ulVSGId, inSA_t *pSA, unsigned int saddr)
 			}
 			if (pOutSA && ASFIPSecCbFn.pFnPeerChange) {
 				pOutSA->ipHdrInfo.hdrdata.iphv4.daddr = saddr;
+				pSA->SAParams.IPsecNatInfo.usDstPort = usSourcePort;
 				ASFIPSecCbFn.pFnPeerChange(ulVSGId,
-							   pSA->SAParams.ulSPI,
-							   pSA->ulSPDInContainerIndex,
-							   pSA->SAParams.ucProtocol,
-							   OldDstAddr, NewDstAddr, 0, 0);
+						pSA->SAParams.ulSPI,
+						pSA->ulSPDInContainerIndex,
+						pSA->SAParams.ucProtocol,
+						OldDstAddr, NewDstAddr,
+						usOldSourcePort, usNewSourcePort);
 			} else {
 				GlobalErrors.ulOutSANotFound++;
 				ASFIPSEC_DEBUG("IP Address adaptation: pOutSA not found");
@@ -4532,13 +4560,23 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 				return 1;
 			}
 		}
-		/* Add code for reassembly after SA Verification */
-		if (pSA->SAParams.bDoPeerGWIPAddressChangeAdaptation) {
-			/* igwIPSec4CheckPeerGW */
-			if (pSA->SAParams.tunnelInfo.addr.iphv4.saddr != saddr) {
-				ASFIPSEC_DEBUG("Gateway address has changed: need to adapt");
-				secfp_adaptPeerGW((*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX])), pSA, saddr);
-			}
+		if ((pSA->SAParams.tunnelInfo.addr.iphv4.saddr !=  saddr) ||
+			(pSA->SAParams.bDoUDPEncapsulationForNATTraversal &&
+			(pSA->SAParams.IPsecNatInfo.usSrcPort !=
+				*(unsigned short *)&(pHeadSkb->cb[SECFP_UDP_SOURCE_PORT])))) {
+			snprintf(aMsg, ASF_MAX_MESG_LEN-1,
+				"SPI = 0x%x, Seq. No = %d :: Inbounbd IPSec packet source IP or UDP "
+				"port is not same as SA source IP or UDP port"
+				"Dropping the packet",
+				pSA->SAParams.ulSPI, pSA->ulLastSeqNum);
+			AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID11;
+			AsfLogInfo.aMsg = aMsg;
+			ASFIPSEC_WARN("%s", aMsg);
+			asfFillLogInfo(&AsfLogInfo, pSA);
+			pSA->ulBytes[smp_processor_id()] -= pHeadSkb->len;
+			pSA->ulPkts[smp_processor_id()]--;
+			rcu_read_unlock();
+			return 1;
 		}
 		rcu_read_unlock();
 		return 0;
@@ -4624,7 +4662,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
-	pIPSecPPGlobalStats->ulTotInProcPkts++;
+
 
 	ASFIPSEC_DEBUG("InComplete: iteration=%d, desc=0x%x, err = %d"
 			" refIndex = %d\n",
@@ -4632,8 +4670,8 @@ void secfp_inCompleteWithFrags(struct device *dev,
 			(unsigned int) desc, err, skb1->cb[SECFP_REF_INDEX]);
 	ASFIPSEC_FENTRY;
 	skb1->cb[SECFP_REF_INDEX]--;
-	if (unlikely(err < 0)) {
-		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
+	if (unlikely(err)) {
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 		iph = (struct iphdr *)*(unsigned int *)&(skb1->cb[SECFP_IPHDR_INDEX]);
 		rcu_read_lock();
 		pSA = secfp_findInv4SA(*(unsigned int *)&(skb1->cb[SECFP_VSG_ID_INDEX]), SECFP_PROTO_ESP,
@@ -4646,7 +4684,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 			AsfLogInfo.aMsg = aMsg;
 			AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID3;
 			asfFillLogInfo(&AsfLogInfo, pSA);
-			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
+			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT18);
 		}
 		rcu_read_unlock();
 		if (skb1->cb[SECFP_REF_INDEX]) {
@@ -4674,7 +4712,6 @@ void secfp_inCompleteWithFrags(struct device *dev,
 			pHeadSkb = pTailSkb  = skb1;
 		}
 
-
 		if (secfp_inHandleICVCheck(desc,  pTailSkb)) {
 			/* Failure case */
 			iph = (struct iphdr *)*(unsigned int *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
@@ -4682,11 +4719,11 @@ void secfp_inCompleteWithFrags(struct device *dev,
 			pSA = secfp_findInv4SA(*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]), SECFP_PROTO_ESP,
 						 *(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]), iph->daddr,
 						 (unsigned int *)&(pHeadSkb->cb[SECFP_HASH_VALUE_INDEX]));
-			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
+			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT17]);
 			if (pSA) {
 				pSA->ulBytes[smp_processor_id()] -= skb1->len;
 				pSA->ulPkts[smp_processor_id()]--;
-				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
+				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT17);
 				snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "ICV Comparision Failed");
 				AsfLogInfo.aMsg = aMsg;
 				AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID8;
@@ -4834,15 +4871,20 @@ inline void secfp_inComplete(struct device *dev, void *desc,
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
-	pIPSecPPGlobalStats->ulTotInProcPkts++;
+
 	memset(&IPSecOpque, 0 , sizeof(IPSecOpque));
 
-	ASFIPSEC_DEBUG("InComplete: iteration=%d, desc=0x%x, err = %d"
+	ASFIPSEC_DEBUG("InComplete: iteration=%d, desc=0x%x, err = %x"
 			"refIndex = %d\n", ++ulNumIter[smp_processor_id()],
 			(unsigned int) desc, err, skb->cb[SECFP_REF_INDEX]);
 
 	skb->cb[SECFP_REF_INDEX]--;
-	if (err < 0) {
+	if (err) {
+#ifdef CONFIG_ASF_SEC4x
+		char tmp[SECFP_ERROR_STR_MAX];
+		ASFIPSEC_WARN("%08x: %s\n", err,
+			caam_jr_strstatus(tmp, err));
+#endif
 		secfp_desc_free(desc);
 		iph = (struct iphdr *)*(unsigned int *)&(skb->cb[SECFP_IPHDR_INDEX]);
 		rcu_read_lock();
@@ -4851,13 +4893,15 @@ inline void secfp_inComplete(struct device *dev, void *desc,
 					 *(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]),
 					 iph->daddr,
 					 (unsigned int *)&(skb->cb[SECFP_HASH_VALUE_INDEX]));
-		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 		if (pSA) {
-			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
+			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT18);
 			snprintf(aMsg, ASF_MAX_MESG_LEN - 1, "Cipher Operation Failed-3");
 			AsfLogInfo.aMsg = aMsg;
 			AsfLogInfo.ulMsgId =   ASF_IPSEC_LOG_MSG_ID3;
 			asfFillLogInfo(&AsfLogInfo, pSA);
+			/* TBD - length being deducted is not
+				same as lengh added*/
 			pSA->ulBytes[smp_processor_id()] -= skb->len;
 			pSA->ulPkts[smp_processor_id()]--;
 		}
@@ -4959,6 +5003,8 @@ inline void secfp_inComplete(struct device *dev, void *desc,
 		}
 
 			iRetVal =  secfp_inCompleteSAProcess(&skb, &IPSecOpque, &ulCommonInterfaceId, ulBeforeTrimLen);
+			ASFIPSEC_DEBUG("\nUL Common IFACE ID is %d\n",
+						ulCommonInterfaceId);
 			if (iRetVal == 1) {
 				ASFIPSEC_WARN("secfp_inCompleteSAProcess failed");
 				ASFSkbFree(skb);
@@ -6114,7 +6160,10 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		return 1; /* Send it up to Stack */
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	}
-
+#ifdef ASFIPSEC_DEBUG_FRAME
+	ASFIPSEC_PRINT("Pkt received skb->len = %d", skb1->len);
+	hexdump(skb1->data - 14, skb1->len);
+#endif
 	rcu_read_lock();
 	SECFP_EXTRACT_PKTINFO(skb1, iph, (iph->ihl*4), ulSPI, ulSeqNum)
 	pSA = secfp_findInv4SA(ulVSGId, iph->protocol, ulSPI, iph->daddr, &ulHashVal);
@@ -6123,7 +6172,6 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		ASFIPSEC_DEBUG(" pSA Found coreId=%d",  smp_processor_id());
 		pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 		pIPSecPPGlobalStats->ulTotInRecvPkts++;
-		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 
 		pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);
 		pIPSecPolicyPPStats->NumInBoundInPkts++;
@@ -6572,6 +6620,9 @@ int secfp_CheckInPkt(
 				pulVSGMagicNumber[ulVSGId]) ||
 				(pSecInfo->inContainerInfo.configIdentity.ulTunnelConfigMagicNumber !=
 				secFP_TunnelIfaces[ulVSGId][pSecInfo->inContainerInfo.ulTunnelId].ulTunnelMagicNumber)) {
+				ASFIPSEC_DBGL2("vsg %d != %d",
+					pSecInfo->inContainerInfo.configIdentity.ulVSGConfigMagicNumber,
+					pulVSGMagicNumber[ulVSGId]);
 				bRevalidate = TRUE;
 				goto callverify;
 			}

@@ -738,7 +738,7 @@ static int display_asf_proc_flow_debug(char *page, char **start,
 			ulIdleTime = ulIdleTime/HZ;
 
 
-			p += sprintf(p, "{%lu, %lu}\t{%lu, %lu}\t%c%c%c%c%c%c\t%u\t%c%u\t%u\t%u\t%lu/%lu\t%pM:%pM..%02x%02x\n",
+			p += sprintf(p, "{%lu, %lu}\t{%lu, %lu}\t%c%c%c%c%c%c%c%c\t%u\t%c%u\t%u\t%u\t%lu/%lu\t%pM:%pM..%02x%02x\n",
 				     flow->id.ulArg1, flow->id.ulArg2,
 				     flow->other_id.ulArg1, flow->other_id.ulArg2,
 
@@ -747,6 +747,8 @@ static int display_asf_proc_flow_debug(char *page, char **start,
 				     flow->bNat ? 'N' : '-',
 				     flow->bVLAN ? 'V' : '-',
 				     flow->bPPPoE ? 'P' : '-',
+				     flow->bIPsecIn ? 'I' : '-',
+				     flow->bIPsecOut ? 'O' : '-',
 				     ASF_TCP_IS_BIT_SET(flow, FIN_RCVD) ? 'F' : (ASF_TCP_IS_BIT_SET(flow, RST_RCVD) ? 'R' : '-'),
 
 				     flow->pmtu,

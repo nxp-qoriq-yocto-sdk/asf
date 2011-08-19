@@ -212,6 +212,7 @@ typedef enum asfIPSecPolicyPPStats {
 	ASF_IPSEC_PP_POL_CNT20, /*38*/
 	ASF_IPSEC_PP_POL_CNT21, /*57*/
 	ASF_IPSEC_PP_POL_CNT22,
+	ASF_IPSEC_PP_POL_CNT23,
 	ASF_IPSEC_PP_POL_CNT_MAX
 } asfIPSecPolicyPPStats_e;
 
@@ -242,6 +243,7 @@ typedef enum asfIPSecGlobalPPStats {
 	ASF_IPSEC_PP_GBL_CNT22, /*Fragmentation Failed 78*/
 	ASF_IPSEC_PP_GBL_CNT23, /*In SA Not Found*/
 	ASF_IPSEC_PP_GBL_CNT24, /*Out SA not Found*/
+	ASF_IPSEC_PP_GBL_CNT25, /*Out L2blob not Found*/
 	ASF_IPSEC_PP_GBL_CNT_MAX
 } asfIPSecGlobalPPStats_e;
 
@@ -722,7 +724,9 @@ typedef enum asfIPSeLogMsgId {
 	ASF_IPSEC_LOG_MSG_ID7,
 	ASF_IPSEC_LOG_MSG_ID8,
 	ASF_IPSEC_LOG_MSG_ID9,
-	ASF_IPSEC_LOG_MSG_ID10
+	ASF_IPSEC_LOG_MSG_ID10,
+	ASF_IPSEC_LOG_MSG_ID11,
+	ASF_IPSEC_LOG_MSG_ID12
 } asfIPSeLogMsgId_e;
 
 

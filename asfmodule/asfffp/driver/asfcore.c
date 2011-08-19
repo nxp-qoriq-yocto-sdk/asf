@@ -778,7 +778,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	if (skb->pkt_type != PACKET_HOST) {
 		/* multicast or broadcast or a packet
 			received in promiscous mode */
-		asf_debug("packet type (%d) is not PACKET_HOST"\
+		asf_debug_l2("packet type (%d) is not PACKET_HOST"\
 			"(skb->dev %s real_dev %s vlan_tci %u) .. return\n",
 			skb->pkt_type, skb->dev->name,
 			real_dev->name, skb->vlan_tci);
@@ -874,6 +874,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	iph = ip_hdr(skb);
 
 	if (unlikely(iph->version != 4)) {
+		asf_debug("Non IPv4 traffic. ver = 0x%x\n", iph->version);
 		goto ret_pkt;
 	}
 
@@ -1133,6 +1134,11 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 	iph = ip_hdr(skb);
 
+#ifdef ASF_DEBUG_FRAME
+	asf_print(" Pkt (%x) skb->len = %d, iph->tot_len = %d",
+		pIpsecOpaque, skb->len, iph->tot_len);
+	hexdump(skb->data - 14, skb->len + 14);
+#endif
 
 #ifdef ASF_IPSEC_FP_SUPPORT
 
@@ -1256,7 +1262,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		" = %lx (hindex %lx) (hini 0x%lx) => %s\n",
 		skb->dev->name,
 		NIPQUAD(iph->saddr), NIPQUAD(iph->daddr), *ptrhdrOffset,
-		ulVsgId, ulZoneId, ulHashVal, FFP_HINDEX(ulHashVal),
+		iph->protocol, ulVsgId, ulHashVal, FFP_HINDEX(ulHashVal),
 		asf_ffp_hash_init_value, flow ? "FOUND" : "NOT FOUND");
 
 #ifdef ASF_IPSEC_FP_SUPPORT
@@ -1805,13 +1811,13 @@ ret_pkt_to_stk:
 	}
 	/* proceed with ret_pkt labelled code for non-frag pkt */
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	gstats->ulPktsToFNP++;
+#endif
 	if (ffpCbFns.pFnNoFlowFound) {
 		ASFBuffer_t	abuf;
 
 		abuf.nativeBuffer = skb;
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-		gstats->ulPktsToFNP++;
-#endif
 		ffpCbFns.pFnNoFlowFound(anDev->ulVSGId,
 			anDev->ulCommonInterfaceId, anDev->ulZoneId,
 			abuf, ASF_SKB_FREE_FUNC, skb);
@@ -1859,8 +1865,7 @@ ret_pkt_to_stk:
 		skb->mac_len = ETH_HLEN;
 	}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	gstats->ulPktsToFNP++;
+
 #endif
 	asf_debug_l2("  ret_pkt LABEL -- calling netif_receive_skb!\n");
 	ASF_netif_receive_skb(skb);

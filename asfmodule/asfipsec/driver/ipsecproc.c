@@ -259,6 +259,8 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT23]);
 	printk(KERN_INFO"%u (OUT SA Not Found )\n",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
+	printk(KERN_INFO"%u (L2blob Not Found )\n",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
 	return 0;
 }
 
@@ -475,10 +477,27 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 				(outSA_t *) ptrIArray_getData(&secFP_OutSATable,
 					pOutSALinkNode->ulSAIndex);
 			if (pOutSA) {
+				ASFSAStats_t outParams = {0, 0};
+				ASFIPSecGetSAQueryParams_t inParams;
+
 				print_SAParams(&pOutSA->SAParams);
 				printk(KERN_INFO"L2BlobLen = %d, Magic = %d\n",
-				pOutSA->ulL2BlobLen,
+					pOutSA->ulL2BlobLen,
 				pOutSA->l2blobConfig.ulL2blobMagicNumber);
+
+				inParams.ulVSGId = ulVSGId;
+				inParams.ulTunnelId = ulTunnelId;
+				inParams.ulSPDContainerIndex = pCINode->ulIndex;
+				inParams.ulSPI = pOutSA->SAParams.ulSPI;
+				inParams.gwAddr.ipv4addr =
+					pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+				inParams.ucProtocol =
+						pOutSA->SAParams.ucProtocol;
+				inParams.bDir = SECFP_OUT;
+				ASFIPSecSAQueryStats(&inParams, &outParams);
+				printk(KERN_INFO"Stats:ulBytes= %u, ulPkts= %u",
+					outParams.ulBytes, outParams.ulPkts);
+
 			}
 		}
 		printk(KERN_INFO"\n");
@@ -547,9 +566,26 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 			ulHashVal = secfp_compute_hash(pSPILinkNode->ulSPIVal);
 			for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
 				pInSA != NULL; pInSA = pInSA->pNext) {
+
+				ASFSAStats_t outParams = {0, 0};
+				ASFIPSecGetSAQueryParams_t inParams;
+
 				printk(KERN_INFO"SpdContId =%d",
 					pInSA->ulSPDInContainerIndex);
 				print_SAParams(&pInSA->SAParams);
+
+				inParams.ulVSGId = ulVSGId;
+				inParams.ulTunnelId = ulTunnelId;
+				inParams.ulSPDContainerIndex = pCINode->ulIndex;
+				inParams.ulSPI = pInSA->SAParams.ulSPI;
+				inParams.gwAddr.ipv4addr =
+					pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+				inParams.ucProtocol =
+					pInSA->SAParams.ucProtocol;
+				inParams.bDir = SECFP_IN;
+				ASFIPSecSAQueryStats(&inParams, &outParams);
+				printk(KERN_INFO"Stats:ulBytes= %u, ulPkts= %u",
+					outParams.ulBytes, outParams.ulPkts);
 			}
 		}
 		printk(KERN_INFO"\n");
