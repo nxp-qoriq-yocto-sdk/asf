@@ -22,6 +22,9 @@
 #include <linux/crypto.h>
 #include <linux/skbuff.h>
 #include <linux/route.h>
+#ifdef ASF_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 #include <linux/version.h>
 #include "../../asfffp/driver/asfparry.h"
 #include "../../asfffp/driver/asfmpool.h"
@@ -29,14 +32,18 @@
 #include "../../asfffp/driver/gplcode.h"
 #include "../../asfffp/driver/asf.h"
 #include "../../asfffp/driver/asfcmn.h"
+#include "../../asfffp/driver/asfterm.h"
 #include "ipsfpapi.h"
 #include "ipsecfp.h"
-
 #include <net/dst.h>
 #include <net/route.h>
 #include <linux/inetdevice.h>
 #include "ipseccmn.h"
 #define SECFP_MF_OFFSET_FLAG_NET_ORDER  htons(IP_MF|IP_OFFSET)
+
+#ifdef ASF_TERM_FP_SUPPORT
+extern ASFTERMProcessPkt_f	pTermProcessPkt;
+#endif
 
 
 struct device *pdev;
@@ -194,7 +201,7 @@ void *secfp_desc_alloc(void)
 	u32 smp_processor_id = smp_processor_id();
 	u32 current_edesc = curr_desc[smp_processor_id];
 	if (unlikely(current_edesc == 0)) {
-		return kmem_cache_alloc(desc_cache, GFP_KERNEL);
+		return kmem_cache_alloc(desc_cache, GFP_DMA | GFP_KERNEL);
 	} else {
 		curr_desc[smp_processor_id] = current_edesc - 1;
 		return desc_rec_queue[smp_processor_id][current_edesc - 1];
@@ -793,17 +800,17 @@ int secfp_init(void)
 
 #ifndef CONFIG_ASF_SEC4x
 	desc_cache = kmem_cache_create("desc_cache",
-				sizeof(struct talitos_desc),
-				__alignof__(struct talitos_desc),
-				SLAB_HWCACHE_ALIGN, NULL);
+			sizeof(struct talitos_desc),
+			__alignof__(struct talitos_desc),
+			SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA, NULL);
 #else
 	desc_cache = kmem_cache_create("desc_cache",
-				sizeof(struct ipsec_esp_edesc),
-				__alignof__(struct ipsec_esp_edesc),
-				SLAB_HWCACHE_ALIGN, NULL);
+			sizeof(struct ipsec_esp_edesc) + CAAM_DESC_BYTES_MAX,
+			__alignof__(struct ipsec_esp_edesc),
+			SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA, NULL);
 #endif
-		if (desc_cache == NULL)
-			return -ENOMEM;
+	if (desc_cache == NULL)
+		return -ENOMEM;
 
 	ASFFFPRegisterIPSecFunctions(secfp_try_fastPathInv4,
 					secfp_try_fastPathOutv4,
@@ -3460,14 +3467,14 @@ int secfp_try_fastPathOutv4 (
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
 				ASFIPSec4SendIcmpErrMsg(skb1->data, ASF_ICMP_DEST_UNREACH, ASF_ICMP_CODE_FRAG_NEEDED, pSA->ulPathMTU, ulVSGId);
 				rcu_read_unlock();
-				return 0;
+				return 1;
 			}
 			if (skb_shinfo(skb1)->frag_list) {
 				if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
 					ASFIPSEC_WARN("asflLinearize failed");
 					ASFSkbFree(skb1);
 					rcu_read_unlock();
-					return 1; /* DOUBT */
+					return 0;
 				}
 
 				ASFIPSEC_DEBUG("skb1->len = %d",  skb->len);
@@ -3488,7 +3495,7 @@ int secfp_try_fastPathOutv4 (
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
 					rcu_read_unlock();
-					return 1;
+					return 0;
 				}
 			}
 		}
@@ -3512,7 +3519,7 @@ int secfp_try_fastPathOutv4 (
 					ASFIPSEC_DEBUG("Trying to flatten the data failed");
 					ASFSkbFree(skb1);
 					rcu_read_unlock();
-					return 1;
+					return 0;
 				}
 				skb_shinfo(skb1)->frag_list = NULL;
 				skb = skb1;
@@ -3532,7 +3539,7 @@ int secfp_try_fastPathOutv4 (
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
 					ASFIPSec4SendIcmpErrMsg(skb1->data, ASF_ICMP_DEST_UNREACH, ASF_ICMP_CODE_FRAG_NEEDED, pSA->ulPathMTU, ulVSGId);
 					rcu_read_unlock();
-					return 0;
+					return 1;
 				}
 
 				if (pSA->SAParams.bRedSideFragment) {
@@ -3630,6 +3637,11 @@ int secfp_try_fastPathOutv4 (
 #endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 				secfp_prepareOutDescriptor(skb, pSA, desc, 0);
+#ifdef ASF_TERM_FP_SUPPORT
+			(*pSA->finishOutPktFnPtr)(skb, pSA, pContainer,
+				pOuterIpHdr, ulVSGId,
+				pSecInfo->outContainerInfo.ulSPDContainerId);
+#endif /*ASF_TERM_FP_SUPPORT */
 
 #ifndef CONFIG_ASF_SEC4x
 			if (secfp_talitos_submit(pdev, desc, secfp_outComplete,
@@ -3657,7 +3669,7 @@ int secfp_try_fastPathOutv4 (
 				ASFSkbFree(skb);
 				secfp_desc_free(desc);
 				rcu_read_unlock();
-				return 1;
+				return 0;
 			}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (pSA->option[1] != SECFP_NONE) {
@@ -3703,6 +3715,7 @@ int secfp_try_fastPathOutv4 (
 				}
 			}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+#ifndef ASF_TERM_FP_SUPPORT
 			(*pSA->finishOutPktFnPtr)(skb, pSA, pContainer, pOuterIpHdr, ulVSGId, pSecInfo->outContainerInfo.ulSPDContainerId);
 #ifdef ASFIPSEC_DEBUG_FRAME
 			ASFIPSEC_PRINT("secfp_out: Pkt Post Processing");
@@ -3710,6 +3723,8 @@ int secfp_try_fastPathOutv4 (
 			nr_frags = skb_shinfo(skb)->nr_frags;
 			ASFIPSEC_PRINT("nf_frags after finish function = %d", nr_frags);
 #endif
+#endif /* ASF_TERM_FP_SUPPORT */
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			skb->cb[SECFP_REF_INDEX]--;
 			if (skb->cb[SECFP_REF_INDEX] == 0) {
@@ -3723,7 +3738,7 @@ int secfp_try_fastPathOutv4 (
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		}
 		rcu_read_unlock();
-		return 1;
+		return 0;
 	} else {
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
 		if (ASFIPSecCbFn.pFnNoOutSA) {
@@ -3748,10 +3763,10 @@ int secfp_try_fastPathOutv4 (
 			ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer,
 					secfp_SkbFree, skb1, bSPDContainerPresent,
 					bRevalidate);
-			return 1;
+			return 0;
 		}
 	}
-	return 0;
+	return 1;
 }
 
 static inline void secfp_unmap_descs(struct sk_buff *skb)
@@ -4967,12 +4982,23 @@ inline void secfp_inComplete(struct device *dev, void *desc,
 #endif
 			/* Homogenous buffer */
 			Buffer.nativeBuffer = skb;
-			ASFFFPProcessAndSendPkt(
+#ifdef ASF_TERM_FP_SUPPORT
+			if (skb->mapped && pTermProcessPkt)
+				pTermProcessPkt(
+				*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
+				ulCommonInterfaceId, Buffer, secfp_SkbFree,
+				skb, &IPSecOpque, ASF_FALSE);
+			else
+#endif
+				ASFFFPProcessAndSendPkt(
 				*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
 				ulCommonInterfaceId, Buffer, secfp_SkbFree,
 				skb, &IPSecOpque);
+
+			pIPSecPPGlobalStats->ulTotInProcPkts++;
 		} else {
-			ASFIPSEC_DEBUG("Stub function: Need to handle IPv6 ");
+			ASFIPSEC_WARN("Stub function: Need to handle IPv6 ");
+			ASFSkbFree(skb);
 			return;
 		}
 	}
@@ -6010,14 +6036,14 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		skb1 = asfIpv4Defrag(ulVSGId, skb1, NULL, NULL, NULL, &fragCnt);
 		if (skb1 == NULL) {
 			ASFIPSEC_DEBUG("ESP Packet absorbed by IP reasembly module");
-			return 1; /*Pkt absorbed */
+			return 0; /*Pkt absorbed */
 		}
 		fragCnt = 0;
 		iph = ip_hdr(skb1);
 		if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
 			ASFIPSEC_WARN("skb->linearize failed ");
 			ASFSkbFree(skb1);
-			return 1;
+			return 0;
 		}
 		skb_reset_network_header(skb1);
 		iph = ip_hdr(skb1);
@@ -6029,11 +6055,11 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		if (unlikely(skb1->len < ((iph->ihl*4) + SECFP_ESP_HDR_LEN))) {
 			ASFIPSEC_WARN("ESP header length is invalid len = %d ",   skb1->len);
 			ASFSkbFree(skb1);
-			return 1;
+			return 0;
 		}
 #else
 		ASFIPSEC_WARN("Fragmented Packets Not supported in this mode");
-		ASFSkbFree(skb1);
+		return 1; /* Send it up to Stack */
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	}
 
@@ -6056,7 +6082,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 				  */
 			ASFIPSEC_DEBUG("Need to send packet up to Normal Path");
 			rcu_read_unlock();
-			return 0;
+			return 1; /* Send it up to Stack */
 		}
 		/* SA Found */
 		/* Need to have this check when packets are coming in from upper layer, but not from the driver interface */
@@ -6090,7 +6116,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 				ASFIPSEC_WARN("skb->linearize failed");
 				ASFSkbFree(skb1);
 				rcu_read_unlock();
-				return 1;
+				return 0;
 			}
 			skb_reset_network_header(skb1);
 			iph = ip_hdr(skb1);
@@ -6136,7 +6162,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT10);
 			ASFSkbFree(pHeadSkb);
 			rcu_read_unlock();
-			return 1;
+			return 0;
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		pContainer = (SPDInContainer_t *)(ptrIArray_getData(
@@ -6326,6 +6352,25 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 #endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
+#ifdef ASF_TERM_FP_SUPPORT
+		/* Post submission, we can move the data pointer beyond the ESP header */
+		/* Trim the length accordingly */
+		/* Since we will be giving packet to fwnat processing,
+		keep the data pointer as 14 bytes before data start */
+		ASFIPSEC_DEBUG("In: Offseting data by ulSecHdrLen = %d",
+					pSA->ulSecHdrLen);
+
+		pHeadSkb->len -= (pSA->ulSecHdrLen);
+		pHeadSkb->data += (pSA->ulSecHdrLen);
+		pHeadSkb->cb[SECFP_REF_INDEX]--;
+		ASFIPSEC_DEBUG("IN-submit to SEC");
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
+			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+#endif /* ASF_TERM_FP_SUPPORT*/
+
+		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
 		if (secfp_talitos_submit(pdev, desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
@@ -6348,12 +6393,14 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			secfp_desc_free(desc);
 			ASFSkbFree(pHeadSkb);
 			rcu_read_unlock();
-			/* Increment statistics */
 			return 1;
 		}
+#ifndef ASF_TERM_FP_SUPPORT
 		pHeadSkb->len -= (pSA->ulSecHdrLen);
 		pHeadSkb->data += (pSA->ulSecHdrLen);
 		pHeadSkb->cb[SECFP_REF_INDEX]--;
+#endif /*ASF_TERM_FP_SUPPORT*/
+
 		/* length of skb memory to unmap upon completion */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (pSA->option[1] != SECFP_NONE) {
@@ -6389,32 +6436,32 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 				secfp_desc_free(desc);
 				/* Increment statistics */
 				rcu_read_unlock();
-				return 1;
+				return 0;
 			}
 		}
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		/* Post submission, we can move the data pointer beyond the ESP header */
 		/* Trim the length accordingly */
 		/* Since we will be giving packet to fwnat processing, keep the data pointer as 14 bytes before data start */
 		ASFIPSEC_DEBUG("In: Offseting data by ulSecHdrLen = %d",
 					pSA->ulSecHdrLen);
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifndef ASF_TERM_FP_SUPPORT
 		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
 			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
 			ASFIPSEC_TRACE;
 			pHeadSkb->data_len = 0;
 			/* CB already finished processing the skb & there was an error*/
 			ASFSkbFree(pHeadSkb);
 		}
+#endif /* ASF_TERM_FP_SUPPORT */
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		/* Assumes successful processing of the Buffer */
 		pSA->ulBytes[smp_processor_id()] += len;
 		pSA->ulPkts[smp_processor_id()]++;
 		pIPSecPolicyPPStats->NumInBoundOutPkts++;
 
 		rcu_read_unlock();
-		return 1;
+		return 0;
 	} else {
 		ASFBuffer_t Buffer;
 		rcu_read_unlock();
@@ -6425,7 +6472,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		if (ASFIPSecCbFn.pFnNoInSA)
 			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
 				skb1, ulCommonInterfaceId);
-		return 1;
+		return 0;
 	}
 }
 

@@ -19,6 +19,10 @@
 #include <linux/if_bridge.h>
 #include <linux/if_arp.h>
 #include <linux/ip.h>
+#ifdef ASF_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
+
 #include "../../asfffp/driver/asf.h"
 #include "../../asfffp/driver/asfparry.h"
 #include "../../asfffp/driver/asftmr.h"
@@ -1957,10 +1961,8 @@ static int __init ASFIPSec_Init(void)
 
 	/* Get ASF Capabilities and store them for future use. */
 	ASFGetCapabilities(&asf_cap);
-	if (!asf_cap.mode[fwdMode]) {
-		asf_err("ASF not configured in FWD mode.... Exiting\n");
-		return err;
-	} else if (!asf_cap.bBufferHomogenous) {
+
+	if (!asf_cap.bBufferHomogenous) {
 		asf_err("No Support for Hetrogenous Buffer, ...Exiting\n");
 		return err;
 	}

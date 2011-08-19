@@ -984,7 +984,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	if (iph->protocol == IPPROTO_ESP) {
 		if (pFFPIPSecInv4) {
 			if (pFFPIPSecInv4(skb, 0, anDev->ulVSGId,
-				anDev->ulCommonInterfaceId) != 0) {
+				anDev->ulCommonInterfaceId) == 0) {
 				ASF_RCU_READ_UNLOCK(bLockFlag);
 				return AS_FP_STOLEN;
 			}
@@ -1837,14 +1837,17 @@ ret_pkt_to_stk:
 	gstats->ulPktsToFNP++;
 #endif
 	asf_debug_l2("  ret_pkt LABEL -- calling netif_receive_skb!\n");
-	netif_receive_skb(skb);
+	ASF_netif_receive_skb(skb);
 	asf_debug_l2("  ret_pkt LABEL -- returning from function!\n");
 	return;
 
 
 drop_pkt:
 	asf_debug_l2("drop_pkt LABEL\n");
-	dev_kfree_skb_any(skb);
+	/* TODO: we may have to iterate through frag_list and free all of them*/
+	/* TODO: ensure all fragments are also dropped. and return STOLEN
+	 always return stolen?? */
+	pFreeFn(skb);
 	return;
 }
 EXPORT_SYMBOL(ASFFFPProcessAndSendPkt);
