@@ -95,7 +95,8 @@ void asfctrl_generic_free(ASF_void_t *freeArg)
 
 /**** Container Indices ***/
 static spinlock_t cont_lock;
-static T_BOOL containers_ids[MAX_POLICY_CONT_ID][ASFCTRL_MAX_SPD_CONTAINERS];
+static ASF_boolean_t
+	containers_ids[MAX_POLICY_CONT_ID][ASFCTRL_MAX_SPD_CONTAINERS];
 static int current_index[MAX_POLICY_CONT_ID];
 
 
@@ -107,10 +108,10 @@ void init_container_indexes(bool init)
 		spin_lock(&cont_lock);
 
 	memset(containers_ids[ASF_OUT_CONTANER_ID], 0,
-		sizeof(T_BOOL) * ASFCTRL_MAX_SPD_CONTAINERS);
+		sizeof(ASF_boolean_t) * ASFCTRL_MAX_SPD_CONTAINERS);
 
 	memset(containers_ids[ASF_IN_CONTANER_ID], 0,
-		sizeof(T_BOOL) * ASFCTRL_MAX_SPD_CONTAINERS);
+		sizeof(ASF_boolean_t) * ASFCTRL_MAX_SPD_CONTAINERS);
 
 	current_index[ASF_OUT_CONTANER_ID] = 1;
 	current_index[ASF_IN_CONTANER_ID] = 1;
@@ -1143,7 +1144,7 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 		struct xfrm_state *xfrm)
 {
 	ASFBuffer_t Buffer;
-	T_INT32 cii;
+	ASF_int32_t cii;
 	struct net_device *dev = skb->dev;
 
 	ASFCTRL_FUNC_ENTRY;

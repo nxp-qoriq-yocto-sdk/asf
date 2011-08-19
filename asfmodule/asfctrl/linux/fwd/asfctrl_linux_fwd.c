@@ -63,7 +63,7 @@ typedef struct asfctrl_fwd_L2blobPktData_s {
 } asfctrl_fwd_L2blobPktData_t;
 
 
-static T_INT32 asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
+static ASF_int32_t asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 {
 	struct	sk_buff *skb;
 	int	ret;
@@ -215,7 +215,7 @@ ASF_void_t asfctrl_fwd_fnAuditLog(ASFLogInfo_t *pLogInfo)
 
 ASF_void_t asfctrl_fwd_l2blob_update_fn(struct sk_buff *skb,
 	ASF_uint32_t hh_len,
-	T_UINT32 ulDeviceID)
+	ASF_uint32_t ulDeviceID)
 {
 	ASFFWDUpdateCacheEntry_t pCacheData;
 	ASF_uint32_t		ulVSGId;

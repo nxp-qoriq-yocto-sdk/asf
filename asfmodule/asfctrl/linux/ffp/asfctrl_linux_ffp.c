@@ -56,14 +56,14 @@ static uint32_t asf_ffp_activity_divisor = DEFVAL_INACTIVITY_DIVISOR;
 module_param(asf_ffp_tcp_state_check, bool, 0644);
 MODULE_PARM_DESC(asf_ffp_tcp_state_check, "Drop TCP out of sequence packets");
 
-static T_INT32 asf_linux_XmitL2blobDummyPkt(
+static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 				ASF_uint32_t ulVsgId,
 				ASF_uint32_t ulZoneId,
 				ASFFFPFlowTuple_t *tpl,
 				ASF_IPv4Addr_t    ulSrcIp,
 				ASF_IPv4Addr_t    uldestIp,
 				ASF_uint32_t tos,
-				T_UINT32 ulHashVal,
+				ASF_uint32_t ulHashVal,
 				ASF_uint32_t ulCII)
 {
 	struct sk_buff *skb;

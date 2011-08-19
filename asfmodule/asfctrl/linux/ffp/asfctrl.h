@@ -18,16 +18,8 @@
 #ifndef __ASFCTRL_H__
 #define __ASFCTRL_H__
 
-#define T_BOOL		uint8_t
-#define T_UINT8		uint8_t
-#define T_UINT16	uint16_t
-#define T_UINT32	uint32_t
-#define T_UCHAR8	uint8_t
-#define T_CHAR8		int8_t
-#define T_INT32		int32_t
-
-#define ASFCTRL_TRUE	((T_BOOL)1)
-#define ASFCTRL_FALSE	((T_BOOL)0)
+#define ASFCTRL_TRUE	((ASF_boolean_t)1)
+#define ASFCTRL_FALSE	((ASF_boolean_t)0)
 
 #define T_SUCCESS	0
 #define T_FAILURE	1
@@ -151,9 +143,9 @@ extern uint32_t asfctrl_vsg_config_id;
 extern uint32_t asfctrl_vsg_l2blobconfig_id;
 
 extern int asf_ip_send(struct sk_buff *skb);
-extern T_INT32 asfctrl_create_dev_map(struct net_device *dev,
-				T_INT32 bForce);
-extern T_INT32 asfctrl_delete_dev_map(struct net_device *dev);
+extern ASF_int32_t asfctrl_create_dev_map(struct net_device *dev,
+				ASF_int32_t bForce);
+extern ASF_int32_t asfctrl_delete_dev_map(struct net_device *dev);
 extern int asfctrl_sysfs_init(void);
 extern int asfctrl_sysfs_exit(void);
 
@@ -169,7 +161,7 @@ typedef int (*asfctrl_ipsec_get_flow_info)(bool *ipsec_in, bool *ipsec_out,
 
 typedef void (*asfctrl_ipsec_l2blob_update)(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
-					T_UINT16 ulDeviceID);
+					ASF_uint16_t ulDeviceID);
 
 typedef void (*asfctrl_ipsec_vsg_magicnum_update)(void);
 
@@ -184,14 +176,14 @@ extern asfctrl_ipsec_get_flow_info fn_ipsec_get_flow4;
 extern void asfctrl_invalidate_sessions(void);
 #ifdef CONFIG_PPPOE
 extern struct net_device *ppp_get_parent_dev(struct net_device *pDev,
-							T_UINT16 *pSessId);
+							ASF_uint16_t *pSessId);
 #endif
 
 #ifdef ASFCTRL_FWD_FP_SUPPORT
 
 typedef void (*asfctrl_fwd_l2blob_update)(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
-					T_UINT32 ulDeviceID);
+					ASF_uint32_t ulDeviceID);
 typedef void (*asfctrl_fwd_l3_route_flush_t)(void);
 typedef int (*asfctrl_fwd_l3_route_add_t)(int iif,
 					struct net_device *dev,

@@ -167,7 +167,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 					ASF_uint32_t ulInSPDContainerIndex,
 					ASF_uint32_t ulMagicNumber,
 					ASF_uint32_t ulSPI,
-					ASF_uint8_t usProtocol,
+					ASF_uint8_t ucProtocol,
 					ASF_IPAddr_t DestAddr,
 					ASFBuffer_t Buffer,
 					genericFreeFn_f pFreeFn,
@@ -175,7 +175,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 					ASF_uchar8_t bRevalidate,
 					ASF_uint32_t ulCommonInterfaceId)
 {
-	struct sk_buff  *skb;
+	struct sk_buff *skb;
 	struct xfrm_state *x;
 	struct net *net;
 	xfrm_address_t daddr;
@@ -186,7 +186,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 
 	skb = AsfBuf2Skb(Buffer);
 	ASFCTRL_DBG("DestAddr %x protocol %x SPI %x",
-			DestAddr.ipv4addr, usProtocol, ulSPI);
+			DestAddr.ipv4addr, ucProtocol, ulSPI);
 
 #ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
 	if (!skb->dev) {
@@ -267,7 +267,7 @@ fnexit:
 ASF_void_t asfctrl_ipsec_fn_SeqNoOverFlow(ASF_uint32_t ulVSGId,
 					ASF_uint32_t ulTunnelId,
 					ASF_uint32_t ulSPI,
-					ASF_uint16_t usProtocol,
+					ASF_uint8_t ucProtocol,
 					ASF_IPAddr_t  DestAddr)
 {
 	ASFCTRL_FUNC_TRACE;
@@ -277,7 +277,7 @@ ASF_void_t asfctrl_ipsec_fn_SeqNoOverFlow(ASF_uint32_t ulVSGId,
 ASF_void_t asfctrl_ipsec_fn_PeerGatewayChange(ASF_uint32_t ulVSGId,
 					ASF_uint32_t ulInSPDContainerIndex,
 					ASF_uint32_t ulSPI,
-					ASF_uint8_t  usProtocol,
+					ASF_uint8_t  ucProtocol,
 					ASF_IPAddr_t OldDstAddr,
 					ASF_IPAddr_t NewDstAddr,
 					ASF_uint16_t usOldPort,
@@ -428,7 +428,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 ASF_void_t asfctrl_ipsec_fn_DPDAlive(ASF_uint32_t ulVSGId,
 				ASF_uint32_t ulTunnelId,
 				ASF_uint32_t ulSPI,
-				ASF_uint16_t usProtocol,
+				ASF_uint8_t ucProtocol,
 				ASF_IPAddr_t DestAddr,
 				ASF_uint32_t ulSPDContainerIndex)
 {
@@ -485,7 +485,7 @@ ASF_void_t asfctrl_ipsec_fn_Runtime(ASF_uint32_t ulVSGId,
 
 ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
-					T_UINT16 ulDeviceID)
+					ASF_uint16_t ulDeviceID)
 {
 	ASFIPSecRuntimeModOutSAArgs_t *pSAData;
 	ASF_uint32_t ulVSGId;
@@ -500,7 +500,7 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 
 	ulVSGId = *(ASF_uint32_t *)pData;
 
-	pSAData = (ASFIPSecRuntimeModOutSAArgs_t *)((T_UCHAR8 *)pData + 4);
+	pSAData = (ASFIPSecRuntimeModOutSAArgs_t *)((ASF_uchar8_t *)pData + 4);
 
 	if (pSAData->ucChangeType == 2) {
 		ASFIPSecRuntime(ulVSGId, ASF_IPSEC_RUNTIME_MOD_OUTSA, pSAData,

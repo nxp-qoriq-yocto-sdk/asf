@@ -5986,6 +5986,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	struct talitos_desc *desc;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	SPDInContainer_t *pContainer;
 	if (ulVSGId == ulMaxVSGs_g) {
 		ulVSGId = secfp_findVSG(skb1);
 		if (ulVSGId == ulMaxVSGs_g) {
@@ -6138,16 +6139,20 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			return 1;
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-		if (pSA->bDPDAlive == 1) {
-			ASF_IPAddr_t   DestAddr;
+		pContainer = (SPDInContainer_t *)(ptrIArray_getData(
+				&(secfp_InDB), pSA->ulSPDInContainerIndex));
+		if (pContainer->SPDParams.bDPDAlive) {
+			ASF_IPAddr_t DestAddr;
 			DestAddr.bIPv4OrIPv6 = 0;
 			DestAddr.ipv4addr = iph->daddr;
 			ASFIPSEC_DEBUG("Calling DPD alive callback VSG=%u, Tunnel=%u, address=%x, Container=%u, SPI=%x",  \
 					 ulVSGId, pSA->ulTunnelId, iph->daddr, pSA->ulSPDInContainerIndex, ulSPI);
 			if (ASFIPSecCbFn.pFnDPDAlive)
-				ASFIPSecCbFn.pFnDPDAlive(ulVSGId, pSA->ulTunnelId, ulSPI, iph->protocol,
-						 DestAddr, pSA->ulSPDInContainerIndex);
-			pSA->bDPDAlive = 0;
+				ASFIPSecCbFn.pFnDPDAlive(ulVSGId,
+					pSA->ulTunnelId, ulSPI,
+					iph->protocol, DestAddr,
+					pSA->ulSPDInContainerIndex);
+			pContainer->SPDParams.bDPDAlive = 0;
 		}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		ulLowerBoundSeqNum = 0;
@@ -7832,36 +7837,26 @@ unsigned int secfp_CreateInSA(
 	return SECFP_SUCCESS;
 }
 
-/* Setting DPD in INSA function */
-unsigned int secfp_SetDPDInSA(unsigned long int ulVSGId,
+/* Setting DPD in IN SPD function */
+unsigned int secfp_SetDPD(unsigned long int ulVSGId,
 				ASFIPSecRuntimeSetDPDArgs_t *pSetDPD)
 {
-	unsigned int hashVal = usMaxInSAHashTaleSize_g;
-	inSA_t *pInSA;
+	SPDInContainer_t *pContainer;
 	int bVal = in_softirq();
 
 	if (!bVal)
 		local_bh_disable();
 
-	pInSA = secfp_findInv4SA(ulVSGId, pSetDPD->ucProtocol, pSetDPD->ulSPI,
-				 pSetDPD->DestAddr.ipv4addr, &hashVal);
-	if (pInSA) {
-		if (pInSA->ulSPDInContainerIndex == pSetDPD->ulInSPDContainerIndex) {
-			pInSA->bDPDAlive = 1;
-			if (!bVal)
-				local_bh_enable();
-			return SECFP_SUCCESS;
-		} else {
-			GlobalErrors.ulInSASPDContainerMisMatch++;
-			ASFIPSEC_DEBUG("SPD Container mismatch  SA Container = %u, Passed Container = %u",
-					 pInSA->ulSPDInContainerIndex, pSetDPD->ulInSPDContainerIndex);
-			if (!bVal)
-				local_bh_enable();
-			return SECFP_FAILURE;
-		}
+	pContainer = (SPDInContainer_t *)(ptrIArray_getData(&(secfp_InDB),
+				pSetDPD->ulInSPDContainerIndex));
+	if (pContainer) {
+		pContainer->SPDParams.bDPDAlive = 1;
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_SUCCESS;
 	}
-	GlobalErrors.ulInSANotFound++;
-	ASFIPSEC_DEBUG("InSA not found");
+	GlobalErrors.ulInvalidInSPDContainerId++;
+	ASFIPSEC_DEBUG("InSPD not found");
 	if (!bVal)
 		local_bh_enable();
 	return SECFP_FAILURE;

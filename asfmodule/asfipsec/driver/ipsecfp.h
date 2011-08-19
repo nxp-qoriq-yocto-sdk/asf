@@ -282,7 +282,8 @@ typedef struct SPDInParams_s {
 	unsigned int bUdpEncap:1,
 	bESN:1,
 	bCopyEcn:1,
-	bCopyDscp:1;
+	bCopyDscp:1,
+	bDPDAlive:1;
 	unsigned char ucProto;
 	unsigned char ucDscp;
 } SPDInParams_t;
@@ -399,8 +400,7 @@ typedef struct inSA_s {
 	unsigned int ulHOSeqNum;
 	unsigned char bVerifySASel:1,
 	bVerifySPDSel:1,
-	bSendPktToNormalPath:1,
-	bDPDAlive:1;
+	bSendPktToNormalPath:1;
 	unsigned int ulHashVal;
 	char bHeap;
 	struct inSA_s *pNext;
@@ -721,7 +721,7 @@ unsigned int secfp_ModifyOutSA(unsigned int long ulVSGId,
 unsigned int secfp_ModifyInSA(unsigned int long ulVSGId,
 				ASFIPSecRuntimeModInSAArgs_t *pModSA);
 
-unsigned int secfp_SetDPDInSA(unsigned int long ulVSGId,
+unsigned int secfp_SetDPD(unsigned int long ulVSGId,
 				ASFIPSecRuntimeSetDPDArgs_t *pSetDPD);
 
 unsigned int secfp_createOutSA(

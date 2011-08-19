@@ -37,7 +37,13 @@ enum {
 #define ASF_L2BLOB_REFRESH_RET_PKT_STK	(2)
 #define ASF_L2BLOB_REFRESH_DROP_PKT	(3)
 
-typedef char	ASF_char8_t;
+#define ASF_IKE_SERVER_PORT	500
+#define ASF_IKE_NAT_FLOAT_PORT	4500
+
+typedef int ASF_int32_t;
+typedef short int ASF_int16_t;
+typedef char ASF_int8_t;
+typedef char ASF_char8_t;
 typedef unsigned long ASF_uint64_t;
 typedef unsigned int ASF_uint32_t;
 typedef unsigned char ASF_uchar8_t;
@@ -87,7 +93,6 @@ typedef struct ASFCap_s {
 } ASFCap_t;
 
 ASF_void_t ASFGetCapabilities(ASFCap_t *pCap);
-
 
 
 enum {

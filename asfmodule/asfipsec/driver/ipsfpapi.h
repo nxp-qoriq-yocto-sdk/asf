@@ -338,7 +338,7 @@ enum ASFIPSecRunTimeCommands {
 	ASF_IPSEC_RUNTIME_DEL_INSA,
 	ASF_IPSEC_RUNTIME_MOD_OUTSA,
 	ASF_IPSEC_RUNTIME_MOD_INSA,
-	ASF_IPSEC_RUNTIME_SET_DPD_INSA,
+	ASF_IPSEC_RUNTIME_SET_DPD,
 	ASF_IPSEC_RUNTIME_MOD_INFLOW
 };
 
@@ -551,9 +551,6 @@ typedef struct ASFIPSecRuntimeSetDPDArgs_s {
 	ASF_uint32_t ulTunnelId;
 	ASF_uint32_t ulInSPDContainerIndex;
 	ASF_uint32_t ulMagicNumber;
-	ASF_IPAddr_t DestAddr;
-	ASF_uint8_t ucProtocol;
-	ASF_uint32_t ulSPI;
 } ASFIPSecRuntimeSetDPDArgs_t;
 
 typedef struct ASFIPSecRuntimeSetFlowL2BlobArgs_s {
@@ -566,6 +563,9 @@ typedef struct ASFIPSecRuntimeSetFlowL2BlobArgs_s {
 		ASF_uchar8_t l2blob[ASF_MAX_L2BLOB_LEN];
 		ASF_uint32_t ulL2BlobLen;
 		ASF_uint32_t ulDeviceID;
+		ASF_uint16_t bTxVlan:1, bUpdatePPPoELen:1;
+		ASF_uint16_t usTxVlanId;
+		ASF_uint32_t ulL2blobMagicNumber;
 	} l2blob;
 } ASFIPSecRuntimeSetFlowL2BlobArgs_t;
 
@@ -628,14 +628,14 @@ typedef  ASF_void_t    (*pASFIPSecSendWithL2Blob_f)(ASF_uint32_t ulVSGId,
 typedef ASF_void_t    (*pASFIPSecCbFnDPDAlive_f)(ASF_uint32_t ulVSGId,
 						 ASF_uint32_t ulTunnelId,
 						 ASF_uint32_t ulSPI,
-						 ASF_uint16_t ucProtocol,
+						 ASF_uint8_t ucProtocol,
 						 ASF_IPAddr_t  DestAddr,
 						 ASF_uint32_t ulSPDContainerIndex);
 
 typedef ASF_void_t    (*pASFIPSecCbFnSeqNoOverFlow_f)(ASF_uint32_t ulVSGId,
 						      ASF_uint32_t ulTunnelId,
 						      ASF_uint32_t ulSPI,
-						      ASF_uint16_t ucProtocol,
+						      ASF_uint8_t ucProtocol,
 						      ASF_IPAddr_t  DestAddr);
 
 typedef  ASF_void_t   (*pASFIPSecCbFnRefreshL2Blob_f)(ASF_uint32_t ulVSGId,

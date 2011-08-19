@@ -226,7 +226,7 @@ int asfctrl_dev_get_cii(struct net_device *dev)
 		&& (dev == p_asfctrl_netdev_cii[dev->ifindex])) {
 			return dev->ifindex;
 	} else {
-		T_INT32 ii;
+		ASF_int32_t ii;
 		/* avoid this and cache cii in netdev struct itself */
 		for (ii = 0; ii < ASFCTRL_MAX_IFACES; ii++) {
 			if (dev == p_asfctrl_netdev_cii[ii])
@@ -240,7 +240,7 @@ EXPORT_SYMBOL(asfctrl_dev_get_cii);
 
 int asfctrl_dev_get_free_cii(struct net_device *dev)
 {
-	T_INT32 jj;
+	ASF_int32_t jj;
 	ASFCTRL_FUNC_ENTRY;
 	if (dev->ifindex < ASFCTRL_MAX_IFACES) {
 		if (p_asfctrl_netdev_cii[dev->ifindex] == NULL)
@@ -257,9 +257,9 @@ int asfctrl_dev_get_free_cii(struct net_device *dev)
 }
 EXPORT_SYMBOL(asfctrl_dev_get_free_cii);
 
-T_INT32 asfctrl_create_dev_map(struct net_device *dev, T_INT32 bForce)
+ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 {
-	T_INT32 cii;
+	ASF_int32_t cii;
 	ASFInterfaceInfo_t  info;
 
 	ASFCTRL_FUNC_ENTRY;
@@ -290,7 +290,7 @@ T_INT32 asfctrl_create_dev_map(struct net_device *dev, T_INT32 bForce)
 #ifdef CONFIG_VLAN_8021Q
 		if (dev->priv_flags & IFF_802_1Q_VLAN) {
 			struct net_device  *pdev;
-			T_UINT16           usVlanId;
+			ASF_uint16_t           usVlanId;
 			ASF_uint32_t       relIds[1];
 
 			pdev = __vlan_get_real_dev(dev, &usVlanId);
@@ -300,6 +300,7 @@ T_INT32 asfctrl_create_dev_map(struct net_device *dev, T_INT32 bForce)
 			relIds[0] = asfctrl_dev_get_cii(pdev);
 			info.ucDevIdentifierInPkt = (ASF_uint8_t *)&usVlanId;
 			info.ulDevIdentiferInPktLen = 2;
+			info.ucDevIdentifierType = ASF_IFACE_NAME_IDENTIFIER;
 			info.ulRelatedIDs = (ASF_uint32_t *)relIds;
 			info.ulNumRelatedIDs = 1;
 		} else {
@@ -307,6 +308,7 @@ T_INT32 asfctrl_create_dev_map(struct net_device *dev, T_INT32 bForce)
 		info.ulDevType = ASF_IFACE_TYPE_ETHER;
 		info.ucDevIdentifierInPkt = (ASF_uint8_t *) dev->dev_addr;
 		info.ulDevIdentiferInPktLen = dev->addr_len;
+		info.ucDevIdentifierType = ASF_IFACE_MAC_IDENTIFIER;
 		ASFCTRL_DBG("MAP interface %s (mac %pM) [%02x:%02x:%02x..]\n",
 			dev->name, dev->dev_addr,
 			dev->dev_addr[0], dev->dev_addr[1], dev->dev_addr[2]);
@@ -316,8 +318,8 @@ T_INT32 asfctrl_create_dev_map(struct net_device *dev, T_INT32 bForce)
 #endif
 #ifdef CONFIG_PPPOE
 	} else if (dev->type == ARPHRD_PPP) {
-		T_UINT16 usPPPoESessId;
-		T_INT32 parent_cii;
+		ASF_uint16_t usPPPoESessId;
+		ASF_int32_t parent_cii;
 		struct net_device  *pdev;
 		ASF_uint32_t       relIds[1];
 
@@ -340,6 +342,7 @@ T_INT32 asfctrl_create_dev_map(struct net_device *dev, T_INT32 bForce)
 		relIds[0] = parent_cii;
 		info.ucDevIdentifierInPkt = (ASF_uint8_t *)&usPPPoESessId;
 		info.ulDevIdentiferInPktLen = 2;
+		info.ucDevIdentifierType == ASF_IFACE_NAME_IDENTIFIER;
 		info.ulRelatedIDs = (ASF_uint32_t *)relIds;
 		info.ulNumRelatedIDs = 1;
 		ASFCTRL_DBG("PPPOE %s (parent %s) SESS_ID 0x%x mtu %d\n",
@@ -367,9 +370,9 @@ T_INT32 asfctrl_create_dev_map(struct net_device *dev, T_INT32 bForce)
 }
 EXPORT_SYMBOL(asfctrl_create_dev_map);
 
-T_INT32 asfctrl_delete_dev_map(struct net_device *dev)
+ASF_int32_t asfctrl_delete_dev_map(struct net_device *dev)
 {
-	T_INT32  cii;
+	ASF_int32_t  cii;
 	ASFCTRL_FUNC_ENTRY;
 #ifdef CONFIG_PPPOE
 	if ((dev->type == ARPHRD_ETHER) || (dev->type == ARPHRD_PPP)) {
@@ -468,9 +471,9 @@ static int asfctrl_dev_notifier_fn(struct notifier_block *this,
 
 int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 {
-	T_UINT16           usEthType;
-	T_INT32            hh_len;
-	T_BOOL             bPPPoE = 0;
+	ASF_uint16_t	usEthType;
+	ASF_int32_t		hh_len;
+	ASF_boolean_t	bPPPoE = 0;
 	struct iphdr       *iph;
 
 	ASFCTRL_FUNC_ENTRY;

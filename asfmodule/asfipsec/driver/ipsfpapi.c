@@ -555,20 +555,14 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			}
 		}
 		break;
-	case ASF_IPSEC_RUNTIME_SET_DPD_INSA: /* Setting DPD in InSA */
+	case ASF_IPSEC_RUNTIME_SET_DPD: /* Setting DPD in InContainer */
 		{
 			ASFIPSecRuntimeSetDPDArgs_t *pSetDPD;
 			pSetDPD = (ASFIPSecRuntimeSetDPDArgs_t *) pArgs;
-			SECFP_IS_TUNNEL_ID_INVALID(pSetDPD->ulTunnelId)
-			{
-				GlobalErrors.ulInvalidTunnelId++;
-				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n", pSetDPD->ulTunnelId);
-				return;
-			}
 
-			if (secfp_SetDPDInSA(ulVSGId, pSetDPD) != SECFP_SUCCESS) {
+			if (secfp_SetDPD(ulVSGId, pSetDPD) != SECFP_SUCCESS)
 				ASFIPSEC_WARN("secfp_SetDPD returned failure");
-			}
+
 		}
 		break;
 	default:
