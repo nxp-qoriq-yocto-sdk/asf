@@ -715,24 +715,28 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 
 	if (pASFSAParams->encDecKey) {
 		pSAParams->bEncrypt = TRUE;
-		if (pASFSAParams->encAlgo == ASF_IPSEC_EALG_DESCBC) {
+		switch (pASFSAParams->encAlgo) {
+		case ASF_IPSEC_EALG_DESCBC:
 			pSAParams->ucCipherAlgo = SECFP_DES;
 			pSAParams->ulBlockSize = DES_CBC_BLOCK_SIZE;
 			pSAParams->ulIvSize = DES_IV_LEN;
-		} else if (pASFSAParams->encAlgo == ASF_IPSEC_EALG_3DESCBC) {
+			break;
+		case ASF_IPSEC_EALG_3DESCBC:
 			pSAParams->ucCipherAlgo = SECFP_3DES;
 			pSAParams->ulBlockSize = TDES_CBC_BLOCK_SIZE;
 			pSAParams->ulIvSize = TDES_IV_LEN;
-		} else if (pASFSAParams->encAlgo == ASF_IPSEC_EALG_AES) {
+			break;
+		case ASF_IPSEC_EALG_AES:
 			pSAParams->ucCipherAlgo = SECFP_AES;
 			pSAParams->ulBlockSize = AES_CBC_BLOCK_SIZE;
 			pSAParams->ulIvSize = AES_CBC_IV_LEN;
-		} else {
+			break;
+		default:
 			pSAParams->ucCipherAlgo = SECFP_AESCTR;
 			pSAParams->ulBlockSize = AES_CTR_BLOCK_SIZE;
 			pSAParams->ulIvSize = AES_CTR_IV_LEN;
 			memcpy(pSAParams->ucNounceIVCounter,
-			       pASFSAParams->aesCtrCounterBlock, 16);
+				pASFSAParams->aesCtrCounterBlock, 16);
 		}
 		pSAParams->EncKeyLen = pASFSAParams->encDecKeyLenBits/8;
 		memcpy(pSAParams->ucEncKey, pASFSAParams->encDecKey,
@@ -967,8 +971,9 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 	}
 	if (pInParams->bDir == SECFP_IN) {
 		rcu_read_lock();
-		pInSA = ASF_findInv4SA(pInParams->ulVSGId, pInParams->ucProtocol,
-				       pInParams->ulSPI, pInParams->gwAddr.ipv4addr, &hashVal);
+		pInSA = ASF_findInv4SA(pInParams->ulVSGId,
+				pInParams->ucProtocol, pInParams->ulSPI,
+				pInParams->gwAddr.ipv4addr, &hashVal);
 		if (pInSA) {
 			for (Index = 0; Index < NR_CPUS; Index++) {
 				pOutParams->ulPkts += pInSA->ulPkts[Index];
@@ -978,8 +983,9 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 		rcu_read_unlock();
 		return;
 	}
-	pOutContainer  = (SPDOutContainer_t *)  (ptrIArray_getData(&(secfp_OutDB),
-								 pInParams->ulSPDContainerIndex));
+	pOutContainer  = (SPDOutContainer_t *) (ptrIArray_getData(
+				&(secfp_OutDB),
+				pInParams->ulSPDContainerIndex));
 	if (!pOutContainer)
 		return;
 

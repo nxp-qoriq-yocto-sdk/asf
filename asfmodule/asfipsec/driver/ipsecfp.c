@@ -183,19 +183,10 @@ static inline inSA_t  *secfp_findInv4SA(unsigned int ulVSGId,
 #define SECFP_COMMON_INTERFACE_ID_POSITION   (SECFP_ESN_MARKER_POSITION + 4)
 
 struct kmem_cache *desc_cache __read_mostly;
-#ifndef CONFIG_ASF_SEC4x
-struct talitos_desc *desc_rec_queue[NR_CPUS][MAX_IPSEC_RECYCLE_DESC];
-#else
 void *desc_rec_queue[NR_CPUS][MAX_IPSEC_RECYCLE_DESC];
-#endif
-
 static unsigned int curr_desc[NR_CPUS];
 
-#ifndef CONFIG_ASF_SEC4x
-struct talitos_desc *secfp_desc_alloc(void)
-#else
 void *secfp_desc_alloc(void)
-#endif
 {
 	u32 smp_processor_id = smp_processor_id();
 	u32 current_edesc = curr_desc[smp_processor_id];
@@ -1606,7 +1597,7 @@ void secfp_sendIndToIke(outSA_t *pSA)
 	ASFIPSEC_PRINT("Stub function: needs to be filled in");
 }
 
-#ifndef CONFIG_ASF_SEC4x
+
 /* Packet Processing routines */
 /* Check if IVLength required is always 8 bytes To be checked */
 /* This function reads from the SEC random number registers. If data is not available
@@ -1619,10 +1610,10 @@ static inline void secfp_GetIVData(unsigned int *pData, unsigned int ulNumWords)
 	int ii;
 	int coreId = smp_processor_id();
 	secfp_ivInfo_t *ptr = per_cpu_ptr(secfp_IVData, coreId);
-
+#ifndef CONFIG_ASF_SEC4x
 	if (secfp_rng_read_data((unsigned int *) ptr))
 		return;
-
+#endif
 	for (ii = 0; ii < ulNumWords; ii++) {
 		*pData  = ptr->vaddr[ptr->ulIVIndex];
 		ptr->ulIVIndex = (ptr->ulIVIndex + 1) & (SECFP_NUM_IV_ENTRIES - 1);
@@ -1636,14 +1627,14 @@ static inline void secfp_GetIVData(unsigned int *pData, unsigned int ulNumWords)
 	}
 	return;
 }
-
+#ifndef CONFIG_ASF_SEC4x
 int vqentr_talitos_rng_data_read(unsigned int len, unsigned int *data)
 {
 	secfp_GetIVData(data, len/4);
 	return len;
 }
 EXPORT_SYMBOL(vqentr_talitos_rng_data_read);
-
+#endif
 /* Function called at the end of Outbound processing. Some part of
 	the encrypted blob is retained to be reused as IV data
    */
@@ -1665,7 +1656,7 @@ static inline void secfp_updateIVData(unsigned int *pData)
 	}
 	return;
 }
-#endif
+
 /*
  * This populates the ID field to be supplied as the IP identifier field of the Outer
  * IP header
@@ -2122,10 +2113,11 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	unsigned int *pIpHdrInSA, usNatOverHead = 0;
 	char *pUDPHdr;
 	int ii;
-	AsfSPDPolicyPPStats_t   *pIPSecPolicyPPStats;
-	ASF_IPSecTunEndAddr_t  TunAddress;
+	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	ASF_IPSecTunEndAddr_t TunAddress;
 	unsigned short	bl2blobRefresh = 0;
-
+#endif
 	pIpHdrInSA = (unsigned int *)  &(pSA->ipHdrInfo.hdrdata.iphv4);
 	org_iphdr = (struct iphdr *) pIpHdrInSA;
 	/* Outer IP already has the TOS and the length field */
@@ -2220,7 +2212,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 			(unsigned int)skb_network_header(skb),
 			(unsigned int)skb_transport_header(skb));
 		skb_set_network_header(skb, pSA->ulL2BlobLen);
-		skb_set_transport_header(skb, (20 + pSA->ulL2BlobLen));
+		skb_set_transport_header(skb, (ASF_IPLEN + pSA->ulL2BlobLen));
 	} else {
 ret_pkt:
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
@@ -2236,7 +2228,7 @@ ret_pkt:
 
 		/* set up the network header etc. that may be needed subsequently */
 		skb_set_network_header(skb, ETH_HLEN);
-		skb_set_transport_header(skb, (20 + ETH_HLEN));
+		skb_set_transport_header(skb, (ASF_IPLEN + ETH_HLEN));
 		skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
 		return;
 	}
@@ -2291,7 +2283,7 @@ send_l2blob:
 }
 
 
-#ifdef ASF_IPSEC_DEBUG_L2
+#ifdef ASFIPSEC_DEBUG_FRAME
 void print_desc(struct talitos_desc *desc)
 {
 	int ii;
@@ -2491,7 +2483,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
  * algorithm. The prepared descriptor is submitted to SEC.
  */
 #ifndef CONFIG_ASF_SEC4x
-void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData, struct talitos_desc *desc, unsigned int ulOptionIndex)
+void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData, void *descriptor, unsigned int ulOptionIndex)
 {
 	dma_addr_t ptr;
 	unsigned int *src, *tgt;
@@ -2499,6 +2491,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData, struct talitos
 	outSA_t *pSA = (outSA_t *) (pData);
 	int iDword, iDword1;
 	unsigned int *ptr1;
+	struct talitos_desc *desc = (struct talitos_desc *)descriptor;
 
 	if (!ulOptionIndex) {		/* 1st iteration */
 		ASFIPSEC_DBGL2("prepareOutDescriptor: Doing DMA mapping");
@@ -2926,8 +2919,12 @@ dma_addr_t secfp_prepareScatterList(struct sk_buff *skb,
 }
 
 void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
-					 struct talitos_desc *desc, unsigned int ulOptionIndex) {
-#ifndef CONFIG_ASF_SEC4x
+			void *descriptor, unsigned int ulOptionIndex)
+{
+#ifdef CONFIG_ASF_SEC4x
+	secfp_prepareOutDescriptor(skb, pData, descriptor, ulOptionIndex);
+	return;
+#else
 	dma_addr_t ptr = 0, ptr2 = 0;
 	unsigned int *src, *tgt;
 	unsigned char *pNounceIVCounter;
@@ -2935,7 +2932,9 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 	int iDword, iDword1;
 	unsigned int ulAppendLen;
 	struct sk_buff *pTailSkb;
+	struct talitos_desc *desc = (struct talitos_desc *)descriptor;
 
+	desc->hdr_lo = 0;
 	if (!ulOptionIndex) {		/* 1st iteration */
 		ASFIPSEC_DEBUG("Doing DMA mapping");
 		if (!skb_shinfo(skb)->frag_list) {
@@ -3628,6 +3627,13 @@ int secfp_try_fastPathOutv4 (
 			and one for the core */
 			skb->cb[SECFP_REF_INDEX] = 2;
 			desc = secfp_desc_alloc();
+			if (!desc) {
+				/* TBD complete this error handling */
+				ASFIPSEC_ERR("desc allocation failure");
+				ASFSkbFree(skb);
+				rcu_read_unlock();
+				return 1;
+			}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
 			if ((secout_sg_flag & SECFP_SCATTER_GATHER)
@@ -3685,6 +3691,21 @@ int secfp_try_fastPathOutv4 (
 				/* 2nd iteration required ICV */
 				skb->cb[SECFP_REF_INDEX]++;
 				desc = secfp_desc_alloc();
+				if (!desc) {
+					ASFIPSEC_ERR("desc allocation failure");
+					if (skb->cb[SECFP_REF_INDEX] != 0) {
+						skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
+					} else {
+
+						/* So, we can release it */
+						skb->data_len = 0;
+						ASFSkbFree(skb);
+					}
+					secfp_desc_free(desc);
+					/* Increment statistics */
+					rcu_read_unlock();
+					return 1;
+				}
 #ifdef SECFP_SG_SUPPORT
 				if ((secout_sg_flag & SECFP_SCATTER_GATHER)
 						== SECFP_SCATTER_GATHER)
@@ -3695,12 +3716,13 @@ int secfp_try_fastPathOutv4 (
 					secfp_prepareOutDescriptor(skb, pSA, desc, 1);
 
 #ifndef CONFIG_ASF_SEC4x
-			if (secfp_talitos_submit(pdev, desc, secfp_outComplete,
-				(void *)skb) == -EAGAIN) {
+				if (secfp_talitos_submit(pdev, desc,
+						secfp_outComplete,
+						(void *)skb) == -EAGAIN) {
 #else
-				if (secfp_caam_submit(pdev, desc,
-							secfp_outComplete,
-							(void *)skb)) {
+				if (secfp_caam_submit(pSA->ctx.jrdev, desc,
+						secfp_outComplete,
+						(void *)skb)) {
 #endif
 					ASFIPSEC_WARN("Outbound Submission to"\
 							"SEC failed ");
@@ -4224,14 +4246,15 @@ void secfp_updateErr(struct sk_buff *skb)
  * to be updated, so that check is not done again when the 2nd
  * iteration completes
  */
-static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
-						  struct sk_buff *skb) {
+static inline unsigned int secfp_inHandleICVCheck(void *dsc, struct sk_buff *skb)
+{
 #ifdef CONFIG_ASF_SEC4x
 
-	skb->len -= ICV_LEN;
+		skb->len -= SECFP_ICV_LEN;
 
 #else
 	int ii;
+	struct talitos_desc *desc = (struct talitos_desc *)dsc;
 
 	if (skb->cb[SECFP_SA_OPTION_INDEX] == SECFP_BOTH) {
 		ASFIPSEC_DEBUG("desc->hdr_lo = 0x%x, desc->hdr = 0x%x",
@@ -4242,7 +4265,7 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 			ASFIPSEC_WARN("hw cmp: ICV Verification failed");
 			return 1;
 		} else {
-			skb->len -= ICV_LEN;
+			skb->len -= SECFP_ICV_LEN;
 		}
 	} else if (skb->cb[SECFP_SA_OPTION_INDEX] == SECFP_AUTH) {
 	/* In the two submission case, only first time around, we need to do the ICV comparison, hence using the REF_INDEX
@@ -4261,12 +4284,13 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 				ASFIPSEC_WARN("hw comparison ICV Verification failed desc->hdr_lo = 0x%x", desc->hdr_lo);
 				return 1;
 			} else {
-				skb->len -= ICV_LEN;
+				skb->len -= SECFP_ICV_LEN;
 				return 0;
 			}
 		} else {
 			unsigned long int  ulESNLen;
-			if (*((unsigned int *)(skb->data + skb->len +  SECFP_ESN_MARKER_POSITION)) == 0xAAAAAAAA) {
+			if (*((unsigned int *)(skb->data + skb->len + SECFP_ESN_MARKER_POSITION))
+					== 0xAAAAAAAA) {
 				ulESNLen = SECFP_APPEND_BUF_LEN_FIELD;
 			} else {
 				ulESNLen = 0;
@@ -4274,12 +4298,15 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 
 #ifdef ASF_IPSEC_DEBUG
 			for (ii = 0; ii < 3; ii++) {
-				ASFIPSEC_DEBUG("Computed ICV = 0x%8x, Received ICV =0x%8x",  *(unsigned int *)&(skb->data[skb->len + (ii*4) + ulESNLen]), *(unsigned int *)&skb->data[skb->len - 12 + (ii*4) + ulESNLen]);
+				ASFIPSEC_DEBUG("Computed ICV = 0x%8x, Received ICV =0x%8x",
+					*(unsigned int *)&(skb->data[skb->len + (ii*4) + ulESNLen]),
+					*(unsigned int *)&skb->data[skb->len - 12 + (ii*4) + ulESNLen]);
 			}
 #endif
 
 			for (ii = 0; ii < 3; ii++) {
-				if (*(unsigned int *)&(skb->data[skb->len + (ii*4) + ulESNLen]) != *(unsigned int *)&(skb->data[skb->len - 12 + (ii*4) + ulESNLen])) {
+				if (*(unsigned int *)&(skb->data[skb->len + (ii*4) + ulESNLen])
+					!= *(unsigned int *)&(skb->data[skb->len - 12 + (ii*4) + ulESNLen])) {
 					break;
 				}
 			}
@@ -4287,7 +4314,7 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 				ASFIPSEC_WARN("byte comparison ICV Comparison failed");
 				return 1;
 			}
-			skb->len -= ICV_LEN;
+			skb->len -= SECFP_ICV_LEN;
 			return 0;
 		}
 	} else if (skb->cb[SECFP_SA_OPTION_INDEX] == SECFP_AESCTR_BOTH) {
@@ -4295,14 +4322,15 @@ static inline unsigned int secfp_inHandleICVCheck(struct talitos_desc *desc,
 
 		ASFIPSEC_DEBUG("desc->hdr_lo = 0x%x",  desc->hdr_lo);
 		for (ii = 0; ii < 3; ii++) {
-			if (*(unsigned int *)&(skb->data[skb->len + (ii*4)]) != *(unsigned int *)&(skb->data[skb->len - 12 + (ii*4)]))
+			if (*(unsigned int *)&(skb->data[skb->len + (ii*4)])
+				!= *(unsigned int *)&(skb->data[skb->len - 12 + (ii*4)]))
 				break;
 		}
 		if (ii != 3) {
 			ASFIPSEC_WARN("ICV Comparison failed");
 			return 1;
 		}
-		skb->len -= ICV_LEN;
+		skb->len -= SECFP_ICV_LEN;
 	}
 #endif
 	return 0;
@@ -4615,36 +4643,14 @@ static inline void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb /*, un
 	}
 }
 
-static inline void secfp_inCompletePreparePktForStack(struct sk_buff *pHeadSkb, unsigned char *pOrgEthHdr)
-{
-	int ii;
-	/* Let us copy the orig mac header */
-	for (ii = 1; ii < 3; ii++) {
-		*(unsigned int *)&pHeadSkb->data[ii*4] = *(unsigned int *)&(pOrgEthHdr[ii*4]);
-	}
-
-#ifdef ASFIPSEC_DEBUG_FRAME
-	ASFIPSEC_DEBUG("Before eth_type_trans skb->data = %x, skb->len = %d",
-		pHeadSkb->data, pHeadSkb->len);
-	hexdump(pHeadSkb->data, (pHeadSkb->len < 64 ? pHeadSkb->len : 64));
-	ASFIPSEC_DEBUG("");
-#endif
-	pHeadSkb->protocol = eth_type_trans(pHeadSkb, pHeadSkb->dev);
-
-#ifdef ASFIPSEC_DEBUG_FRAME
-	ASFIPSEC_DEBUG("After eth_type_trans skb->protocol = %d, "\
-		"skb->pkt_type =%d, skb->len=%d, skb->data = 0x%x",
-		pHeadSkb->protocol, pHeadSkb->pkt_type,
-		pHeadSkb->len, pHeadSkb->data);
-	hexdump(pHeadSkb->data, (pHeadSkb->len < 64 ? pHeadSkb->len : 64));
-	ASFIPSEC_DEBUG("");
-#endif
-}
-
-
+#ifndef CONFIG_ASF_SEC4x
 void secfp_inCompleteWithFrags(struct device *dev,
 				struct talitos_desc *desc,
 				void *context, int err)
+#else
+void secfp_inCompleteWithFrags(struct device *dev, void *desc,
+				int err, void *context)
+#endif
 {
 	struct sk_buff *skb1 = (struct sk_buff *) context;
 	unsigned int ulFragCnt;
@@ -4657,19 +4663,25 @@ void secfp_inCompleteWithFrags(struct device *dev,
 	inSA_t *pSA;
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;
-	ASFIPSecOpqueInfo_t IPSecOpqaue;
+	ASFIPSecOpqueInfo_t IPSecOpque;
 	unsigned int ulCommonInterfaceId, ulBeforeTrimLen;
 
 	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
 	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
 
+	memset(&IPSecOpque, 0 , sizeof(IPSecOpque));
 
 	ASFIPSEC_DEBUG("InComplete: iteration=%d, desc=0x%x, err = %d"
 			" refIndex = %d\n",
 			++ulNumIter[smp_processor_id()],
 			(unsigned int) desc, err, skb1->cb[SECFP_REF_INDEX]);
 	ASFIPSEC_FENTRY;
+
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	skb1->cb[SECFP_REF_INDEX]--;
+#else
+	skb1->cb[SECFP_REF_INDEX] = 0;
+#endif
 	if (unlikely(err)) {
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 		iph = (struct iphdr *)*(unsigned int *)&(skb1->cb[SECFP_IPHDR_INDEX]);
@@ -4805,7 +4817,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 		}
 
 		if (pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX]) {
-			if (secfp_inCompleteSAProcess(&pHeadSkb, &IPSecOpqaue, &ulCommonInterfaceId, ulBeforeTrimLen)) {
+			if (secfp_inCompleteSAProcess(&pHeadSkb, &IPSecOpque, &ulCommonInterfaceId, ulBeforeTrimLen)) {
 				ASFIPSEC_WARN("secfp_inCompleteSAProcess: Error ");
 				ASFSkbFree(pHeadSkb);
 				return;
@@ -4817,32 +4829,41 @@ void secfp_inCompleteWithFrags(struct device *dev,
 		pHeadSkb->data_len = 0;
 
 		if (ucNextProto == SECFP_PROTO_IP) {
-			pOrgEthHdr = skb_network_header(pHeadSkb)-ETH_HLEN;
-			secfp_inCompleteUpdateIpv4Pkt(pHeadSkb);
-			/* Packet is ready to go */
-			/* Assuming ethernet as the receiving device of original packet */
-			if (try_fastroute_fwnat(pHeadSkb, pHeadSkb->dev, ulTotLen) != 1) {
-				ASFIPSEC_WARN("try_fastroute_fwnat failed");
+			ASFBuffer_t Buffer;
 
-				/* Need to give it to the stack */
-				ASFIPSEC_DEBUG("pOrgEthHdr = 0x%x:0x%x:0x%x",
+			pOrgEthHdr = skb_network_header(pHeadSkb)-ETH_HLEN;
+
+			secfp_inCompleteUpdateIpv4Pkt(pHeadSkb);
+#ifdef ASFIPSEC_DEBUG_FRAME
+			/* Need to give it to the stack */
+			ASFIPSEC_DEBUG("pOrgEthHdr = 0x%x:0x%x:0x%x",
 					*(unsigned int *)&pOrgEthHdr[0],
 					*(unsigned int *)&(pOrgEthHdr[4]),
 					*(unsigned int *)&(pOrgEthHdr[8]));
-				if (skb_shinfo(pHeadSkb)->frag_list) {
-					/* Need to change ETH_HLEN to some cb field carrying L2 header length */
-					return;
-				} else {
-					secfp_inCompletePreparePktForStack(pHeadSkb, pOrgEthHdr);
-					if (netif_receive_skb(pHeadSkb) == NET_RX_DROP) {
-						ASFIPSEC_WARN("Stack dropped the packet");
-					}
-				}
-				pIPSecPPGlobalStats->ulTotInProcSecPkts++;
-			}
+			ASFIPSEC_PRINT("Pkt received skb->len = %d", pHeadSkb->len);
+			hexdump(pHeadSkb->data, pHeadSkb->len);
+#endif
+		/* Packet is ready to go */
+		/* Assuming ethernet as the receiving device of original packet */
+		/* Homogenous buffer */
+			Buffer.nativeBuffer = pHeadSkb;
+#ifdef ASF_TERM_FP_SUPPORT
+			if (pHeadSkb->mapped && pTermProcessPkt)
+				pTermProcessPkt(
+				*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]),
+				ulCommonInterfaceId, Buffer, secfp_SkbFree,
+				pHeadSkb, &IPSecOpque, ASF_FALSE);
+			else
+#endif
+				ASFFFPProcessAndSendPkt(
+				*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]),
+				ulCommonInterfaceId, Buffer, secfp_SkbFree,
+				pHeadSkb, &IPSecOpque);
+
+			pIPSecPPGlobalStats->ulTotInProcPkts++;
 		} else {
-			ASFIPSEC_DEBUG("Stub function: Need to handle IPv6 ");
-			rcu_read_unlock();
+			ASFIPSEC_WARN("Stub function: Need to handle IPv6 ");
+			ASFSkbFree(pHeadSkb);
 			return;
 		}
 	}
@@ -4878,7 +4899,11 @@ inline void secfp_inComplete(struct device *dev, void *desc,
 			"refIndex = %d\n", ++ulNumIter[smp_processor_id()],
 			(unsigned int) desc, err, skb->cb[SECFP_REF_INDEX]);
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	skb->cb[SECFP_REF_INDEX]--;
+#else
+	skb->cb[SECFP_REF_INDEX] = 0;
+#endif
 	if (err) {
 #ifdef CONFIG_ASF_SEC4x
 		char tmp[SECFP_ERROR_STR_MAX];
@@ -5065,7 +5090,7 @@ inline void secfp_handleFragments(struct sk_buff *skb)
   */
 #ifndef CONFIG_ASF_SEC4x
 void secfp_prepareInDescriptor(struct sk_buff *skb,
-					void *pData, struct talitos_desc *desc,
+					void *pData, void *descriptor,
 					unsigned int ulIndex)
 {
 	unsigned int *tgt, *src;
@@ -5074,8 +5099,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 	unsigned char *pNounceIVCounter;
 	unsigned int *ptr1;
 	int len;
-
-	if (desc) {
+	struct talitos_desc *desc = (struct talitos_desc *)descriptor;
 
 		if (!ulIndex) {	/* first iteration */
 			addr = SECFP_DMA_MAP_SINGLE(skb->data,
@@ -5297,7 +5321,6 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		if (ulIndex == 0)
 			skb->cb[SECFP_SA_OPTION_INDEX] = pSA->option[ulIndex];
 
-	}
 	return;
 }
 #else
@@ -5319,7 +5342,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 #endif
 
 void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
-				 void *pData, struct talitos_desc *desc,
+				 void *pData, void *descriptor,
 				 unsigned int ulIndex)
 {
 #ifndef CONFIG_ASF_SEC4x
@@ -5331,6 +5354,7 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 	int len;
 	struct sk_buff *pTailSkb;
 	unsigned int ulOffsetIcvLen;
+	struct talitos_desc *desc = (struct talitos_desc *)descriptor;
 
 	if (desc) {
 		if (!ulIndex) {	/* first iteration */
@@ -6055,6 +6079,7 @@ int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
 	skb_reset_network_header(skb);
 	ip_hdr(skb)->tot_len -= ucSkipLen;
 	ip_hdr(skb)->protocol = SECFP_PROTO_ESP;
+	*skbuff = skb;
 	return ASF_NATT_PACKET;
 }
 
@@ -6086,7 +6111,6 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	unsigned int ulLowerBoundSeqNum;
 	unsigned int ulHashVal = usMaxInSAHashTaleSize_g;
 	unsigned int fragCnt = 0;
-	int kk;
 	struct sk_buff *pHeadSkb, *pTailSkb;
 #ifdef SECFP_SG_SUPPORT
 	struct sk_buff *pTailPrevSkb = 0;
@@ -6107,6 +6131,8 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	SPDInContainer_t *pContainer;
+	unsigned int *pCurICVLoc = 0, *pNewICVLoc = 0;
+
 	if (ulVSGId == ulMaxVSGs_g) {
 		ulVSGId = secfp_findVSG(skb1);
 		if (ulVSGId == ulMaxVSGs_g) {
@@ -6376,6 +6402,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 						}
 					}
 					if (pSA->SAParams.bUseExtendedSequenceNumber) {
+						int kk;
 						pCurICVLoc = (unsigned int *)(pTailSkb->tail - SECFP_ICV_LEN);
 						pNewICVLoc = (unsigned int *)(pTailSkb->tail - SECFP_ICV_LEN + sizeof(unsigned int));
 						for (kk = 2; kk >= 0; kk--) {
@@ -6439,9 +6466,17 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 
 		/* Using skb->data_len for storing the total length submitted to SEC */
 		skb1->data_len = iph->tot_len - (iph->ihl*4);
-		ASFIPSEC_DEBUG("Calling secfp_talitos_submit");
+		ASFIPSEC_DEBUG("Calling secfp-submit");
 		pHeadSkb->cb[SECFP_REF_INDEX] = 2;
 		desc = secfp_desc_alloc();
+		if (!desc) {
+			ASFIPSEC_ERR("desc allocation failure");
+			/*TBD - add stats and log etc*/
+			pHeadSkb->data_len = 0;
+			secfp_desc_free(desc);
+			ASFSkbFree(pHeadSkb);
+			rcu_read_unlock();
+		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
 		if ((secin_sg_flag & SECFP_SCATTER_GATHER)
@@ -6477,8 +6512,10 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			 secfp_inCompleteWithFrags : secfp_inComplete,
 			 (void *)pHeadSkb) == -EAGAIN) {
 #else
-		if (secfp_caam_submit(pdev, desc, secfp_inComplete,
-					(void *)pHeadSkb)) {
+		if (secfp_caam_submit(pSA->ctx.jrdev, desc,
+			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
+			secfp_inCompleteWithFrags : secfp_inComplete,
+			(void *)pHeadSkb)) {
 #endif
 #ifdef ASFIPSEC_LOG_MSG
 			ASFIPSEC_DEBUG("Inbound Submission to SEC failed");
@@ -6506,6 +6543,22 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		if (pSA->option[1] != SECFP_NONE) {
 			pHeadSkb->cb[SECFP_REF_INDEX]++;
 			desc = secfp_desc_alloc();
+			if (!desc) {
+				ASFIPSEC_ERR("desc allocation failure");
+				/* Mark SKB action index to drop */
+				pHeadSkb->cb[SECFP_REF_INDEX] -= 2 ;
+				if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
+					/* CB finished */
+					ASFSkbFree(pHeadSkb);
+				} else {
+					pHeadSkb->cb[SECFP_ACTION_INDEX]
+						= SECFP_DROP;
+				}
+				secfp_desc_free(desc);
+				/* Increment statistics */
+				rcu_read_unlock();
+				return 0;
+			}
 #ifdef SECFP_SG_SUPPORT
 			if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 				== SECFP_SCATTER_GATHER)
@@ -6520,8 +6573,10 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 				? secfp_inCompleteWithFrags : secfp_inComplete,
 				(void *)pHeadSkb) == -EAGAIN) {
 #else
-			if (secfp_caam_submit(pdev, desc, secfp_inComplete,
-					(void *)pHeadSkb)) {
+			if (secfp_caam_submit(pSA->ctx.jrdev, desc,
+				(secin_sg_flag & SECFP_SCATTER_GATHER)
+				? secfp_inCompleteWithFrags : secfp_inComplete,
+				(void *)pHeadSkb)) {
 #endif
 				ASFIPSEC_WARN("Inbound Submission to SEC failed");
 
@@ -6585,6 +6640,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			}
 			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
 				skb1, ulCommonInterfaceId);
+		}
 		return 0;
 	}
 }
@@ -6594,11 +6650,11 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
   * by doing SPI verification
   */
 int secfp_CheckInPkt(
-			unsigned int ulVSGId,
-			struct sk_buff *skb,
-			ASF_uint32_t ulCommonInterfaceId,
-			ASFFFPIpsecInfo_t  *pSecInfo,
-			void *pIpsecOpq) {
+		unsigned int ulVSGId,
+		struct sk_buff *skb,
+		ASF_uint32_t ulCommonInterfaceId,
+		ASFFFPIpsecInfo_t *pSecInfo,
+		void *pIpsecOpq) {
 	SPDInSPIValLinkNode_t *pNode;
 	SPDInContainer_t *pContainer;
 	ASFIPSecOpqueInfo_t  *pIPSecOpque;
@@ -6607,14 +6663,16 @@ int secfp_CheckInPkt(
 
 	pIPSecOpque = (ASFIPSecOpqueInfo_t  *)pIpsecOpq;
 	if (pSecInfo != NULL) {
-		ASFIPSEC_DBGL2(" VSGId = %d, OCI= %d, OMN=%d ICN=%d IMN=%d ",
-			 ulVSGId,
-			 pSecInfo->outContainerInfo.ulSPDContainerId,
-			 pSecInfo->outContainerInfo.ulSPDMagicNumber,
-			 pSecInfo->inContainerInfo.ulSPDContainerId,
-			 pSecInfo->inContainerInfo.ulSPDMagicNumber);
+		ASFIPSEC_DBGL2(" VSGId = %d, OCI= %x, OMN=%d ICN=%d IMN=%x ",
+			ulVSGId,
+			pSecInfo->outContainerInfo.ulSPDContainerId,
+			pSecInfo->outContainerInfo.ulSPDMagicNumber,
+			pSecInfo->inContainerInfo.ulSPDContainerId,
+			pSecInfo->inContainerInfo.ulSPDMagicNumber);
 		ASFIPSEC_DBGL2("SPI value stored in cb field of skb is %p, ",
 			 (void *) *(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]));
+
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (unlikely(pSecInfo->inContainerInfo.ulTimeStamp < ulTimeStamp_g)) {
 			if ((pSecInfo->inContainerInfo.configIdentity.ulVSGConfigMagicNumber !=
 				pulVSGMagicNumber[ulVSGId]) ||
@@ -6628,16 +6686,18 @@ int secfp_CheckInPkt(
 			}
 			pSecInfo->inContainerInfo.ulTimeStamp = ulTimeStamp_g;
 		}
-
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 
 		pContainer = (SPDInContainer_t *)ptrIArray_getData(&(secfp_InDB),
-								   pSecInfo->inContainerInfo.ulSPDContainerId);
+				pSecInfo->inContainerInfo.ulSPDContainerId);
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (ptrIArray_getMagicNum(&(secfp_InDB),
-					  pSecInfo->inContainerInfo.ulSPDContainerId)
+				pSecInfo->inContainerInfo.ulSPDContainerId)
 			 == pSecInfo->inContainerInfo.ulSPDMagicNumber) {
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			pNode = secfp_findInSPINode(pContainer,
-							 *(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]));
+				*(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]));
 			if (pNode) {
 				ASFIPSEC_DEBUG("pNode->ulSPIVal = %d: matches "\
 					"with stored value",  pNode->ulSPIVal);
@@ -6645,12 +6705,12 @@ int secfp_CheckInPkt(
 			} else {
 				ASFIPSEC_DEBUG("Stored values don't match: Debug");
 			}
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		} else {
 			ASFIPSEC_DEBUG("Stored SPD not matched");
 		}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		ASFSkbFree(skb);
-		IPSecPPGlobalStats_g[smp_processor_id()].ulTotInProcPkts++;
-		IPSecPPGlobalStats_g[smp_processor_id()].ulTotInProcSecPkts++;
 		return 1;
 	}
 callverify:
@@ -7483,12 +7543,9 @@ unsigned int secfp_createOutSA(
 		}
 
 		/* revisit - usAuthKeyLen or usAuthKeySize */
-		if (pSA->SAParams.bAuth) {
-#ifndef CONFIG_ASF_SEC4x
-			pSA->AuthKeyDmaAddr = SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucAuthKey,
-						pSA->SAParams.AuthKeyLen,
-						DMA_TO_DEVICE);
-#else
+
+#ifdef CONFIG_ASF_SEC4x
+		if (pSA->SAParams.bEncrypt)
 			if (secfp_createOutSACaamCtx(pSA)) {
 				ASFIPSEC_DEBUG("secfp_createOutSACaamCtx"\
 						"Failed");
@@ -7497,12 +7554,25 @@ unsigned int secfp_createOutSA(
 					local_bh_enable();
 				return SECFP_FAILURE;
 			}
+#ifdef ASFIPSEC_DEBUG_FRAME
+	printk(KERN_INFO "authsize %d enckeylen %d authkeylen %d\n",
+	       pSA->ctx.authsize, pSA->SAParams.EncKeyLen, pSA->SAParams.AuthKeyLen);
+	printk(KERN_INFO "split_key_len %d split_key_pad_len %d\n",
+	       pSA->ctx.split_key_len, pSA->ctx.split_key_pad_len);
+	print_hex_dump(KERN_INFO, "key in @"xstr(__LINE__)": ",
+		       DUMP_PREFIX_ADDRESS, 16, 4, pSA->ctx.key,
+		       pSA->SAParams.EncKeyLen + pSA->SAParams.AuthKeyLen, 1);
 #endif
-		}
+#else
+		if (pSA->SAParams.bAuth)
+			pSA->AuthKeyDmaAddr =
+				SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucAuthKey,
+						pSA->SAParams.AuthKeyLen,
+						DMA_TO_DEVICE);
 
-#ifndef CONFIG_ASF_SEC4x
 		if (pSA->SAParams.bEncrypt)
-			pSA->EncKeyDmaAddr = SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucEncKey,
+			pSA->EncKeyDmaAddr =
+				SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucEncKey,
 						pSA->SAParams.EncKeyLen,
 						DMA_TO_DEVICE);
 #endif
@@ -7945,27 +8015,24 @@ unsigned int secfp_CreateInSA(
 		 */
 		pSA->ulSecHdrLen = SECFP_ESP_HDR_LEN + pSA->SAParams.ulIvSize;
 
-		if (pSA->SAParams.bAuth) {
-#ifndef CONFIG_ASF_SEC4x
-			pSA->AuthKeyDmaAddr = SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucAuthKey,
+#ifdef CONFIG_ASF_SEC4x
+		if (secfp_createInSACaamCtx(pSA)) {
+			ASFIPSEC_DEBUG("secfp_createInSACaamCtx returnfailure");
+			kfree(pSA);
+			if (!bVal)
+				local_bh_enable();
+
+			return SECFP_FAILURE;
+		}
+#else
+		if (pSA->SAParams.bAuth)
+			pSA->AuthKeyDmaAddr = SECFP_DMA_MAP_SINGLE(
+						&pSA->SAParams.ucAuthKey,
 						pSA->SAParams.AuthKeyLen,
 						DMA_TO_DEVICE);
-#else
-			if (secfp_createInSACaamCtx(pSA)) {
-				ASFIPSEC_DEBUG("secfp_createInSACaamCtx"\
-						"returned failure");
-				kfree(pSA);
-				if (!bVal)
-					local_bh_enable();
-
-				return SECFP_FAILURE;
-			}
-#endif
-		}
-
-#ifndef CONFIG_ASF_SEC4x
 		if (pSA->SAParams.bEncrypt)
-			pSA->EncKeyDmaAddr = SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucEncKey,
+			pSA->EncKeyDmaAddr = SECFP_DMA_MAP_SINGLE(
+						&pSA->SAParams.ucEncKey,
 						  pSA->SAParams.EncKeyLen,
 						  DMA_TO_DEVICE);
 #endif
@@ -8223,7 +8290,7 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 			(pFreeFn)(freeArg);
 		goto ret_stk;
 	}
-	if (secfp_try_fastPathOutv4(ulVsgId, skb, &SecInfo) == 0) {
+	if (secfp_try_fastPathOutv4(ulVsgId, skb, &SecInfo) != 0) {
 		if (pFreeFn)
 			(pFreeFn)(freeArg);
 	}
@@ -8256,7 +8323,10 @@ ASF_void_t	ASFIPSecDecryptAndSendPkt(ASF_uint32_t ulVSGId,
 			(pFreeFn)(freeArg);
 		goto ret_stk;
 	}
-	secfp_try_fastPathInv4(skb, 0, ulVSGId, ulCommonInterfaceId);
+	if (secfp_try_fastPathInv4(skb, 0, ulVSGId, ulCommonInterfaceId) != 0) {
+		if (pFreeFn)
+			(pFreeFn)(freeArg);
+	}
 ret_stk:
 	if (!bVal)
 		local_bh_enable();

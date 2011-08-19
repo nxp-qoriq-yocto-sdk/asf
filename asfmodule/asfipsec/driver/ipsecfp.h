@@ -94,8 +94,7 @@
 #define SECFP_MAX_TOS_INDICES 8
 
 /* Information for preparing outer IP header */
-#define SECFP_IPVERSION  4   /* IP Version */
-#define SECFP_IP_TTL 120
+#define SECFP_IP_TTL			120
 
 
 /* skb Cb indices where various information is kept for post SEC operation */
@@ -220,8 +219,6 @@ extern dma_addr_t talitos_dma_unmap_single(void *data,
 
 
 #define SECFP_MAX_SELECTORS 5
-
-#define ICV_LEN	12
 
 #define SECFP_MAX_IB_SAS 128
 #define SECFP_MAX_IN_SEL_TBL_ENTRIES SECFP_MAX_IB_SAS
@@ -638,30 +635,34 @@ typedef struct secfp_ivInfo_s {
 /* to satisfy the compiler */
 struct talitos_desc;
 
+extern	void secfp_prepareOutDescriptor(struct sk_buff *skb,
+				void *pSA, void *, unsigned int);
+extern	void secfp_prepareInDescriptor(struct sk_buff *skb,
+				void *pSA, void *, unsigned int);
+void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
+				void *pData, void *, unsigned int);
+void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb,
+				void *pData, void *, unsigned int);
 #ifndef CONFIG_ASF_SEC4x
-extern  void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pSA, struct talitos_desc *, unsigned int);
-extern  void secfp_prepareInDescriptor(struct sk_buff *skb, void *pSA, struct talitos_desc *, unsigned int);
 extern inline void secfp_outComplete(struct device *dev,
-		struct talitos_desc *desc, void *context, int error);
+				struct talitos_desc *desc,
+				void *context, int error);
 extern inline void secfp_inComplete(struct device *dev,
-		struct talitos_desc *desc, void *context, int err);
+				struct talitos_desc *desc,
+				void *context, int err);
+extern void secfp_inCompleteWithFrags(struct device *dev,
+				struct talitos_desc *desc,
+				void *context, int err);
 #else
-extern  void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pSA,
-					void *, unsigned int);
-extern  void secfp_prepareInDescriptor(struct sk_buff *skb, void *pSA,
-					void *, unsigned int);
+/* This is due to different prototype of the SEC return function*/
 extern inline void secfp_outComplete(struct device *dev,
 		void *desc, int error, void *context);
 extern inline void secfp_inComplete(struct device *dev,
 		void *desc, int err, void *context);
+extern void secfp_inCompleteWithFrags(struct device *dev,
+		void *desc, int err, void *context);
 #endif
 
-void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
-					void *pData, struct talitos_desc *desc,
-					unsigned int ulIndex);
-void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
-					 struct talitos_desc *desc,
-					unsigned int ulOptionIndex);
 extern inline void secfp_inv6Complete(struct talitos_desc *desc, struct sk_buff *context, int err);
 extern int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev);
 extern int try_fastroute_fwnat(struct sk_buff *skb, struct net_device *dev, int length);
@@ -669,9 +670,6 @@ extern __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev);
 extern int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			   ASF_boolean_t bCheckLen, unsigned int ulVSGId,
 			   ASF_uint32_t  ulCommonInterfaceId);
-
-extern void secfp_inCompleteWithFrags(struct device *dev,
-		struct talitos_desc *desc, void *context, int err);
 
 int secfp_init(void);
 void secfp_deInit(void);
