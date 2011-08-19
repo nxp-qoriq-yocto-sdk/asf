@@ -22,5 +22,10 @@ int asfReasmInit(void);
 void asfReasmDeInit(void);
 
 void asfReasmInitConfig(void);
+#ifdef ASF_TERM_FP_SUPPORT
+extern struct sk_buff *packet_new_skb(struct net_device *dev);
+#endif
+extern struct sk_buff *gfar_new_skb(struct net_device * dev);
+extern void gfar_skb_destructor(struct sk_buff *skb);
 
 #endif

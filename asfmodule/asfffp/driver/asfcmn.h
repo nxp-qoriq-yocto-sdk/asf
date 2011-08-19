@@ -83,14 +83,16 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 }
 
 /* Initialization Parameters */
-#define ASF_NUM_OF_TIMERS  6
-
 #define ASF_FFP_BLOB_TMR_ID	(0)
 #define ASF_REASM_TMR_ID 	(1)
 #define ASF_FFP_INAC_REFRESH_TMR_ID	(2)
 #define ASF_SECFP_BLOB_TMR_ID   (3)
 #define ASF_FWD_BLOB_TMR_ID	(4)
 #define ASF_FWD_EXPIRY_TMR_ID	(5)
+#define ASF_TERM_BLOB_TMR_ID	(6)
+#define ASF_TERM_EXPIRY_TMR_ID	(7)
+
+#define ASF_NUM_OF_TIMERS (ASF_TERM_EXPIRY_TMR_ID + 1)
 
 /* ASF Proc interface */
 #define CTL_ASF 9999
@@ -102,13 +104,34 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 #define ASFSkbAlloc	alloc_skb
 
 #define ASFKernelSkbFree(freeArg) kfree_skb((struct sk_buff *)freeArg)
+#ifdef ASF_TERM_FP_SUPPORT
+#define ASFSkbFree(freeArg) \
+{\
+	if (((struct sk_buff *)freeArg)->mapped) \
+		packet_kfree_skb((struct sk_buff *)freeArg);\
+	else\
+		kfree_skb((struct sk_buff *)freeArg);\
+}
+#else
 #define ASFSkbFree(freeArg) kfree_skb((struct sk_buff *)freeArg)
+#endif
+
+#ifdef ASF_TERM_FP_SUPPORT
+#define ASF_netif_receive_skb	pmal_netif_receive_skb
+#else
+#define ASF_netif_receive_skb	netif_receive_skb
+#endif
 
 #define ASF_gfar_new_skb
 #define ASF_gfar_kfree_skb	ASFSkbFree
 
 static inline void asf_skb_free_func(void *obj)
 {
+#ifdef ASF_TERM_FP_SUPPORT
+	if (((struct sk_buff *)obj)->mapped)
+		packet_kfree_skb((struct sk_buff *)obj);
+	else
+#endif
 	dev_kfree_skb_any((struct sk_buff *)obj);
 }
 #define ASF_SKB_FREE_FUNC	asf_skb_free_func
@@ -260,6 +283,8 @@ static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 			memcpy(dst, src, len);
 	}
 }
+
+#define BUFGET16(cp)	(*(unsigned short *) (cp))
 
 extern ASFNetDevEntry_t *ASFCiiToNetDev(ASF_uint32_t ulCommonInterfaceId);
 extern ASFNetDevEntry_t *ASFNetDev(struct net_device *dev);

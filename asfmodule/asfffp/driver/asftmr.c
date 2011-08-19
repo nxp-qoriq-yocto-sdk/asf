@@ -32,6 +32,10 @@
 #include <asm/uaccess.h>
 #include <linux/module.h>
 #include <linux/dma-mapping.h>
+#ifdef ASF_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
+
 #include "gplcode.h"
 #include "asfmpool.h"
 #include "asftmr.h"

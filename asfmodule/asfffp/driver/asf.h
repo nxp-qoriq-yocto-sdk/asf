@@ -54,13 +54,15 @@ typedef ASF_uint32_t ASF_IPv4Addr_t;
 
 /*
  * ASF_Modes_t mode - indicates the basic mode of operations such
- * as firewall , forwarding
+ * as firewall, forwarding or Termination
 */
 typedef enum {
-	fwMode = 0,	/* Firewall mode */
-	fwdMode = 1,	/* Forwarding mode */
-	numModes = 2, /*number of modes being supported */
-} ASF_Modes_t;
+	fwMode = 0x01,	/* Firewall mode */
+	fwdMode = 0x02,	/* Forwarding mode */
+	termMode = 0x04,	/* User Space Termination mode */
+} ASF_ModeType_t;
+
+typedef ASF_uint32_t ASF_Modes_t;
 
 typedef struct ASF_Funcs_s {
 	ASF_uint32_t
@@ -79,7 +81,7 @@ typedef struct ASFCap_s {
 
 	ASF_boolean_t  bBufferHomogenous;
 
-	ASF_Modes_t mode[numModes];
+	ASF_Modes_t mode;
 	 /* Basic Modes available such as Firewall, forwarding etc. */
 	ASF_Functions_t func; /* Offloadable functions in ASF. */
 } ASFCap_t;
@@ -157,6 +159,15 @@ typedef struct ASFFWDCacheEntryTuple_s {
 	ASF_uint8_t 	ucDscp;   /* DSCP Value */
 } ASFFWDCacheEntryTuple_t;
 
+typedef struct ASFTERMCacheEntryTuple_s {
+	ASF_IPv4Addr_t	ulSrcIp; /* Source IP Address */
+	ASF_IPv4Addr_t	ulDestIp; /* Destination IP Address */
+	ASF_uint16_t	usSrcPort;	/* Source Port */
+	ASF_uint16_t	usDestPort; /* Destination Port */
+	ASF_uint8_t	ucProtocol;	/* IP Protocol */
+	ASF_uint8_t	ucSubProtocolOffset; /* SubProtocol Offset in Packet */
+	ASF_uint16_t	ucSubProtocol; /*SubProtocol Id */
+} ASFTERMCacheEntryTuple_t;
 
 typedef struct ASFFFPL2blobConfig_s {
 	ASF_boolean_t	bl2blobRefreshSent;
@@ -557,6 +568,10 @@ typedef struct ASFLogInfo_s {
 			ASF_uint32_t ulNumOfPktsProcessed;
 			ASF_uint32_t ulNumOfBytesProcessed;
 		} IPSecInfo;
+		struct {
+			ASFTERMCacheEntryTuple_t tuple;
+			ASF_uint32_t ulHashVal;
+		} termInfo;
 	} u;
 } ASFLogInfo_t;
 
@@ -894,6 +909,13 @@ int ASFFFPQueryGlobalStats(ASFFFPGlobalStats_t *pStats);
 /*
  * Utility API
  */
+ASF_void_t ASFProcessNonTermPkt(
+		ASF_uint32_t	ulVsgId,
+		ASF_uint32_t	ulCommonInterfaceId,
+		ASFBuffer_t	Buffer,
+		genericFreeFn_t	pFreeFn,
+		ASF_void_t	*freeArg,
+		ASF_void_t	*pIpsecOpaque);
 
 /* compute hash index based on maximum number of buckets */
 #define ASF_HINDEX(hval, hmax) (hval&(hmax-1))

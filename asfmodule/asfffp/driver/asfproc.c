@@ -37,6 +37,9 @@
 #include <asm/uaccess.h>
 #include <linux/module.h>
 #include <linux/sysctl.h>
+#ifdef ASF_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 
 #include <linux/version.h>
 #include <linux/proc_fs.h>

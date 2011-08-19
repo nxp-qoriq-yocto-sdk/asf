@@ -46,6 +46,9 @@
 #include <net/xfrm.h>
 #include <linux/sysctl.h>
 #include <net/tcp.h>
+#ifdef ASF_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 
 #include <linux/version.h>
 #include "asf.h"

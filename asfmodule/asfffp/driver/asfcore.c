@@ -51,12 +51,14 @@
 #include <net/xfrm.h>
 #include <linux/sysctl.h>
 #include <gianfar.h>
-
-
+#ifdef ASF_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 #include "gplcode.h"
 #include "asf.h"
 #include "asfcmn.h"
 #include "asffwd.h"
+#include "asfterm.h"
 #include "asfipsec.h"
 #include "asfparry.h"
 #include "asfmpool.h"
@@ -84,9 +86,14 @@ int asf_reasm_timeout = 60; /* in seconds ? */
 int asf_reasm_maxfrags = 47;
 int asf_reasm_min_fragsize = 28;
 int asf_tcp_drop_oos;
+#ifdef ASF_TERM_FP_SUPPORT
+int asf_default_mode = fwMode | termMode;
+#else
 int asf_default_mode = fwMode;
-int asf_fwd_func_on;
-int asf_ipsec_func_on;
+#endif
+ASF_boolean_t asf_fwd_func_on;
+ASF_boolean_t asf_term_func_on;
+ASF_boolean_t asf_ipsec_func_on;
 extern unsigned long asf_reasm_hash_list_size;
 extern unsigned long asf_reasm_num_cbs;
 
@@ -180,13 +187,20 @@ inline ASFFFPGlobalStats_t *get_asf_gstats() /* per cpu global stats */
 EXPORT_SYMBOL(get_asf_gstats);
 
 #ifdef ASF_IPSEC_FP_SUPPORT
-ASFFFPIPSecInv4_f   pFFPIPSecInv4;
-ASFFFPIPSecOutv4_f  pFFPIPSecOutv4;
-ASFFFPIPSecInVerifyV4_f  pFFPIpsecInVerifyV4;
-ASFFFPIPSecProcessPkt_f pFFPIpsecProcess;
+ASFFFPIPSecInv4_f pFFPIPSecInv4;
+EXPORT_SYMBOL(pFFPIPSecInv4);
 
-void ASFFFPRegisterIPSecFunctions(ASFFFPIPSecInv4_f   pIn,
-				ASFFFPIPSecOutv4_f  pOut,
+ASFFFPIPSecOutv4_f pFFPIPSecOutv4;
+EXPORT_SYMBOL(pFFPIPSecOutv4);
+
+ASFFFPIPSecInVerifyV4_f pFFPIpsecInVerifyV4;
+EXPORT_SYMBOL(pFFPIpsecInVerifyV4);
+
+ASFFFPIPSecProcessPkt_f pFFPIpsecProcess;
+EXPORT_SYMBOL(pFFPIpsecProcess);
+
+void ASFFFPRegisterIPSecFunctions(ASFFFPIPSecInv4_f pIn,
+				ASFFFPIPSecOutv4_f pOut,
 				ASFFFPIPSecInVerifyV4_f pIpsecInVerify,
 				ASFFFPIPSecProcessPkt_f pIpsecProcess)
 {
@@ -221,6 +235,27 @@ void ASFFFPRegisterFWDFunctions(
 		asf_fwd_func_on = ASF_FALSE;
 }
 EXPORT_SYMBOL(ASFFFPRegisterFWDFunctions);
+#endif
+
+#ifdef ASF_TERM_FP_SUPPORT
+
+ASFTERMCleanVsg_f	pTermCleanVsg;
+ASFTERMProcessPkt_f	pTermProcessPkt;
+EXPORT_SYMBOL(pTermProcessPkt);
+
+void ASFFFPRegisterTERMFunctions(
+		ASFTERMProcessPkt_f pTerm,
+		ASFTERMCleanVsg_f pCleanVsg)
+{
+	pTermCleanVsg = pCleanVsg;
+
+	pTermProcessPkt = pTerm;
+	if (pTermProcessPkt)
+		asf_term_func_on = ASF_TRUE;
+	else
+		asf_term_func_on = ASF_FALSE;
+}
+EXPORT_SYMBOL(ASFFFPRegisterTERMFunctions);
 #endif
 
 static __u32 rule_salt __read_mostly;
@@ -537,9 +572,8 @@ int asfAdjustFragAndSendToStack(struct sk_buff *skb, ASFNetDevEntry_t *anDev)
 			pSkb->protocol = eth_type_trans(pSkb, dev); */
 			offset = (ntohs(((struct iphdr *) (pSkb->data))->frag_off) & IP_OFFSET) << 3;
 			asf_debug("Call netif_receive_skb (frag) : skb->len %d offset %d skb->pkt_type %d skb->protocol 0x%04x data[0] = 0x%02x\n", pSkb->len, offset, pSkb->pkt_type, pSkb->protocol, pSkb->data[0]);
-			if (netif_receive_skb(pSkb) == NET_RX_DROP) {
+			if (ASF_netif_receive_skb(pSkb) == NET_RX_DROP)
 				asf_debug("Error in Submitting to NetRx: Should not happen\r\n");
-			}
 		}
 		return 1;
 	}
@@ -863,7 +897,10 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	/* If in Forwarding Mode , send packet to
 	   FWD module for further processing */
 	if (asf_fwd_func_on &&
-		(asf_vsg_info[anDev->ulVSGId]->curMode == fwdMode)) {
+#ifdef ASF_TERM_FP_SUPPORT
+		!skb->mapped &&
+#endif
+		(asf_vsg_info[anDev->ulVSGId]->curMode & fwdMode)) {
 
 		/* Checksum verification will be done by eTSEC.*/
 		abuf.nativeBuffer = skb;
@@ -943,9 +980,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	 *   udph->dport == 500 or 4500
 	 *   udph->sport == 500 or 4500
 	 */
-/*Derive Src and Dst Ports*/
-
-#define BUFGET16(cp)	(*(unsigned short *) (cp))
 
 	if (iph->protocol == IPPROTO_ESP) {
 		if (pFFPIPSecInv4) {
@@ -979,9 +1013,31 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
+#ifdef ASF_TERM_FP_SUPPORT
+	/* If in Termination Mode , send packet to
+	   TERM module for further processing */
+	if (skb->mapped) {
+		if (asf_term_func_on &&
+		(asf_vsg_info[anDev->ulVSGId]->curMode & termMode)) {
 
-	abuf.nativeBuffer = skb;
-	ASFFFPProcessAndSendPkt(anDev->ulVSGId,
+			/* Checksum verification will be done by eTSEC.*/
+			abuf.nativeBuffer = skb;
+			pTermProcessPkt(anDev->ulVSGId,
+					anDev->ulCommonInterfaceId, abuf,
+					(genericFreeFn_t)ASF_SKB_FREE_FUNC,
+					skb, NULL, ASF_FALSE);
+			ASF_RCU_READ_UNLOCK(bLockFlag);
+			return AS_FP_STOLEN;
+		} else
+			goto drop_pkt;
+	}
+#endif
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	if (!(asf_vsg_info[anDev->ulVSGId]->curMode & fwdMode))
+		goto ret_pkt;
+	else
+#endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
+		ASFFFPProcessAndSendPkt(anDev->ulVSGId,
 			anDev->ulCommonInterfaceId,
 			abuf, ASF_SKB_FREE_FUNC, skb, NULL);
 
@@ -999,7 +1055,8 @@ iface_not_found:
 
 ret_pkt:
 	/* no frag list expected */
-	netif_receive_skb(skb);
+	ASF_netif_receive_skb(skb);
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	gstats->ulPktsToFNP++;
 #endif
@@ -1055,9 +1112,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 	anDev = ASFCiiToNetDev(ulCommonInterfaceId);
 
-	if (NULL == anDev) {
-		asf_debug("CII %u doesn't appear to be valid\n", ulCommonInterfaceId);
-		dev_kfree_skb_any(skb);
+	if (unlikely(!anDev)) {
+		asf_debug("CII %u doesn't appear to be valid\n",
+			ulCommonInterfaceId);
+		pFreeFn(skb);
 		return;
 	}
 
@@ -1791,6 +1849,32 @@ drop_pkt:
 }
 EXPORT_SYMBOL(ASFFFPProcessAndSendPkt);
 
+ASF_void_t ASFProcessNonTermPkt(
+		ASF_uint32_t	ulVsgId,
+		ASF_uint32_t	ulCommonInterfaceId,
+		ASFBuffer_t	Buffer,
+		genericFreeFn_t	pFreeFn,
+		ASF_void_t	*freeArg,
+		ASF_void_t	*pIpsecOpaque)
+{
+	ASF_Modes_t mode;
+	struct sk_buff *skb = (struct sk_buff *) Buffer.nativeBuffer;
+
+	ASFGetVSGMode(ulVsgId, &mode);
+
+	if (mode & fwMode) {
+		ASFFFPProcessAndSendPkt(ulVsgId, ulCommonInterfaceId,
+			Buffer, pFreeFn, freeArg, pIpsecOpaque);
+	} else
+#ifdef ASF_FWD_FP_SUPPORT
+	if ((mode & fwdMode) && pFwdProcessPkt) {
+		pFwdProcessPkt(ulVsgId, ulCommonInterfaceId,
+			Buffer, pFreeFn, freeArg);
+	} else
+#endif
+		ASF_netif_receive_skb(skb);
+}
+EXPORT_SYMBOL(ASFProcessNonTermPkt);
 
 unsigned int asf_ffp_check_vsg_mode(ASF_uint32_t ulVSGId, ASF_Modes_t mode)
 {
@@ -1798,7 +1882,7 @@ unsigned int asf_ffp_check_vsg_mode(ASF_uint32_t ulVSGId, ASF_Modes_t mode)
 		return ASF_FALSE;
 
 	if (asf_vsg_info[ulVSGId]) {
-		if (asf_vsg_info[ulVSGId]->curMode == mode)
+		if (asf_vsg_info[ulVSGId]->curMode & mode)
 			return ASF_TRUE;
 		else
 			return ASF_FALSE;
@@ -1806,7 +1890,7 @@ unsigned int asf_ffp_check_vsg_mode(ASF_uint32_t ulVSGId, ASF_Modes_t mode)
 
 	/*if default mdoe is also same than is also ok. as it will create new
 	vsg entry with default mode. */
-	if (asf_default_mode == mode)
+	if (asf_default_mode & mode)
 		return ASF_TRUE;
 
 	return ASF_FALSE;
@@ -1836,13 +1920,20 @@ asf_vsg_info_t *asf_ffp_get_vsg_info_node(ASF_uint32_t ulVSGId)
 	return vsg;
 }
 
-ASF_void_t  ASFGetCapabilities(ASFCap_t *pCap)
+ASF_void_t ASFGetCapabilities(ASFCap_t *pCap)
 {
 	pCap->ulNumVSGs = asf_max_vsgs;
 	pCap->ulNumIfaces = asf_max_ifaces;
 	pCap->bBufferHomogenous = 1;
-	pCap->mode[fwMode] = 1;
-	pCap->mode[fwdMode] = 1;
+	pCap->mode = fwMode;
+
+#ifdef ASF_FWD_FP_SUPPORT
+	pCap->mode |= fwdMode;
+#endif
+
+#ifdef ASF_TERM_FP_SUPPORT
+	pCap->mode |= termMode;
+#endif
 	pCap->func.bIPsec = 1;
 }
 EXPORT_SYMBOL(ASFGetCapabilities);
@@ -3280,6 +3371,26 @@ void asfDestroyNetDevEntries(void)
 		}
 	}
 }
+inline void asf_clean_vsg(ASF_uint32_t ulVSGId, ASF_Modes_t mode)
+{
+	if (mode & fwMode)
+		asf_ffp_cleanup_all_flows();
+
+#ifdef ASF_FWD_FP_SUPPORT
+	else if (mode & fwdMode)
+		if (pFwdCleanVsg)
+			pFwdCleanVsg(ulVSGId);
+#endif
+
+#ifdef ASF_TERM_FP_SUPPORT
+	if (mode & termMode)
+		if (pTermCleanVsg)
+			pTermCleanVsg(ulVSGId);
+#endif
+
+	return;
+}
+
 ASF_uint32_t ASFSetVSGMode(ASF_uint32_t ulVSGId, ASF_Modes_t  mode)
 {
 	asf_vsg_info_t *vsg_info = NULL;
@@ -3295,25 +3406,45 @@ ASF_uint32_t ASFSetVSGMode(ASF_uint32_t ulVSGId, ASF_Modes_t  mode)
 	if (vsg_info->curMode == mode)
 		return ASF_SUCCESS;
 
-	if (!asf_fwd_func_on && (mode == fwdMode)) {
-		asf_err(" Forwarding Mode Not Available");
+	switch (mode & 0x3) {
+#ifdef ASF_FWD_FP_SUPPORT
+	case fwdMode:
+		if (!asf_fwd_func_on) {
+			asf_err(" Forwarding Mode Not Available");
+			return ASF_FAILURE;
+		}
+		asf_print("Setting FWD Mode for VSG [%d]\n", ulVSGId);
+		break;
+#endif
+	case fwMode:
+		asf_print("Setting FFP Mode for VSG [%d]\n", ulVSGId);
+		break;
+
+	/* Termination Only Case*/
+	case 0:
+		break;
+
+	/* FWD and FW mode are not supported simultaneously*/
+	default:
+		asf_err(" Not Supported Mode");
 		return ASF_FAILURE;
 	}
 
-	if (mode == fwdMode) {
-		asf_ffp_cleanup_all_flows();
-		asf_print("Setting FWD Mode for VSG [%d]\n", ulVSGId);
-		vsg_info->curMode = fwdMode;
-
-	} else {
-		/* cleanup all fwd flows */
-#ifdef ASF_FWD_FP_SUPPORT
-		if (vsg_info->curMode == fwdMode)
-			if (pFwdCleanVsg)
-				pFwdCleanVsg(ulVSGId);
-#endif
-		vsg_info->curMode = fwMode;
+#ifdef ASF_TERM_FP_SUPPORT
+	if (mode & termMode) {
+		if (!asf_term_func_on) {
+			asf_err(" Termination Mode Not Available");
+			return ASF_FAILURE;
+		}
+		asf_print("Setting TERM Mode for VSG [%d]\n", ulVSGId);
 	}
+#endif
+
+/* TBD- at present on mode set, ASF flows in all modules are being reset,
+we may be able to selectively reset the flows in respective modules */
+
+	asf_clean_vsg(ulVSGId, vsg_info->curMode);
+	vsg_info->curMode = mode;
 
 	asf_fexit;
 	return ASF_SUCCESS;
@@ -3333,7 +3464,7 @@ ASF_uint32_t ASFGetVSGMode(ASF_uint32_t ulVSGId , ASF_Modes_t *mode)
 	}
 
 	*mode = vsg_info->curMode;
-
+	asf_debug("VSGId[=%d] mode %d=%d ", ulVSGId, *mode, vsg_info->curMode);
 	asf_fexit;
 	return ASF_SUCCESS;
 }

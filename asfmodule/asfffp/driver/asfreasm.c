@@ -21,6 +21,9 @@
 #include <linux/crypto.h>
 #include <linux/skbuff.h>
 #include <linux/route.h>
+#ifdef ASF_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 #include "asfparry.h"
 #include "asfmpool.h"
 #include "asftmr.h"
@@ -32,7 +35,6 @@
 /* #define ASF_REASM_DEBUG */
 
 extern ASFFFPGlobalStats_t *asf_gstats;
-extern struct sk_buff *gfar_new_skb(struct net_device * dev);
 #ifdef ASF_REASM_DEBUG
 #define asf_reasm_debug(fmt, args...) printk("[CPU %d line %d %s] " fmt, smp_processor_id(), __LINE__, __FUNCTION__, ##args)
 #else
@@ -1380,6 +1382,22 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 		skb = pTempSkb;
 		bAlloc = 0;
 	} else {
+#ifdef ASF_TERM_FP_SUPPORT
+		asf_reasm_debug("Total Len =%d, available = %d, "\
+			"Don't expect to allocate new SKB.Dropping.\n",
+			ulTotalLen,
+			pTempSkb->end - (pTempSkb->data + pTempSkb->len));
+		frag = skb_shinfo(pTempSkb)->frag_list;
+		/* The Calling Function will free the First SKB */
+		while (frag) {
+			frag1 = frag;
+			frag = frag->next;
+			/* Free SKB using frag1 */
+			frag1->next = NULL;
+			packet_kfree_skb(frag1);
+		}
+		return 1;
+#endif
 		skb = ASFSkbAlloc((ulTotalLen+ulExtraLen), GFP_ATOMIC);
 		if (skb) {
 			skb_reserve(skb, ulHeadRoom);
@@ -1634,8 +1652,11 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				len = (bytesLeft > ulMTU) ?  ulMTU : bytesLeft;
 				if (len < bytesLeft)
 					len &= ~7;
-
+#ifdef ASF_TERM_FP_SUPPORT
+				skb2 = packet_new_skb(skb->dev);
+#else
 				skb2 = gfar_new_skb(skb->dev);
+#endif
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
 					skb2->skb_owner = NULL;

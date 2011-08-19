@@ -30,6 +30,9 @@
 #include <linux/if_arp.h>
 #include <linux/ip.h>
 #include <net/xfrm.h>
+#ifdef ASF_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 #include "asffwd_pvt.h"
 
 
@@ -624,7 +627,7 @@ gen_indications:
 
 	/* Return to Slow path for further handling */
 ret_pkt_to_stk:
-	netif_receive_skb(skb);
+	ASF_netif_receive_skb(skb);
 
 exit:
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -1563,7 +1566,7 @@ static int __init asf_fwd_init(void)
 
 	/* Get ASF Capabilities and store them for future use. */
 	ASFGetCapabilities(&asf_cap);
-	if (!asf_cap.mode[fwdMode]) {
+	if (!(asf_cap.mode & fwdMode)) {
 		asf_err("ASF not configured in FWD mode.... Exiting\n");
 		return err;
 	} else if (!asf_cap.bBufferHomogenous) {
