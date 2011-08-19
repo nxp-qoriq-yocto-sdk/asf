@@ -1377,7 +1377,7 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 		asf_reasm_debug("Fragments with nr_frags not handled \r\n");
 		return 1;
 	}
-	if (ulTotalLen  <= (pTempSkb->end - (pTempSkb->data + pTempSkb->len))) {
+	if (ulTotalLen <= (pTempSkb->end - pTempSkb->data)) {
 		asf_reasm_debug("Total fragment can fit in first skb \r\n");
 		skb = pTempSkb;
 		bAlloc = 0;
@@ -1399,7 +1399,13 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 		return 1;
 #endif
 		skb = ASFSkbAlloc((ulTotalLen+ulExtraLen), GFP_ATOMIC);
-		if (skb) {
+		if (skb) { /* We need a flat buffer, if not return an error*/
+			if (skb_linearize(skb)) {
+				dev_kfree_skb_any(skb);
+				asf_reasm_debug("skb linearize failed ");
+				return 1;
+			}
+
 			skb_reserve(skb, ulHeadRoom);
 			memcpy(skb->data, pTempSkb->data, pTempSkb->len);
 			memcpy(skb->cb, pTempSkb->cb, sizeof(skb->cb));
@@ -1545,7 +1551,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 	if ((likely(iph->tot_len > ulMTU)) || (skb_shinfo(skb)->frag_list)) {
 		/* Fragmentation */
 		if (((skb->len <= ulMTU) && (skb_headroom(skb) > ulDevXmitHdrLen))
-		    || (!(skb->len - (ihl & 7)))) {
+			&& (!((skb->len - ihl) & 7))) {
 			bNewSkb = 0;
 			for (pSkb = skb->next;  pSkb != NULL; pSkb = pSkb->next) {
 				if ((pSkb->len + ASF_REASM_IP_HDR_LEN > ulMTU) ||

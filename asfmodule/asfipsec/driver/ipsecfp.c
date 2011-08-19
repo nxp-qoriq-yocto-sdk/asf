@@ -93,8 +93,6 @@ static inline  void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA);
 #define ASF_IPV4_MAC_CODE 0x800
 #define ASF_IPPROTO_ICMP 1
 #define MAX_TTL 30
-#define ASF_IPSEC_IKE_SERVER_PORT	500
-#define ASF_IPSEC_IKE_NAT_FLOAT_PORT   4500
 
 #define ASF_IPSEC_MAX_UDP_ENCAPS_HDR_LEN       8
 
@@ -5908,57 +5906,106 @@ inline int secfp_try_fastPathInv6(struct sk_buff *skb, bool bCheckLen)
 
 }
 
-
-int secfp_process_udp_encapsulator(struct sk_buff *skb, unsigned int ulVSGId)
+int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
+	unsigned int ulVSGId,
+	unsigned char *pSkipHeader,
+	unsigned char *pucSkepLen)
 {
 	struct udphdr *uh;
-	char *pData;
 	char ucNatT, ucSkipLen;
-	unsigned short usIPHdrLen;
+	unsigned short usIPHdrLen, usSourcePort;
 	char aIpHeader[ASF_IPLEN + ASF_IP_MAXOPT];
+	char aMarker[32]; /* atleast 8 bytes required */
+	int mark_len = 0, expected_mark_len;
+	struct sk_buff *skb = *skbuff;
 
-	uh =  (struct udphdr *) skb_transport_header(skb);
+
+	uh = (struct udphdr *) skb_transport_header(skb);
 	usIPHdrLen = ip_hdr(skb)->ihl * 4;
+	usSourcePort = uh->source;
 
-	if (uh->len < (SECFP_MAX_UDP_HDR_LEN + 8))
-		return ASF_NON_NATT_PACKET;
+/*
+	if (uh->len < (SECFP_MAX_UDP_HDR_LEN + 8)) {
+	return ASF_NON_NATT_PACKET;
+	}
+*/
 
-	if ((uh->source  == ASF_IPSEC_IKE_SERVER_PORT) ||
-		(uh->dest  == ASF_IPSEC_IKE_SERVER_PORT)) {
+	if ((uh->source  == ASF_IKE_SERVER_PORT) ||
+		(uh->dest  == ASF_IKE_SERVER_PORT)) {
+
 		ucNatT = ASF_IPSEC_IKE_NATtV1;
-	} else if ((uh->source == ASF_IPSEC_IKE_NAT_FLOAT_PORT) ||
-		   (uh->dest  == ASF_IPSEC_IKE_NAT_FLOAT_PORT)) {
+
+	} else if ((uh->source == ASF_IKE_NAT_FLOAT_PORT) ||
+		(uh->dest  == ASF_IKE_NAT_FLOAT_PORT)) {
+
 		ucNatT = ASF_IPSEC_IKE_NATtV2;
 	} else {
 		/****
-		 * If UDP packet's port values not matching with IKE port values
-		 * then it is plain packet and returning with T_SUCCESS
-		 ****/
+		* If UDP packet's port values not matching with IKE port values
+		* then it is plain packet and returning with T_SUCCESS
+		****/
 		return ASF_NON_NATT_PACKET;
 	}
-	pData = skb->data + usIPHdrLen + SECFP_MAX_UDP_HDR_LEN;
+	expected_mark_len = (ucNatT == ASF_IPSEC_IKE_NATtV1) ?
+		ASF_IPSEC_MAX_NON_IKE_MARKER_LEN : ASF_IPSEC_MAX_NON_ESP_MARKER_LEN;
+
+	/* skb could be a list of fragments */
+	/* each fragment is expected to have at least 8 bytes
+		of IP data. i.e 28 bytes of ip len */
+	mark_len = ASF_MIN(expected_mark_len,
+				skb->len-usIPHdrLen - SECFP_MAX_UDP_HDR_LEN);
+	if (mark_len)
+		memcpy(aMarker, skb->data + usIPHdrLen + SECFP_MAX_UDP_HDR_LEN,
+			mark_len);
+
+	if (mark_len < expected_mark_len) {
+		if (skb_shinfo(skb)->frag_list)
+			memcpy(aMarker + mark_len, skb_shinfo(skb)->frag_list->data,
+				expected_mark_len - mark_len);
+		else
+			return ASF_NON_NATT_PACKET;
+		mark_len = expected_mark_len;
+	}
+
 	if (ucNatT == ASF_IPSEC_IKE_NATtV1) {
 		/****
-		 * If UDP packet contains the matching IKE port values
-		 * then check with the NON-IKE marker header
-		 * If not matched , then return T_SUCCESS
-		 ****/
-		if (memcmp(pData, aNonIkeMarker_g, ASF_IPSEC_MAX_NON_IKE_MARKER_LEN) != 0) {
+		* If UDP packet contains the matching IKE port values
+		* then check with the NON-IKE marker header
+		* If not matched , then return T_SUCCESS
+		****/
+		if (memcmp(aMarker, aNonIkeMarker_g, ASF_IPSEC_MAX_NON_IKE_MARKER_LEN) != 0)
 			return ASF_NON_NATT_PACKET;
-		}
+
 		/* Copy the IP header */
-		memcpy(aIpHeader, skb->data, usIPHdrLen);
 		ucSkipLen = ASF_IPSEC_MAX_NON_IKE_MARKER_LEN + SECFP_MAX_UDP_HDR_LEN;
 	} else {
-		if (memcmp(pData, aNonESPMarker_g, ASF_IPSEC_MAX_NON_ESP_MARKER_LEN) == 0) {
+		if (memcmp(aMarker, aNonESPMarker_g, ASF_IPSEC_MAX_NON_ESP_MARKER_LEN) == 0)
 			return ASF_NON_NATT_PACKET;
-		}
-		memcpy(aIpHeader, skb->data, usIPHdrLen);
+
 		ucSkipLen = SECFP_MAX_UDP_HDR_LEN;
 	}
+
+	if (skb_shinfo(skb)->frag_list) {
+		if (asfReasmLinearize(&skb,
+			ip_hdr(skb)->tot_len, 1400+32, 1100+32)) {
+			ASFIPSEC_ERR("skb->linearize failed ");
+			dev_kfree_skb_any(skb);
+			*skbuff = NULL;
+			return ASF_IPSEC_CONSUMED;
+		}
+		skb_reset_network_header(skb);
+		usIPHdrLen = ip_hdr(skb)->ihl * 4;
+	}
+
+	*pucSkepLen = ucSkipLen;
+	memcpy(pSkipHeader, skb->data + usIPHdrLen, ucSkipLen);
+
+	*((unsigned short *)&skb->cb[SECFP_UDP_SOURCE_PORT]) = usSourcePort;
+
+	memcpy(aIpHeader, skb->data, usIPHdrLen);
 	skb->data = skb->data + ucSkipLen;
 	memcpy(skb->data, aIpHeader, usIPHdrLen);
-	skb->len  -=  ucSkipLen;
+	skb->len -= ucSkipLen;
 	skb_reset_network_header(skb);
 	ip_hdr(skb)->tot_len -= ucSkipLen;
 	ip_hdr(skb)->protocol = SECFP_PROTO_ESP;
@@ -5992,7 +6039,6 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	struct iphdr *iph = ip_hdr(skb1);
 	unsigned int ulLowerBoundSeqNum;
 	unsigned int ulHashVal = usMaxInSAHashTaleSize_g;
-	unsigned int *pCurICVLoc = 0, *pNewICVLoc = 0;
 	unsigned int fragCnt = 0;
 	int kk;
 	struct sk_buff *pHeadSkb, *pTailSkb;
@@ -6004,10 +6050,12 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 #endif
 	bool bScatterGather;
 	unsigned int len;
+	signed int iRetVal;
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	AsfSPDPolicyPPStats_t   *pIPSecPolicyPPStats;
+	unsigned char  aSkipHeader[32], ucSkipLen = 0;
 	unsigned char secin_sg_flag;
 	struct talitos_desc *desc;
 
@@ -6018,15 +6066,19 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		if (ulVSGId == ulMaxVSGs_g) {
 			ASFIPSEC_DEBUG("Stub: Need to send packet up for VSG determination");
 			ASFIPSEC_DEBUG("Need to call registered callback function ");
-			ASFSkbFree(skb1);
 			return 1; /* Send it up to Stack */
 		}
 	}
 
 	if (iph->protocol == IPPROTO_UDP) {
-		if (secfp_process_udp_encapsulator(skb1, ulVSGId) == ASF_NON_NATT_PACKET) {
-			return ASF_NON_NATT_PACKET;
-		}
+		iRetVal = secfp_process_udp_encapsulator(&skb1, ulVSGId,
+			aSkipHeader, &ucSkipLen);
+
+		if (iRetVal == ASF_NON_NATT_PACKET)
+			return 1; /* Send it up to Stack */
+		else if (iRetVal == ASF_IPSEC_CONSUMED)
+			return 1;
+
 		iph = ip_hdr(skb1);
 	}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -6393,7 +6445,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			secfp_desc_free(desc);
 			ASFSkbFree(pHeadSkb);
 			rcu_read_unlock();
-			return 1;
+			return 0;
 		}
 #ifndef ASF_TERM_FP_SUPPORT
 		pHeadSkb->len -= (pSA->ulSecHdrLen);
@@ -6469,7 +6521,20 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		/* Homogenous buffer */
 		Buffer.nativeBuffer = skb1;
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT23]);
-		if (ASFIPSecCbFn.pFnNoInSA)
+		if (ASFIPSecCbFn.pFnNoInSA) {
+			if (ucSkipLen) {
+				unsigned short usIPHdrLen;
+				char aIpHeader[ASF_IPLEN + ASF_IP_MAXOPT];
+				usIPHdrLen = ip_hdr(skb1)->ihl * 4;
+				memcpy(aIpHeader, skb1->data, usIPHdrLen);
+				memcpy(skb1->data + usIPHdrLen - ucSkipLen, aSkipHeader, ucSkipLen);
+				skb1->data = skb1->data - ucSkipLen;
+				memcpy(skb1->data, aIpHeader, usIPHdrLen);
+				skb1->len  +=  ucSkipLen;
+				skb_reset_network_header(skb1);
+				ip_hdr(skb1)->tot_len += ucSkipLen;
+				ip_hdr(skb1)->protocol = IPPROTO_UDP;
+			}
 			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
 				skb1, ulCommonInterfaceId);
 		return 0;
@@ -7307,7 +7372,7 @@ unsigned int secfp_createOutSA(
 #endif
 		/* Prepare the IP header and keep it for reuse */
 		if (!pSA->ipHdrInfo.bIpVersion) { /* IPv4 */
-			pSA->ipHdrInfo.hdrdata.iphv4.version = SECFP_IPVERSION;
+			pSA->ipHdrInfo.hdrdata.iphv4.version = 4;
 			pSA->ipHdrInfo.hdrdata.iphv4.ihl = 5;
 			pSA->ipHdrInfo.hdrdata.iphv4.tos = 0;
 			if (!pSA->SAParams.bCopyDscp) {
@@ -7325,6 +7390,7 @@ unsigned int secfp_createOutSA(
 					pSA->ipHdrInfo.hdrdata.iphv4.frag_off = IP_DF;
 					break;
 				default:
+					pSA->ipHdrInfo.hdrdata.iphv4.frag_off = 0;
 					ASFIPSEC_DEBUG("DF Option not handled");
 					break;
 				}
@@ -7340,6 +7406,15 @@ unsigned int secfp_createOutSA(
 			pSA->ulSecLenIncrease = SECFP_IP_HDR_LEN;
 			pSA->prepareOutPktFnPtr = secfp_prepareOutPacket;
 			pSA->finishOutPktFnPtr = secfp_finishOutPacket;
+			pSA->ulCompleteOverHead += pSA->ulSecOverHead;
+			pSA->ulCompleteOverHead += pSA->SAParams.ulBlockSize;
+			if (pSA->SAParams.bDoUDPEncapsulationForNATTraversal) {
+				pSA->ulCompleteOverHead += ASF_NAT_UDP_HDR_LEN;
+
+				if (pSA->SAParams.IPsecNatInfo.ulNATt
+					== ASF_IPSEC_IKE_NATtV1)
+					pSA->ulCompleteOverHead += 8;
+			}
 		} else { /* Handle IPv6 case */
 			ASFIPSEC_DEBUG("stub IPv6 gateway changes not done yet");
 		}
@@ -7353,6 +7428,7 @@ unsigned int secfp_createOutSA(
 		if (pSA->SAParams.bAuth) {
 			pSA->ulSecOverHead += SECFP_ICV_LEN;
 			pSA->ulSecLenIncrease += SECFP_ICV_LEN;
+			pSA->ulCompleteOverHead += SECFP_ICV_LEN;
 		}
 
 		/* revisit - usAuthKeyLen or usAuthKeySize */

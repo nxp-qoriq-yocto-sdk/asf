@@ -104,6 +104,7 @@
 #define SECFP_SKB_DATA_DMA_INDEX 4
 #define SECFP_ACTION_INDEX	8
 #define SECFP_REF_INDEX 45
+#define SECFP_UDP_SOURCE_PORT		46
 
 /* Inbound */
 #define SECFP_LOOKUP_SA_INDEX	9
@@ -583,6 +584,8 @@ typedef struct outSA_s {
 	unsigned short	ulL2BlobLen;
 	unsigned short	tx_vlan_id; /*valid if bVLAN is 1*/
 	ASFFFPL2blobConfig_t	l2blobConfig;
+	unsigned int ulCompleteOverHead;
+
 } outSA_t;
 
 

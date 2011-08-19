@@ -994,18 +994,24 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 			goto ret_pkt;
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	} else if (iph->protocol == IPPROTO_UDP) {
+	} else if ((iph->protocol == IPPROTO_UDP)
+		&& !((iph->frag_off) & ASF_MF_OFFSET_FLAG_NET_ORDER)) {
+		/* Don't submit individual fragments here as UDP header is
+		 * available in first fragment only.
+		 */
 		unsigned short int usSrcPrt;
 		unsigned short int usDstPrt;
 
 		usSrcPrt = BUFGET16((char *) (iph) + iph->ihl*4);
 		usDstPrt = BUFGET16(((char *) (iph) + iph->ihl*4) + 2);
 
-		if (usSrcPrt  ==  500 || usSrcPrt  ==  4500 ||
-			usDstPrt  ==  500 || usDstPrt  ==  4500) {
+		if (usSrcPrt  ==  ASF_IKE_NAT_FLOAT_PORT
+			|| usSrcPrt  ==  ASF_IKE_SERVER_PORT
+			|| usDstPrt  ==  ASF_IKE_SERVER_PORT
+			|| usDstPrt  ==  ASF_IKE_NAT_FLOAT_PORT) {
 			if (pFFPIPSecInv4 &&
 				pFFPIPSecInv4(skb, 0, anDev->ulVSGId,
-					anDev->ulCommonInterfaceId) != 0) {
+					anDev->ulCommonInterfaceId) == 0) {
 				ASF_RCU_READ_UNLOCK(bLockFlag);
 				return AS_FP_STOLEN;
 			}
@@ -1218,7 +1224,27 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		asf_display_frags(skb, "After Pull");
 	}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
+	if (iph->protocol == IPPROTO_UDP) {
+		unsigned short int usSrcPrt;
+		unsigned short int usDstPrt;
 
+		usSrcPrt = BUFGET16((char *) (iph) + iph->ihl*4);
+		usDstPrt = BUFGET16(((char *) (iph) + iph->ihl*4) + 2);
+
+		if (usSrcPrt == ASF_IKE_SERVER_PORT
+			|| usSrcPrt == ASF_IKE_NAT_FLOAT_PORT
+			|| usDstPrt == ASF_IKE_SERVER_PORT
+			|| usDstPrt == ASF_IKE_NAT_FLOAT_PORT) {
+			if (pFFPIPSecInv4 &&
+				pFFPIPSecInv4(skb, 0, anDev->ulVSGId,
+				anDev->ulCommonInterfaceId) == 0) {
+				asf_debug("UDP encapsulated ESP packet"
+					"(fraglist) absorbed by IPSEC-ASF\n");
+				return;
+			} else
+				asf_debug("Looks like IKE packet");
+		}
+	}
 	iphlen = iph->ihl * 4;
 	ptrhdrOffset = (unsigned long int *)(((unsigned char *) iph) + iphlen);
 
