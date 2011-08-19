@@ -29,6 +29,9 @@
 #include <net/dst.h>
 #include <net/route.h>
 #include <net/xfrm.h>
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 
 #include "../../../asfipsec/driver/ipsfpapi.h"
 #include "../ffp/asfctrl.h"
@@ -85,7 +88,7 @@ ASF_void_t asfctrl_ipsec_fn_NoInSA(ASF_uint32_t ulVsgId,
 #ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
 	ASFCTRL_INFO("Sending packet UP ");
 	/* Send it to for normal path handling */
-	netif_receive_skb(skb);
+	ASFCTRL_netif_receive_skb(skb);
 #else
 	ASFCTRL_WARN("NO IN SA Found Drop packet");
 	pFreeFn(Buffer.nativeBuffer);
@@ -126,10 +129,24 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	}
 	ASFCTRL_INFO("Route found for dst %x ", iph->daddr);
 
-
 	skb->pkt_type = PACKET_HOST;
 	skb->skb_iif = skb->dev->ifindex;
-	ip_forward(skb);
+
+	ASFCTRL_INFO("NO OUT SA Found Sending Packet Up");
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+	if (skb->mapped) {
+		struct sk_buff *nskb;
+		/* Allocate new skb from kernel pool */
+		nskb = skb_copy(skb, GFP_ATOMIC);
+		if (!nskb)
+			goto drop;
+
+		nskb->mapped = 0;
+		ip_forward(nskb);
+		goto drop;
+	} else
+#endif
+		ip_forward(skb);
 	goto out;
 #else
 	ASFCTRL_WARN("NO OUT SA Found Drop packet");
@@ -172,13 +189,38 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 			DestAddr.ipv4addr, usProtocol, ulSPI);
 
 #ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
-
+	if (!skb->dev) {
+		if (skb_dst(skb))
+			skb->dev = skb_dst(skb)->dev;
+		else
+			ASFCTRL_ERR("No Dev pointer!!");
+	}
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+	if (skb->mapped) {
+		struct sk_buff *nskb;
+		/* Allocate new skb from kernel pool */
+		nskb = skb_copy(skb, GFP_ATOMIC);
+		if (!nskb) {
+			goto drop;
+		} else {
+			pFreeFn(Buffer.nativeBuffer);
+			skb = nskb;
+			Buffer.nativeBuffer = skb;
+			pFreeFn = (genericFreeFn_f)kfree;
+		}
+		skb->mapped = 0;
+	}
+#endif
 	/*1.  find the SA (xfrm pointer) on the basis of SPI,
 	 * protcol, dest Addr */
 	net = dev_net(skb->dev);
 	daddr.a4 = (DestAddr.ipv4addr);
 	family = AF_INET;
-	x = xfrm_state_lookup(net, 0, &daddr, ulSPI, usProtocol, family);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
+	x = xfrm_state_lookup(net, 0, &daddr, ulSPI, ucProtocol, family);
+#else
+	x = xfrm_state_lookup(net, &daddr, ulSPI, ucProtocol, family);
+#endif
 	if (x == NULL) {
 		ASFCTRL_WARN("Unable to get the match SPD"\
 			"for the decrypted packet");
@@ -205,11 +247,14 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	skb->sp->xvec[skb->sp->len++] = x;
 
 	/*3. send the packet to slow path */
-	netif_receive_skb(skb);
+	ASFCTRL_netif_receive_skb(skb);
+	goto out;
 #else
 	ASFCTRL_WARN("VerifySPD Fail Found Drop packet");
-	pFreeFn(Buffer.nativeBuffer);
 #endif
+drop:
+	pFreeFn(Buffer.nativeBuffer);
+out:
 	if (bRevalidate)
 		ASFCTRL_DBG("Revalidation is required");
 
@@ -319,7 +364,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 	if (!bVal)
 		local_bh_disable();
 	/* Generate Dummy packet */
-	skb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
+	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (skb) {
 		struct iphdr *iph;
 		ASF_uint32_t *pData;
@@ -337,9 +382,9 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 
 		if (ip_route_output_key(&init_net, &rt, &fl)) {
 			ASFCTRL_DBG("\n Route not found for dst %x"\
-			"local host: %d", address->dstIP.ipv4addr,
-			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
-			ASFKernelSkbFree(skb);
+			"skb->dst: 0x%x", address->dstIP.ipv4addr,
+			skb_rtable(skb));
+			ASFCTRLKernelSkbFree(skb);
 			return ;
 		}
 
@@ -467,11 +512,13 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 	pSAData->u.l2blob.ulL2BlobLen =  hh_len;
 	memcpy(&pSAData->u.l2blob.l2blob, skb->data,
 			pSAData->u.l2blob.ulL2BlobLen);
+#ifdef CONFIG_VLAN_8021Q
 	if (vlan_tx_tag_present(skb)) {
 		pSAData->u.l2blob.bTxVlan = 1;
 		pSAData->u.l2blob.usTxVlanId = (vlan_tx_tag_get(skb)
 							| VLAN_TAG_PRESENT);
 	} else
+#endif
 		pSAData->u.l2blob.bTxVlan = 0;
 	pSAData->u.l2blob.bUpdatePPPoELen = 0;
 	pSAData->u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;

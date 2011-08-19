@@ -29,6 +29,10 @@
 #include <linux/init.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+#include <linux/if_packet.h>
+#include <linux/if_pmal.h>
+#endif
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/route.h>
@@ -86,7 +90,7 @@ static inline int asfctrl_alg_getbyname(char *name, int type)
 
 void asfctrl_generic_free(ASF_void_t *freeArg)
 {
-	dev_kfree_skb_any((struct sk_buff *)freeArg);
+	ASFCTRLSkbFree((struct sk_buff *)freeArg);
 }
 
 /**** Container Indices ***/
@@ -224,7 +228,7 @@ static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 			return cur_id;
 		}
 	}
-	ASFCTRL_WARN("\nMaximum SAs are offloaded")
+	ASFCTRL_WARN("\nMaximum SAs are offloaded");
 
 ret_unlock:
 	spin_unlock(&sa_table_lock);

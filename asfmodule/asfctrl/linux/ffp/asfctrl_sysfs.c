@@ -25,7 +25,9 @@
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
 #include <linux/sysctl.h>
-
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 #include "../../../asfffp/driver/asf.h"
 #include "asfctrl.h"
 
@@ -66,7 +68,7 @@ static ssize_t asfctrl_vsg_mode_show(struct kobject *kobj,
 		ret = ASFGetVSGFunctions(vsg, &funcs);
 		if (ASF_SUCCESS != ret)
 			continue;
-		printk(KERN_INFO"VSG = %d, mode = %d, funcs=%d\n",
+		printk(KERN_INFO"vsg=%d, mode=%d, funcs=%d\n",
 			vsg, mode , funcs.bIPsec);
 	}
 	return 1;
@@ -77,15 +79,12 @@ static ssize_t asfctrl_vsg_mode_store(struct kobject *kobj,
 				struct kobj_attribute *attr,
 				const char *buf, size_t count)
 {
-	int vsg, ret;
-	ASF_Modes_t mode;
+	int vsg = -1, ret;
+	unsigned int mode = 0;
 	ASF_Functions_t funcs;
-	int bipsec;
+	int bipsec = -1;
 
-	vsg = -1;
-	bipsec = -1;
-
-	sscanf(buf, "vsg=%d mode=%d ipsec=%d", &vsg, (int *)&mode, &bipsec);
+	sscanf(buf, "vsg=%d mode=%u ipsec=%d", &vsg, &mode, &bipsec);
 
 	if (-1 == vsg) {
 		ASFCTRL_ERR("Wrong command format: \

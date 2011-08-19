@@ -17,6 +17,8 @@
 */
 /***************************************************************************/
 #include <linux/init.h>
+#include <linux/module.h>
+#include <linux/version.h>
 #include <linux/netdevice.h>
 #include <linux/netfilter.h>
 #include <linux/inetdevice.h>
@@ -24,6 +26,9 @@
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
 #include <gianfar.h>
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 #include <net/ip.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
@@ -68,19 +73,20 @@ static T_INT32 asf_linux_XmitL2blobDummyPkt(
 
 	ASFCTRL_FUNC_ENTRY;
 
-	skb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
+	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (!skb)
 		return T_FAILURE;
 
 	dev = dev_get_by_name(&init_net, "lo");
 
 	if ((0 != ip_route_input(skb, uldestIp, ulSrcIp, 0, dev)) ||
-		(skb_rtable(skb)->rt_flags & RTCF_LOCAL)) {
+			(!skb_rtable(skb) ||
+			(skb_rtable(skb)->rt_flags & RTCF_LOCAL))) {
 		ASFCTRL_INFO("Route not found for dst %x local host : %d",
 			uldestIp,
-			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
+			(!skb_rtable(skb) || (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) ? 1 : 0);
 		dev_put(dev);
-		ASFKernelSkbFree(skb);
+		ASFCTRLKernelSkbFree(skb);
 		return T_FAILURE;
 	}
 	dev_put(dev);
@@ -129,7 +135,7 @@ ASF_void_t asfctrl_fnZoneMappingNotFound(
 	if (!bVal)
 		local_bh_disable();
 	/* Send it to for normal path handling */
-	netif_receive_skb(skb);
+	ASFCTRL_netif_receive_skb(skb);
 
 	if (!bVal)
 		local_bh_enable();
@@ -155,7 +161,7 @@ ASF_void_t  asfctrl_fnNoFlowFound(
 		local_bh_disable();
 
 	/* Send it to for normal path handling */
-	netif_receive_skb(skb);
+	ASFCTRL_netif_receive_skb(skb);
 
 	if (!bVal)
 		local_bh_enable();
@@ -316,7 +322,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		}
 	}
 
-	skb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
+	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (!skb) {
 		ASFCTRL_ERR("SKB allocation failed");
 		return;
@@ -330,7 +336,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			uldestIp,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
 		dev_put(dev);
-		ASFKernelSkbFree(skb);
+		ASFCTRLKernelSkbFree(skb);
 		return;
 	}
 	dev_put(dev);
@@ -362,7 +368,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 
 	result = ipt_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
 			net->ipv4.iptable_filter);
-	ASFKernelSkbFree(skb);
+	ASFCTRLKernelSkbFree(skb);
 
 	switch (result) {
 	case NF_ACCEPT:
@@ -881,8 +887,13 @@ static int asfctrl_conntrack_event(unsigned int events, struct nf_ct_event *ptr)
 			ASFCTRL_INFO("UDP flow");
 			asfctrl_offload_session(ct);
 		}
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
 	} else if (events & (1 << IPCT_ASSURED)) {
 		ASFCTRL_INFO("IPCT_ASSURED!");
+#else
+	} else if (events & (1 << IPCT_STATUS)) {
+		ASFCTRL_INFO("IPCT_STATUS!");
+#endif
 		/* Offload the connection if status is assured */
 		if ((ct_tuple->dst.protonum == IPPROTO_TCP) &&
 			(ct->status & IPS_ASSURED)) {

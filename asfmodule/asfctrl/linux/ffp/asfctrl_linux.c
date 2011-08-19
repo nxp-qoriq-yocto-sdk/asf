@@ -30,7 +30,12 @@
 #include <net/dst.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <net/route.h>
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 33))
 #include <8021q/vlan.h>
+#endif
 #include "../../../asfffp/driver/asf.h"
 #include "asfctrl.h"
 
@@ -91,9 +96,23 @@ void asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob,
 EXPORT_SYMBOL(asfctrl_register_fwd_func);
 #endif
 
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+asfctrl_term_l2blob_update fn_term_l2blob_update;
+asfctrl_term_cache_flush_t fn_term_cache_flush;
+
+void asfctrl_register_term_func(asfctrl_term_l2blob_update p_l2blob,
+				asfctrl_term_cache_flush_t cache_flush)
+{
+	fn_term_l2blob_update = p_l2blob;
+	fn_term_cache_flush = cache_flush;
+}
+EXPORT_SYMBOL(asfctrl_register_term_func);
+#endif
+
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
-asfctrl_ipsec_get_flow_info   fn_ipsec_get_flow4;
-asfctrl_ipsec_l2blob_update   fn_ipsec_l2blob_update;
+asfctrl_ipsec_get_flow_info fn_ipsec_get_flow4;
+EXPORT_SYMBOL(fn_ipsec_get_flow4);
+asfctrl_ipsec_l2blob_update fn_ipsec_l2blob_update;
 asfctrl_ipsec_vsg_magicnum_update fn_ipsec_vsg_magic_update;
 void asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info   p_flow,
 				asfctrl_ipsec_l2blob_update  p_l2blob,
@@ -192,7 +211,7 @@ int asf_ip_send(struct sk_buff *skb)
 		return dst->neighbour->output(skb);
 
 	ASFCTRL_DBG(" Packet send failure");
-	ASFKernelSkbFree(skb);
+	ASFCTRLKernelSkbFree(skb);
 
 	ASFCTRL_FUNC_EXIT;
 	return -EINVAL;
@@ -538,14 +557,14 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 		cmd.u.l2blob.l2blobLen = hh_len;
 
 		memcpy(cmd.u.l2blob.l2blob, skb->data, cmd.u.l2blob.l2blobLen);
-
+#ifdef CONFIG_VLAN_8021Q
 		if (vlan_tx_tag_present(skb)) {
 			cmd.u.l2blob.bTxVlan = 1;
 			cmd.u.l2blob.usTxVlanId = (vlan_tx_tag_get(skb)
 							| VLAN_TAG_PRESENT);
-		} else {
+		} else
+#endif
 			cmd.u.l2blob.bTxVlan = 0;
-		}
 
 		ASFFFPRuntime(pData->ulVsgId, ASF_FFP_MODIFY_FLOWS, &cmd,
 			sizeof(cmd), NULL, 0);
@@ -572,9 +591,19 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 
 		break;
 #endif
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+	case ASFCTRL_IPPROTO_DUMMY_TERM_L2BLOB:
+		ASFCTRL_INFO("DUMMY_TERM_L2BLOB");
+
+		if (fn_term_l2blob_update)
+			fn_term_l2blob_update(skb, hh_len,
+				asfctrl_dev_get_cii(dev));
+
+		break;
+#endif
 	}
 drop:
-	ASFKernelSkbFree(skb);
+	ASFCTRLKernelSkbFree(skb);
 	ASFCTRL_FUNC_EXIT;
 	return AS_FP_STOLEN;
 }
@@ -597,7 +626,7 @@ ASF_void_t  asfctrl_fnInterfaceNotFound(
 	if (!bVal)
 		local_bh_disable();
 	/* Send it to for normal path handling */
-	netif_receive_skb(skb);
+	ASFCTRL_netif_receive_skb(skb);
 
 	if (!bVal)
 		local_bh_enable();
@@ -619,7 +648,7 @@ ASF_void_t  asfctrl_fnVSGMappingNotFound(
 	if (!bVal)
 		local_bh_disable();
 	/* Send it to for normal path handling */
-	netif_receive_skb(skb);
+	ASFCTRL_netif_receive_skb(skb);
 
 	if (!bVal)
 		local_bh_enable();
@@ -674,7 +703,7 @@ static int __init asfctrl_init(void)
 	asfctrl_sysfs_init();
 
 
-	if (g_cap.mode[fwMode])
+	if (g_cap.mode & fwMode)
 		asfctrl_linux_register_ffp();
 
 	if (ASFGetStatus() == 0)
@@ -691,7 +720,7 @@ static void __exit asfctrl_exit(void)
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (g_cap.mode[fwMode])
+	if (g_cap.mode & fwMode)
 		asfctrl_linux_unregister_ffp();
 
 	asfctrl_sysfs_exit();

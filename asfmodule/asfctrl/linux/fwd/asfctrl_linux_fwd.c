@@ -24,6 +24,9 @@
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
 #include <gianfar.h>
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+#include <linux/if_pmal.h>
+#endif
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/route.h>
@@ -65,7 +68,7 @@ static T_INT32 asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 	struct	sk_buff *skb;
 	int	ret;
 
-	skb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
+	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (skb) {
 		asfctrl_fwd_L2blobPktData_t *pData;
 		struct iphdr *iph;
@@ -74,13 +77,15 @@ static T_INT32 asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 		dev = dev_get_by_name(&init_net, "lo");
 
 		if (0 != ip_route_input(skb, tpl->ulDestIp,
-					tpl->ulSrcIp, tpl->ucDscp, dev)
-			|| skb_rtable(skb)->rt_flags & RTCF_LOCAL) {
-			ASFCTRL_INFO("\n Route not found for"
+					tpl->ulSrcIp, tpl->ucDscp, dev) ||
+			(!skb_rtable(skb) ||
+			(skb_rtable(skb)->rt_flags & RTCF_LOCAL))) {
+
+			ASFCTRL_INFO("Route not found for"
 				" dst %x local host : %d", tpl->ulDestIp,
-			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
+			(!skb_rtable(skb) || (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) ? 1 : 0);
 			dev_put(dev);
-			ASFKernelSkbFree(skb);
+			ASFCTRLKernelSkbFree(skb);
 			return T_FAILURE;
 		}
 		dev_put(dev);
@@ -129,7 +134,7 @@ ASF_void_t asfctrl_fwd_fnCacheEntryNotFound(
 	ASFCTRL_FUNC_TRACE;
 
 	if (skb)
-		netif_receive_skb(skb);
+		ASFCTRL_netif_receive_skb(skb);
 	return;
 }
 
@@ -183,7 +188,7 @@ ASF_void_t asfctrl_fwd_fnCacheEntryRefreshL2Blob(ASF_uint32_t ulVSGId,
 	ASFCTRL_INFO("L2Blob Refresh Request Indication\n");
 	skb = AsfBuf2Skb(pInfo->Buffer);
 	if (skb)
-		netif_receive_skb(skb);
+		ASFCTRL_netif_receive_skb(skb);
 
 	asfctrl_fwd_XmitL2blobDummyPkt(&pInfo->packetTuple);
 	return;
@@ -236,11 +241,13 @@ ASF_void_t asfctrl_fwd_l2blob_update_fn(struct sk_buff *skb,
 	pCacheData.u.l2blob.l2blobLen =  hh_len;
 	memcpy(&pCacheData.u.l2blob.l2blob, skb->data,
 					pCacheData.u.l2blob.l2blobLen);
+#ifdef CONFIG_VLAN_8021Q
 	if (vlan_tx_tag_present(skb)) {
 		pCacheData.u.l2blob.bTxVlan = 1;
 		pCacheData.u.l2blob.usTxVlanId = (vlan_tx_tag_get(skb)
 							| VLAN_TAG_PRESENT);
 	} else
+#endif
 		pCacheData.u.l2blob.bTxVlan = 0;
 
 	pCacheData.u.l2blob.bUpdatePPPoELen = 0;
@@ -270,8 +277,10 @@ int  asfctrl_fwd_l3_route_add(
 
 	ASFGetVSGMode(ASF_DEF_VSG, &mode);
 	/* If ASF is disabled or mode is not FWD, simply return */
-	if ((0 == ASFGetStatus()) || (mode != fwdMode))
+	if ((0 == ASFGetStatus()) || !(mode & fwdMode)) {
+		ASFCTRL_INFO("ASF not ready or invalid mode 0x%x\n", mode);
 		return 0;
+	}
 	/*loopback dummy packet */
 	if (iif == 1) {
 		ASFCTRL_INFO("dummy Loop Back offload...ignoring\n");
@@ -351,7 +360,7 @@ static int __init asfctrl_linux_fwd_init(void)
 	};
 
 	ASFGetCapabilities(&asf_cap);
-	if (!asf_cap.mode[fwdMode]) {
+	if (!(asf_cap.mode & fwdMode)) {
 		ASFCTRL_ERR("Forwarding mode Not supported in ASF");
 		return -1;
 	}
@@ -359,13 +368,6 @@ static int __init asfctrl_linux_fwd_init(void)
 		ASFCTRL_ERR("Hetrogeneous Buffer mode is not supported in ASF");
 		return -1;
 	}
-	ASFFWDSetNotifyPreference(ASF_ASYNC_RESPONSE);
-
-	ASFFWDRegisterCallbackFns(&asfctrl_Cbs);
-
-	expCmd.ulExpiryInterval = ASFCTRL_FWD_EXPIRY_TIMER;
-	ASFFWDSetCacheEntryExpiryParams(&expCmd);
-
 	ASFFWDGetCapabilities(&g_fwd_cap);
 	/* Number of VSG in FWD module must not greater
 	than those of ASF Core module */
@@ -379,6 +381,15 @@ static int __init asfctrl_linux_fwd_init(void)
 				" not supported in ASFFWD\n");
 		return -1;
 	}
+
+	ASFFWDSetNotifyPreference(ASF_ASYNC_RESPONSE);
+
+	ASFFWDRegisterCallbackFns(&asfctrl_Cbs);
+
+	expCmd.ulExpiryInterval = ASFCTRL_FWD_EXPIRY_TIMER;
+	ASFFWDSetCacheEntryExpiryParams(&expCmd);
+
+
 	/* Register Callback function with ASF control layer to
 	get L2blob information, route add event and flush events */
 	asfctrl_register_fwd_func(&asfctrl_fwd_l2blob_update_fn,

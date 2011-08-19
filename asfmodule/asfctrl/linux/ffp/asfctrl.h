@@ -40,6 +40,8 @@
 
 #define ASF_ASYNC_RESPONSE ASF_FALSE
 
+#define ASF_PROTOCOL_GTP	1024
+
 #define ASFCTRL_DUMMY_SKB_CB_OFFSET	(16)
 #define ASFCTRL_DUMMY_SKB_MAGIC1	(0xDE)
 #define ASFCTRL_DUMMY_SKB_MAGIC2	(0xAD)
@@ -47,6 +49,7 @@
 #define ASFCTRL_IPPROTO_DUMMY_L2BLOB 		(0x6F)
 #define ASFCTRL_IPPROTO_DUMMY_IPSEC_L2BLOB 	(0x70)
 #define ASFCTRL_IPPROTO_DUMMY_FWD_L2BLOB 	(0x71)
+#define ASFCTRL_IPPROTO_DUMMY_TERM_L2BLOB	(0x72)
 
 #define ASF_TCP_INAC_TMOUT	(5*60*60*24)
 #define ASF_UDP_INAC_TMOUT	(180)
@@ -54,12 +57,20 @@
 #define DEFVAL_INACTIVITY_DIVISOR	(4)
 
 #define AsfBuf2Skb(a)	((struct sk_buff *)(a.nativeBuffer))
-#define ASFKernelSkbAlloc	alloc_skb
-#define ASFSkbAlloc		alloc_skb
+#define ASFCTRLKernelSkbAlloc	alloc_skb
 
-#define ASFKernelSkbFree(freeArg)	kfree_skb((struct sk_buff *)freeArg)
-#define ASFSkbFree(freeArg)		kfree_skb((struct sk_buff *)freeArg)
+#define ASFCTRLKernelSkbFree(freeArg)	kfree_skb((struct sk_buff *)freeArg)
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+#define ASFCTRLSkbFree(freeArg)		packet_kfree_skb((struct sk_buff *)freeArg)
+#else
+#define ASFCTRLSkbFree(freeArg)		kfree_skb((struct sk_buff *)freeArg)
+#endif
 
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+#define ASFCTRL_netif_receive_skb	pmal_netif_receive_skb
+#else
+#define ASFCTRL_netif_receive_skb	netif_receive_skb
+#endif
 
 ASF_void_t  asfctrl_fnNoFlowFound(
 				ASF_uint32_t ulVSGId,
@@ -192,7 +203,17 @@ typedef int (*asfctrl_fwd_l3_route_add_t)(int iif,
 extern void  asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob,
 					asfctrl_fwd_l3_route_add_t route_add,
 					asfctrl_fwd_l3_route_flush_t  route_flush);
+#endif
 
+#ifdef ASFCTRL_TERM_FP_SUPPORT
+
+typedef void (*asfctrl_term_l2blob_update)(struct sk_buff *skb,
+					ASF_uint32_t hh_len,
+					ASF_uint32_t ulDeviceID);
+typedef void (*asfctrl_term_cache_flush_t)(void);
+
+extern void  asfctrl_register_term_func(asfctrl_term_l2blob_update p_l2blob,
+					asfctrl_term_cache_flush_t cache_flush);
 #endif
 
 extern void asfctrl_linux_unregister_ffp(void);
