@@ -61,6 +61,8 @@ ASFIPSecCap_t g_ipsec_cap;
 uint32_t asfctrl_vsg_ipsec_cont_magic_id;
 uint32_t asfctrl_max_sas = SECFP_MAX_SAS;
 uint32_t asfctrl_max_policy_cont = ASFCTRL_MAX_SPD_CONTAINERS;
+int bRedSideFragment = ASF_FALSE;
+int bAntiReplayCheck = ASF_FALSE;
 
 struct asf_ipsec_callbackfn_s asf_sec_fns = {
 		asfctrl_xfrm_enc_hook,
@@ -593,6 +595,14 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 	ASFCTRL_DBG("IPSEC : In =%d, Out =%d", *ipsec_in, *ipsec_out);
 	return err;
 }
+
+module_param(bRedSideFragment, bool, 0444);
+MODULE_PARM_DESC(bRedSideFragment, "Bool - Whether ASF-IPsec "\
+	"RED Side Fragmentation is Enabled");
+
+module_param(bAntiReplayCheck, bool, 0444);
+MODULE_PARM_DESC(bAntiReplayCheck, "Bool - Whether ASF-IPsec "\
+	"Anti Replay Check is Enabled");
 
 static int __init asfctrl_linux_ipsec_init(void)
 {

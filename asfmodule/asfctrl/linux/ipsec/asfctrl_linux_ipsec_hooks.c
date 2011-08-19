@@ -530,8 +530,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	SAParams.bVerifyInPktWithSASelectors =
 				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
-	SAParams.bRedSideFragment =
-				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+	SAParams.bRedSideFragment = bRedSideFragment;
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_ENABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
@@ -539,6 +538,9 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.bDoAntiReplayCheck =
 		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
 			: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
+
+	SAParams.bDoAntiReplayCheck =
+		SAParams.bDoAntiReplayCheck ? bAntiReplayCheck : 0;
 
 	if (xfrm->props.replay_window < 32)
 		SAParams.replayWindowSize = 32;
@@ -714,14 +716,17 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	SAParams.bVerifyInPktWithSASelectors =
 				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
-	SAParams.bRedSideFragment =
-				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+	SAParams.bRedSideFragment = bRedSideFragment;
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_ENABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 	SAParams.bDoAntiReplayCheck =
 		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
 			: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
+
+	SAParams.bDoAntiReplayCheck =
+		SAParams.bDoAntiReplayCheck ? bAntiReplayCheck : 0;
+
 	if (xfrm->props.replay_window < 32)
 		SAParams.replayWindowSize = 32;
 	else

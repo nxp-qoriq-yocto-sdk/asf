@@ -78,6 +78,9 @@ int asfctrl_ipsec_km_register(void);
 extern uint32_t asfctrl_vsg_ipsec_cont_magic_id;
 extern uint32_t asfctrl_max_sas;
 extern uint32_t asfctrl_max_policy_cont;
+extern int bRedSideFragment;
+extern int bAntiReplayCheck;
+
 extern void  register_ipsec_offload_hook(struct asf_ipsec_callbackfn_s *);
 extern void unregister_ipsec_offload_hook(void);
 
