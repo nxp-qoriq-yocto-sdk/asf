@@ -10,7 +10,7 @@
  *
  */
 /* History
- *  Version	Date		Author		Change Description
+ * Version	Date		Author		Change Description
  *
 */
 /****************************************************************************/
@@ -20,9 +20,14 @@
 
 #include <linux/ip.h>
 #include <linux/ipv6.h>
-#include <talitos.h>
 
+#ifdef CONFIG_ASF_SEC3x
+#include <talitos.h>
+#endif
+
+#ifdef CONFIG_ASF_SEC4x
 #include "ipseccaam.h"
+#endif
 
 #define FALSE 0
 #define TRUE 1
@@ -30,68 +35,67 @@
 #define SECFP_HM_BUFFER TRUE
 
 /* DF related bits */
-#define SECFP_DF_COPY   0
-#define SECFP_DF_CLEAR  1
-#define SECFP_DF_SET    2
+#define SECFP_DF_COPY	0
+#define SECFP_DF_CLEAR	1
+#define SECFP_DF_SET	2
 
 /* Protocol related values */
-#define SECFP_PROTO_ESP 50
-#define SECFP_PROTO_AH 51
-#define SECFP_PROTO_IP 4
-#define SECFP_PROTO_IPV6 41
+#define SECFP_PROTO_ESP		50
+#define SECFP_PROTO_AH		51
+#define SECFP_PROTO_IP		4
+#define SECFP_PROTO_IPV6	41
 
 /* Header length validation information */
-#define SECFP_ESP_HDR_LEN 8
-#define SECFP_IP_HDR_LEN 20
-#define SECFP_AH_MAX_HDR_LEN 16
-#define SECFP_ESP_TRAILER_LEN  2
-#define SECFP_ICV_LEN 12
+#define SECFP_ESP_HDR_LEN	8
+#define SECFP_IP_HDR_LEN	20
+#define SECFP_AH_MAX_HDR_LEN	16
+#define SECFP_ESP_TRAILER_LEN	2
+#define SECFP_ICV_LEN		12
 
 /* Capacity information */
-#define SECFP_MAX_OB_SAS 600
-#define SECFP_MAX_SPI_ENTRIES 64
-#define SECFP_MAX_DSCP_SA 8
-#define SECFP_MAX_SPD_CONTAINERS   300
-#define SECFP_MAX_NUM_TUNNEL_IFACES		64
+#define SECFP_MAX_OB_SAS		600
+#define SECFP_MAX_SPI_ENTRIES		64
+#define SECFP_MAX_DSCP_SA		8
+#define SECFP_MAX_SPD_CONTAINERS	300
+#define SECFP_MAX_NUM_TUNNEL_IFACES	64
 
 /* Options to set up descriptors */
-#define SECFP_AUTH     1
-#define SECFP_CIPHER   2
-#define SECFP_BOTH     3
-#define SECFP_AESCTR_BOTH  4
-#define SECFP_NONE	5
+#define SECFP_AUTH		1
+#define SECFP_CIPHER		2
+#define SECFP_BOTH		3
+#define SECFP_AESCTR_BOTH	4
+#define SECFP_NONE		5
 
 
 /* Different algorithm macros */
-#define SECFP_HMAC_MD5    1 /* For HmachHash calculation  */
-#define SECFP_HMAC_SHA1   2
-#define SECFP_HMAC_AES_XCBC_MAC 3
-#define SECFP_HMAC_NULL 4 /* No Authentication */
-#define SECFP_DES  2   /* generic DES transform using DES-SBC */
-#define SECFP_3DES 3   /* generic triple-DES transform    */
-#define SECFP_ESP_NULL	   11
-#define SECFP_AES 12
-#define SECFP_AESCTR 13
-#define DES_CBC_BLOCK_SIZE 8
-#define TDES_CBC_BLOCK_SIZE    8
-#define AES_CBC_BLOCK_SIZE 16
-#define AES_CTR_BLOCK_SIZE 8
-#define DES_IV_LEN     8
-#define TDES_IV_LEN    8
-#define AES_CBC_IV_LEN 16
-#define AES_CTR_IV_LEN  8
+#define SECFP_HMAC_MD5		1 /* For HmachHash calculation	*/
+#define SECFP_HMAC_SHA1		2
+#define SECFP_HMAC_AES_XCBC_MAC	3
+#define SECFP_HMAC_NULL		4 /* No Authentication */
+#define SECFP_DES		2 /* generic DES transform using DES-SBC */
+#define SECFP_3DES		3 /* generic triple-DES transform	*/
+#define SECFP_ESP_NULL		11
+#define SECFP_AES		12
+#define SECFP_AESCTR		13
+#define DES_CBC_BLOCK_SIZE	8
+#define TDES_CBC_BLOCK_SIZE	8
+#define AES_CBC_BLOCK_SIZE	16
+#define AES_CTR_BLOCK_SIZE	8
+#define DES_IV_LEN		8
+#define TDES_IV_LEN		8
+#define AES_CBC_IV_LEN		16
+#define AES_CTR_IV_LEN		8
 
 /* Sequence number related */
-#define SECFP_APPEND_BUF_LEN_FIELD  4
-#define SECFP_HO_SEQNUM_LEN 4
-#define SECFP_NOUNCE_IV_LEN 16
+#define SECFP_APPEND_BUF_LEN_FIELD	4
+#define SECFP_HO_SEQNUM_LEN		4
+#define SECFP_NOUNCE_IV_LEN		16
 
 /* Used for AES_CTR */
-#define SECFP_COUNTER_BLK_LEN 16
-
+#define SECFP_COUNTER_BLK_LEN		16
 
 /* Number of DHCP based SAs */
-#define SECFP_MAX_TOS_INDICES 8
+#define SECFP_MAX_TOS_INDICES		8
 
 /* Information for preparing outer IP header */
 #define SECFP_IP_TTL			120
@@ -99,37 +103,37 @@
 
 /* skb Cb indices where various information is kept for post SEC operation */
 /* Common for outbound and inbound */
-#define SECFP_SKB_SG_DMA_INDEX 0
-#define SECFP_SKB_DATA_DMA_INDEX 4
-#define SECFP_ACTION_INDEX	8
-#define SECFP_REF_INDEX 45
+#define SECFP_SKB_SG_DMA_INDEX 		0
+#define SECFP_SKB_DATA_DMA_INDEX 	4
+#define SECFP_ACTION_INDEX		8
+#define SECFP_REF_INDEX 		45
 #define SECFP_UDP_SOURCE_PORT		46
 
 /* Inbound */
-#define SECFP_LOOKUP_SA_INDEX	9
+#define SECFP_LOOKUP_SA_INDEX		9
 #define SECFP_SA_OPTION_INDEX		10
-#define SECFP_SPI_INDEX	12
-#define SECFP_IPHDR_INDEX	16
-#define SECFP_HASH_VALUE_INDEX 20
-#define SECFP_SEQNUM_INDEX	24
+#define SECFP_SPI_INDEX			12
+#define SECFP_IPHDR_INDEX		16
+#define SECFP_HASH_VALUE_INDEX		20
+#define SECFP_SEQNUM_INDEX		24
 #define SECFP_SABITMAP_DIFF_INDEX	28
-#define SECFP_SABITMAP_INFO_INDEX		32
-#define SECFP_TOS_INDEX 33
-#define SECFP_UPDATE_TOS_INDEX	34
-#define SECFP_SABITMAP_COEF_INDEX		35
+#define SECFP_SABITMAP_INFO_INDEX	32
+#define SECFP_TOS_INDEX 		33
+#define SECFP_UPDATE_TOS_INDEX		34
+#define SECFP_SABITMAP_COEF_INDEX	35
 #define SECFP_SABITMAP_REMAIN_INDEX	36
-#define SECFP_VSG_ID_INDEX	40
+#define SECFP_VSG_ID_INDEX		40
 
 
 /* For Outbound skb indices */
-#define SECFP_OUTB_FRAG_REQD   9
+#define SECFP_OUTB_FRAG_REQD		9
 #define SECFP_SPD_CI_INDEX		12
-#define SECFP_SPD_CI_MAGIC_INDEX 16
-#define SECFP_SAD_SAI_INDEX	20
-#define SECFP_SAD_SAI_MAGIC_INDEX 24
-#define SECFP_IV_DATA_INDEX	28
-#define SECFP_OUTB_PATH_MTU	32
-#define SECFP_OUTB_L2_OVERHEAD 36
+#define SECFP_SPD_CI_MAGIC_INDEX	16
+#define SECFP_SAD_SAI_INDEX		20
+#define SECFP_SAD_SAI_MAGIC_INDEX	24
+#define SECFP_IV_DATA_INDEX		28
+#define SECFP_OUTB_PATH_MTU		32
+#define SECFP_OUTB_L2_OVERHEAD		36
 
 
 #define SECFP_NUM_IV_DATA_GET_AT_ONE_TRY	1
@@ -140,7 +144,7 @@
 
 #define SECFP_PRESUMED_INTERFACE_MTU 1500
 #define SECFP_IN_GATHER_NO_SCATTER	1
-#define SECFP_IN_GATHER_SCATTER	0
+#define SECFP_IN_GATHER_SCATTER		0
 
 /* Bit position 1 */
 /*
@@ -154,7 +158,7 @@
 
 /* Bit position 2 */
 #define SECFP_NO_SCATTER_GATHER 0
-#define SECFP_SCATTER_GATHER  2
+#define SECFP_SCATTER_GATHER	2
 
 /* Assumes skb->data points to beginning of IP header */
 /* assumes ESP or AH only */
@@ -162,12 +166,12 @@
 #define SECFP_EXTRACT_PKTINFO(skb, iph, iphlen, spi, seqnum)	\
 {\
 	if (iph->protocol == SECFP_PROTO_ESP) {\
-		spi = *(unsigned long int *)  &(skb->data[iphlen]); \
-		seqnum = *(unsigned long int *)  &(skb->data[iphlen+4]); \
+		spi = *(unsigned long int *)	&(skb->data[iphlen]); \
+		seqnum = *(unsigned long int *)	&(skb->data[iphlen+4]); \
 	} \
 	else {\
-		spi = *(unsigned long int *)  &(skb->data[iphlen+4]); \
-		seqnum = *(unsigned long int *)  &(skb->data[iphlen+8]); \
+		spi = *(unsigned long int *)	&(skb->data[iphlen+4]); \
+		seqnum = *(unsigned long int *)	&(skb->data[iphlen+8]); \
 	} \
 }
 #define SECFP_NUM_IV_ENTRIES 8
@@ -238,15 +242,15 @@ extern dma_addr_t talitos_dma_unmap_single(void *data,
 
 #define SECFP_MAX_32BIT_VALUE	0xffffffff /* 2^32-1 */
 
-#define IGW_SAD_SET_BIT_IN_WINDOW(pSA , ulNunOfBits, ucSize , ucCnt , ucCo_efficient, ucRemainder) \
+#define IGW_SAD_SET_BIT_IN_WINDOW(pSA, ulNunOfBits, ucSize, ucCnt, ucCo_efficient, ucRemainder) \
 {\
-  ucSize  = pSA->SAParams.AntiReplayWin >> 5;  \
+	ucSize	= pSA->SAParams.AntiReplayWin >> 5;	\
 	if (ulNunOfBits >= pSA->SAParams.AntiReplayWin) { \
 		for (ucCnt = 0; ucCnt < ucSize ; ucCnt++) \
 			pSA->pWinBitMap[ucCnt] = 0; \
-	pSA->pWinBitMap[ucSize-1]  |= 1; \
+	pSA->pWinBitMap[ucSize-1]	|= 1; \
 	} else { \
-		ucCo_efficient  = ulNunOfBits >> 5; \
+		ucCo_efficient	= ulNunOfBits >> 5; \
 		if (ucCo_efficient) {\
 			for (ucCnt = 0; (ucCnt + ucCo_efficient) < ucSize;\
 					ucCnt++) \
@@ -254,17 +258,17 @@ extern dma_addr_t talitos_dma_unmap_single(void *data,
 				pSA->pWinBitMap[ucCnt + ucCo_efficient]; \
 			for (ucCnt = 0; ucCnt < ucCo_efficient ; ucCnt++) \
 				pSA->pWinBitMap[(ucSize-1) - ucCnt] = 0; \
-    } \
-    ucRemainder  = ulNunOfBits & 31; \
-    if (ucRemainder) {\
-	for (ucCnt = 0; ucCnt < (ucSize - ucCo_efficient); ucCnt++) {\
-	  pSA->pWinBitMap[ucCnt] <<= ucRemainder; \
-	  if ((ucCnt+1) < (ucSize - ucCo_efficient)) \
-	    pSA->pWinBitMap[ucCnt] |= (pSA->pWinBitMap[ucCnt+1] >> (32-ucRemainder)); \
 	} \
-    } \
-    pSA->pWinBitMap[ucSize-1] |= 1; \
-  } \
+	ucRemainder	= ulNunOfBits & 31; \
+	if (ucRemainder) {\
+	for (ucCnt = 0; ucCnt < (ucSize - ucCo_efficient); ucCnt++) {\
+		pSA->pWinBitMap[ucCnt] <<= ucRemainder; \
+		if ((ucCnt+1) < (ucSize - ucCo_efficient)) \
+		pSA->pWinBitMap[ucCnt] |= (pSA->pWinBitMap[ucCnt+1] >> (32-ucRemainder)); \
+	} \
+	} \
+	pSA->pWinBitMap[ucSize-1] |= 1; \
+	} \
 }
 
 
@@ -317,7 +321,7 @@ typedef struct SAParams_s {
 			} iphv6;
 		} addr;
 	} tunnelInfo;
-	unsigned int  bRedSideFragment:1,
+	unsigned int	bRedSideFragment:1,
 	bVerifyInPktWithSASelectors:1,
 	bDoPeerGWIPAddressChangeAdaptation:1,
 	bDoUDPEncapsulationForNATTraversal:1,
@@ -329,7 +333,7 @@ typedef struct SAParams_s {
 	bCopyDscp:1,
 	handleDf:2;
 
-	unsigned char  ucProtocol;
+	unsigned char	ucProtocol;
 	unsigned char ucAuthAlgo;
 	unsigned char ucCipherAlgo;
 	unsigned int AuthKeyLen;
@@ -338,9 +342,10 @@ typedef struct SAParams_s {
 	unsigned short int ulBlockSize;
 	unsigned char ucAuthKey[SECFP_MAX_AUTH_KEY_SIZE];
 	unsigned char ucEncKey[SECFP_MAX_CIPHER_KEY_SIZE];
-	unsigned  int AntiReplayWin;
+	unsigned	int AntiReplayWin;
 	unsigned char ucDscp;
-	unsigned char ucNounceIVCounter[16]; /* Nonce:4 bytes, followed by 8 bytes IV + 4 bytes counter */
+	unsigned char ucNounceIVCounter[16];
+	/* Nonce:4 bytes, followed by 8 bytes IV + 4 bytes counter */
 	ASF_IPSec_Nat_Info_t IPsecNatInfo;
 	unsigned int ulCId;
 } SAParams_t;
@@ -367,12 +372,12 @@ typedef struct inSA_s {
 	struct caam_ctx ctx;
 #else
 	__be32 desc_hdr_template;
-	__be32    hdr_Auth_template_0; /* when proto is AH and
-					  only Auth needs to be performed*/
-	__be32    hdr_Auth_template_1; /* when proto is ESP and auth
-					  algorithm is set */
+	__be32	hdr_Auth_template_0; /* when proto is AH and
+					only Auth needs to be performed*/
+	__be32	hdr_Auth_template_1; /* when proto is ESP and auth
+					algorithm is set */
 	dma_addr_t	AuthKeyDmaAddr;
-	dma_addr_t    EncKeyDmaAddr;
+	dma_addr_t	EncKeyDmaAddr;
 #endif
 	unsigned int validIpPktLen; /* Sum of ESP or AH header + IP header
 					 IF ESP
@@ -382,14 +387,14 @@ typedef struct inSA_s {
 					+ ICVLen + Padding len
 					 */
 	unsigned int ulReqTailRoom; /* Required tail room goes like this -
-					   4 bytes for appending buffer length +
-					  if Extended Sequence number +4
-					  for high order sequence number
+					4 bytes for appending buffer length +
+					if Extended Sequence number +4
+					for high order sequence number
 					 if AH, ICV length */
 	unsigned int ulPkts[NR_CPUS];
 	unsigned int ulBytes[NR_CPUS];
 	unsigned int ulTunnelId;
-	AsfSPDPolicyPPStats_t    PolicyPPStats[NR_CPUS];
+	AsfSPDPolicyPPStats_t	PolicyPPStats[NR_CPUS];
 	AsfSPDPolPPStats_t	 PPStats;
 	/* For Gateway Adaptation purposes */
 	unsigned int ulSPDOutContainerIndex;
@@ -439,7 +444,7 @@ typedef struct OutSelList_s {
 	SASel_t srcSel;
 	SASel_t destSel;
 	unsigned int ucSelFlags;
-	char    bHeap;
+	char	bHeap;
 } OutSelList_t;
 
 typedef struct InSelList_s {
@@ -464,7 +469,7 @@ typedef struct SAInfo_s {
 typedef struct SPDOutSALinkNode_s {
 	struct rcu_head rcu ____cacheline_aligned_in_smp;
 	unsigned int ulSAIndex;
-	char  bHeap;
+	char	bHeap;
 	struct SPDOutSALinkNode_s *pNext;
 	struct SPDOutSALinkNode_s *pPrev;
 } SPDOutSALinkNode_t;
@@ -486,7 +491,7 @@ typedef struct SPDOutContainer_s {
 typedef struct SPDInSelTblIndexLinkNode_s {
 	struct rcu_head rcu ____cacheline_aligned_in_smp;
 	unsigned int ulIndex;
-	char  bHeap;
+	char	bHeap;
 	struct SPDInSelTblIndexLinkNode_s *pNext;
 	struct SPDInSelTblIndexLinkNode_s *pPrev;
 } SPDInSelTblIndexLinkNode_t;
@@ -504,9 +509,9 @@ typedef struct SPDInContainer_s {
 	struct rcu_head rcu ____cacheline_aligned_in_smp;
 	spinlock_t spinlock;
 	SPDInParams_t SPDParams;
-	AsfSPDPolPPStats_t		   PPStats;
+	AsfSPDPolPPStats_t			PPStats;
 	/* Not sure if this is link is needed, if not can be
-	   removed in productization */
+		removed in productization */
 	SPDInSelTblIndexLinkNode_t *pSelIndex;
 	SPDInSPIValLinkNode_t *pSPIValList;
 	char bHeap;
@@ -528,23 +533,24 @@ typedef struct secTunnelIface_s {
 	unsigned int		ulTunnelMagicNumber;
 } SecTunnelIface_t;
 
+
 typedef struct outSA_s {
 	struct rcu_head rcu;
 	SAParams_t SAParams;
 	SPDOutParams_t SPDParams;
 	int chan;
-	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS]; /* Hardware option AES_CBC or BOTH or only encryption etc. */
-
+	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
+		/* Hardware option AES_CBC or BOTH or only encryption etc. */
 #ifdef CONFIG_ASF_SEC4x
 	struct caam_ctx ctx;
 #else
 	__be32 desc_hdr_template;
-	__be32    hdr_Auth_template_0; /* when proto is AH and
-					  only Auth needs to be performed*/
-	__be32    hdr_Auth_template_1; /* when proto is ESP and auth
-					  algorithm is set */
+	__be32	hdr_Auth_template_0; /* when proto is AH and
+					only Auth needs to be performed*/
+	__be32	hdr_Auth_template_1; /* when proto is ESP and auth
+					algorithm is set */
 	dma_addr_t	AuthKeyDmaAddr;
-	dma_addr_t    EncKeyDmaAddr;
+	dma_addr_t	EncKeyDmaAddr;
 #endif
 	struct {
 		bool bIpVersion; /* 0-IPv4 or 1-IPv6 */
@@ -554,9 +560,10 @@ typedef struct outSA_s {
 		} hdrdata;
 	} ipHdrInfo;
 	void (*prepareOutPktFnPtr)(struct sk_buff *, struct outSA_s *,
-				   SPDOutContainer_t *, unsigned int **) ;
+				SPDOutContainer_t *, unsigned int **) ;
 	void (*finishOutPktFnPtr)(struct sk_buff *,
-				  struct outSA_s *, SPDOutContainer_t *, unsigned int *, unsigned int, unsigned int);
+				struct outSA_s *, SPDOutContainer_t *,
+				unsigned int *, unsigned int, unsigned int);
 	atomic_t ulLoSeqNum;
 	atomic_t ulHiSeqNum;
 	unsigned int ulIvSizeInWords;
@@ -566,14 +573,14 @@ typedef struct outSA_s {
 	unsigned int ulPathMTU;
 	unsigned int ulPkts[NR_CPUS];
 	unsigned int ulBytes[NR_CPUS];
-	AsfSPDPolicyPPStats_t    PolicyPPStats[NR_CPUS];
+	AsfSPDPolicyPPStats_t	PolicyPPStats[NR_CPUS];
 	AsfSPDPolPPStats_t	 PPStats;
 	unsigned int macAddr[6];
 	unsigned int ulTunnelId;
 	struct net_device *odev;
 	OutSelList_t *pSelList;
 	bool bl2blob;
-	asfTmr_t		    *pL2blobTmr;
+	asfTmr_t			*pL2blobTmr;
 	bool bIVDataPresent;
 	char bHeap;
 	unsigned short bVLAN:1, bPPPoE:1;
@@ -663,13 +670,17 @@ extern void secfp_inCompleteWithFrags(struct device *dev,
 		void *desc, int err, void *context);
 #endif
 
-extern inline void secfp_inv6Complete(struct talitos_desc *desc, struct sk_buff *context, int err);
-extern int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev);
-extern int try_fastroute_fwnat(struct sk_buff *skb, struct net_device *dev, int length);
-extern __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev);
+extern inline void secfp_inv6Complete(struct talitos_desc *desc,
+				struct sk_buff *context, int err);
+extern int gfar_start_xmit(struct sk_buff *skb,
+				struct net_device *dev);
+extern int try_fastroute_fwnat(struct sk_buff *skb,
+				struct net_device *dev, int length);
+extern __be16 eth_type_trans(struct sk_buff *skb,
+				struct net_device *dev);
 extern int secfp_try_fastPathInv4(struct sk_buff *skb1,
-			   ASF_boolean_t bCheckLen, unsigned int ulVSGId,
-			   ASF_uint32_t  ulCommonInterfaceId);
+				ASF_boolean_t bCheckLen, unsigned int ulVSGId,
+				ASF_uint32_t	ulCommonInterfaceId);
 
 int secfp_init(void);
 void secfp_deInit(void);
@@ -677,47 +688,54 @@ int secfp_register_proc(void);
 int secfp_unregister_proc(void);
 
 inSA_t *ASF_findInv4SA(unsigned int ulVSGId,
-			 unsigned char ucProto,
-			 unsigned long int ulSPI, unsigned int daddr, unsigned int *pHashVal);
+			unsigned char ucProto,
+			unsigned long int ulSPI,
+			unsigned int daddr,
+			unsigned int *pHashVal);
 
-unsigned int secfp_SPDOutContainerCreate(unsigned int    ulVSGId,
-					 unsigned int    ulTunnelId,
-					 unsigned int    ulContainerIndex,
-					 unsigned int    ulMagicNum,
-					 SPDOutParams_t *pSPDParams);
-unsigned int secfp_SPDInContainerCreate(unsigned int    ulVSGId,
-					unsigned int    ulTunnelId,
-					unsigned int    ulContainerIndex,
-					unsigned int    ulMagicNum,
-					SPDInParams_t  *pSPDParams);
+unsigned int secfp_SPDOutContainerCreate(
+				unsigned int	ulVSGId,
+				unsigned int	ulTunnelId,
+				unsigned int	ulContainerIndex,
+				unsigned int	ulMagicNum,
+				SPDOutParams_t *pSPDParams);
 
-unsigned int secfp_SPDOutContainerDelete(unsigned int ulVSGId,
-					 unsigned int ulTunnelId,
-					 unsigned int ulContainerIndex,
-					 unsigned int ulMagicNumber);
+unsigned int secfp_SPDInContainerCreate(
+				unsigned int	ulVSGId,
+				unsigned int	ulTunnelId,
+				unsigned int	ulContainerIndex,
+				unsigned int	ulMagicNum,
+				SPDInParams_t	*pSPDParams);
 
-unsigned int secfp_SPDInContainerDelete(unsigned int ulVSGId,
-					unsigned int ulTunnelId,
-					unsigned int ulContainerIndex,
-					unsigned int ulMagicNumber);
+unsigned int secfp_SPDOutContainerDelete(
+				unsigned int ulVSGId,
+				unsigned int ulTunnelId,
+				unsigned int ulContainerIndex,
+				unsigned int ulMagicNumber);
+
+unsigned int secfp_SPDInContainerDelete(
+				unsigned int ulVSGId,
+				unsigned int ulTunnelId,
+				unsigned int ulContainerIndex,
+				unsigned int ulMagicNumber);
 
 unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
-				 unsigned int	 ulSPDMagicNumber,
-				 unsigned int	 daddr,
-				 unsigned char	ucProtocol,
-				 unsigned int	 ulSPI,
-				 unsigned short	usDscpStart,
-				 unsigned short	usDscpEnd);
+				unsigned int	 ulSPDMagicNumber,
+				unsigned int	 daddr,
+				unsigned char	ucProtocol,
+				unsigned int	 ulSPI,
+				unsigned short	usDscpStart,
+				unsigned short	usDscpEnd);
 
-unsigned int secfp_DeleteInSA(unsigned int  ulVSGId,
-				unsigned int  ulContainerIndex,
-				unsigned int  ulMagicNumber,
-				unsigned int  daddr,
-				unsigned char  ucProtocol,
-				unsigned int  ulSPI);
+unsigned int secfp_DeleteInSA(unsigned int	ulVSGId,
+				unsigned int	ulContainerIndex,
+				unsigned int	ulMagicNumber,
+				unsigned int	daddr,
+				unsigned char	ucProtocol,
+				unsigned int	ulSPI);
 
 unsigned int secfp_ModifyOutSA(unsigned int long ulVSGId,
-				 ASFIPSecRuntimeModOutSAArgs_t *pModSA);
+				ASFIPSecRuntimeModOutSAArgs_t *pModSA);
 
 unsigned int secfp_ModifyInSA(unsigned int long ulVSGId,
 				ASFIPSecRuntimeModInSAArgs_t *pModSA);
@@ -726,28 +744,28 @@ unsigned int secfp_SetDPD(unsigned int long ulVSGId,
 				ASFIPSecRuntimeSetDPDArgs_t *pSetDPD);
 
 unsigned int secfp_createOutSA(
-				unsigned int  ulVSGId,
-				unsigned int  ulTunnelId,
-				unsigned int  ulSPDContainerIndex,
-				unsigned int  ulMagicNumber,
+				unsigned int	ulVSGId,
+				unsigned int	ulTunnelId,
+				unsigned int	ulSPDContainerIndex,
+				unsigned int	ulMagicNumber,
 				SASel_t	 *pSrcSel,
 				SASel_t	 *pDstSel,
-				unsigned char  ucSelMask,
-				SAParams_t    *SAParams,
-				unsigned  short usDscpStart,
-				unsigned  short usDscpEnd,
-				unsigned int   ulMtu);
+				unsigned char	ucSelMask,
+				SAParams_t	*SAParams,
+				unsigned	short usDscpStart,
+				unsigned	short usDscpEnd,
+				unsigned int	ulMtu);
 
 unsigned int secfp_CreateInSA(
-			     unsigned int ulVSGId,
-			     unsigned int ulTunnelId,
-			     unsigned int ulContainerIndex,
-			     unsigned int ulMagicNumber,
-			     SASel_t     *pSrcSel,
-			     SASel_t     *pDstSel,
-			     unsigned int ucSelFlags,
-			     SAParams_t *pSAParams,
-			     unsigned int ulSPDOutContainerIndex,
-			     unsigned int ulOutSPI);
+				unsigned int ulVSGId,
+				unsigned int ulTunnelId,
+				unsigned int ulContainerIndex,
+				unsigned int ulMagicNumber,
+				SASel_t	*pSrcSel,
+				SASel_t	*pDstSel,
+				unsigned int ucSelFlags,
+				SAParams_t *pSAParams,
+				unsigned int ulSPDOutContainerIndex,
+				unsigned int ulOutSPI);
 
 #endif

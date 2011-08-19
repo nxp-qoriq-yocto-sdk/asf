@@ -5101,171 +5101,70 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 	int len;
 	struct talitos_desc *desc = (struct talitos_desc *)descriptor;
 
-		if (!ulIndex) {	/* first iteration */
-			addr = SECFP_DMA_MAP_SINGLE(skb->data,
-					(skb->len + 12 +
-					 SECFP_APPEND_BUF_LEN_FIELD +
-					SECFP_NOUNCE_IV_LEN), DMA_TO_DEVICE);
-			ptr1 = (unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
-			*ptr1 = addr;
-			ASFIPSEC_DEBUG("ulIndex = %d: addr =  0x%x",
-				ulIndex, addr);
-		} else {
-			/* Take information from the cb field */
-			addr = *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
-			ASFIPSEC_DEBUG("ulIndex= %d: addr =  0x%x",
-				ulIndex, addr);
-		}
-		desc->hdr_lo = 0;
-		switch (pSA->option[ulIndex]) {
-		case SECFP_AUTH:
-			{
-				desc->hdr = pSA->hdr_Auth_template_0;
+	if (!ulIndex) {	/* first iteration */
+		addr = SECFP_DMA_MAP_SINGLE(skb->data,
+				(skb->len + 12 +
+				 SECFP_APPEND_BUF_LEN_FIELD +
+				SECFP_NOUNCE_IV_LEN), DMA_TO_DEVICE);
+		ptr1 = (unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
+		*ptr1 = addr;
+		ASFIPSEC_DEBUG("ulIndex = %d: addr =  0x%x",
+			ulIndex, addr);
+	} else {
+		/* Take information from the cb field */
+		addr = *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
+		ASFIPSEC_DEBUG("ulIndex= %d: addr =  0x%x",
+			ulIndex, addr);
+	}
+	desc->hdr_lo = 0;
+	switch (pSA->option[ulIndex]) {
+	case SECFP_AUTH:
+		{
+			desc->hdr = pSA->hdr_Auth_template_0;
 
-				ASFIPSEC_DEBUG("skb->len = %d, addr = 0x%x, "\
-					"SECFP_ICV_LEN =%d",
-					skb->len, addr, SECFP_ICV_LEN);
+			ASFIPSEC_DEBUG("skb->len = %d, addr = 0x%x, "\
+				"SECFP_ICV_LEN =%d",
+				skb->len, addr, SECFP_ICV_LEN);
 
-				SECFP_SET_DESC_PTR(desc->ptr[0], 0, 0, 0)
-				SECFP_SET_DESC_PTR(desc->ptr[1], 0, 0, 0)
-				SECFP_SET_DESC_PTR(desc->ptr[2],
-						pSA->SAParams.AuthKeyLen,
-					pSA->AuthKeyDmaAddr, 0)
-				if (pSA->SAParams.bUseExtendedSequenceNumber) {
-					len = skb->len + SECFP_APPEND_BUF_LEN_FIELD;
-				} else {
-					len = skb->len;
-				}
-				/* Setting up data */
-				SECFP_SET_DESC_PTR(desc->ptr[3], len - 12, addr, 0)
-
-				/* Setting up ICV Check : Only when AES_XCBC_MAC is not programmed */
-				if (pSA->SAParams.ucAuthAlgo != SECFP_HMAC_AES_XCBC_MAC) {
-					SECFP_SET_DESC_PTR(desc->ptr[4], SECFP_ICV_LEN, addr + len - SECFP_ICV_LEN, 0)
-					SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
-				} else {
-					SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0)
-					SECFP_SET_DESC_PTR(desc->ptr[6], SECFP_ICV_LEN, addr + len, 0);
-#ifdef ASF_IPSEC_DEBUG
-				{
-					int ii;
-					for (ii = 0; ii < 3; ii++)
-						ASFIPSEC_DEBUG("Offset ii=%d  0x%8x",  ii, *(unsigned int *)&(skb->data[skb->len + ii*4]));
-				}
-#endif
-				}
-				SECFP_SET_DESC_PTR(desc->ptr[5], 0, 0, 0);
-				print_desc(desc);
-				break;
+			SECFP_SET_DESC_PTR(desc->ptr[0], 0, 0, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[1], 0, 0, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[2],
+					pSA->SAParams.AuthKeyLen,
+				pSA->AuthKeyDmaAddr, 0)
+			if (pSA->SAParams.bUseExtendedSequenceNumber) {
+				len = skb->len + SECFP_APPEND_BUF_LEN_FIELD;
+			} else {
+				len = skb->len;
 			}
-		case SECFP_CIPHER:
-			{
-				desc->hdr = pSA->desc_hdr_template;
+			/* Setting up data */
+			SECFP_SET_DESC_PTR(desc->ptr[3], len - 12, addr, 0)
 
-				if ((pSA->desc_hdr_template &
-					(DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU))
-					 == (DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU)) {
-					/* Set up the AES Context field - Need to validate this with soft crypto */
-
-					src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
-					pNounceIVCounter = skb->data + skb->len + SECFP_APPEND_BUF_LEN_FIELD + 12;
-					tgt = (unsigned int *)pNounceIVCounter;
-
-					/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte
-						is set to 128; not sure why though? */
-					*(tgt) = *src;
-					*(tgt+3) = src[3];
-					src = (unsigned int *)(skb->data + SECFP_ESP_HDR_LEN);
-					*(tgt+1) = src[0];
-					*(tgt+2) = src[1];
-
-					SECFP_SET_DESC_PTR(desc->ptr[1], SECFP_COUNTER_BLK_LEN,
-							   addr + skb->len + SECFP_APPEND_BUF_LEN_FIELD + 12, 0)
-				} else {
-					SECFP_SET_DESC_PTR(desc->ptr[1], pSA->SAParams.ulIvSize, addr + SECFP_ESP_HDR_LEN, 0)
-				}
-
-				SECFP_SET_DESC_PTR(desc->ptr[2],
-						pSA->SAParams.EncKeyLen,
-						pSA->EncKeyDmaAddr, 0)
-
-				if ((ulIndex) && (skb->cb[SECFP_REF_INDEX] == 3)) {
-					/* We have queued the packet and c/b has not yet triggered */
-					/* if 2nd iteration is encryption, then we need to reduce the length by ICV Length */
-					SECFP_SET_DESC_PTR(desc->ptr[3],
-							   skb->len - pSA->ulSecHdrLen - 12,
-							   addr + pSA->ulSecHdrLen,
-							   0)
-
-					SECFP_SET_DESC_PTR(desc->ptr[4],
-							   skb->len - pSA->ulSecHdrLen - 12,
-							   addr + pSA->ulSecHdrLen,
-							   0)
-				} else {
-					/* In the 2 descriptor case, callback has triggered, so we need not to
-					   reduce by the ICV length
-					*/
-					SECFP_SET_DESC_PTR(desc->ptr[3],
-							   skb->len - pSA->ulSecHdrLen,
-							   addr + pSA->ulSecHdrLen,
-							   0);
-					SECFP_SET_DESC_PTR(desc->ptr[4],
-							   skb->len - pSA->ulSecHdrLen,
-							   addr + pSA->ulSecHdrLen,
-							   0);
-				}
-				/* Set the descriptors 5 and 6 and 6 to 0 */
-				SECFP_SET_DESC_PTR(desc->ptr[5], 0, 0, 0)
-				SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0)
-				print_desc(desc);
-				break;
-			}
-		case SECFP_BOTH:
-			{
-				desc->hdr = pSA->desc_hdr_template;
-
-				SECFP_SET_DESC_PTR(desc->ptr[0],
-						pSA->SAParams.AuthKeyLen,
-						pSA->AuthKeyDmaAddr, 0)
-				SECFP_SET_DESC_PTR(desc->ptr[1], pSA->ulSecHdrLen, addr, 0)
-				SECFP_SET_DESC_PTR(desc->ptr[2], pSA->SAParams.ulIvSize, addr+SECFP_ESP_HDR_LEN, 0)
-				SECFP_SET_DESC_PTR(desc->ptr[3],
-						pSA->SAParams.EncKeyLen,
-						pSA->EncKeyDmaAddr, 0)
-
-				SECFP_SET_DESC_PTR(desc->ptr[4],
-						   skb->len - pSA->ulSecHdrLen - 12,
-						   addr + pSA->ulSecHdrLen,
-						   12);
-
-				SECFP_SET_DESC_PTR(desc->ptr[5],
-						   skb->len - pSA->ulSecHdrLen - 12,
-						   addr + pSA->ulSecHdrLen,
-						   0);
-
+			/* Setting up ICV Check : Only when AES_XCBC_MAC is not programmed */
+			if (pSA->SAParams.ucAuthAlgo != SECFP_HMAC_AES_XCBC_MAC) {
+				SECFP_SET_DESC_PTR(desc->ptr[4], SECFP_ICV_LEN, addr + len - SECFP_ICV_LEN, 0)
 				SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
-			}
-			break;
-		case SECFP_AESCTR_BOTH:
+			} else {
+				SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0)
+				SECFP_SET_DESC_PTR(desc->ptr[6], SECFP_ICV_LEN, addr + len, 0);
+#ifdef ASF_IPSEC_DEBUG
 			{
-				desc->hdr = pSA->desc_hdr_template |
-						pSA->hdr_Auth_template_1 ;
+				int ii;
+				for (ii = 0; ii < 3; ii++)
+					ASFIPSEC_DEBUG("Offset ii=%d  0x%8x",  ii, *(unsigned int *)&(skb->data[skb->len + ii*4]));
+			}
+#endif
+			}
+			SECFP_SET_DESC_PTR(desc->ptr[5], 0, 0, 0);
+			print_desc(desc);
+			break;
+		}
+	case SECFP_CIPHER:
+		{
+			desc->hdr = pSA->desc_hdr_template;
 
-				SECFP_SET_DESC_PTR(desc->ptr[0],
-						   pSA->SAParams.AuthKeyLen,
-						   pSA->AuthKeyDmaAddr,
-						   0);
-
-				SECFP_SET_DESC_PTR(desc->ptr[1],
-						   pSA->ulSecHdrLen,
-						   addr,
-						   0);
-
-				SECFP_SET_DESC_PTR(desc->ptr[2],
-						   pSA->SAParams.EncKeyLen,
-						   pSA->EncKeyDmaAddr,
-						   0);
-
+			if ((pSA->desc_hdr_template &
+				(DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU))
+				 == (DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU)) {
 				/* Set up the AES Context field - Need to validate this with soft crypto */
 
 				src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
@@ -5275,58 +5174,159 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 				/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte
 					is set to 128; not sure why though? */
 				*(tgt) = *src;
-				*(tgt + 3) = src[3];
+				*(tgt+3) = src[3];
 				src = (unsigned int *)(skb->data + SECFP_ESP_HDR_LEN);
 				*(tgt+1) = src[0];
 				*(tgt+2) = src[1];
 
-				/* Need to verify why we are setting COUNTER_BLK_LEN + 8 */
-				SECFP_SET_DESC_PTR(desc->ptr[3], SECFP_COUNTER_BLK_LEN,
+				SECFP_SET_DESC_PTR(desc->ptr[1], SECFP_COUNTER_BLK_LEN,
 						   addr + skb->len + SECFP_APPEND_BUF_LEN_FIELD + 12, 0)
+			} else {
+				SECFP_SET_DESC_PTR(desc->ptr[1], pSA->SAParams.ulIvSize, addr + SECFP_ESP_HDR_LEN, 0)
+			}
+
+			SECFP_SET_DESC_PTR(desc->ptr[2],
+					pSA->SAParams.EncKeyLen,
+					pSA->EncKeyDmaAddr, 0)
+
+			if ((ulIndex) && (skb->cb[SECFP_REF_INDEX] == 3)) {
+				/* We have queued the packet and c/b has not yet triggered */
+				/* if 2nd iteration is encryption, then we need to reduce the length by ICV Length */
+				SECFP_SET_DESC_PTR(desc->ptr[3],
+						   skb->len - pSA->ulSecHdrLen - 12,
+						   addr + pSA->ulSecHdrLen,
+						   0)
 
 				SECFP_SET_DESC_PTR(desc->ptr[4],
-						   (skb->len - pSA->ulSecHdrLen - 12),
-						   (addr + pSA->ulSecHdrLen),
+						   skb->len - pSA->ulSecHdrLen - 12,
+						   addr + pSA->ulSecHdrLen,
+						   0)
+			} else {
+				/* In the 2 descriptor case, callback has triggered, so we need not to
+				   reduce by the ICV length
+				*/
+				SECFP_SET_DESC_PTR(desc->ptr[3],
+						   skb->len - pSA->ulSecHdrLen,
+						   addr + pSA->ulSecHdrLen,
 						   0);
-
-				SECFP_SET_DESC_PTR(desc->ptr[5],
-						   (skb->len - pSA->ulSecHdrLen - 12),
-						   (addr + pSA->ulSecHdrLen),
-						   0);
-
-				/* Not sure about this
-							talitosDescriptor->bRecvICV = T_TRUE;
-
-
-							memcpy(desc->aRecvICV, (skb->tail - 12), 12);
-				  */
-				/*	Having extra length in the buffer to hold the calculated ICV value */
-
-				/* Looks like in this case, ICV is calculated and supplied always  */
-				SECFP_SET_DESC_PTR(desc->ptr[6],
-						   12,
-						   addr + skb->len,
+				SECFP_SET_DESC_PTR(desc->ptr[4],
+						   skb->len - pSA->ulSecHdrLen,
+						   addr + pSA->ulSecHdrLen,
 						   0);
 			}
-			break;
-		default:
-			ASFIPSEC_DEBUG("SECFP: Not supported");
-			SECFP_UNMAP_SINGLE_DESC((void *)addr,  (skb->len + 12 +
-				SECFP_APPEND_BUF_LEN_FIELD +
-				SECFP_NOUNCE_IV_LEN));
+			/* Set the descriptors 5 and 6 and 6 to 0 */
+			SECFP_SET_DESC_PTR(desc->ptr[5], 0, 0, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0)
+			print_desc(desc);
 			break;
 		}
+	case SECFP_BOTH:
+		{
+			desc->hdr = pSA->desc_hdr_template;
 
-		/* Correcting this: Only for the first time , ICV check, this option needs to be recorded */
-		if (ulIndex == 0)
-			skb->cb[SECFP_SA_OPTION_INDEX] = pSA->option[ulIndex];
+			SECFP_SET_DESC_PTR(desc->ptr[0],
+					pSA->SAParams.AuthKeyLen,
+					pSA->AuthKeyDmaAddr, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[1], pSA->ulSecHdrLen, addr, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[2], pSA->SAParams.ulIvSize, addr+SECFP_ESP_HDR_LEN, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[3],
+					pSA->SAParams.EncKeyLen,
+					pSA->EncKeyDmaAddr, 0)
+
+			SECFP_SET_DESC_PTR(desc->ptr[4],
+					   skb->len - pSA->ulSecHdrLen - 12,
+					   addr + pSA->ulSecHdrLen,
+					   12);
+
+			SECFP_SET_DESC_PTR(desc->ptr[5],
+					   skb->len - pSA->ulSecHdrLen - 12,
+					   addr + pSA->ulSecHdrLen,
+					   0);
+
+			SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
+		}
+		break;
+	case SECFP_AESCTR_BOTH:
+		{
+			desc->hdr = pSA->desc_hdr_template |
+					pSA->hdr_Auth_template_1 ;
+
+			SECFP_SET_DESC_PTR(desc->ptr[0],
+					   pSA->SAParams.AuthKeyLen,
+					   pSA->AuthKeyDmaAddr,
+					   0);
+
+			SECFP_SET_DESC_PTR(desc->ptr[1],
+					   pSA->ulSecHdrLen,
+					   addr,
+					   0);
+
+			SECFP_SET_DESC_PTR(desc->ptr[2],
+					   pSA->SAParams.EncKeyLen,
+					   pSA->EncKeyDmaAddr,
+					   0);
+
+			/* Set up the AES Context field - Need to validate this with soft crypto */
+
+			src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
+			pNounceIVCounter = skb->data + skb->len + SECFP_APPEND_BUF_LEN_FIELD + 12;
+			tgt = (unsigned int *)pNounceIVCounter;
+
+			/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte
+				is set to 128; not sure why though? */
+			*(tgt) = *src;
+			*(tgt + 3) = src[3];
+			src = (unsigned int *)(skb->data + SECFP_ESP_HDR_LEN);
+			*(tgt+1) = src[0];
+			*(tgt+2) = src[1];
+
+			/* Need to verify why we are setting COUNTER_BLK_LEN + 8 */
+			SECFP_SET_DESC_PTR(desc->ptr[3], SECFP_COUNTER_BLK_LEN,
+					   addr + skb->len + SECFP_APPEND_BUF_LEN_FIELD + 12, 0)
+
+			SECFP_SET_DESC_PTR(desc->ptr[4],
+					   (skb->len - pSA->ulSecHdrLen - 12),
+					   (addr + pSA->ulSecHdrLen),
+					   0);
+
+			SECFP_SET_DESC_PTR(desc->ptr[5],
+					   (skb->len - pSA->ulSecHdrLen - 12),
+					   (addr + pSA->ulSecHdrLen),
+					   0);
+
+			/* Not sure about this
+						talitosDescriptor->bRecvICV = T_TRUE;
+
+
+						memcpy(desc->aRecvICV, (skb->tail - 12), 12);
+			  */
+			/*	Having extra length in the buffer to hold the calculated ICV value */
+
+			/* Looks like in this case, ICV is calculated and supplied always  */
+			SECFP_SET_DESC_PTR(desc->ptr[6],
+					   12,
+					   addr + skb->len,
+					   0);
+		}
+		break;
+	default:
+		ASFIPSEC_DEBUG("SECFP: Not supported");
+		SECFP_UNMAP_SINGLE_DESC((void *)addr,  (skb->len + 12 +
+			SECFP_APPEND_BUF_LEN_FIELD +
+			SECFP_NOUNCE_IV_LEN));
+		break;
+	}
+
+	/* Correcting this: Only for the first time , ICV check, this option needs to be recorded */
+	if (ulIndex == 0)
+		skb->cb[SECFP_SA_OPTION_INDEX] = pSA->option[ulIndex];
 
 	return;
 }
 #else
 void secfp_prepareInDescriptor(struct sk_buff *skb,
-					void *pData, void *desc,
-					unsigned int ulIndex)
+			void *pData, void *desc,
+			unsigned int ulIndex)
 {
 
 	dma_addr_t ptr;
@@ -5384,267 +5384,267 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 		{
 			desc->hdr = pSA->hdr_Auth_template_0;
 
-					ASFIPSEC_DEBUG("skb->len = %d, addr = "\
-						"0x%x, SECFP_ICV_LEN =%d",
-						skb->len, addr, SECFP_ICV_LEN);
-					SECFP_SET_DESC_PTR(desc->ptr[0], 0, 0, 0)
-					SECFP_SET_DESC_PTR(desc->ptr[1], 0, 0, 0)
-					SECFP_SET_DESC_PTR(desc->ptr[2],
-						pSA->SAParams.AuthKeyLen,
-						pSA->AuthKeyDmaAddr, 0)
+			ASFIPSEC_DEBUG("skb->len = %d, addr = "\
+				"0x%x, SECFP_ICV_LEN =%d",
+				skb->len, addr, SECFP_ICV_LEN);
+			SECFP_SET_DESC_PTR(desc->ptr[0], 0, 0, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[1], 0, 0, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[2],
+				pSA->SAParams.AuthKeyLen,
+				pSA->AuthKeyDmaAddr, 0)
 
-					if (pSA->SAParams.bUseExtendedSequenceNumber) {
-						len = SECFP_APPEND_BUF_LEN_FIELD;
-					} else {
-						len = 0;
-					}
+			if (pSA->SAParams.bUseExtendedSequenceNumber) {
+				len = SECFP_APPEND_BUF_LEN_FIELD;
+			} else {
+				len = 0;
+			}
 
-					addr = secfp_prepareGatherList(skb, &pTailSkb, 0, (12+len));
-					/* Setting up data */
-					SECFP_SET_DESC_PTR(desc->ptr[3], skb->data_len - 12, addr, DESC_PTR_LNKTBL_JUMP);
+			addr = secfp_prepareGatherList(skb, &pTailSkb, 0, (12+len));
+			/* Setting up data */
+			SECFP_SET_DESC_PTR(desc->ptr[3], skb->data_len - 12, addr, DESC_PTR_LNKTBL_JUMP);
 
 
-					/* Setting up ICV Check : Only when AES_XCBC_MAC is not programmed */
-					if (pSA->SAParams.ucAuthAlgo != SECFP_HMAC_AES_XCBC_MAC) {
-						SECFP_SET_DESC_PTR(desc->ptr[4],
-								   SECFP_ICV_LEN,
-								   (*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])+len - SECFP_ICV_LEN), 0)
+			/* Setting up ICV Check : Only when AES_XCBC_MAC is not programmed */
+			if (pSA->SAParams.ucAuthAlgo != SECFP_HMAC_AES_XCBC_MAC) {
+				SECFP_SET_DESC_PTR(desc->ptr[4],
+						   SECFP_ICV_LEN,
+						   (*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])+len - SECFP_ICV_LEN), 0)
 
-						SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
-					} else {
-						SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0)
+				SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
+			} else {
+				SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0)
 
-						SECFP_SET_DESC_PTR(desc->ptr[6],
-								   SECFP_ICV_LEN,
-								   (*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])+len - SECFP_ICV_LEN), 0)
+				SECFP_SET_DESC_PTR(desc->ptr[6],
+						   SECFP_ICV_LEN,
+						   (*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])+len - SECFP_ICV_LEN), 0)
 
 #ifdef ASF_IPSEC_DEBUG
-						{
-						int ii;
-						for (ii = 0; ii < 3; ii++)
-							ASFIPSEC_DEBUG("Offset ii=%d  0x%8x",
-							  ii, *(unsigned int *)&(skb->data[skb->len + ii*4]));
-						}
+				{
+				int ii;
+				for (ii = 0; ii < 3; ii++)
+					ASFIPSEC_DEBUG("Offset ii=%d  0x%8x",
+					  ii, *(unsigned int *)&(skb->data[skb->len + ii*4]));
+				}
 #endif
-					}
-					SECFP_SET_DESC_PTR(desc->ptr[5], 0, 0, 0);
-					print_desc(desc);
-					break;
-				}
-			case SECFP_CIPHER:
-				{
-					desc->hdr = pSA->desc_hdr_template;
+			}
+			SECFP_SET_DESC_PTR(desc->ptr[5], 0, 0, 0);
+			print_desc(desc);
+			break;
+		}
+		case SECFP_CIPHER:
+		{
+			desc->hdr = pSA->desc_hdr_template;
 
-					addr = secfp_prepareGatherList(skb, &pTailSkb, pSA->ulSecHdrLen, 0);
+			addr = secfp_prepareGatherList(skb, &pTailSkb, pSA->ulSecHdrLen, 0);
 
-					if ((pSA->desc_hdr_template &
-						(DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU))
-						 == (DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU)) {
-						/* Set up the AES Context field - Need to validate this with soft crypto */
+			if ((pSA->desc_hdr_template &
+				(DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU))
+				 == (DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU)) {
+				/* Set up the AES Context field - Need to validate this with soft crypto */
 
-						src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
-						/* To be verified
-						tgt  = *(unsigned int *)desc->ucNounceIVCounter;
-						*/
-						pNounceIVCounter = (unsigned char *)(*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])
-											+ pTailSkb->len + (SECFP_APPEND_BUF_LEN_FIELD * 2) + 12);
+				src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
+				/* To be verified
+				tgt  = *(unsigned int *)desc->ucNounceIVCounter;
+				*/
+				pNounceIVCounter = (unsigned char *)(*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])
+									+ pTailSkb->len + (SECFP_APPEND_BUF_LEN_FIELD * 2) + 12);
 
-						tgt = (unsigned int *)pNounceIVCounter;
+				tgt = (unsigned int *)pNounceIVCounter;
 
-						/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte
-							is set to 128; not sure why though? */
-						*(tgt) = *src;
-						src = (unsigned int *)(skb->data + SECFP_ESP_HDR_LEN);
-						*(tgt+1) = src[0];
-						*(tgt+2) = src[1];
+				/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte
+					is set to 128; not sure why though? */
+				*(tgt) = *src;
+				src = (unsigned int *)(skb->data + SECFP_ESP_HDR_LEN);
+				*(tgt+1) = src[0];
+				*(tgt+2) = src[1];
 
-						/* Need to verify why we are setting COUNTER_BLK_LEN + 8 */
-						SECFP_SET_DESC_PTR(desc->ptr[1],
-							SECFP_COUNTER_BLK_LEN,
-						(dma_addr_t)pNounceIVCounter,
-						0);
-					} else {
-						SECFP_SET_DESC_PTR(desc->ptr[1], pSA->SAParams.ulIvSize,
-								   (*(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])+SECFP_ESP_HDR_LEN), 0)
-					}
+				/* Need to verify why we are setting COUNTER_BLK_LEN + 8 */
+				SECFP_SET_DESC_PTR(desc->ptr[1],
+					SECFP_COUNTER_BLK_LEN,
+				(dma_addr_t)pNounceIVCounter,
+				0);
+			} else {
+				SECFP_SET_DESC_PTR(desc->ptr[1], pSA->SAParams.ulIvSize,
+						   (*(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])+SECFP_ESP_HDR_LEN), 0)
+			}
 
-					SECFP_SET_DESC_PTR(desc->ptr[2],
-							pSA->SAParams.EncKeyLen,
-							pSA->EncKeyDmaAddr, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[2],
+					pSA->SAParams.EncKeyLen,
+					pSA->EncKeyDmaAddr, 0)
 
-					if ((ulIndex) && (skb->cb[SECFP_REF_INDEX] == 3)) {
-						/* We have queued the packet and c/b has not yet triggered */
-						/* if 2nd iteration is encryption, then we need to reduce the length by ICV Length */
-						ulOffsetIcvLen = 12;
-					} else {
-						/* In the 2 descriptor case, callback has triggered, so we need not to
-						   reduce by the ICV length
-						*/
-						ulOffsetIcvLen = 0;
-					}
+			if ((ulIndex) && (skb->cb[SECFP_REF_INDEX] == 3)) {
+				/* We have queued the packet and c/b has not yet triggered */
+				/* if 2nd iteration is encryption, then we need to reduce the length by ICV Length */
+				ulOffsetIcvLen = 12;
+			} else {
+				/* In the 2 descriptor case, callback has triggered, so we need not to
+				   reduce by the ICV length
+				*/
+				ulOffsetIcvLen = 0;
+			}
 
-					SECFP_SET_DESC_PTR(desc->ptr[3],
-							   skb->data_len - pSA->ulSecHdrLen-ulOffsetIcvLen,
-							   addr,
-							   DESC_PTR_LNKTBL_JUMP)
+			SECFP_SET_DESC_PTR(desc->ptr[3],
+					   skb->data_len - pSA->ulSecHdrLen-ulOffsetIcvLen,
+					   addr,
+					   DESC_PTR_LNKTBL_JUMP)
 
-					if ((unsigned int)skb->prev == SECFP_IN_GATHER_NO_SCATTER) {
-						SECFP_SET_DESC_PTR(desc->ptr[4],
-								   skb->data_len - pSA->ulSecHdrLen-ulOffsetIcvLen,
-								   addr + pSA->ulSecHdrLen,
-								   0)
-					} else { /* skb->prev = SECFP_IN_GATHER_SCATTER */
-						SECFP_SET_DESC_PTR(desc->ptr[4],
-								   skb->data_len - pSA->ulSecHdrLen-ulOffsetIcvLen,
-								   addr,
-								   DESC_PTR_LNKTBL_JUMP)
-					}
-					/* Set the descriptors 5 and 6 and 6 to 0 */
-					SECFP_SET_DESC_PTR(desc->ptr[5], 0, 0, 0)
-					SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0)
-					print_desc(desc);
-					break;
-				}
-			case SECFP_BOTH:
-				{
-					desc->hdr = pSA->desc_hdr_template;
+			if ((unsigned int)skb->prev == SECFP_IN_GATHER_NO_SCATTER) {
+				SECFP_SET_DESC_PTR(desc->ptr[4],
+						   skb->data_len - pSA->ulSecHdrLen-ulOffsetIcvLen,
+						   addr + pSA->ulSecHdrLen,
+						   0)
+			} else { /* skb->prev = SECFP_IN_GATHER_SCATTER */
+				SECFP_SET_DESC_PTR(desc->ptr[4],
+						   skb->data_len - pSA->ulSecHdrLen-ulOffsetIcvLen,
+						   addr,
+						   DESC_PTR_LNKTBL_JUMP)
+			}
+			/* Set the descriptors 5 and 6 and 6 to 0 */
+			SECFP_SET_DESC_PTR(desc->ptr[5], 0, 0, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0)
+			print_desc(desc);
+			break;
+		}
+		case SECFP_BOTH:
+		{
+			desc->hdr = pSA->desc_hdr_template;
 
-					addr = secfp_prepareGatherList(skb, &pTailSkb, pSA->ulSecHdrLen, 12);
+			addr = secfp_prepareGatherList(skb, &pTailSkb, pSA->ulSecHdrLen, 12);
 
-					SECFP_SET_DESC_PTR(desc->ptr[0],
-						pSA->SAParams.AuthKeyLen,
-						pSA->AuthKeyDmaAddr, 0)
-					SECFP_SET_DESC_PTR(desc->ptr[1], pSA->ulSecHdrLen,
-							   *(unsigned int *)(&skb->cb[SECFP_SKB_DATA_DMA_INDEX]), 0)
-					SECFP_SET_DESC_PTR(desc->ptr[2], pSA->SAParams.ulIvSize,
-							   *(unsigned int *)(&skb->cb[SECFP_SKB_DATA_DMA_INDEX])+SECFP_ESP_HDR_LEN, 0)
-					SECFP_SET_DESC_PTR(desc->ptr[3],
-							pSA->SAParams.EncKeyLen,
-							pSA->EncKeyDmaAddr, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[0],
+				pSA->SAParams.AuthKeyLen,
+				pSA->AuthKeyDmaAddr, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[1], pSA->ulSecHdrLen,
+					   *(unsigned int *)(&skb->cb[SECFP_SKB_DATA_DMA_INDEX]), 0)
+			SECFP_SET_DESC_PTR(desc->ptr[2], pSA->SAParams.ulIvSize,
+					   *(unsigned int *)(&skb->cb[SECFP_SKB_DATA_DMA_INDEX])+SECFP_ESP_HDR_LEN, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[3],
+					pSA->SAParams.EncKeyLen,
+					pSA->EncKeyDmaAddr, 0)
 
-					SECFP_SET_DESC_PTR(desc->ptr[4],
-							   skb->data_len - pSA->ulSecHdrLen - 12,
-							   addr ,
-							   (12 | DESC_PTR_LNKTBL_JUMP))
+			SECFP_SET_DESC_PTR(desc->ptr[4],
+					   skb->data_len - pSA->ulSecHdrLen - 12,
+					   addr ,
+					   (12 | DESC_PTR_LNKTBL_JUMP))
 
-					if (skb->prev == SECFP_IN_GATHER_SCATTER) {
-						SECFP_SET_DESC_PTR(desc->ptr[5],
-								   skb->data_len - pSA->ulSecHdrLen - 12,
-								   addr ,
-								   DESC_PTR_LNKTBL_JUMP);
-					} else {
-						SECFP_SET_DESC_PTR(desc->ptr[5],
-								   skb->data_len - pSA->ulSecHdrLen - 12,
-								   *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) + pSA->ulSecHdrLen,
-								   0);
-					}
+			if (skb->prev == SECFP_IN_GATHER_SCATTER) {
+				SECFP_SET_DESC_PTR(desc->ptr[5],
+						   skb->data_len - pSA->ulSecHdrLen - 12,
+						   addr ,
+						   DESC_PTR_LNKTBL_JUMP);
+			} else {
+				SECFP_SET_DESC_PTR(desc->ptr[5],
+						   skb->data_len - pSA->ulSecHdrLen - 12,
+						   *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) + pSA->ulSecHdrLen,
+						   0);
+			}
 
-					SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
-				}
-				break;
-			case SECFP_AESCTR_BOTH:
-				{
-					desc->hdr = pSA->desc_hdr_template |
-							pSA->hdr_Auth_template_1 ;
+			SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
+		}
+		break;
+		case SECFP_AESCTR_BOTH:
+		{
+			desc->hdr = pSA->desc_hdr_template |
+					pSA->hdr_Auth_template_1 ;
 
-					addr = secfp_prepareGatherList(skb, &pTailSkb, pSA->ulSecHdrLen, 12);
+			addr = secfp_prepareGatherList(skb, &pTailSkb, pSA->ulSecHdrLen, 12);
 
-					SECFP_SET_DESC_PTR(desc->ptr[0],
-						pSA->SAParams.AuthKeyLen,
-						pSA->AuthKeyDmaAddr,
-						0);
+			SECFP_SET_DESC_PTR(desc->ptr[0],
+				pSA->SAParams.AuthKeyLen,
+				pSA->AuthKeyDmaAddr,
+				0);
 
-					SECFP_SET_DESC_PTR(desc->ptr[1],
-							   pSA->ulSecHdrLen,
-							   *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]),
-							   0);
+			SECFP_SET_DESC_PTR(desc->ptr[1],
+					   pSA->ulSecHdrLen,
+					   *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]),
+					   0);
 
-					SECFP_SET_DESC_PTR(desc->ptr[2],
-						pSA->SAParams.EncKeyLen,
-						pSA->EncKeyDmaAddr,
-						0);
+			SECFP_SET_DESC_PTR(desc->ptr[2],
+				pSA->SAParams.EncKeyLen,
+				pSA->EncKeyDmaAddr,
+				0);
 
-					/* Set up the AES Context field - Need to validate this with soft crypto */
+			/* Set up the AES Context field - Need to validate this with soft crypto */
 
-					src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
-					/* To be verified
-					tgt  = *(unsigned int *)desc->ucNounceIVCounter;
-					*/
-					pNounceIVCounter = (unsigned char *)
-							   (*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])
-								+ pTailSkb->len + (SECFP_APPEND_BUF_LEN_FIELD * 2) + 12);
+			src = (unsigned int *)&(pSA->SAParams.ucNounceIVCounter);
+			/* To be verified
+			tgt  = *(unsigned int *)desc->ucNounceIVCounter;
+			*/
+			pNounceIVCounter = (unsigned char *)
+					   (*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])
+						+ pTailSkb->len + (SECFP_APPEND_BUF_LEN_FIELD * 2) + 12);
 
-					tgt = (unsigned int *)pNounceIVCounter;
+			tgt = (unsigned int *)pNounceIVCounter;
 
-					/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte
-						is set to 128; not sure why though? */
-					*(tgt) = *src;
-					src = (unsigned int *)(skb->data + SECFP_ESP_HDR_LEN);
-					*(tgt+1) = src[0];
-					*(tgt+2) = src[1];
+			/* Copying 2 integers of IV, Assumes that the first 4 bytes of Nounce is valid and the 16th byte
+				is set to 128; not sure why though? */
+			*(tgt) = *src;
+			src = (unsigned int *)(skb->data + SECFP_ESP_HDR_LEN);
+			*(tgt+1) = src[0];
+			*(tgt+2) = src[1];
 
-					/* Need to verify why we are setting COUNTER_BLK_LEN + 8 */
-					SECFP_SET_DESC_PTR(desc->ptr[3],
-							SECFP_COUNTER_BLK_LEN,
-						(dma_addr_t)pNounceIVCounter,
-						0);
+			/* Need to verify why we are setting COUNTER_BLK_LEN + 8 */
+			SECFP_SET_DESC_PTR(desc->ptr[3],
+					SECFP_COUNTER_BLK_LEN,
+				(dma_addr_t)pNounceIVCounter,
+				0);
 
-					SECFP_SET_DESC_PTR(desc->ptr[4],
-							   (skb->data_len - pSA->ulSecHdrLen - 12),
-							   (addr),
-							   DESC_PTR_LNKTBL_JUMP);
+			SECFP_SET_DESC_PTR(desc->ptr[4],
+					   (skb->data_len - pSA->ulSecHdrLen - 12),
+					   (addr),
+					   DESC_PTR_LNKTBL_JUMP);
 
-					if (skb->prev == SECFP_IN_GATHER_SCATTER) {
-						SECFP_SET_DESC_PTR(desc->ptr[5],
-								   (skb->data_len - pSA->ulSecHdrLen - 12),
-								   (addr),
-								   DESC_PTR_LNKTBL_JUMP);
+			if (skb->prev == SECFP_IN_GATHER_SCATTER) {
+				SECFP_SET_DESC_PTR(desc->ptr[5],
+						   (skb->data_len - pSA->ulSecHdrLen - 12),
+						   (addr),
+						   DESC_PTR_LNKTBL_JUMP);
 
-						/* Not sure about this
+				/* Not sure about this
 				talitosDescriptor->bRecvICV = T_TRUE;
 
 				memcpy(desc->aRecvICV, (skb->tail - 12), 12);
-				 */
-						/*	Having extra length in the buffer to hold the calculated ICV value */
+				*/
+				/*	Having extra length in the buffer to hold the calculated ICV value */
 
-						/* Looks like in this case, ICV is calculated and supplied always  */
+				/* Looks like in this case, ICV is calculated and supplied always  */
 
-						SECFP_SET_DESC_PTR(desc->ptr[6],
-								   12,
-								   *(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX]) + pTailSkb->len,
-								   0);
-					} else {
-						/* In Gather, Out No scatter */
-						SECFP_SET_DESC_PTR(desc->ptr[5],
-								   (skb->data_len - pSA->ulSecHdrLen - 12),
-								   (*(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])
-									+ pSA->ulSecHdrLen),
-								   0)
+				SECFP_SET_DESC_PTR(desc->ptr[6],
+						   12,
+						   *(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX]) + pTailSkb->len,
+						   0);
+			} else {
+				/* In Gather, Out No scatter */
+				SECFP_SET_DESC_PTR(desc->ptr[5],
+						   (skb->data_len - pSA->ulSecHdrLen - 12),
+						   (*(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])
+							+ pSA->ulSecHdrLen),
+						   0)
 
-						/* Not sure about this
-					talitosDescriptor->bRecvICV = T_TRUE;
+				/* Not sure about this
+			talitosDescriptor->bRecvICV = T_TRUE;
 
-					memcpy(desc->aRecvICV, (skb->tail - 12), 12);
-					 */
-						/*	Having extra length in the buffer to hold the calculated ICV value */
+			memcpy(desc->aRecvICV, (skb->tail - 12), 12);
+			 */
+				/*	Having extra length in the buffer to hold the calculated ICV value */
 
-						/* Looks like in this case, ICV is calculated and supplied always  */
+				/* Looks like in this case, ICV is calculated and supplied always  */
 
-						SECFP_SET_DESC_PTR(desc->ptr[6],
-								   12,
-								   *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) + skb->data_len,
-								   0);
-					}
+				SECFP_SET_DESC_PTR(desc->ptr[6],
+						   12,
+						   *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) + skb->data_len,
+						   0);
+			}
 
-				}
-				break;
-			default:
-				ASFIPSEC_WARN("SECFP: Not supported");
-				SECFP_UNMAP_SINGLE_DESC((void *) addr,
-						(skb->len + 12 +
-						 SECFP_APPEND_BUF_LEN_FIELD +
-						 SECFP_NOUNCE_IV_LEN));
-				break;
+		}
+		break;
+		default:
+			ASFIPSEC_WARN("SECFP: Not supported");
+			SECFP_UNMAP_SINGLE_DESC((void *) addr,
+					(skb->len + 12 +
+					 SECFP_APPEND_BUF_LEN_FIELD +
+					 SECFP_NOUNCE_IV_LEN));
+			break;
 		}
 
 		/* Correcting this: Only for the first time , ICV check, this option needs to be recorded */
