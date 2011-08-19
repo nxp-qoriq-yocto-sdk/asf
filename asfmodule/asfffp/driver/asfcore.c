@@ -1395,13 +1395,14 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			asf_debug_l2("TCP_STATE_PROC: tcp_data_len = %d\n", tcp_data_len);
 
 			if (flow->bTcpOutOfSeqCheck) {
-				ulLogId = asfTcpCheckForOutOfSeq(flow, oth_flow, ptcph, tcp_data_len);
+				ulLogId = asfTcpCheckForOutOfSeq(flow, oth_flow, ptcph,
+							tcp_data_len, vsgInfo);
 				if (unlikely(ulLogId != ASF_LOG_ID_DUMMY)) {
 					asf_debug("out of seq check failed!\n");
 					asfFfpSendLog(flow, ulLogId, ulHashVal);
 					gstats->ulErrIpProtoHdr++;
 					XGSTATS_INC(TcpOutOfSequenceErr);
-					if (asf_tcp_drop_oos)
+					if (vsgInfo->bDropOutOfSeq)
 						goto drop_pkt;
 				}
 			}
@@ -1948,11 +1949,14 @@ asf_vsg_info_t *asf_ffp_get_vsg_info_node(ASF_uint32_t ulVSGId)
 	vsg->ulReasmMinFragSize = asf_reasm_min_fragsize;
 	vsg->ulReasmTimeout = asf_reasm_timeout;
 	vsg->bDropOutOfSeq = asf_tcp_drop_oos;
+	vsg->ulTcpSeqNumRange = ASF_TCP_MAX_SEQNUM;
+	vsg->ulTcpRstSeqNumRange = ASF_TCP_MAX_SEQNUM;
 	vsg->curMode = asf_default_mode;
 	vsg->bIPsec = 0;
 	asf_vsg_info[ulVSGId] = vsg;
 	return vsg;
 }
+EXPORT_SYMBOL(asf_ffp_get_vsg_info_node);
 
 ASF_void_t ASFGetCapabilities(ASFCap_t *pCap)
 {
@@ -2647,18 +2651,22 @@ ASF_uint32_t  ASFFFPSetInacRefreshParams(ASFFFPInacRefreshParams_t *pInfo)
 EXPORT_SYMBOL(ASFFFPSetInacRefreshParams);
 
 
-
-ASF_uint32_t ASFFFPSetTcpCtrlParams(ASF_uint32_t  ulVSGId, ASFFFPTcpCtrlParams_t *pInfo)
+ASF_uint32_t ASFSetTcpCtrlParams(ASF_uint32_t ulVSGId,
+				ASFTcpCtrlParams_t *pInfo)
 {
 	asf_vsg_info_t  *vsg;
 
+	if (ulVSGId >= asf_max_vsgs)
+		return ASF_FAILURE;
 	vsg = asf_ffp_get_vsg_info_node(ulVSGId);
 	if (!vsg)
 		return ASF_FAILURE;
 	vsg->bDropOutOfSeq = pInfo->bDropOutOfSeq;
+	vsg->ulTcpSeqNumRange = pInfo->ulTcpSeqNumRange;
+	vsg->ulTcpRstSeqNumRange = pInfo->ulTcpRstSeqNumRange;
 	return ASF_SUCCESS;
 }
-EXPORT_SYMBOL(ASFFFPSetTcpCtrlParams);
+EXPORT_SYMBOL(ASFSetTcpCtrlParams);
 
 static inline int ffp_flow_copy_info(ASFFFPFlowInfo_t *pInfo, ffp_flow_t *flow)
 {

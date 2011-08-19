@@ -225,6 +225,8 @@ typedef struct asf_vsg_info_s {
 	ASF_uint32_t    ulReasmMaxFrags;
 	ASF_uint32_t    ulReasmMinFragSize;
 	ASF_boolean_t   bDropOutOfSeq;
+	ASF_uint32_t	ulTcpSeqNumRange;
+	ASF_uint32_t	ulTcpRstSeqNumRange;
 	ASFFFPConfigIdentity_t configIdentity;
 	ASF_Modes_t		curMode;
 	ASF_boolean_t 	bIPsec; /*IPsec function */

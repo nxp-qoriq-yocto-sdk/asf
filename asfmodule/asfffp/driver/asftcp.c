@@ -72,7 +72,8 @@ static inline int asfTcpCheckForNormalOos(
 					 ffp_flow_t *flow,
 					 ffp_flow_t *oth_flow,
 					 unsigned long ulSeqNum,
-					 unsigned long ulAckNum)
+					unsigned long ulAckNum,
+					asf_vsg_info_t *vsgInfo)
 {
 	unsigned long ulSendNext, ulOtherRcvNext;
 
@@ -84,10 +85,10 @@ static inline int asfTcpCheckForNormalOos(
 
 	if (!asfTcpSeqWithin(ulSeqNum, ulOtherRcvNext -
 			     _MIN((oth_flow->tcpState.ulMaxRcvWin << oth_flow->tcpState.ucWinScaleFactor),
-				  ASF_TCP_MAX_SEQNUM),
+						vsgInfo->ulTcpSeqNumRange),
 			     ulOtherRcvNext +
 			     _MIN((oth_flow->tcpState.ulMaxRcvWin << oth_flow->tcpState.ucWinScaleFactor),
-				  ASF_TCP_MAX_SEQNUM))) {
+				vsgInfo->ulTcpSeqNumRange))) {
 		return ASF_LOG_ID_TCP_BAD_SEQ_NO;
 	}
 
@@ -101,7 +102,7 @@ static inline int asfTcpCheckForNormalOos(
 	if (!asfTcpSeqWithin(ulAckNum,
 			     flow->tcpState.ulRcvNext -
 			     _MIN((flow->tcpState.ulMaxRcvWin <<  flow->tcpState.ucWinScaleFactor),
-				  ASF_TCP_MAX_SEQNUM),
+				vsgInfo->ulTcpSeqNumRange),
 			     ulSendNext)) {
 		return ASF_LOG_ID_TCP_BAD_ACK_SEQ;
 	}
@@ -113,7 +114,9 @@ static inline int asfTcpCheckForRstOos(
 				      ffp_flow_t *flow,
 				      ffp_flow_t *oth_flow,
 				      unsigned long ulSeqNum,
-				      unsigned long ulAckNum)
+				unsigned long ulAckNum,
+				struct tcphdr *tcph,
+				asf_vsg_info_t *vsgInfo)
 {
 	unsigned long ulSendNext, ulOtherRcvNext;
 
@@ -133,41 +136,47 @@ static inline int asfTcpCheckForRstOos(
 	if (!asfTcpSeqWithin(ulSeqNum,
 			     ulOtherRcvNext -
 			     _MIN((oth_flow->tcpState.ulRcvWin <<  oth_flow->tcpState.ucWinScaleFactor),
-				  ASF_TCP_MAX_SEQNUM),
+					vsgInfo->ulTcpRstSeqNumRange),
 			     ulOtherRcvNext +
 			     _MIN((oth_flow->tcpState.ulRcvWin <<  oth_flow->tcpState.ucWinScaleFactor),
-				  ASF_TCP_MAX_SEQNUM))) {
+					vsgInfo->ulTcpRstSeqNumRange))) {
 		return ASF_LOG_ID_TCP_BAD_RST_SEQ;
 	}
 
-	ulSendNext  = oth_flow->tcpState.ulHighSeqNum;
-	if (oth_flow->tcpState.bPositiveDelta) {
-		ulSendNext += oth_flow->tcpState.ulSeqDelta;
-	} else {
-		ulSendNext -= oth_flow->tcpState.ulSeqDelta;
-	}
+	if (tcph->ack) {
+		ulSendNext  = oth_flow->tcpState.ulHighSeqNum;
+		if (oth_flow->tcpState.bPositiveDelta) {
+			ulSendNext += oth_flow->tcpState.ulSeqDelta;
+		} else {
+			ulSendNext -= oth_flow->tcpState.ulSeqDelta;
+		}
 
-	if (!asfTcpSeqWithin(ulAckNum,
+		if (!asfTcpSeqWithin(ulAckNum,
 			     flow->tcpState.ulRcvNext -
 			     _MIN((flow->tcpState.ulMaxRcvWin << flow->tcpState.ucWinScaleFactor),
-				  ASF_TCP_MAX_SEQNUM),
+					vsgInfo->ulTcpSeqNumRange),
 			     ulSendNext)) {
-		return ASF_LOG_ID_TCP_BAD_RST_ACK_SEQ;
+			return ASF_LOG_ID_TCP_BAD_RST_ACK_SEQ;
+		}
 	}
 	return ASF_LOG_ID_DUMMY;
 }
 
 int asfTcpCheckForOutOfSeq(ffp_flow_t *flow, ffp_flow_t *oth_flow,
-			   struct tcphdr *tcph, unsigned short data_len)
+					struct tcphdr *tcph,
+					unsigned short data_len,
+					asf_vsg_info_t *vsgInfo)
 {
 	int iRetVal;
 	unsigned long ulSeqNum = ntohl(tcph->seq);
 	unsigned long ulAckNum = ntohl(tcph->ack_seq);
 
 	if (tcph->rst)
-		iRetVal = asfTcpCheckForRstOos(flow, oth_flow, ulSeqNum, ulAckNum);
+		iRetVal = asfTcpCheckForRstOos(flow, oth_flow, ulSeqNum,
+					ulAckNum, tcph, vsgInfo);
 	else
-		iRetVal	= asfTcpCheckForNormalOos(flow, oth_flow, ulSeqNum, ulAckNum);
+		iRetVal = asfTcpCheckForNormalOos(flow, oth_flow, ulSeqNum,
+					ulAckNum, vsgInfo);
 
 	if (iRetVal != ASF_LOG_ID_DUMMY)
 		return iRetVal;

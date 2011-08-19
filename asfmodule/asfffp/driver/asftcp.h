@@ -138,10 +138,10 @@ static inline void asfTcpApplyDelta(ffp_flow_t *flow, ffp_flow_t *oth_flow, stru
 }
 
 
-
-
 int asfTcpCheckForOutOfSeq(ffp_flow_t *flow, ffp_flow_t *oth_flow,
-			   struct tcphdr *tcph, unsigned short data_len);
+					struct tcphdr *tcph,
+					unsigned short data_len,
+					asf_vsg_info_t *vsgInfo);
 
 
 static inline void asfTcpUpdateState(

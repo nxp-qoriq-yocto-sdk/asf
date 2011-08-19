@@ -266,23 +266,20 @@ typedef struct ASFFFPInacRefreshParams_s {
 
 ASF_uint32_t  ASFFFPSetInacRefreshParams(ASFFFPInacRefreshParams_t *pInfo);
 
+typedef struct ASFTcpCtrlParams_s {
+	/* indicates if the out of sequence packets to be dropped */
+	ASF_boolean_t  bDropOutOfSeq;
 
+	/* indicates the seqence number range */
+	ASF_uint32_t	ulTcpSeqNumRange;
 
+	/* indicates the seqence number range for RST packets */
+	ASF_uint32_t	ulTcpRstSeqNumRange;
 
+} ASFTcpCtrlParams_t;
 
-typedef struct ASFFFPTcpCtrlParams_s {
-	/*
-		 TRUE indicates that Out of Sequence TCP packets will be dropped.
-		 FALSE indicates no action needs to be taken.
-	*/
-
-	ASF_boolean_t   bDropOutOfSeq;
-} ASFFFPTcpCtrlParams_t;
-
-ASF_uint32_t ASFFFPSetTcpCtrlParams(ASF_uint32_t  ulVSGId,
-			ASFFFPTcpCtrlParams_t *pInfo);
-
-
+ASF_uint32_t ASFSetTcpCtrlParams(ASF_uint32_t ulVSGId,
+			ASFTcpCtrlParams_t *pInfo);
 
 typedef union ASFBuffer_u {
 	struct {
