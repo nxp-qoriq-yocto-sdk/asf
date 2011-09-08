@@ -149,7 +149,7 @@ int pmal_del_connection(int fd, struct pmal_con_s *conn);
 void pmal_free_buffer(int fd, struct pmal_buf *frame);
 
 /* get a raw data buffer  - All frames are of fixed size (MAX) */
-struct pmal_buf *pmal_alloc_buffer(int fd, int size);
+struct pmal_buf *pmal_alloc_buffer(int fd, int size, unsigned int flag);
 
 /*This is used to allocate chain of 'n' buffers/ fragments for
 	sending message through pmal_socket. Typically this API will be
@@ -189,6 +189,8 @@ void pmal_sg_to_single_frame(struct pmal_buf *sg,
 
 int pmal_join_frags(struct pmal_buf *first,
 		struct pmal_buf *last);
+
+void pmal_set_data_len_frag(struct pmal_buf *frag, unsigned int data_len);
 
 #define PMAL_GET_FRAME_PHYS_ADDR(frame)
 

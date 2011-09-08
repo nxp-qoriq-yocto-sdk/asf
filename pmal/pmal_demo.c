@@ -69,11 +69,19 @@ static inline void pmal_copy(__u32 *dst, __u32 *src, int len)
 }
 
 /* Dummy function to process the received frame */
-void process_frame(char *frame,
+void process_frame(struct pmal_buf *pmal_buf,
 	struct pkt_ipudphdr *iph_s,
 	struct pkt_ethhdr **eth_s)
 {
+	char *frame = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(pmal_buf);
 	*eth_s = (struct pkt_ethhdr *) (frame - ETH_HLEN);
+
+	if (pmal_buf->num_frags) {
+		struct pmal_buf *tmp_pmal_buf;
+		pmal_frag_next(pmal_buf, &tmp_pmal_buf);
+		frame = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(tmp_pmal_buf);
+		PMAL_PRINT("\nLength of Frag is %d ; first byte being = 0x%x", tmp_pmal_buf->buf_len, frame[0]);
+	}
 }
 
 /*	Dummy function, which copies the received
@@ -312,19 +320,25 @@ int main(int argc, char **argv)
 				total_rx++;
 				rx_wt++;
 				iph_s = (struct pkt_ipudphdr *)pframe;
-				process_frame(pframe, iph_s, &eth_s);
+				process_frame(pmal_buf, iph_s, &eth_s);
 
 				PMAL_PRINT("RX-%d", total_rx);
 				if (total_rx % 2) {
 					pmal_buf_tx =
 					pmal_alloc_buffer(fd_tx,
-							iph_s->tot_len + 14);
-					if (pmal_buf_tx == NULL) {
-						pmal_buf_tx =
-						pmal_alloc_sg_list(fd_tx,
-							iph_s->tot_len + 14);
-						if (pmal_buf_tx == NULL)
-							goto _free_buff;
+							iph_s->tot_len + 14, 1);
+					if (pmal_buf_tx == NULL)
+						goto _free_buff;
+
+					if (pmal_buf_tx->num_frags) {
+						struct pmal_buf *tmp_buf_tx = pmal_buf_tx;
+						int i = pmal_buf_tx->num_frags;
+						while (i) {
+							len = (i == 1) ? (iph_s->tot_len + 14) % 1452 : 1452;
+							tmp_buf_tx = pmal_frag_next(tmp_buf_tx, &tmp_buf_tx);
+							pmal_set_data_len_frag(tmp_buf_tx, len);
+							i--;
+						}
 					}
 					pframe_tx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(pmal_buf_tx);
 					fill_frame(pframe_tx,

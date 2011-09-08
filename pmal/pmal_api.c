@@ -383,7 +383,7 @@ void pmal_free_buffer(int fd, struct pmal_buf *frame)
 }
 
 /* get a raw data buffer  - All frames are of fixed size (MAX) */
-struct pmal_buf *pmal_alloc_buffer(int fd, int size)
+struct pmal_buf *pmal_alloc_buffer(int fd, int size, unsigned int flag)
 {
 	unsigned int len = 0;
 	struct pmal_sock *ps = ps_list[fd];
@@ -391,8 +391,11 @@ struct pmal_buf *pmal_alloc_buffer(int fd, int size)
 	struct pcb_s *pcb = NULL;
 
 	if ((data_tx[0].iov_len -
-		data_tx_offset - PACKET_UM_END_RESERVE) < size)
+		data_tx_offset - PACKET_UM_END_RESERVE) < size) {
+		if (flag)
+			return pmal_alloc_sg_list(fd, size);
 		return NULL;
+	}
 
 	if (ps->buff_index) {
 		ps->buff_index--;
@@ -526,7 +529,7 @@ void *pmal_alloc_frag(int fd, struct pmal_buf *next, unsigned int size)
 	struct pcb_s *pcb_next = PMAL_GET_PCB_FROM_PMAL_BUF(next);
 	struct pmal_buf *buff = NULL;
 
-	buff = pmal_alloc_buffer(fd, size);
+	buff = pmal_alloc_buffer(fd, size, 0);
 	if (buff == NULL)
 		return NULL;
 
@@ -603,7 +606,7 @@ struct pmal_buf *pmal_alloc_sg_list(int fd, int size)
 			tmp1_pmal_buf->pmal_ext.buf_len = len;
 			tmp1_pmal_buf->priv.first_fid =
 				first_pmal_buf->priv.frame_id;
-			first_pmal_buf->pmal_ext.total_len += len;
+			tmp1_pmal_buf->priv.tail = data_tx[0].iov_len - PACKET_UM_END_RESERVE;
 			nr_frags--;
 		}
 
