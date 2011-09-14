@@ -4,7 +4,8 @@
 #
 
 
-CC ?= gcc
+#CC ?= gcc
+CC = $(CROSS_COMPILE)gcc
 AS ?= as
 
 #PREFIX ?= /usr/local

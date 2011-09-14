@@ -277,8 +277,11 @@ int main(int argc, char **argv)
 	if (opt_val == P2020_AMC)
 		strncpy(s_ifr.ifr_name, "eth0",
 				sizeof(s_ifr.ifr_name));
-	else
+	else if (opt_val == P1010_RDB)
 		strncpy(s_ifr.ifr_name, "eth2",
+				sizeof(s_ifr.ifr_name));
+	else
+		strncpy(s_ifr.ifr_name, "eth1",
 				sizeof(s_ifr.ifr_name));
 
 	ioctl(fd_tx, SIOCGIFINDEX, &s_ifr);
