@@ -44,11 +44,11 @@ enum alg_type {
 #define MAX_AUTH_ENC_ALGO	5
 #define MAX_ALGO_TYPE		2
 
-#define XFRM_DIR(dir)  (dir ? "OUT" : "IN")
+#define XFRM_DIR(dir) ((dir == 0) ? "IN" : ((dir == 1) ? "OUT" : "FWD"))
 
 void init_container_indexes(bool init);
 void init_sa_indexes(bool init);
-inline int free_container_index(int index, int cont_dir);
+int free_container_index(int index, int cont_dir);
 int is_policy_offloadable(struct xfrm_policy *xp);
 
 int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb, struct xfrm_state *xfrm);

@@ -153,7 +153,7 @@ ret_id:
 	return i;
 }
 
-inline int free_container_index(int index, int cont_dir)
+int free_container_index(int index, int cont_dir)
 {
 	if (index > 0 && index <= asfctrl_max_policy_cont) {
 		spin_lock(&cont_lock);
@@ -289,7 +289,7 @@ int is_policy_offloadable(struct xfrm_policy *xp)
 		ASFCTRL_WARN("Non ESP protocol not supported");
 		return -EINVAL;
 	}
-	if (tmpl->calgos != 0) {
+	if ((tmpl->calgos != 0) && (tmpl->calgos != 0xffffffff)) {
 		ASFCTRL_WARN("Compression is not supported");
 		return -EINVAL;
 	}
@@ -303,6 +303,12 @@ static inline int is_sa_offloadable(struct xfrm_state *xfrm)
 		ASFCTRL_WARN("Invalid Pointer");
 		return -EINVAL;
 	}
+
+	if (xfrm->id.proto != IPPROTO_ESP) {
+		ASFCTRL_WARN("Non ESP protocol not supported");
+		return -EINVAL;
+	}
+
 	/* lifetime in byte or packet is not supported
 	** here XFRM_INF is  (~(__u64)0)  */
 	if (xfrm->lft.soft_byte_limit != XFRM_INF ||
@@ -411,7 +417,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 		ASFCTRL_DBG("\nPOLICY is neither IN nor OUT\n");
 	}
 
-	ASFCTRL_DBG("COKKIE = %d", xp->asf_cookie);
+	ASFCTRL_INFO("Policy =0x%x COKKIE = 0x%x", xp, xp->asf_cookie);
 fn_return:
 	ASFCTRL_FUNC_EXIT;
 
@@ -427,8 +433,8 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (xp->asf_cookie) {
-		ASFCTRL_WARN("Not offloaded policy");
+	if (!xp->asf_cookie) {
+		ASFCTRL_WARN("Not offloaded policy xp=0x%x", xp);
 		return -EINVAL;
 	}
 	if (dir == OUT_SA) {
@@ -475,11 +481,11 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 
 	return 0;
 }
-int asfctrl_xfrm_update_policy(struct xfrm_policy *xp, int ifindex)
+int asfctrl_xfrm_update_policy(struct xfrm_policy *xp, int dir)
 {
 	ASFCTRL_FUNC_TRACE;
-	ASFCTRL_WARN("Not Implemented");
-	return -1;
+	ASFCTRL_WARN("***Policy Update Message** COOKIE = %d", xp->asf_cookie);
+	return 0;
 }
 
 int asfctrl_xfrm_flush(void)
@@ -1260,7 +1266,7 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 		break;
 	case XFRM_MSG_NEWPOLICY:
 		ASFCTRL_INFO("XFRM_MSG_NEWPOLICY-%s",
-			(dir == OUT_SA) ? "OUT" : "IN");
+		 (dir == IN_SA) ? "IN" : ((dir == OUT_SA) ? "OUT" : "FWD"));
 		asfctrl_xfrm_add_policy(xp, dir);
 		break;
 	case XFRM_MSG_UPDPOLICY:
@@ -1352,9 +1358,9 @@ int asfctrl_ipsec_km_register(void)
 void asfctrl_xfrm_dump_tmpl(struct xfrm_tmpl *t)
 {
 	if (t) {
-		ASFCTRL_INFO("TMPL daddr = %x, spi=%x, saddr = %x,"
-			"proto=%x, encap = %d reqid = %d, mode = %d,"
-			"allalgs=%x, eal=%x, aal=%x, cal =%x\n",
+		ASFCTRL_INFO("TMPL daddr = 0x%x, spi=0x%x, saddr = 0x%x,"
+			"proto=0x%x, encap = %d reqid = %d, mode = %d,"
+			"allalgs=0x%x, eal=0x%x, aal=0x%x, cal =0x%x\n",
 			t->id.daddr.a4, t->id.spi, t->saddr.a4,
 			t->id.proto, t->encap_family, t->reqid, t->mode,
 			t->allalgs, t->ealgos, t->aalgos, t->calgos);
@@ -1370,7 +1376,7 @@ void asfctrl_xfrm_dump_policy(struct xfrm_policy *xp, u8 dir)
 		dir, XFRM_DIR(dir), XFRM_ACTION(xp->action),
 		xp->selector.proto);
 
-	ASFCTRL_INFO(" SELECTOR - saddr =%x, daddr %x, prefix_s=%u,"
+	ASFCTRL_INFO(" SELECTOR - saddr =0x%x, daddr 0x%x, prefix_s=%u,"
 			"sport=%u, prefix_d=%u, dport=%u, IFINDEX=%d",
 			xp->selector.saddr.a4, xp->selector.daddr.a4,
 			xp->selector.prefixlen_s, xp->selector.sport,
@@ -1399,7 +1405,7 @@ void asfctrl_xfrm_dump_state(struct xfrm_state *xfrm)
 	ASFCTRL_INFO("SA- STATE = family = %u proto=%d",
 			xfrm->sel.family, xfrm->sel.proto);
 
-	ASFCTRL_INFO("SELECTOR saddr =%x, daddr %x, prefix_s=%u,"
+	ASFCTRL_INFO("SELECTOR saddr =0x%x, daddr 0x%x, prefix_s=%u,"
 		"sport=%u, prefix_d=%u, dport=%u, ifIndex=%d",
 		xfrm->sel.saddr.a4, xfrm->sel.daddr.a4,
 		xfrm->sel.prefixlen_s, xfrm->sel.sport,
@@ -1423,14 +1429,14 @@ void asfctrl_xfrm_dump_state(struct xfrm_state *xfrm)
 		ASFCTRL_INFO(" EALG alg_name = %s,(%d), key is 0x",
 				xfrm->aalg->alg_name, xfrm->aalg->alg_key_len);
 		for (i = 0; i < xfrm->aalg->alg_key_len/8; i++)
-			ASFCTRL_INFO("%x", xfrm->aalg->alg_key[i]);
+			printk(KERN_INFO "%x", xfrm->aalg->alg_key[i]);
 	}
 
 	if (xfrm->ealg) {
 		ASFCTRL_INFO(" EALG alg_name = %s,(%d), key is 0x",
 				xfrm->ealg->alg_name, xfrm->ealg->alg_key_len);
 		for (i = 0; i < xfrm->ealg->alg_key_len/8; i++)
-			ASFCTRL_INFO("%x", xfrm->ealg->alg_key[i]);
+			printk(KERN_INFO "%x", xfrm->ealg->alg_key[i]);
 	}
 
 	if (aead && esp)
