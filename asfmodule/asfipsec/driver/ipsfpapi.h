@@ -562,9 +562,9 @@ typedef struct ASFIPSecRuntimeSetFlowL2BlobArgs_s {
 	ASF_uint16_t  srcPort;
 	ASF_uint16_t  destPort;
 	struct {
-		ASF_uchar8_t l2blob[ASF_MAX_L2BLOB_LEN];
-		ASF_uint32_t ulL2BlobLen;
 		ASF_uint32_t ulDeviceID;
+		ASF_uchar8_t l2blob[ASF_MAX_L2BLOB_LEN];
+		ASF_uint16_t ulL2BlobLen;
 		ASF_uint16_t bTxVlan:1, bUpdatePPPoELen:1;
 		ASF_uint16_t usTxVlanId;
 		ASF_uint32_t ulL2blobMagicNumber;
@@ -1013,7 +1013,7 @@ typedef struct ASFIPSecGlobalErrorCounters_st {
 #define ASFIPSEC_WARN(fmt, arg...)
 #define ASFIPSEC_DEBUG(fmt, arg...)
 #define ASFIPSEC_DBGL2(fmt, arg...)
-#define ASFIPSEC_DEBUG(fmt, arg...)
+
 
 #define ASFIPSEC_TRACE
 #define ASFIPSEC_FENTRY

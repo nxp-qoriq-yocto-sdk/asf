@@ -651,10 +651,10 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb,
 				void *pData, void *, unsigned int);
 #ifndef CONFIG_ASF_SEC4x
-extern inline void secfp_outComplete(struct device *dev,
+extern void secfp_outComplete(struct device *dev,
 				struct talitos_desc *desc,
 				void *context, int error);
-extern inline void secfp_inComplete(struct device *dev,
+extern void secfp_inComplete(struct device *dev,
 				struct talitos_desc *desc,
 				void *context, int err);
 extern void secfp_inCompleteWithFrags(struct device *dev,
@@ -662,12 +662,12 @@ extern void secfp_inCompleteWithFrags(struct device *dev,
 				void *context, int err);
 #else
 /* This is due to different prototype of the SEC return function*/
-extern inline void secfp_outComplete(struct device *dev,
-		void *desc, int error, void *context);
-extern inline void secfp_inComplete(struct device *dev,
-		void *desc, int err, void *context);
+extern void secfp_outComplete(struct device *dev,
+		void *pdesc, u32 error, void *context);
+extern void secfp_inComplete(struct device *dev,
+		void *pdesc, u32 err, void *context);
 extern void secfp_inCompleteWithFrags(struct device *dev,
-		void *desc, int err, void *context);
+		void *pdesc, u32 err, void *context);
 #endif
 
 extern inline void secfp_inv6Complete(struct talitos_desc *desc,
