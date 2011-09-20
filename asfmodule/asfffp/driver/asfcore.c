@@ -14,6 +14,7 @@
  * History
  * 22 Sep 2010 - Sachin Saxena - Integrating code for IPv4 Forwarding support.
  * 30 Sep 2010 - Sachin Saxena - Changes for Per VSG flow table support.
+ * 22 Jul 2011 - Sachin Saxena - Adding support for ASF tool Kit.
  *
  */
 /******************************************************************************/
@@ -71,6 +72,10 @@ MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Application Specific FastPath");
 MODULE_LICENSE("GPL");
 
+/*! \brief Index used by Linux to register driver */
+#define ASF_HLD_MAJORNUMBER (100)
+/*! \brief Name used when mounting path */
+#define ASF_HLD_DEVICE_NAME "asf_hld"
 
 char *asf_version = "asf-rel-0.1.0";
 /* Initilization Parameters */
@@ -1042,7 +1047,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	}
 #endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	if (!(asf_vsg_info[anDev->ulVSGId]->curMode & fwdMode))
+	if (!(asf_vsg_info[anDev->ulVSGId]->curMode & fwMode))
 		goto ret_pkt;
 	else
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -3620,6 +3625,17 @@ static int __init asf_init(void)
 {
 	int err;
 
+	/* Registering the character device */
+	if (register_chrdev(ASF_HLD_MAJORNUMBER,
+			ASF_HLD_DEVICE_NAME,
+			&asf_interface_fops) < 0) {
+		asf_err(" %s : %s : Unable to get the "\
+			"major number %d\n", __FILE__,
+					__func__, ASF_HLD_MAJORNUMBER);
+		return -1;
+	}
+	spin_lock_init(&asf_app_lock);
+
 	get_random_bytes(&rule_salt, sizeof(rule_salt));
 
 	if (asf_max_vsgs > ASF_MAX_VSGS) {
@@ -3692,6 +3708,9 @@ static int __init asf_init(void)
 static void __exit asf_exit(void)
 {
 /*	wait_queue_head_t dummyWq; */
+
+	/* Unregister the character device from the kernel.*/
+	unregister_chrdev(ASF_HLD_MAJORNUMBER, ASF_HLD_DEVICE_NAME);
 
 	asf_debug("Unregister DevFP RX Hooks!\n");
 	devfp_register_rx_hook(NULL);

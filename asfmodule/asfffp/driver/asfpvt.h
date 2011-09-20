@@ -9,6 +9,7 @@
  */
 /* History
  *  Version	Date		Author		Change Description
+ * 22 Jul 2011 - Sachin Saxena - Changes to introduce ASF tool kit support.
  *
 */
 /******************************************************************************/
@@ -233,6 +234,9 @@ typedef struct asf_vsg_info_s {
 } asf_vsg_info_t;
 
 extern asf_vsg_info_t *asf_ffp_get_vsg_info_node(ASF_uint32_t ulVSGId);
+
+extern const struct	file_operations asf_interface_fops;
+extern spinlock_t	asf_app_lock;
 
 #ifdef ASF_DEBUG
 #define SEARCH_MAX_PER_BUCKET	(1024)

@@ -55,10 +55,9 @@ asf-y := asfproc.o \
 	    asftmr.o \
 	    asftcp.o \
 	    asfreasm.o \
-	    asfcore.o \
+	    asftoolkit.o \
+	    asfcore.o
 
-
-#obj-$(CONFIG_GIANFAR) += gianfar_driver.o
 all:
 	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) modules
 

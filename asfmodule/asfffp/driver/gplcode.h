@@ -10,6 +10,7 @@
 /* History
  *  Version	Date		Author		Change Description
  *
+ * 22-Jul-2011  Sachin Saxena  Changes to introduce ASF tool kit support.
 */
 /****************************************************************************/
 
@@ -17,6 +18,9 @@
 #ifndef __ASF_GPL_CODE_H
 #define __ASF_GPL_CODE_H
 #include "asf.h"
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 #define asfAllocPerCpu(size)	__alloc_percpu(size, 4)
@@ -41,7 +45,21 @@ extern int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev);
 
 
 void asf_ip_options_fragment(struct sk_buff  *skb);
-int asf_ip_options_compile(struct net *net, struct ip_options  *opt, struct sk_buff  *skb, struct iphdr *ipheader);
+int asf_ip_options_compile(struct net *net,
+				struct ip_options  *opt,
+				struct sk_buff  *skb,
+				struct iphdr *ipheader);
 
+extern void gfar_config_afx(struct net_device *dev, unsigned int reg);
+
+extern void gfar_config_filer(struct net_device *dev,
+				unsigned int rqfar,
+				unsigned int rqfcr,
+				unsigned int rqfpr);
+
+extern void gfar_get_filer(struct net_device *dev,
+			unsigned int far,
+			unsigned int *fcr,
+			unsigned int *fpr);
 #endif
 

@@ -289,10 +289,10 @@ typedef struct ASFFWDUpdateCacheEntry_s {
 			ASF_uint8_t l2blob[ASF_MAX_L2BLOB_LEN];
 
 			/* L2 blob len */
-			ASF_uint32_t l2blobLen;
+			ASF_uint16_t l2blobLen;
 
 			/* Path MTU to be used for packets for the CacheEntry.*/
-			ASF_uint32_t ulPathMTU;
+			ASF_uint16_t ulPathMTU;
 
 			ASF_uint16_t bTxVlan:1, bUpdatePPPoELen:1;
 
