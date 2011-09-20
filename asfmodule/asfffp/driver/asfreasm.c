@@ -758,6 +758,8 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 	for (pFragPrev = NULL, pFrag = pCb->fragList;
 	    pFrag != NULL;
 	    pFrag = pFrag->next) {
+		asf_reasm_debug("pFrag->ulFragOffset = 0x%x >"\
+			" pOffset = 0x%x\n", pFrag->ulFragOffset, *pOffset);
 		if (pFrag->ulFragOffset > *pOffset) {
 			break;
 		}
@@ -769,6 +771,8 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 
 	ulSegMap = *pLen + *pOffset;
 	if (pFragPrev) {
+		asf_reasm_debug("FragHandle:  ulSegMap = %d, pFragPrev->"\
+			"ulSegMap = %d\n", ulSegMap, pFragPrev->ulSegMap);
 		if (unlikely(((*pOffset >= pFragPrev->ulFragOffset)
 			      && ((ulSegMap) <= (pFragPrev->ulSegMap))))) {
 			asf_reasm_debug("IPREASM_SYSMSGID_OVERLAP_IPFRAG_8\r\n");
@@ -891,6 +895,9 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 
 	if (*option == ASF_ADJUST_PREVFRAG) {
 		pFragPrev->ulLen += *pLen;
+		asf_reasm_debug("ASF_ADJUST_PREVFRAG: ulSegMap = %d, "\
+			"pFragPrev->ulSegMap = %d\r\n", pFragPrev->ulSegMap,
+						pFragPrev->ulSegMap + *pLen);
 		pFragPrev->ulSegMap += *pLen;
 		pCb->ulRecvLen += *pLen;
 		*frag = pFragPrev;
@@ -900,7 +907,12 @@ static inline struct sk_buff  *asfIPv4FragHandle(struct asf_reasmCb_s *pCb,
 
 		pFrag->ulLen += *pLen;
 		pCb->ulRecvLen += *pLen;
-		pFrag->ulSegMap += *pLen;
+		asf_reasm_debug("ASF_ADJUST_NEXTFRAG: ulSegMap = %d, "\
+			"pFrag->ulSegMap = %d\r\n", pFrag->ulSegMap,
+						pFrag->ulSegMap + *pLen);
+		/* Not required when handling Next Fragment
+		   as it already have updated SegMap*/
+		/* pFrag->ulSegMap += *pLen; */
 		*frag = pFrag;
 	} else {
 		newFrag = asfGetNode(
@@ -1193,8 +1205,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 				asf_reasm_debug("before trimming : ulSegLen = %d, skb->len = %d\r\n", ulSegLen, skb->len);
 
 				/* Trim the skbs*/
-				if ((option == ASF_ADJUST_PREVFRAG) || (option == ASF_ADJUST_NONE))
-					skb->data += (skb->len - ulSegLen);
+				skb->data += (skb->len - ulSegLen);
 				skb->len = ulSegLen;
 
 				asf_reasm_debug("After next fragment received: next frag: skb->data =0x%x, skb->len=%d\r\n",
@@ -1582,13 +1593,12 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				skb_set_transport_header(skb, ihl);
 				skb_reset_network_header(skb);
 
-
+				offset += skb->len - ihl;
 				for (; frag != NULL; frag = frag->next) {
 					if (frag) {
 
 						__skb_push(frag, ihl);
 						skb_reset_network_header(frag);
-						skb->transport_header = NULL;
 
 
 						for (pSrc = (unsigned int *)  iph,
@@ -1600,7 +1610,6 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 						iph->tot_len = htons(frag->len);
 						if (offset == 0)
 							asf_ip_options_fragment(frag);
-						offset += skb->len - ihl;
 						iph->frag_off = htons(offset >> 3);
 						if (frag->next != NULL)
 							iph->frag_off |= htons(IP_MF);
@@ -1611,6 +1620,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 							ip_send_check(iph);
 							frag->ip_summed = CHECKSUM_UNNECESSARY;
 						}
+						offset += frag->len - ihl;
 					}
 				}
 				skb->next = skb_shinfo(skb)->frag_list;
@@ -1659,10 +1669,12 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				if (len < bytesLeft)
 					len &= ~7;
 #ifdef ASF_TERM_FP_SUPPORT
-				skb2 = packet_new_skb(skb->dev);
-#else
-				skb2 = gfar_new_skb(skb->dev);
+				if (skb->mapped == PF_PACKET_SKB)
+					skb2 = packet_new_skb(skb->dev);
+				else
 #endif
+				skb2 = gfar_new_skb(skb->dev);
+
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
 					skb2->skb_owner = NULL;
@@ -1735,8 +1747,96 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 	return 1;
 }
 
+#ifdef ASF_SG_SUPPORT
 /* Copy some data bits from skb to kernel buffer. */
 
+static int asfSkbCopyBits(const struct sk_buff *this_skb,
+			int offset,
+			void *to,
+			int len)
+{
+	unsigned char *dest = (unsigned char *) to, *src;
+	const struct	sk_buff *skb = this_skb;
+	int	nbytes, begin_skip, cur_off = 0, do_copy = 0;
+	unsigned int src_len;
+	unsigned int i;
+
+	asf_reasm_debug("offset %d len %d (skb->len %u)!\n",
+			offset, len, skb->len);
+
+
+
+	while (skb) {
+
+		src_len = skb->len;
+
+		if (!do_copy && (offset >= cur_off) && (offset < (cur_off+src_len))) {
+			do_copy = 1;
+			begin_skip = offset-cur_off;
+		} else {
+			begin_skip = 0;
+		}
+
+		if (do_copy) {
+
+			if (begin_skip <  skb_headlen(skb)) {
+				nbytes = (len <= (skb_headlen(skb) - begin_skip)) ? len : (skb_headlen(skb) - begin_skip);
+				src = skb->data;
+				memcpy(dest, src + begin_skip, nbytes);
+				len -= nbytes;
+				dest += nbytes;
+				if (len <= 0) {
+					asf_reasm_debug("SkbCopyBits done!\n");
+					return 0;
+				}
+				begin_skip = 0;
+			}
+
+			i = 0;
+
+			if (begin_skip) {
+				begin_skip -= skb_headlen(skb);
+				for ( ; i < skb_shinfo(skb)->nr_frags; i++) {
+					if (begin_skip < skb_shinfo(skb)->frags[i].size)
+						break;
+					begin_skip -= skb_shinfo(skb)->frags[i].size;
+				}
+				nbytes = (len <= (skb_shinfo(skb)->frags[i].size - begin_skip)) ? len : (skb_shinfo(skb)->frags[i].size - begin_skip);
+				src = page_address(skb_shinfo(skb)->frags[i].page);
+				memcpy(dest, src + begin_skip + skb_shinfo(skb)->frags[i].page_offset, nbytes);
+				len -= nbytes;
+				dest += nbytes;
+				if (len <= 0) {
+					asf_reasm_debug("SkbCopyBits done!\n");
+					return 0;
+				}
+				++i;
+			}
+
+			for ( ; i < skb_shinfo(skb)->nr_frags; i++) {
+				nbytes = (len <= skb_shinfo(skb)->frags[i].size) ? len : skb_shinfo(skb)->frags[i].size;
+				src = page_address(skb_shinfo(skb)->frags[i].page);
+				memcpy(dest, src + skb_shinfo(skb)->frags[i].page_offset, nbytes);
+				len -= nbytes;
+				dest += nbytes;
+				if (len <= 0) {
+					asf_reasm_debug("SkbCopyBits done!\n");
+					return 0;
+				}
+			}
+		}
+
+		cur_off += src_len;
+
+		if (skb == this_skb)
+			skb = skb_shinfo(skb)->frag_list;
+		else
+			skb = skb->next;
+	}
+	return len;
+}
+#else
+/* Copy some data bits from skb to kernel buffer. */
 static int asfSkbCopyBits(const struct sk_buff *this_skb,
 			int offset,
 			void *to,
@@ -1788,7 +1888,65 @@ static int asfSkbCopyBits(const struct sk_buff *this_skb,
 	}
 	return len;
 }
+#endif
 
+#ifdef ASF_SG_SUPPORT
+void asfSkbFraglistToNRFrags(struct sk_buff *skb)
+{
+	struct sk_buff *first_skb = skb;
+	struct sk_buff *skb_dtor;
+	unsigned int i;
+
+	skb = skb_shinfo(first_skb)->frag_list;
+
+	if (skb_shinfo(first_skb)->destructor_arg) {
+
+		skb_dtor = skb_shinfo(first_skb)->destructor_arg;
+
+		while (skb_dtor->next != NULL) {
+			skb_dtor = skb_dtor->next;
+		}
+
+	} else {
+		first_skb->gianfar_destructor = gfar_skb_destructor;
+		skb_shinfo(first_skb)->destructor_arg = skb;
+		skb_dtor = skb;
+	}
+	while (skb != NULL) {
+
+
+		if ((skb_shinfo(first_skb)->nr_frags + 1 + skb_shinfo(skb)->nr_frags)
+				> MAX_SKB_FRAGS)
+				panic("asfSkbFraglistToNRFrags: overflow");
+
+		skb_fill_page_desc(first_skb,
+					skb_shinfo(first_skb)->nr_frags,
+					virt_to_page(skb->data),
+					((unsigned int)(skb->data) & ~PAGE_MASK),
+					(skb->len - skb->data_len));
+
+		for (i = 0; i < skb_shinfo(skb)->nr_frags; ++i) {
+			skb_fill_page_desc(first_skb,
+						skb_shinfo(first_skb)->nr_frags,
+						skb_shinfo(skb)->frags[i].page,
+						skb_shinfo(skb)->frags[i].page_offset,
+						skb_shinfo(skb)->frags[i].size);
+		}
+
+		first_skb->len += skb->len;
+		first_skb->data_len += skb->data_len;
+
+		skb_shinfo(skb)->nr_frags = 0;
+		skb->data_len = 0;
+
+		skb_dtor->next = skb;
+		skb_dtor = skb;
+
+		skb = skb->next;
+	}
+}
+EXPORT_SYMBOL(asfSkbFraglistToNRFrags);
+#endif
 /*
  * Callback from splice_to_pipe(), if we need to release some pages
  * at the end of the spd in case we error'ed out in filling the pipe.
