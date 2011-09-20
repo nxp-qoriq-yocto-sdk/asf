@@ -8894,6 +8894,9 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		iph->ihl = 5;
 		iph->check = 0;
 		iph->ttl = MAX_TTL;
+		iph->id = secfp_getNextId();
+		iph->tos = 0;
+		iph->frag_off = 0;
 
 		iph->daddr = BUFGET32((unsigned char  *)(pOrgData + 12));
 		iph->protocol = ASF_IPPROTO_ICMP;

@@ -73,6 +73,7 @@ static ASF_int32_t asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 		asfctrl_fwd_L2blobPktData_t *pData;
 		struct iphdr *iph;
 		struct net_device *dev;
+		static unsigned short IPv4_IDs[NR_CPUS];
 
 		dev = dev_get_by_name(&init_net, "lo");
 
@@ -89,7 +90,7 @@ static ASF_int32_t asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 			return T_FAILURE;
 		}
 		dev_put(dev);
-		ASFCTRL_INFO("\n Route found for dst %x, src %x, tos %d ",
+		ASFCTRL_INFO("Route found for dst %x, src %x, tos %d ",
 				tpl->ulDestIp, tpl->ulSrcIp, tpl->ucDscp);
 		skb->dev = skb_dst(skb)->dev;
 		skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
@@ -99,6 +100,8 @@ static ASF_int32_t asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 		iph->version = 5;
 		iph->ihl = 5;
 		iph->ttl = 1;
+		iph->id = IPv4_IDs[smp_processor_id()]++;
+		iph->frag_off = 0;
 		iph->saddr = tpl->ulSrcIp;
 		iph->daddr = tpl->ulDestIp;
 		iph->tos = tpl->ucDscp;

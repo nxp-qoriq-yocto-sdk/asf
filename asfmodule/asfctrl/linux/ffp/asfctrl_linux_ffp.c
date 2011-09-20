@@ -71,6 +71,8 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	struct iphdr *iph;
 	struct net_device *dev;
 
+	static unsigned short IPv4_IDs[NR_CPUS];
+
 	ASFCTRL_FUNC_ENTRY;
 
 	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
@@ -99,6 +101,9 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	iph->version = 5;
 	iph->ihl = 5;
 	iph->ttl = 1;
+	iph->id = IPv4_IDs[smp_processor_id()]++;
+	iph->tos = 0;
+	iph->frag_off = 0;
 	iph->saddr = ulSrcIp;
 	iph->daddr = uldestIp;
 	iph->protocol = ASFCTRL_IPPROTO_DUMMY_L2BLOB;
