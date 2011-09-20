@@ -103,6 +103,13 @@ enum {
 	ASF_IFACE_TYPE_MAX
 } ;
 
+/* values for ucDevIdentifierType */
+enum {
+	ASF_IFACE_MAC_IDENTIFIER = 0,
+	ASF_IFACE_NAME_IDENTIFIER,
+	ASF_IFACE_DEV_IDENTIFIER,
+	ASF_IFACE_MAX_ID_TYPE
+};
 
 typedef struct ASFInterfaceInfo_s {
 	ASF_uint32_t    ulDevType;
@@ -110,7 +117,8 @@ typedef struct ASFInterfaceInfo_s {
 	ASF_uint8_t     *ucDevIdentifierInPkt;
 	ASF_uint32_t    ulDevIdentiferInPktLen;
 	ASF_uint32_t *ulRelatedIDs;
-	ASF_uint32_t    ulNumRelatedIDs;
+	ASF_uint32_t	ulNumRelatedIDs;
+	ASF_uint8_t		ucDevIdentifierType;
 } ASFInterfaceInfo_t;
 
 ASF_uint32_t ASFMapInterface(ASF_uint32_t ulCommonInterfaceId,
@@ -129,7 +137,7 @@ ASF_uint32_t ASFRemove(ASF_void_t);
 
 ASF_uint32_t ASFDeploy(ASF_void_t);
 
-ASF_uint32_t ASFSetVSGMode(ASF_uint32_t ulVSGId, ASF_Modes_t  mode);
+ASF_uint32_t ASFSetVSGMode(ASF_uint32_t ulVSGId, ASF_Modes_t mode);
 
 ASF_uint32_t ASFGetVSGMode(ASF_uint32_t ulVSGId, ASF_Modes_t *mode);
 
@@ -805,10 +813,10 @@ typedef struct ASFFFPUpdateFlowParams_s {
 			ASF_uint8_t l2blob[ASF_MAX_L2BLOB_LEN];
 
 			/* L2 blob len */
-			ASF_uint32_t l2blobLen;
+			ASF_uint16_t l2blobLen;
 
 			/* Path MTU to be used for packets for the flow. */
-			ASF_uint32_t ulPathMTU;
+			ASF_uint16_t ulPathMTU;
 
 			ASF_uint32_t    ulL2blobMagicNumber;
 

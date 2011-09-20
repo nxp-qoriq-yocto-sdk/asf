@@ -150,6 +150,7 @@ extern int asfctrl_sysfs_init(void);
 extern int asfctrl_sysfs_exit(void);
 
 extern int asfctrl_dev_get_cii(struct net_device *dev);
+extern struct net_device *asfctrl_dev_get_dev(int cii);
 extern struct kobject *asfctrl_kobj;
 
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT

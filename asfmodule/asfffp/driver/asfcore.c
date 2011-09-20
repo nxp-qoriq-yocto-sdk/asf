@@ -595,8 +595,11 @@ static inline int asfAdjustFragAndSendUp(struct sk_buff *skb, ASFNetDevEntry_t *
 				pSkb->next = NULL;
 				pSkb->dev = dev;
 				abuf.nativeBuffer = pSkb;
-				ffpCbFns.pFnNoFlowFound(anDev->ulVSGId, anDev->ulCommonInterfaceId, anDev->ulZoneId,
-							abuf, ASF_SKB_FREE_FUNC, pSkb);
+				ffpCbFns.pFnNoFlowFound(anDev->ulVSGId,
+					anDev->ulCommonInterfaceId,
+					anDev->ulZoneId, abuf,
+					(genericFreeFn_t)ASF_SKB_FREE_FUNC,
+					pSkb);
 			}
 		}
 	} else {
@@ -741,7 +744,7 @@ void asf_display_skb_list(struct sk_buff *skb, char *msg)
 static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	ASFFFPGlobalStats_t     *gstats;
+	ASFFFPGlobalStats_t	*gstats;
 	int			bCsumVerify = 0;
 #endif
 	int			bLockFlag;
@@ -788,14 +791,15 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	anDev = ASFNetDev(real_dev);
 	if (NULL == anDev)
 		goto iface_not_found;
+	abuf.nativeBuffer = skb;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (real_dev != skb->dev)
 		anDev = ASFGetVlanDev(anDev, skb->vlan_tci & VLAN_VID_MASK);
 	if (NULL == anDev)
 		goto iface_not_found;
 	if (unlikely(anDev->ulVSGId == ASF_INVALID_VSG)) {
-		abuf.nativeBuffer = skb;
-		ffpCbFns.pFnVSGMappingNotFound(anDev->ulCommonInterfaceId, abuf, ASF_SKB_FREE_FUNC, skb);
+		ffpCbFns.pFnVSGMappingNotFound(anDev->ulCommonInterfaceId,
+			abuf, (genericFreeFn_t)ASF_SKB_FREE_FUNC, skb);
 		ASF_RCU_READ_UNLOCK(bLockFlag);
 		return AS_FP_STOLEN;
 	}
@@ -904,9 +908,8 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		(asf_vsg_info[anDev->ulVSGId]->curMode & fwdMode)) {
 
 		/* Checksum verification will be done by eTSEC.*/
-		abuf.nativeBuffer = skb;
 		pFwdProcessPkt(anDev->ulVSGId, anDev->ulCommonInterfaceId,
-				abuf, ASF_SKB_FREE_FUNC, skb);
+				abuf, (genericFreeFn_t)ASF_SKB_FREE_FUNC, skb);
 		ASF_RCU_READ_UNLOCK(bLockFlag);
 		return AS_FP_STOLEN;
 	}
@@ -923,10 +926,9 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (unlikely(anDev->ulZoneId == ASF_INVALID_ZONE)) {
-		abuf.nativeBuffer = skb;
 		ffpCbFns.pFnZoneMappingNotFound(anDev->ulVSGId,
 			anDev->ulCommonInterfaceId, abuf,
-			ASF_SKB_FREE_FUNC, skb);
+			(genericFreeFn_t)ASF_SKB_FREE_FUNC, skb);
 		ASF_RCU_READ_UNLOCK(bLockFlag);
 		return AS_FP_STOLEN;
 	}
@@ -1046,7 +1048,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		ASFFFPProcessAndSendPkt(anDev->ulVSGId,
 			anDev->ulCommonInterfaceId,
-			abuf, ASF_SKB_FREE_FUNC, skb, NULL);
+			abuf, (genericFreeFn_t)ASF_SKB_FREE_FUNC, skb, NULL);
 
 	ASF_RCU_READ_UNLOCK(bLockFlag);
 	asf_debug_l2("returning STOLEN!\n");
@@ -1056,7 +1058,8 @@ iface_not_found:
 	ASF_RCU_READ_UNLOCK(bLockFlag);
 	if (ffpCbFns.pFnInterfaceNotFound) {
 		abuf.nativeBuffer = skb;
-		ffpCbFns.pFnInterfaceNotFound(abuf, ASF_SKB_FREE_FUNC, skb);
+		ffpCbFns.pFnInterfaceNotFound(abuf,
+			(genericFreeFn_t)ASF_SKB_FREE_FUNC, skb);
 		return AS_FP_STOLEN;
 	}
 
@@ -1193,6 +1196,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	/* TODO: how to handle fragments received on PPPoE iface and how to remember
+	 * logical device and hh_len */
 	fragCnt = 1;
 	if (unlikely((iph->frag_off) & ASF_MF_OFFSET_FLAG_NET_ORDER)) {
 		asf_display_one_frag(skb);
@@ -1298,9 +1303,14 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		vsgInfo = asf_ffp_get_vsg_info_node(ulVsgId);
 		if (vsgInfo) {
-			if (vsgInfo->configIdentity.ulConfigMagicNumber > flow->configIdentity.ulConfigMagicNumber)
-				bFlowValidate = 1;
+			if (vsgInfo->configIdentity.ulConfigMagicNumber !=
+				flow->configIdentity.ulConfigMagicNumber) {
+				asf_print("Calling flow validate %d != %d",
+				vsgInfo->configIdentity.ulConfigMagicNumber,
 
+				flow->configIdentity.ulConfigMagicNumber);
+				bFlowValidate = 1;
+			}
 			/* L2blob refersh handling for the possible change in the l2blob */
 
 			if ((!flow->bIPsecOut) &&
@@ -1439,7 +1449,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		if (asf_l2blob_refresh_npkts &&
 			(flow_stats->ulInPkts % asf_l2blob_refresh_npkts) == 0) {
 			asf_debug_l2("Decided to send L2Blob refresh ind based on npkts\n");
-			L2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
+			if (!L2blobRefresh)
+				L2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
 		}
 		flow->ulLastPktInAt = jiffies;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -1538,11 +1549,11 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		if (flow->bIPsecOut) {
 			if (pFFPIPSecOutv4) {
 				if (pFFPIPSecOutv4(ulVsgId,
-					skb, &flow->ipsecInfo) != 0) {
+					skb, &flow->ipsecInfo) == 0) {
 					goto gen_indications;
 				}
-			} else
-				goto drop_pkt;
+			}
+			goto drop_pkt;
 
 		}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
@@ -1821,9 +1832,12 @@ ret_pkt_to_stk:
 		abuf.nativeBuffer = skb;
 		ffpCbFns.pFnNoFlowFound(anDev->ulVSGId,
 			anDev->ulCommonInterfaceId, anDev->ulZoneId,
-			abuf, ASF_SKB_FREE_FUNC, skb);
+			abuf, (genericFreeFn_t)ASF_SKB_FREE_FUNC, skb);
 		return;
 	}
+#if 0
+/*TBD - This code is not used anywhere.
+	when this code will be called?*/
 	/* no frag list expected */
 	asf_debug_l2("ret_pkt LABEL\n");
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -1865,9 +1879,9 @@ ret_pkt_to_stk:
 		skb_set_mac_header(skb, -ETH_HLEN);
 		skb->mac_len = ETH_HLEN;
 	}
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
-
 #endif
+
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	asf_debug_l2("  ret_pkt LABEL -- calling netif_receive_skb!\n");
 	ASF_netif_receive_skb(skb);
 	asf_debug_l2("  ret_pkt LABEL -- returning from function!\n");
@@ -2029,31 +2043,41 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 		{
 			struct net_device  *ndev;
 			int found = 0;
-			asf_debug("MAP REQ ETHER cii %u mac %pM ptr 0x%x\n",
-				  ulCommonInterfaceId, info->ucDevIdentifierInPkt, info->ucDevIdentifierInPkt);
+			asf_debug("MAP REQ ETHER cii %u ptr 0x%x\n",
+				ulCommonInterfaceId,
+				info->ucDevIdentifierInPkt);
 			/*
 			 * Device identifier must have ethernet port number.
 			 * eg: 0 for eth0, 1 for eth1 etc.
 			 */
-			if (info->ulDevIdentiferInPktLen != 6) {
-				asf_debug("Invalid DevIdLen %d for ETHER iface type\n", info->ulDevIdentiferInPktLen);
+			if ((info->ucDevIdentifierType == ASF_IFACE_MAC_IDENTIFIER) &&
+				(info->ulDevIdentiferInPktLen != 6)) {
+				asf_debug("Invalid DevIdLen %d for ETHER iface type\n",
+					info->ulDevIdentiferInPktLen);
 				goto free_and_ret_err;
 			}
 			read_lock_bh(&dev_base_lock);
 			for_each_netdev(&init_net, ndev) {
-				if ((ndev->type == ARPHRD_ETHER) && (info->ulDevIdentiferInPktLen == ndev->addr_len)) {
-					if (!memcmp(ndev->dev_addr, info->ucDevIdentifierInPkt, ndev->addr_len)) {
-						asf_debug("ETHER iface found %s with mac %pM req-mac %pM\n",
-							  ndev->name,
-							  ndev->dev_addr, info->ucDevIdentifierInPkt);
+				if ((ndev->type == ARPHRD_ETHER) &&
+				(((info->ucDevIdentifierType == ASF_IFACE_MAC_IDENTIFIER) &&
+				(info->ulDevIdentiferInPktLen == ndev->addr_len) &&
+				(!memcmp(ndev->dev_addr, info->ucDevIdentifierInPkt, ndev->addr_len))) ||
+				((info->ucDevIdentifierType == ASF_IFACE_NAME_IDENTIFIER) &&
+				(!memcmp(ndev->name, info->ucDevIdentifierInPkt, info->ulDevIdentiferInPktLen))))) {
+						asf_debug("ETHER iface found %s with mac %pM\n",
+							ndev->name, ndev->dev_addr);
 						found = 1;
 						break;
 					}
 				}
-			}
 			read_unlock_bh(&dev_base_lock);
 			if (!found) {
-				asf_debug("Ethernet device with hwaddr %pM not found\n", info->ucDevIdentifierInPkt);
+				if (info->ucDevIdentifierType == ASF_IFACE_MAC_IDENTIFIER)
+					asf_debug("Ethernet device with hwaddr %pM not found\n",
+						info->ucDevIdentifierInPkt);
+				else
+					asf_debug("Ethernet device with name %s not found\n",
+						info->ucDevIdentifierInPkt);
 				goto free_and_ret_err;
 			}
 
@@ -2388,9 +2412,17 @@ EXPORT_SYMBOL(ASFUnMapInterface);
 ASF_uint32_t ASFBindDeviceToVSG(ASF_uint32_t ulVSGId, ASF_uint32_t ulCommonInterfaceId)
 {
 	asf_debug(" begin cii %u vsg %u\n", ulCommonInterfaceId, ulVSGId);
-	if ((ulCommonInterfaceId < asf_max_ifaces) && asf_ifaces[ulCommonInterfaceId]) {
+	if ((ulVSGId < asf_max_vsgs)
+		&& (ulCommonInterfaceId < asf_max_ifaces)
+		&& asf_ifaces[ulCommonInterfaceId]) {
+
 		asf_ifaces[ulCommonInterfaceId]->ulVSGId = ulVSGId;
-		asf_debug(" exit ... success .. cii %u vsg %u\n", ulCommonInterfaceId, ulVSGId);
+
+		/* create vsg specific node if not allocated yet! */
+		asf_ffp_get_vsg_info_node(ulVSGId);
+
+		asf_debug(" exit ... success .. cii %u vsg %u\n",
+			ulCommonInterfaceId, ulVSGId);
 		return ASF_SUCCESS;
 	}
 	return ASF_FAILURE;
@@ -2400,9 +2432,13 @@ EXPORT_SYMBOL(ASFBindDeviceToVSG);
 ASF_uint32_t ASFUnBindDeviceToVSG(ASF_uint32_t ulVSGId, ASF_uint32_t ulCommonInterfaceId)
 {
 	asf_debug(" begin cii %u vsg %u\n", ulCommonInterfaceId, ulVSGId);
-	if ((ulCommonInterfaceId < asf_max_ifaces) && asf_ifaces[ulCommonInterfaceId]) {
+	if ((ulVSGId < asf_max_vsgs)
+		&& (ulCommonInterfaceId < asf_max_ifaces)
+		&& asf_ifaces[ulCommonInterfaceId]) {
+
 		asf_ifaces[ulCommonInterfaceId]->ulVSGId = ASF_INVALID_VSG;
-		asf_debug(" exit ... success .. cii %u vsg %u\n", ulCommonInterfaceId, ulVSGId);
+		asf_debug(" exit ... success .. cii %u vsg %u\n",
+			ulCommonInterfaceId, ulVSGId);
 		return ASF_SUCCESS;
 	}
 	return ASF_FAILURE;
@@ -3613,6 +3649,7 @@ static int __init asf_init(void)
 		asf_err("Failed to allocate memory for vsg specific info array\n");
 		return -ENOMEM;
 	}
+	asf_ffp_get_vsg_info_node(0); /* create first vsg */
 
 	asf_debug("Allocating perCpu memory for global stats\n");
 	asf_gstats = asfAllocPerCpu(sizeof(ASFFFPGlobalStats_t));

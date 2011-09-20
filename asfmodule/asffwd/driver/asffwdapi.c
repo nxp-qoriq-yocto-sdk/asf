@@ -448,9 +448,10 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 			abuf.nativeBuffer = skb;
 			if (anDev)
 				fwdCbFns.pFnCacheEntryNotFound(anDev->ulVSGId,
-						anDev->ulCommonInterfaceId,
-						abuf,
-						ASF_SKB_FREE_FUNC, skb);
+					anDev->ulCommonInterfaceId,
+					abuf,
+					(genericFreeFn_t)ASF_SKB_FREE_FUNC,
+					skb);
 			goto exit;
 		} else
 			goto ret_pkt_to_stk;

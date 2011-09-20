@@ -142,6 +142,7 @@ ASF_void_t  asfctrl_invalidate_sessions(void)
 	if (fn_ipsec_vsg_magic_update)
 		fn_ipsec_vsg_magic_update();
 #endif
+	ASFCTRL_DBG("Exit:ulConfigMagicNumber =%d", asfctrl_vsg_config_id);
 	ASFCTRL_FUNC_EXIT;
 }
 EXPORT_SYMBOL(asfctrl_invalidate_sessions);
@@ -185,7 +186,7 @@ ASF_void_t  asfctrl_invalidate_l2blob(void)
 	if (fn_ipsec_vsg_magic_update)
 		fn_ipsec_vsg_magic_update();
 #endif
-	ASFCTRL_FUNC_EXIT;
+	ASFCTRL_DBG("Exit:ulL2blobMagic =%d", asfctrl_vsg_l2blobconfig_id);
 }
 
 ASF_void_t asfctrl_l3_route_flush(void)
@@ -237,6 +238,16 @@ int asfctrl_dev_get_cii(struct net_device *dev)
 	return -1;
 }
 EXPORT_SYMBOL(asfctrl_dev_get_cii);
+
+struct net_device *asfctrl_dev_get_dev(int cii)
+{
+	ASFCTRL_FUNC_ENTRY;
+
+	if (cii > ASFCTRL_MAX_IFACES)
+		return NULL;
+	return p_asfctrl_netdev_cii[cii];
+}
+EXPORT_SYMBOL(asfctrl_dev_get_dev);
 
 int asfctrl_dev_get_free_cii(struct net_device *dev)
 {
@@ -300,7 +311,7 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 			relIds[0] = asfctrl_dev_get_cii(pdev);
 			info.ucDevIdentifierInPkt = (ASF_uint8_t *)&usVlanId;
 			info.ulDevIdentiferInPktLen = 2;
-			info.ucDevIdentifierType = ASF_IFACE_NAME_IDENTIFIER;
+			info.ucDevIdentifierType = ASF_IFACE_DEV_IDENTIFIER;
 			info.ulRelatedIDs = (ASF_uint32_t *)relIds;
 			info.ulNumRelatedIDs = 1;
 		} else {
@@ -342,7 +353,7 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 		relIds[0] = parent_cii;
 		info.ucDevIdentifierInPkt = (ASF_uint8_t *)&usPPPoESessId;
 		info.ulDevIdentiferInPktLen = 2;
-		info.ucDevIdentifierType == ASF_IFACE_NAME_IDENTIFIER;
+		info.ucDevIdentifierType == ASF_IFACE_DEV_IDENTIFIER;
 		info.ulRelatedIDs = (ASF_uint32_t *)relIds;
 		info.ulNumRelatedIDs = 1;
 		ASFCTRL_DBG("PPPOE %s (parent %s) SESS_ID 0x%x mtu %d\n",

@@ -34,16 +34,16 @@
 #define asf_debug(fmt, arg...)  \
 	printk(KERN_INFO"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
 	__LINE__, __func__, ##arg)
-#define asf_trace 	asf_debug("-trace\n")
-#define asf_fentry 	asf_debug("-ENTRY\n")
-#define asf_fexit 	asf_debug("-EXIT\n")
+#define asf_trace	asf_debug(" trace\n")
+#define asf_fentry	asf_debug(" ENTRY\n")
+#define asf_fexit	asf_debug(" EXIT\n")
 #else
 #define asf_warn(fmt, arg...)
 #define asf_print(fmt, arg...)
 #define asf_debug(fmt, arg...)
-#define asf_trace 	asf_debug("-trace\n")
-#define asf_fentry 	asf_debug("-ENTRY\n")
-#define asf_fexit 	asf_debug("-EXIT\n")
+#define asf_trace	asf_debug(" trace\n")
+#define asf_fentry	asf_debug(" ENTRY\n")
+#define asf_fexit	asf_debug(" EXIT\n")
 #endif
 
 #ifdef ASF_DEBUG_L2
