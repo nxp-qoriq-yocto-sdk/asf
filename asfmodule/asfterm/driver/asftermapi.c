@@ -673,7 +673,7 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 		ulBytesToCopy = iph->tot_len - skb->len;
 		frag = skb_shinfo(skb)->frag_list;
 		/* It has been assumed that the accumulated size of
-		   all the fragments at ant time will be < 1536 bytes.*/
+		   all the fragments at any time will be < 1536 bytes.*/
 		if (ulBytesToCopy > (skb->end - (skb->data + skb->len))) {
 			asf_debug(" cann't Fit in First fragment.."\
 					"Dropping all the fragments\n");

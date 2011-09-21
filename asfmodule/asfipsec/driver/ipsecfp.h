@@ -142,7 +142,6 @@
 
 #define SECFP_MAX_SECPROC_ITERATIONS 2
 
-#define SECFP_PRESUMED_INTERFACE_MTU 1500
 #define SECFP_IN_GATHER_NO_SCATTER	1
 #define SECFP_IN_GATHER_SCATTER		0
 
@@ -391,6 +390,7 @@ typedef struct inSA_s {
 					if Extended Sequence number +4
 					for high order sequence number
 					 if AH, ICV length */
+	unsigned int ulRcvMTU;
 	unsigned int ulPkts[NR_CPUS];
 	unsigned int ulBytes[NR_CPUS];
 	unsigned int ulTunnelId;
@@ -766,6 +766,7 @@ unsigned int secfp_CreateInSA(
 				unsigned int ucSelFlags,
 				SAParams_t *pSAParams,
 				unsigned int ulSPDOutContainerIndex,
-				unsigned int ulOutSPI);
+				unsigned int ulOutSPI,
+				unsigned int ulMtu);
 
 #endif

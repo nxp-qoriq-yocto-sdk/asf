@@ -94,7 +94,7 @@ static ASF_int32_t asfctrl_term_veify_firewall(ASF_uint32_t ulVSGId,
 {
 	unsigned int verdict = NF_ACCEPT;
 
-	/* TBD */
+	/* TBD  Link with Linux Firewall*/
 
 	return verdict;
 }

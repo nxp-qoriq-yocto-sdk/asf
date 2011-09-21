@@ -2111,7 +2111,7 @@ static int secfp_createOutSACaamCtx(outSA_t *pSA)
 					(u8 *)&pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen);
 		if (ret) {
-			ASFIPSEC_DEBUG("secfp_createCaamCtx Failed\n");
+			ASFIPSEC_DEBUG("Failed\n");
 			kfree(pSA->ctx.key);
 
 			return ret;
@@ -2125,7 +2125,7 @@ static int secfp_createOutSACaamCtx(outSA_t *pSA)
 						pSA->SAParams.EncKeyLen,
 						DMA_TO_DEVICE);
 		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
-			ASFIPSEC_DEBUG("secfp_createCaamCtx: Unable to map key"\
+			ASFIPSEC_DEBUG(" Unable to map key"\
 						"i/o memory\n");
 			kfree(pSA->ctx.key);
 			return -ENOMEM;
@@ -2134,7 +2134,7 @@ static int secfp_createOutSACaamCtx(outSA_t *pSA)
 		pSA->ctx.authsize = SECFP_ICV_LEN;
 		ret = secfp_buildProtocolDesc(&pSA->ctx);
 		if (ret) {
-			ASFIPSEC_DEBUG("secfp_createCaamCtx Failed\n");
+			ASFIPSEC_DEBUG("Failed\n");
 			kfree(pSA->ctx.key);
 			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
 				pSA->ctx.split_key_pad_len +
@@ -2179,7 +2179,7 @@ static int secfp_createInSACaamCtx(inSA_t *pSA)
 					(u8 *)&pSA->SAParams.ucAuthKey,
 						pSA->SAParams.AuthKeyLen);
 		if (ret) {
-			ASFIPSEC_DEBUG("secfp_createCaamCtx Failed\n");
+			ASFIPSEC_DEBUG("Failed\n");
 			kfree(pSA->ctx.key);
 
 			return ret;
@@ -2201,7 +2201,7 @@ static int secfp_createInSACaamCtx(inSA_t *pSA)
 		pSA->ctx.authsize = SECFP_ICV_LEN;
 		ret = secfp_buildProtocolDesc(&pSA->ctx);
 		if (ret) {
-			ASFIPSEC_DEBUG("secfp_createCaamCtx Failed\n");
+			ASFIPSEC_DEBUG("Failed\n");
 			kfree(pSA->ctx.key);
 			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
 			pSA->ctx.split_key_pad_len +
@@ -2421,7 +2421,7 @@ send_l2blob:
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 }
 
-#ifndef CONFIG_ASF_SEC4x
+#ifdef CONFIG_ASF_SEC3x
 #ifdef ASFIPSEC_DEBUG_FRAME
 void print_desc(struct talitos_desc *desc)
 {
@@ -3771,7 +3771,10 @@ int secfp_try_fastPathOutv4 (
 		} else
 			usPadLen = 0;
 #ifndef SECFP_SG_SUPPORT
-		if ((iph->tot_len > (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen))) || (skb_shinfo(skb1)->frag_list)) {
+		if ((iph->tot_len > (pSA->ulPathMTU -
+					(pSA->ulSecOverHead + usPadLen)))
+				|| (skb_shinfo(skb1)->frag_list)
+				|| (skb_shinfo(skb1)->nr_frags)) {
 			ASFIPSEC_DEBUG("Fragmentation activated");
 			if (((iph->frag_off & IP_DF) && (pSA->SAParams.bRedSideFragment)) ||
 				((!pSA->SAParams.bRedSideFragment) && ((pSA->SAParams.handleDf == SECFP_DF_SET) ||
@@ -3789,22 +3792,6 @@ int secfp_try_fastPathOutv4 (
 				rcu_read_unlock();
 				return 1;
 			}
-			if (skb_shinfo(skb1)->frag_list) {
-				if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
-					ASFIPSEC_WARN("asflLinearize failed");
-					ASFSkbFree(skb1);
-					rcu_read_unlock();
-					return 0;
-				}
-
-				ASFIPSEC_DEBUG("skb1->len = %d",  skb->len);
-				skb_reset_network_header(skb1);
-				iph = ip_hdr(skb1);
-
-				skb = skb1;
-				ASFIPSEC_DEBUG("skb->len = %d, skb1->len = %d",
-					skb->len, skb1->len);
-			}
 
 			if (pSA->SAParams.bRedSideFragment) {
 				ASFIPSEC_DEBUG("Red side fragmentation is enabled");
@@ -3817,14 +3804,34 @@ int secfp_try_fastPathOutv4 (
 					rcu_read_unlock();
 					return 0;
 				}
+			} else {
+				if (skb_shinfo(skb1)->frag_list ||
+					skb_shinfo(skb1)->nr_frags) {
+					if (asfReasmLinearize(&skb1,
+						iph->tot_len, 1400+32, 1100+32)) {
+						ASFIPSEC_WARN("asflLinearize failed");
+						ASFSkbFree(skb1);
+						rcu_read_unlock();
+						return 0;
+					}
+
+					ASFIPSEC_DEBUG("skb->len = %d", skb->len);
+					ASFIPSEC_DEBUG("skb1->len = %d", skb1->len);
+					skb_reset_network_header(skb1);
+					iph = ip_hdr(skb1);
+					skb = skb1;
+				}
 			}
 		}
-#else
-		if ((iph->tot_len > (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen))) || (skb_shinfo(skb1)->frag_list)) {
+#else /* IF SEC_SG is ON */
+		if ((iph->tot_len > (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen)))
+				|| (skb_shinfo(skb1)->frag_list)
+				|| (skb_shinfo(skb1)->nr_frags)) {
 			ASFIPSEC_DEBUG("Total Leng is > ulPathMTU or has a frag list:"\
-				"tot_len = %d, ulPathMTU = %d, frag_list = %d",
+				"tot_len = %d, ulPathMTU = %d, frag_list = %d nr_frags = %d",
 				iph->tot_len, pSA->ulPathMTU,
-				skb_shinfo(skb1)->frag_list);
+				skb_shinfo(skb1)->frag_list,
+				skb_shinfo(skb1)->nr_frags);
 			if (unlikely((iph->tot_len) < (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen)))) {
 				ASFIPSEC_DEBUG("TotalLength is"\
 					" less than path MTU, but frag_list "\
@@ -3833,15 +3840,12 @@ int secfp_try_fastPathOutv4 (
 				/* Example : Ingress device MTU is much lesser to Egress device MTU */
 				/* So we entered here because of frag_list */
 				/* Saves us a  lot if we get all information into single fragment */
-				if (skb_copy_bits(skb_shinfo(skb1)->frag_list, 0, skb1->data + skb1->len, iph->tot_len - skb1->len) < 0) {
-					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
-					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
-					ASFIPSEC_DEBUG("Trying to flatten the data failed");
-					ASFSkbFree(skb1);
-					rcu_read_unlock();
-					return 0;
-				}
-				skb_shinfo(skb1)->frag_list = NULL;
+
+				/* convert the buffer to SG List for SEC input*/
+				/* TBD -the output can be out of place in single buffer */
+				if (skb_shinfo(skb1)->frag_list)
+					asfSkbFraglistToNRFrags(skb1);
+				bScatterGatherList = SECFP_SCATTER_GATHER;
 				skb = skb1;
 			} else {
 				ASFIPSEC_DEBUG("skb has a fragment list or "\
@@ -3861,7 +3865,6 @@ int secfp_try_fastPathOutv4 (
 					rcu_read_unlock();
 					return 1;
 				}
-
 				if (pSA->SAParams.bRedSideFragment) {
 					ASFIPSEC_DEBUG("Red side fragmentation is enabled");
 						if (unlikely(asfIpv4Fragment(skb1,
@@ -3873,12 +3876,12 @@ int secfp_try_fastPathOutv4 (
 						rcu_read_unlock();
 						return 1;
 						}
-				} else{
+				} else {
 					ASFIPSEC_DEBUG("bScatterGather Enabling");
 					/*Check for  most common two fragment case */
 					bScatterGatherList = SECFP_SCATTER_GATHER;
 					skb = skb1;
-					if (!(skb_shinfo(skb1)->frag_list)) {
+					if (!(skb_shinfo(skb1)->frag_list || skb_shinfo(skb1)->nr_frags)) {
 						ASFIPSEC_DEBUG("Trying to see if we can fit in two fragment");
 						/* In the 2 fragment case, total packet size would include additional ip header length */
 						/* Assumption: rest are accounted in ulPathMTU */
@@ -3887,7 +3890,12 @@ int secfp_try_fastPathOutv4 (
 							ASFIPSEC_DEBUG("IP packet fits into 2 fragments");
 							ASFIPSEC_DEBUG("Current packet does not have a fragments, but  will be fragmented subsequently ");
 							/* Temporary holder for the extra fragment */
-							skb1->prev = ASF_gfar_new_skb(pSA->odev);
+#ifdef ASF_TERM_FP_SUPPORT
+							if (skb->mapped == PF_PACKET_SKB)
+								skb1->prev = packet_new_skb(pSA->odev);
+							else
+#endif
+								skb1->prev = gfar_new_skb(pSA->odev);
 							if (skb1->prev) {
 								ASFIPSEC_DEBUG("Allocated skb->prev");
 								skb_reserve(skb1->prev, ETH_HLEN + SECFP_IP_HDR_LEN);
@@ -3909,6 +3917,9 @@ int secfp_try_fastPathOutv4 (
 		ASFIPSEC_DEBUG("outV4: bScatterGather = %d", bScatterGatherList);
 #endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+		/* For frag_list case, this will send each frag independently
+		to SEC for encryption*/
+
 		for (; skb != NULL; skb = pNextSkb)
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		{
@@ -3949,13 +3960,12 @@ int secfp_try_fastPathOutv4 (
 			skb->cb[SECFP_REF_INDEX] = 2;
 
 			desc = secfp_desc_alloc();
-
 			if (!desc) {
-				/* TBD complete this error handling */
-				ASFIPSEC_ERR("desc allocation failure");
+				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
+				ASFIPSEC_WARN("desc allocation failure");
 				ASFSkbFree(skb);
 				rcu_read_unlock();
-				return 1;
+				return 0;
 			}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
@@ -4015,9 +4025,9 @@ int secfp_try_fastPathOutv4 (
 				skb->cb[SECFP_REF_INDEX]++;
 
 				desc = secfp_desc_alloc();
-
 				if (!desc) {
-					ASFIPSEC_ERR("desc allocation failure");
+					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
+					ASFIPSEC_WARN("desc allocation failure");
 					if (skb->cb[SECFP_REF_INDEX] != 0) {
 						skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
 					} else {
@@ -4028,7 +4038,7 @@ int secfp_try_fastPathOutv4 (
 					}
 					/* Increment statistics */
 					rcu_read_unlock();
-					return 1;
+					return 0;
 				}
 #ifdef SECFP_SG_SUPPORT
 				if ((secout_sg_flag & SECFP_SCATTER_GATHER)
@@ -4065,7 +4075,7 @@ int secfp_try_fastPathOutv4 (
 					secfp_desc_free(desc);
 					/* Increment statistics */
 					rcu_read_unlock();
-					return 1;
+					return 0;
 				}
 			}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
@@ -4087,7 +4097,7 @@ int secfp_try_fastPathOutv4 (
 				skb->data_len = 0;
 				ASFSkbFree(skb);
 				rcu_read_unlock();
-				return 1;
+				return 0;
 			}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		}
@@ -4100,15 +4110,15 @@ int secfp_try_fastPathOutv4 (
 			ASFBuffer_t Buffer;
 			/* Homogenous buffer */
 			rcu_read_unlock();
+			/* TBD - No need for this check, once the frag_list of asf is same as linux frag_list*/
 			if (skb_shinfo(skb1)->frag_list) {
 				if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
 					ASFIPSEC_DEBUG("asflLinearize failed");
 					ASFSkbFree(skb1);
-					return 1;
+					return 0;
 				}
 				skb_reset_network_header(skb1);
 			}
-
 			Buffer.nativeBuffer = skb1;
 			if (pContainer)
 				bSPDContainerPresent = 1;
@@ -4120,6 +4130,7 @@ int secfp_try_fastPathOutv4 (
 			return 0;
 		}
 	}
+	rcu_read_unlock();
 	return 1;
 }
 
@@ -4326,7 +4337,7 @@ void secfp_outComplete(struct device *dev, void *pdesc,
 		if (error) {
 #ifdef ASF_IPSEC_DEBUG
 			char tmp[SECFP_ERROR_STR_MAX];
-			ASFIPSEC_DEBUG("%08x: %s\n", error,
+			ASFIPSEC_WARN("%08x: %s\n", error,
 				caam_jr_strstatus(tmp, error));
 #endif
 		}
@@ -5345,7 +5356,7 @@ void secfp_inComplete(struct device *dev, void *pdesc,
 #ifdef CONFIG_ASF_SEC4x
 #ifdef ASF_IPSEC_DEBUG
 		char tmp[SECFP_ERROR_STR_MAX];
-		ASFIPSEC_DEBUG("%08x: %s\n", err,
+		ASFIPSEC_WARN("%08x: %s\n", err,
 			caam_jr_strstatus(tmp, err));
 #endif
 #endif
@@ -6743,15 +6754,19 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			ASFIPSEC_DEBUG("ESP Packet absorbed by IP reasembly module");
 			return 0; /*Pkt absorbed */
 		}
-		fragCnt = 0;
+
 		iph = ip_hdr(skb1);
+#ifndef SECFP_SG_SUPPORT
 		if (asfReasmLinearize(&skb1, iph->tot_len, 1400+32, 1100+32)) {
 			ASFIPSEC_WARN("skb->linearize failed ");
 			ASFSkbFree(skb1);
 			return 0;
 		}
+		fragCnt = 0;
 		skb_reset_network_header(skb1);
 		iph = ip_hdr(skb1);
+#endif
+
 #ifdef ASFIPSEC_DEBUG_FRAME
 		ASFIPSEC_PRINT("Pkt received skb->len = %d", skb1->len);
 		hexdump(skb1->data - 14, skb1->len);
@@ -6762,7 +6777,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			ASFSkbFree(skb1);
 			return 0;
 		}
-#else
+#else /* ASF_MINIMUM MODE */
 		ASFIPSEC_WARN("Fragmented Packets Not supported in this mode");
 		return 1; /* Send it up to Stack */
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -6793,20 +6808,18 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		}
 		/* SA Found */
 		/* Need to have this check when packets are coming in from upper layer, but not from the driver interface */
-		if (!fragCnt) {
-			pHeadSkb = pTailSkb = skb1;
-			len  = skb1->len;
-			bScatterGather = SECFP_NO_SCATTER_GATHER;
-		} else {
+		if (skb_shinfo(skb1)->frag_list ||
+			skb_shinfo(skb1)->nr_frags) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
 			pHeadSkb = skb1;
+
 			for (pTailPrevSkb = skb1, pTailSkb = skb_shinfo(skb1)->frag_list;
 				pTailSkb->next != NULL; pTailPrevSkb = pTailSkb, pTailSkb = pTailSkb->next)
 				;
 			bScatterGather = SECFP_SCATTER_GATHER;
 
-			if (likely((iph->tot_len - (pSA->ulSecHdrLen + (iph->ihl*4))) < SECFP_PRESUMED_INTERFACE_MTU)
+			if (likely((iph->tot_len - (pSA->ulSecHdrLen + (iph->ihl*4))) < pSA->ulRcvMTU)
 				&& (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL)) {
 				/* We go into gather input , single output */
 				/* use skb->prev for indicating single output */
@@ -6836,9 +6849,14 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 					(unsigned int) skb1->dev);
 #endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
+		} else {
+			pHeadSkb = pTailSkb = skb1;
+			len  = skb1->len;
+			bScatterGather = SECFP_NO_SCATTER_GATHER;
 		}
 		secin_sg_flag = SECFP_IN|bScatterGather;
-
+/*TBD - In the following Code, pTailSkb will not work for nr_frags.
+So all these special boundary cases need to be handled for nr_frags*/
 		if ((bCheckLen) && ((pTailSkb->end - pTailSkb->tail)
 					< pSA->ulReqTailRoom)) {
 			ASFIPSEC_WARN("Received Skb does not have"
@@ -7054,13 +7072,13 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		pHeadSkb->cb[SECFP_REF_INDEX] = 2;
 
 		desc = secfp_desc_alloc();
-
 		if (!desc) {
-			ASFIPSEC_ERR("desc allocation failure");
-			/*TBD - add stats and log etc*/
+			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
+			ASFIPSEC_WARN("desc allocation failure");
 			pHeadSkb->data_len = 0;
 			ASFSkbFree(pHeadSkb);
 			rcu_read_unlock();
+			return 0;
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
@@ -7131,7 +7149,8 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			desc = secfp_desc_alloc();
 
 			if (!desc) {
-				ASFIPSEC_ERR("desc allocation failure");
+				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
+				ASFIPSEC_WARN("desc allocation failure");
 				/* Mark SKB action index to drop */
 				pHeadSkb->cb[SECFP_REF_INDEX] -= 2 ;
 				if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
@@ -7642,7 +7661,6 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 		case SECFP_ESP_NULL:
 			ASFIPSEC_DEBUG("NULL Encryption set");
 			break;
-
 		default:
 			ASFIPSEC_WARN("Invalid ucEncryptAlgo");
 			return -1;
@@ -8472,7 +8490,8 @@ unsigned int secfp_CreateInSA(
 				unsigned int ucSelFlags,
 				SAParams_t *pSAParams,
 				unsigned int ulSPDOutContainerIndex,
-				unsigned int ulOutSPI)
+				unsigned int ulOutSPI,
+				unsigned int ulMtu)
 {
 	inSA_t *pSA;
 	SPDInContainer_t *pContainer;
@@ -8677,7 +8696,7 @@ unsigned int secfp_CreateInSA(
 				local_bh_enable();
 			return SECFP_FAILURE;
 		}
-
+		pSA->ulRcvMTU = ulMtu;
 		/* Update the magic number and index in SPI table for easy reference */
 		pSA->ulSPDInContainerIndex = ulContainerIndex;
 		pSA->ulSPDInMagicNum = ptrIArray_getMagicNum(&secfp_InDB, ulContainerIndex);
@@ -9160,7 +9179,7 @@ static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
 	}
 	pAsfLogInfo->u.IPSecInfo.ucProtocol = pSA->SAParams.ucProtocol;
 	pAsfLogInfo->u.IPSecInfo.ulSeqNumber = pSA->ulLastSeqNum;
-	pAsfLogInfo->u.IPSecInfo.ulPathMTU = SECFP_PRESUMED_INTERFACE_MTU;
+	pAsfLogInfo->u.IPSecInfo.ulPathMTU = pSA->ulRcvMTU;
 	pAsfLogInfo->u.IPSecInfo.ulSPI = pSA->SAParams.ulSPI;
 	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6 == 0) {
 		pAsfLogInfo->u.IPSecInfo.Address.IP_Version = 4;

@@ -261,6 +261,8 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
 	printk(KERN_INFO"%u (L2blob Not Found )\n",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
+	printk(KERN_INFO"%u (Desc Alloc Error )\n",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
 	return 0;
 }
 

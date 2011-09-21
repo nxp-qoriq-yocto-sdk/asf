@@ -496,12 +496,14 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			}
 
 			if (secfp_CreateInSA(ulVSGId,
-					     pAddSA->ulTunnelId,
-					     pAddSA->ulInSPDContainerIndex,
-					     pAddSA->ulInSPDMagicNumber,
-					     pSrcSel, pDstSel, ucSelFlag, &SAParams,
-					     pAddSA->ulOutSPDContainerIndex,
-					     pAddSA->ulOutSPI) != SECFP_SUCCESS) {
+					pAddSA->ulTunnelId,
+					pAddSA->ulInSPDContainerIndex,
+					pAddSA->ulInSPDMagicNumber,
+					pSrcSel, pDstSel, ucSelFlag, &SAParams,
+					pAddSA->ulOutSPDContainerIndex,
+					pAddSA->ulOutSPI,
+					pAddSA->pSAParams->ulMtu
+					) != SECFP_SUCCESS) {
 				ASFIPSEC_WARN("secfp_CreateInSA returned failure");
 			}
 			secfp_freeSelSet(pSrcSel);

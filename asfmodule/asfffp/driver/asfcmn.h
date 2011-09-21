@@ -122,7 +122,6 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 #define ASF_netif_receive_skb	netif_receive_skb
 #endif
 
-#define ASF_gfar_new_skb
 #define ASF_gfar_kfree_skb	ASFSkbFree
 
 static inline void asf_skb_free_func(void *obj)

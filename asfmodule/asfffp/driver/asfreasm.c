@@ -1979,6 +1979,7 @@ void asfSkbFraglistToNRFrags(struct sk_buff *skb)
 
 		skb = skb->next;
 	}
+	skb_shinfo(first_skb)->frag_list = NULL;
 }
 EXPORT_SYMBOL(asfSkbFraglistToNRFrags);
 #endif

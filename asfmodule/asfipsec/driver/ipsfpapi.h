@@ -244,6 +244,7 @@ typedef enum asfIPSecGlobalPPStats {
 	ASF_IPSEC_PP_GBL_CNT23, /*In SA Not Found*/
 	ASF_IPSEC_PP_GBL_CNT24, /*Out SA not Found*/
 	ASF_IPSEC_PP_GBL_CNT25, /*Out L2blob not Found*/
+	ASF_IPSEC_PP_GBL_CNT26, /*Desc alloc Failure*/
 	ASF_IPSEC_PP_GBL_CNT_MAX
 } asfIPSecGlobalPPStats_e;
 
