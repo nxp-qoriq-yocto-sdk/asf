@@ -34,7 +34,7 @@ endif
 KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfffp/driver/Module.symvers
 export KBUILD_EXTRA_SYMBOLS
 
-EXTRA_CFLAGS += -DCONFIG_ASF=1 -DCONFIG_AS_FASTPATH=1 -I$(KERNEL_PATH)/net/bridge
+EXTRA_CFLAGS += -O0 -DCONFIG_ASF=1 -DCONFIG_AS_FASTPATH=1 -I$(KERNEL_PATH)/net/bridge
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/drivers/net
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/drivers/crypto
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/drivers/crypto/caam
