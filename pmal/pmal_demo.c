@@ -45,7 +45,9 @@
 #define ASFT_UDP_PORT_GTP_U	2152
 #define ASFT_UDP_PORT_TEST	1024
 
-/*#define PMAL_DEBUG*/
+#define ASFT_DEF_SRC_ADDR      "192.168.1.5"
+#define ASFT_DEF_DEST_ADDR     "192.168.1.7"
+
 #include "pmal.h"
 
 /* Application Specific Global var, and defines */
@@ -54,7 +56,6 @@ int fd_tx;
 int total_rx;
 int total_tx;
 struct pmal_con_s my_conn;
-
 
 static inline void pmal_copy(__u32 *dst, __u32 *src, int len)
 {
@@ -184,7 +185,6 @@ static void sigproc(int signum)
 
 int main(int argc, char **argv)
 {
-	struct pmal_config_s s_conf;
 	struct pollfd pfd;
 	struct sockaddr_ll peer_addr;
 	struct ifreq s_ifr;
@@ -192,10 +192,13 @@ int main(int argc, char **argv)
 	struct pkt_ethhdr *eth_d, *eth_s;
 	struct pmal_buf *pmal_buf = NULL;
 	struct pmal_buf *pmal_buf_tx = NULL;
+	struct pmal_config_s s_conf;
 	unsigned int tx_wt = 0;
 	unsigned int rx_wt = 0;
 	unsigned int size = 4;
 	unsigned int i_ifindex;
+	unsigned int filter_ip = 0;
+	unsigned int filter_port = ASFT_UDP_PORT_GTP_U;
 	unsigned int opt_val;
 	unsigned int len = 0;
 	unsigned int kernel_loopback = 0;
@@ -227,20 +230,23 @@ int main(int argc, char **argv)
 	CATCH_SIGNAL(SIGTERM);
 #undef CATCH_SIGNAL
 
-	if (argc >= 2) {
+	switch (argc) {
+	case 4:
+		filter_port = atoi(argv[3]);
+	case 3:
+		filter_ip = inet_addr(argv[2]);
+	case 2:
 		kernel_loopback = atoi(argv[1]);
-		printf("\nStarting PACKET_MMAP with KERNEL_LOOPBACK = %d",
-			atoi(argv[1]));
-	} else
-		printf("\nStarting PACKET_MMAP with USERSPACE_LOOPBACK");
+		if (kernel_loopback)
+			printf("\nStarting PMAL with KERNEL_LOOPBACK");
+		break;
+	}
 
 	memset(&s_conf, 0, sizeof(s_conf));
 
 	s_conf.type = SOCK_RAW;
 	s_conf.ring_size = 4096;
 	s_conf.dynamic_learing_enabled = 1;
-	s_conf.sock_filter.udp_ports[0] = ASFT_UDP_PORT_GTP_U;
-	s_conf.sock_filter.udp_ports[1] = ASFT_UDP_PORT_TEST;
 
 	s_conf.config_bitmap = PMAL_SOCKET_TYPE |
 			PMAL_RING_SIZE |
@@ -250,10 +256,8 @@ int main(int argc, char **argv)
 		PMAL_ERROR("pmal_init");
 		return -1;
 	}
-
-	s_conf.sock_filter.udp_ports[0] = ASFT_UDP_PORT_GTP_U;
-	s_conf.sock_filter.udp_ports[1] = ASFT_UDP_PORT_TEST;
-
+	s_conf.sock_filter.ip_addr = filter_ip;
+	s_conf.sock_filter.udp_ports[0] = filter_port;
 	s_conf.config_bitmap = PMAL_SOCK_FILTER;
 
 	fd_rx = pmal_socket(PMAL_SOCKET_RX, s_conf);
@@ -293,13 +297,13 @@ int main(int argc, char **argv)
 	peer_addr.sll_ifindex = i_ifindex;
 
 	my_conn.saddr.sin_family = AF_INET;
-	my_conn.saddr.sin_port = htons(ASFT_UDP_PORT_TEST);
-	my_conn.saddr.sin_addr.s_addr = inet_addr("192.168.1.5");
+	my_conn.saddr.sin_port = htons(filter_port);
+	my_conn.saddr.sin_addr.s_addr =
+		filter_ip ? filter_ip : inet_addr(ASFT_DEF_SRC_ADDR);
 
 	my_conn.daddr.sin_family = AF_INET;
-	my_conn.daddr.sin_port = htons(ASFT_UDP_PORT_TEST);
-	my_conn.daddr.sin_addr.s_addr = inet_addr("192.168.2.5");
-
+	my_conn.daddr.sin_port = htons(filter_port);
+	my_conn.daddr.sin_addr.s_addr = inet_addr(ASFT_DEF_DEST_ADDR);
 	my_conn.conn_id = 1;
 
 	pmal_add_connection(fd_rx, &my_conn);
@@ -307,9 +311,8 @@ int main(int argc, char **argv)
 	if (kernel_loopback)
 		if ((pmal_setsockopt(fd_rx,
 			PMAL_KERNEL_LOOPBACK,
-			(char *)opt_val, size)) != 0)
+			(char *)kernel_loopback, size)) != 0)
 				perror("setsockopt()");
-
 	for (i = 0;;) {
 		if (!kernel_loopback) {
 			rx_wt = 0;

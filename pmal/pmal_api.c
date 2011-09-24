@@ -278,7 +278,6 @@ int pmal_socket(int direction, struct pmal_config_s cfg)
 /* To Close a Packet Mapped Socket*/
 int pmal_close(int fd)
 {
-	PMAL_FN_ENTRY();
 	return close(fd);
 }
 
