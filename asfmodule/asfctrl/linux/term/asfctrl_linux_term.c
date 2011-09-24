@@ -122,7 +122,7 @@ static ASF_int32_t asfctrl_term_XmitL2blobDummyPkt(
 		memset(&fl, 0, sizeof(fl));
 		fl.oif = dev->ifindex;
 		fl.proto = IPPROTO_UDP,
-		fl.nl_u.ip4_u.saddr = tpl->ulSrcIp;
+		fl.nl_u.ip4_u.saddr = 0;
 		fl.nl_u.ip4_u.daddr = tpl->ulDestIp;
 		fl.nl_u.ip4_u.tos = 0;
 		fl.uli_u.ports.sport = tpl->usSrcPort;
