@@ -1639,9 +1639,13 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			/* adjust other skb pointers */
 			len = (ulMTU & ~7);
 			bytesLeft = (iph->tot_len - ihl - len);
+
+			tot_len = len+ihl;
+			/* The first fragment will be created at the end */
+
+#if 0
 			/* Skb->len will be set at last as will be used
 			  asfSkbCopyBits() */
-			tot_len = len+ihl;
 			skb->tail = skb->data;
 			skb->tail += tot_len;
 			iph->frag_off |= htons(IP_MF);
@@ -1654,6 +1658,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				skb->ip_summed = CHECKSUM_UNNECESSARY;
 			}
 			asf_ip_options_fragment(skb);
+#endif
 
 			offset += len;
 			ptr += (ihl + len);
@@ -1737,7 +1742,37 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					return 1;
 				}
 			}
-			skb->len = tot_len;
+
+#ifdef ASF_TERM_FP_SUPPORT
+			if (skb->mapped == PF_PACKET_SKB)
+				skb2 = packet_new_skb(skb->dev);
+			else
+#endif
+				skb2 = gfar_new_skb(skb->dev);
+
+			skb_reset_network_header(skb2);
+
+			asfSkbCopyBits(skb, 0,
+					skb_put(skb2, tot_len),
+					tot_len);
+
+			ip_hdr(skb2)->frag_off |= htons(IP_MF);
+			ip_hdr(skb2)->tot_len = htons(tot_len);
+
+			asf_ip_options_fragment(skb2);
+
+			if (!bDoChecksum)
+				skb2->ip_summed = CHECKSUM_PARTIAL;
+			else {
+				ip_send_check(ip_hdr(skb2));
+				skb2->ip_summed = CHECKSUM_UNNECESSARY;
+			}
+
+
+			*pOutSkb = skb2;
+			skb2->next = skb->next;
+			skb->next = NULL;
+			ASFSkbFree(skb);
 			return 0;
 		}
 	}
