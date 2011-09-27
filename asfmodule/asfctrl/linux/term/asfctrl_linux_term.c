@@ -781,7 +781,7 @@ static int asfctrl_term_pkt_pmal_config(int type, void *param)
 		if (!asf_dev)
 			return -1;
 		ret = asfctrl_term_entry_add(asf_dev->ndev,
-			tuple, conn->conn_id, (void *)conn->ctxt);
+			tuple, ASF_FALSE, (void *)conn->ctxt);
 		return ret;
 	}
 	case ASF_PACKET_CONN_DEL:

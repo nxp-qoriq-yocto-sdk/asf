@@ -1812,22 +1812,18 @@ static void term_cmd_flush_table(unsigned long ulVsgId)
 		return;
 
 	asf_print("Flushing VSG [%lu] Cache Table", ulVsgId);
-
+	/* Flush only non-static entries for required VSG*/
 	for (i = 0; i < term_hash_buckets; i++) {
 		bkt = &term_cache_table[i];
 		head = (term_cache_t *) bkt;
 		spin_lock_bh(&bkt->lock);
 		entry = head->pNext;
-		rcu_assign_pointer(head->pNext, head);
-		rcu_assign_pointer(head->pPrev, head);
-		spin_unlock_bh(&bkt->lock);
-
-		/* Now the list is detached from the bucket */
 		while (entry != head) {
 			temp = entry;
 			entry = entry->pNext;
-			if (entry->ulVsgId != ulVsgId)
+			if (temp->ulVsgId != ulVsgId || !temp->ulInacTime)
 				continue;
+			__asf_term_cache_remove(temp, bkt);
 			if (temp->pL2blobTmr)
 				asfTimerStop(ASF_TERM_BLOB_TMR_ID, 0,
 					temp->pL2blobTmr);
@@ -1837,6 +1833,7 @@ static void term_cmd_flush_table(unsigned long ulVsgId)
 			ptrIArray_delete(&term_ptrary, temp->id.ulArg1,
 				term_cache_free_rcu);
 		}
+		spin_unlock_bh(&bkt->lock);
 	}
 	return;
 }
