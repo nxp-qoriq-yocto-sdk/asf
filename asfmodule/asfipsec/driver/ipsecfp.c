@@ -39,6 +39,8 @@
 #include <net/route.h>
 #include <linux/inetdevice.h>
 #include "ipseccmn.h"
+#include "../../asfffp/driver/asfreasm.h"
+
 #define SECFP_MF_OFFSET_FLAG_NET_ORDER  htons(IP_MF|IP_OFFSET)
 
 #ifdef ASF_TERM_FP_SUPPORT
