@@ -7084,6 +7084,8 @@ So all these special boundary cases need to be handled for nr_frags*/
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
+		if (skb_shinfo(pHeadSkb)->frag_list)
+			asfSkbFraglistToNRFrags(pHeadSkb);
 		if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 			== SECFP_SCATTER_GATHER)
 			secfp_prepareInDescriptorWithFrags(pHeadSkb, pSA,
