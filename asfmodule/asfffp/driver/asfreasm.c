@@ -1938,9 +1938,9 @@ void asfSkbFraglistToNRFrags(struct sk_buff *skb)
 
 	skb = skb_shinfo(first_skb)->frag_list;
 
-	if (skb_shinfo(first_skb)->destructor_arg) {
+	if (first_skb->gianfar_destructor) {
 
-		skb_dtor = skb_shinfo(first_skb)->destructor_arg;
+		skb_dtor = skb_shinfo(first_skb)->gianfar_destructor_arg;
 
 		while (skb_dtor->next != NULL) {
 			skb_dtor = skb_dtor->next;
@@ -1948,7 +1948,7 @@ void asfSkbFraglistToNRFrags(struct sk_buff *skb)
 
 	} else {
 		first_skb->gianfar_destructor = gfar_skb_destructor;
-		skb_shinfo(first_skb)->destructor_arg = skb;
+		skb_shinfo(first_skb)->gianfar_destructor_arg = skb;
 		skb_dtor = skb;
 	}
 	while (skb != NULL) {
@@ -1973,13 +1973,13 @@ void asfSkbFraglistToNRFrags(struct sk_buff *skb)
 		}
 
 		first_skb->len += skb->len;
-		first_skb->data_len += skb->data_len;
+		first_skb->data_len += skb->len;
 
-		skb_shinfo(skb)->nr_frags = 0;
-		skb->data_len = 0;
 
-		skb_dtor->next = skb;
-		skb_dtor = skb;
+		if (skb_dtor != skb) {
+			skb_dtor->next = skb;
+			skb_dtor = skb;
+		}
 
 		skb = skb->next;
 	}
