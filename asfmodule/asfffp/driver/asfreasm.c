@@ -1394,20 +1394,24 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 		bAlloc = 0;
 	} else {
 #ifdef ASF_TERM_FP_SUPPORT
-		asf_reasm_debug("Total Len =%d, available = %d, "\
-			"Don't expect to allocate new SKB.Dropping.\n",
-			ulTotalLen,
-			pTempSkb->end - (pTempSkb->data + pTempSkb->len));
-		frag = skb_shinfo(pTempSkb)->frag_list;
-		/* The Calling Function will free the First SKB */
-		while (frag) {
-			frag1 = frag;
-			frag = frag->next;
-			/* Free SKB using frag1 */
-			frag1->next = NULL;
-			packet_kfree_skb(frag1);
+		if (pTempSkb->mapped) {
+			asf_reasm_debug("Total Len =%d, available = %d, "\
+					"Don't expect to allocate new SKB\n",
+					ulTotalLen,
+					pTempSkb->end
+					- (pTempSkb->data + pTempSkb->len));
+			frag = skb_shinfo(pTempSkb)->frag_list;
+			/* The Calling Function will free the First SKB */
+			while (frag) {
+				frag1 = frag;
+				frag = frag->next;
+				/* Free SKB using frag1 */
+				frag1->next = NULL;
+				packet_kfree_skb(frag1);
+			}
+			skb_shinfo(pTempSkb)->frag_list = NULL;
+			return 1;
 		}
-		return 1;
 #endif
 		skb = ASFSkbAlloc((ulTotalLen+ulExtraLen), GFP_ATOMIC);
 		if (skb) { /* We need a flat buffer, if not return an error*/
