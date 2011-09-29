@@ -6815,10 +6815,15 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
 			pHeadSkb = skb1;
-
-			for (pTailPrevSkb = skb1, pTailSkb = skb_shinfo(skb1)->frag_list;
-				pTailSkb->next != NULL; pTailPrevSkb = pTailSkb, pTailSkb = pTailSkb->next)
-				;
+			if (skb_shinfo(skb1)->frag_list)
+				for (pTailPrevSkb = skb1,
+					pTailSkb = skb_shinfo(skb1)->frag_list;
+					pTailSkb->next != NULL;
+					pTailPrevSkb = pTailSkb,
+					pTailSkb = pTailSkb->next)
+					;
+			else
+				pHeadSkb = pTailSkb = skb1;
 			bScatterGather = SECFP_SCATTER_GATHER;
 
 			if (likely((iph->tot_len - (pSA->ulSecHdrLen + (iph->ihl*4))) < pSA->ulRcvMTU)
@@ -7065,10 +7070,6 @@ So all these special boundary cases need to be handled for nr_frags*/
 			*((unsigned int *)(pHeadSkb->data + skb_headlen(pHeadSkb) + SECFP_COMMON_INTERFACE_ID_POSITION)) = pSA->SAParams.ulCId;
 		}
 
-		/* Using skb->data_len for storing the total length submitted to SEC */
-		/* SANDEEP: WHY DO WE NEED THAT
-			skb1->data_len = iph->tot_len - (iph->ihl*4);
-		*/
 
 		ASFIPSEC_DEBUG("Calling secfp-submit");
 		pHeadSkb->cb[SECFP_REF_INDEX] = 2;
