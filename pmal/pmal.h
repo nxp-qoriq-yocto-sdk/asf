@@ -14,6 +14,8 @@
 #ifndef __PMAL_H__
 #define __PMAL_H__
 
+#include <ctype.h>
+
 #define PMAL_DEF_FRAME_SIZE 2048
 #define PMAL_DEF_NUM_FRAMES 4096
 
@@ -210,4 +212,31 @@ void pmal_set_data_len_frag(struct pmal_buf *frag, unsigned int data_len);
 #define PMAL_FN_EXIT()
 #endif
 
+
+static inline void hexdump(const unsigned char *buf, unsigned short len)
+{
+	char str[80], octet[10];
+	int ofs, i, l;
+
+	for (ofs = 0; ofs < len; ofs += 16) {
+		sprintf(str, "%03x ", ofs);
+
+		for (i = 0; i < 16; i++) {
+			if ((i + ofs) < len)
+				sprintf(octet, "%02x ", buf[ofs + i]);
+			else
+				strcpy(octet, "   ");
+
+			strcat(str, octet);
+		}
+		strcat(str, "  ");
+		l = strlen(str);
+
+		for (i = 0; (i < 16) && ((i + ofs) < len); i++)
+			str[l++] = isprint(buf[ofs + i]) ? buf[ofs + i] : '.';
+
+		str[l] = '\0';
+		printf("%s\n", str);
+	}
+}
 #endif

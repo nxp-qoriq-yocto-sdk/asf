@@ -75,13 +75,17 @@ void process_frame(struct pmal_buf *pmal_buf,
 	struct pkt_ethhdr **eth_s)
 {
 	char *frame = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(pmal_buf);
-	*eth_s = (struct pkt_ethhdr *) (frame - ETH_HLEN);
+	unsigned int i = 0;
+	struct pmal_buf *tmp_pmal_buf;
 
-	if (pmal_buf->num_frags) {
-		struct pmal_buf *tmp_pmal_buf;
-		pmal_frag_next(pmal_buf, &tmp_pmal_buf);
+	*eth_s = (struct pkt_ethhdr *) (frame - ETH_HLEN);
+	i = pmal_buf->num_frags;
+	tmp_pmal_buf = pmal_buf;
+	frame = (char *)iph_s;
+	while (i) {
+		pmal_frag_next(tmp_pmal_buf, &tmp_pmal_buf);
 		frame = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(tmp_pmal_buf);
-		PMAL_PRINT("\nLength of Frag is %d ; first byte being = 0x%x", tmp_pmal_buf->buf_len, frame[0]);
+		i--;
 	}
 }
 

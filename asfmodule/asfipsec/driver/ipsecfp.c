@@ -4915,12 +4915,16 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 				return 2; /*Pkt absorbed */
 			}
 			inneriph = (struct iphdr *)(pHeadSkb->data);
+#ifdef SECFP_SG_SUPPORT
+			asfSkbFraglistToNRFrags(pHeadSkb);
+#else
 			if (asfReasmLinearize(&pHeadSkb, inneriph->tot_len, 1400+32, 1100+32)) {
 				ASFIPSEC_WARN(" skb->linearize failed ");
 				ASFSkbFree(pHeadSkb);
 				rcu_read_unlock();
 				return 1;
 			}
+#endif
 			skb_reset_network_header(pHeadSkb);
 			inneriph = (struct iphdr *)(pHeadSkb->data);
 			if (unlikely(pHeadSkb->len < ((inneriph->ihl*4) + SECFP_ESP_HDR_LEN))) {
@@ -6650,6 +6654,9 @@ int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
 	}
 
 	if (skb_shinfo(skb)->frag_list) {
+#ifdef SECFP_SG_SUPPORT
+		asfSkbFraglistToNRFrags(skb);
+#else
 		if (asfReasmLinearize(&skb,
 			ip_hdr(skb)->tot_len, 1400+32, 1100+32)) {
 			ASFIPSEC_ERR("skb->linearize failed ");
@@ -6657,6 +6664,7 @@ int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
 			*skbuff = NULL;
 			return ASF_IPSEC_CONSUMED;
 		}
+#endif
 		skb_reset_network_header(skb);
 		usIPHdrLen = ip_hdr(skb)->ihl * 4;
 	}

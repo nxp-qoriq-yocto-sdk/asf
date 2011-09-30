@@ -395,5 +395,5 @@ typedef struct ASFTERMQueryCacheEntryStatsInfo_s {
 int ASFTERMQueryCacheEntryStats(
 	ASF_uint32_t ulVsgId,
 	ASFTERMQueryCacheEntryStatsInfo_t *p);
-
+extern void asfSkbFraglistToNRFrags(struct sk_buff *skb);
 #endif

@@ -672,6 +672,10 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 		iph = ip_hdr(skb);
 		ulBytesToCopy = iph->tot_len - skb->len;
 		frag = skb_shinfo(skb)->frag_list;
+
+#ifdef ASF_SG_SUPPORT
+		asfSkbFraglistToNRFrags(skb);
+#else
 		/* It has been assumed that the accumulated size of
 		   all the fragments at any time will be < 1536 bytes.*/
 		if (ulBytesToCopy > (skb->end - (skb->data + skb->len))) {
@@ -721,6 +725,7 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 				break;
 			}
 		}
+#endif
 		skb_shinfo(skb)->frag_list = NULL;
 		ip_send_check(iph);
 		skb->ip_summed = CHECKSUM_UNNECESSARY;

@@ -364,9 +364,9 @@ delete_entry:
 			sizeof(ASFTERMCacheEntryTuple_t));
 
 		ASFCTRL_INFO("\n sip : %x dip : %x srcport : %d\n",
-			tuple.ulSrcIp,
-			tuple.ulDestIp,
-			tuple.usSrcPort);
+			cmd.tuple.ulSrcIp,
+			cmd.tuple.ulDestIp,
+			cmd.tuple.usSrcPort);
 
 		if (ASFTERMRuntime(ASF_DEF_VSG, ASF_TERM_DELETE_CACHE_ENTRY,
 			&cmd, sizeof(cmd), NULL, 0)
