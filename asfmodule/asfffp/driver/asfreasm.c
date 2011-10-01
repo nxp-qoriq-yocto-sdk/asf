@@ -1327,7 +1327,8 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 					pIpHdr->ihl = (unsigned char)5;
 					pIpHdr->id = asfReasmGetNextId();
 
-					skb->ip_summed = CHECKSUM_PARTIAL;
+					ip_send_check(pIpHdr);
+					skb->ip_summed = CHECKSUM_UNNECESSARY;
 					*fragCnt = pCb->ulNumFrags + pCb->ulNumSkbs;
 					asf_reasm_debug("returning skbs to caller\r\n");
 					if ((pReasmCb1 == NULL) || (pReasmCb2 == NULL)) {
