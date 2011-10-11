@@ -1678,11 +1678,6 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				len = (bytesLeft > ulMTU) ?  ulMTU : bytesLeft;
 				if (len < bytesLeft)
 					len &= ~7;
-#ifdef ASF_TERM_FP_SUPPORT
-				if (skb->mapped == PF_PACKET_SKB)
-					skb2 = packet_new_skb(skb->dev);
-				else
-#endif
 				skb2 = gfar_new_skb(skb->dev);
 
 				if (skb2) {
@@ -1748,13 +1743,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				}
 			}
 
-#ifdef ASF_TERM_FP_SUPPORT
-			if (skb->mapped == PF_PACKET_SKB)
-				skb2 = packet_new_skb(skb->dev);
-			else
-#endif
-				skb2 = gfar_new_skb(skb->dev);
-
+			skb2 = gfar_new_skb(skb->dev);
 			skb_reset_network_header(skb2);
 
 			asfSkbCopyBits(skb, 0,
