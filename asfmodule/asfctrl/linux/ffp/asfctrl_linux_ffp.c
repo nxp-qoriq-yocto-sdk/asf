@@ -392,6 +392,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		cmd.ulZoneId = ASF_DEF_ZN_ID;
 
 		cmd.bFFPConfigIdentityUpdate = 1;
+		cmd.bDrop = 0;
 
 		cmd.u.fwConfigIdentity.ulConfigMagicNumber =
 				asfctrl_vsg_config_id;
@@ -454,7 +455,33 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		}
 	case NF_DROP:
 		{
-			goto delete_flow;
+			ASFFFPUpdateFlowParams_t cmd;
+
+			memset(&cmd, 0, sizeof(cmd));
+
+			cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
+			cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
+			cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
+			cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
+			cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
+
+
+			cmd.ulZoneId = ASF_DEF_ZN_ID;
+
+			cmd.bFFPConfigIdentityUpdate = 1;
+			cmd.bDrop = 1;
+
+			cmd.u.fwConfigIdentity.ulConfigMagicNumber =
+				asfctrl_vsg_config_id;
+
+			if (ASFFFPRuntime(ASF_DEF_VSG,
+						ASF_FFP_MODIFY_FLOWS,
+						&cmd, sizeof(cmd), NULL, 0) ==
+					ASFFFP_RESPONSE_SUCCESS) {
+				ASFCTRL_INFO("Flow modified successfully");
+			} else {
+				ASFCTRL_ERR("Flow modification failure");
+			}
 		}
 	}
 	ASFCTRL_FUNC_EXIT;
@@ -875,7 +902,6 @@ static int asfctrl_conntrack_event(unsigned int events, struct nf_ct_event *ptr)
 	struct nf_conntrack_tuple *ct_tuple = tuple(ct, IP_CT_DIR_ORIGINAL);
 
 	ASFCTRL_FUNC_ENTRY;
-
 	if (events & (1 << IPCT_DESTROY)) {
 		ASFCTRL_INFO("IPCT_DESTROY!");
 		/* Remove the connection if its previously offloaded */

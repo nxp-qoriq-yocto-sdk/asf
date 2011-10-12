@@ -1296,14 +1296,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 		flow_stats = &flow->stats;
 #endif
-		/* general purpose flag. This gets set when TCP connection is
-		 * completed and we are waiting for FNP to delete flows. The
-		 * same can be used by L2 firewall later */
-		if (flow->bDrop) {
-			XGSTATS_INC(bDropPkts);
-			asf_debug("dropping packet as bDrop is set\n");
-			goto drop_pkt;
-		}
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		vsgInfo = asf_ffp_get_vsg_info_node(ulVsgId);
@@ -1347,6 +1339,19 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 		}
 #endif
+		/* general purpose flag. This gets set when TCP connection is
+		 * completed and we are waiting for FNP to delete flows. This
+		 * flag is also used in firewall case*/
+		if (flow->bDrop) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+			if (bFlowValidate)
+				goto gen_indications;
+#endif
+			XGSTATS_INC(bDropPkts);
+			asf_debug("dropping packet as bDrop is set\n");
+			goto drop_pkt;
+		}
+
 		q = (unsigned short *)  ptrhdrOffset;
 		if (iph->protocol == IPPROTO_UDP) {
 			XGSTATS_INC(UdpPkts);
@@ -1750,6 +1755,13 @@ gen_indications:
 					(ASF_uint8_t *)flow->as_flow_info;
 
 					ffpCbFns.pFnFlowValidate(ulVsgId, &ind);
+				}
+				if (flow->bDrop) {
+					XGSTATS_INC(bDropPkts);
+					asf_debug("dropping packet as"\
+							"bDrop is set\n");
+					goto drop_pkt;
+
 				}
 			}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -3021,6 +3033,64 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 			return ASFFFP_RESPONSE_SUCCESS;
 		} else if (p->bFFPConfigIdentityUpdate) {
 			memcpy(&flow->configIdentity, &p->u.fwConfigIdentity, sizeof(flow->configIdentity));
+			flow->bDrop = p->bDrop;
+			if (flow->bDrop) {
+				if (flow->pL2blobTmr) {
+					asfTimerStop(ASF_FFP_BLOB_TMR_ID, 0, flow->pL2blobTmr);
+					flow->pL2blobTmr = NULL;
+				}
+				if (flow->pInacRefreshTmr) {
+					asfTimerStop(ASF_FFP_INAC_REFRESH_TMR_ID,
+							0, flow->pInacRefreshTmr);
+					flow->pInacRefreshTmr = NULL;
+				}
+			} else {
+				if (!flow->pL2blobTmr) {
+					flow->pL2blobTmr = asfTimerStart(ASF_FFP_BLOB_TMR_ID, 0,
+							asf_l2blob_refresh_interval,
+							flow->ulVsgId,
+							flow->id.ulArg1,
+							flow->id.ulArg2, hash);
+					if (!flow->pL2blobTmr) {
+						flow->bDrop = 0;
+						return ASFFFP_RESPONSE_FAILURE;
+					}
+				}
+				if (!flow->pInacRefreshTmr) {
+					flow->pInacRefreshTmr = asfTimerStart(ASF_FFP_INAC_REFRESH_TMR_ID, 0,
+							flow->ulInacTime/asf_inac_divisor,
+							flow->ulVsgId,
+							flow->id.ulArg1,
+							flow->id.ulArg2, hash);
+					if (!flow->pInacRefreshTmr) {
+						flow->bDrop = 0;
+						asfTimerStop(ASF_FFP_BLOB_TMR_ID, 0, flow->pL2blobTmr);
+						flow->pL2blobTmr = NULL;
+						return ASFFFP_RESPONSE_FAILURE;
+					}
+					if (ffpCbFns.pFnFlowActivityRefresh) {
+						ASFFFPFlowRefreshInfo_t ind;
+
+						ind.tuple.ulSrcIp = flow->ulSrcIp;
+						ind.tuple.ulDestIp = flow->ulDestIp;
+						ind.tuple.usSrcPort = (flow->ulPorts >> 16);
+						ind.tuple.usDestPort = flow->ulPorts&0xffff;
+						ind.tuple.ucProtocol = flow->ucProtocol;
+						ind.ulZoneId = flow->ulZoneId;
+
+						/*ind.ulInactiveTime = htonl(ulIdleTime);*/
+						ind.ulHashVal = htonl(hash);
+						ffp_copy_flow_stats(flow, &ind.flow_stats);
+						ind.ASFwInfo = (ASF_uint8_t *)flow->as_flow_info;
+						XGSTATS_INC(TmrCtxInacInd);
+						ffpCbFns.pFnFlowActivityRefresh(flow->ulVsgId, &ind);
+
+						flow->pInacRefreshTmr->ulTmOutVal =
+							flow->ulInacTime/asf_inac_divisor;
+
+					}
+				}
+			}
 			return ASFFFP_RESPONSE_SUCCESS;
 		} else if (p->bIPsecConfigIdentityUpdate) {
 			if (p->u.ipsec.bOut) {

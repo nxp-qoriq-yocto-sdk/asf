@@ -802,7 +802,8 @@ typedef struct ASFFFPUpdateFlowParams_s {
 	ASF_uint8_t
 	bL2blobUpdate : 1,
 	bFFPConfigIdentityUpdate:1,
-	bIPsecConfigIdentityUpdate:1;
+	bIPsecConfigIdentityUpdate:1,
+	bDrop:1;
 	union {
 		/* Valid when bL2blob is set */
 		struct {
