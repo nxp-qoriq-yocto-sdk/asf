@@ -77,6 +77,12 @@ unsigned long asf_reasm_num_cbs = 1024;
 
 #define ASF_REASM_IP_MAX_PKT_LEN 65535
 
+#ifndef ASF_IPSEC_FP_SUPPORT
+#define ASF_MAX_SKB_FRAGS MAX_SKB_FRAGS
+#else
+#define ASF_MAX_SKB_FRAGS 16
+#endif
+
 /* Values taken from iGateway code */
 extern int asf_reasm_timeout;
 extern int asf_reasm_maxfrags;
@@ -1920,7 +1926,7 @@ static int asfSkbCopyBits(const struct sk_buff *this_skb,
 #endif
 
 #ifdef ASF_SG_SUPPORT
-void asfSkbFraglistToNRFrags(struct sk_buff *skb)
+uint32_t asfSkbFraglistToNRFrags(struct sk_buff *skb)
 {
 	struct sk_buff *first_skb = skb;
 	struct sk_buff *skb_dtor;
@@ -1945,9 +1951,10 @@ void asfSkbFraglistToNRFrags(struct sk_buff *skb)
 
 
 		if ((skb_shinfo(first_skb)->nr_frags + 1 + skb_shinfo(skb)->nr_frags)
-				> MAX_SKB_FRAGS)
-				panic("asfSkbFraglistToNRFrags: overflow");
-
+				> ASF_MAX_SKB_FRAGS) {
+				skb_shinfo(first_skb)->frag_list = skb;
+				return ASF_FAILURE;
+		}
 		skb_fill_page_desc(first_skb,
 					skb_shinfo(first_skb)->nr_frags,
 					virt_to_page(skb->data),
@@ -1974,6 +1981,7 @@ void asfSkbFraglistToNRFrags(struct sk_buff *skb)
 		skb = skb->next;
 	}
 	skb_shinfo(first_skb)->frag_list = NULL;
+	return ASF_SUCCESS;
 }
 EXPORT_SYMBOL(asfSkbFraglistToNRFrags);
 #endif

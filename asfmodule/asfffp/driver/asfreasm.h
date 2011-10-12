@@ -28,6 +28,5 @@ extern struct sk_buff *packet_new_skb(struct net_device *dev);
 extern struct sk_buff *gfar_new_skb(struct net_device * dev);
 #ifdef ASF_SG_SUPPORT
 extern void gfar_skb_destructor(struct sk_buff *skb);
-extern void asfSkbFraglistToNRFrags(struct sk_buff *skb);
 #endif
 #endif

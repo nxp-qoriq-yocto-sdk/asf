@@ -674,7 +674,10 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 		frag = skb_shinfo(skb)->frag_list;
 
 #ifdef ASF_SG_SUPPORT
-		asfSkbFraglistToNRFrags(skb);
+		 if (asfSkbFraglistToNRFrags(skb)) {
+			asf_debug("asfSkbFraglistToNRFrags failed");
+			goto drop_pkt;
+		}
 #else
 		/* It has been assumed that the accumulated size of
 		   all the fragments at any time will be < 1536 bytes.*/

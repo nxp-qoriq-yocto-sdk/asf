@@ -3846,7 +3846,14 @@ int secfp_try_fastPathOutv4 (
 				/* convert the buffer to SG List for SEC input*/
 				/* TBD -the output can be out of place in single buffer */
 				if (skb_shinfo(skb1)->frag_list)
-					asfSkbFraglistToNRFrags(skb1);
+					if (asfSkbFraglistToNRFrags(skb1)) {
+						ASFIPSEC_WARN(
+						"asfSkbFraglistToNRFragsi \
+							 failed");
+						ASFSkbFree(skb1);
+						rcu_read_unlock();
+						return 0;
+					}
 				bScatterGatherList = SECFP_SCATTER_GATHER;
 				skb = skb1;
 			} else {
@@ -4916,7 +4923,13 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 			}
 			inneriph = (struct iphdr *)(pHeadSkb->data);
 #ifdef SECFP_SG_SUPPORT
-			asfSkbFraglistToNRFrags(pHeadSkb);
+			if (asfSkbFraglistToNRFrags(pHeadSkb)) {
+				ASFIPSEC_WARN("asfSkbFraglistToNRFrags failed");
+				ASFSkbFree(pHeadSkb);
+				rcu_read_unlock();
+				return 1;
+			}
+
 #else
 			if (asfReasmLinearize(&pHeadSkb, inneriph->tot_len, 1400+32, 1100+32)) {
 				ASFIPSEC_WARN(" skb->linearize failed ");
@@ -6655,7 +6668,13 @@ int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
 
 	if (skb_shinfo(skb)->frag_list) {
 #ifdef SECFP_SG_SUPPORT
-		asfSkbFraglistToNRFrags(skb);
+		if (asfSkbFraglistToNRFrags(skb)) {
+			ASFIPSEC_ERR("asfSkbFraglistToNRFrags failed");
+			ASFSkbFree(skb);
+			*skbuff = NULL;
+			return ASF_IPSEC_CONSUMED;
+		}
+
 #else
 		if (asfReasmLinearize(&skb,
 			ip_hdr(skb)->tot_len, 1400+32, 1100+32)) {
@@ -7094,7 +7113,13 @@ So all these special boundary cases need to be handled for nr_frags*/
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
 		if (skb_shinfo(pHeadSkb)->frag_list)
-			asfSkbFraglistToNRFrags(pHeadSkb);
+			if (asfSkbFraglistToNRFrags(pHeadSkb)) {
+				ASFIPSEC_WARN("asfSkbFraglistToNRFrags failed");
+				secfp_desc_free(desc);
+				ASFSkbFree(pHeadSkb);
+				rcu_read_unlock();
+				return 0;
+			}
 		if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 			== SECFP_SCATTER_GATHER)
 			secfp_prepareInDescriptorWithFrags(pHeadSkb, pSA,
