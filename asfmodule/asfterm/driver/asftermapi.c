@@ -53,7 +53,7 @@ MODULE_DESCRIPTION(ASF_TERM_DESC);
 char *asf_term_version = ASF_TERM_VERSION;
 
 /* Initilization Parameters */
-int term_aging_enable; /* Disable */
+bool term_aging_enable = 1; /* Enable */
 int term_max_entry = 1024;
 int term_max_vsgs = ASF_MAX_VSGS;
 int term_max_ifaces = ASF_MAX_IFACES;
@@ -64,7 +64,7 @@ int term_l2blob_refresh_interval = ASF_MAX_L2BLOB_REFRESH_TIME;
 bool term_l4_rx_csum;
 bool term_l4_tx_csum;
 
-module_param(term_aging_enable, int, 0644);
+module_param(term_aging_enable, bool, 0644);
 MODULE_PARM_DESC(term_aging_enable, "Enable / Disable Aging.");
 module_param(term_l2blob_refresh_interval, int, 0644);
 MODULE_PARM_DESC(term_l2blob_refresh_interval,
@@ -1681,8 +1681,9 @@ unsigned int asfTermBlobTmrCb(unsigned int ulVsgId,
 		asf_print("Blob Tmr: CacheEntry not found {%p}.."
 			" (might happen while Caches are being deleted)!!!",
 							CacheEntry);
+	} else {
+		asf_print("asf not enabled: return 1.. REVIEW??");
 	}
-	asf_print("asf not enabled: return 1.. REVIEW??");
 	return 0;
 }
 

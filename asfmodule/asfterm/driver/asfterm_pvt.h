@@ -117,7 +117,7 @@ typedef struct term_bucket_s {
 
 
 /* Extern declarations */
-extern int term_aging_enable;
+extern bool term_aging_enable;
 extern int term_l2blob_refresh_npkts;
 extern int term_l2blob_refresh_interval;
 extern int term_max_entry;

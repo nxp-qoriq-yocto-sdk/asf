@@ -54,7 +54,7 @@ MODULE_DESCRIPTION(ASF_FWD_DESC);
 char *asf_fwd_version = ASF_FWD_VERSION;
 
 /* Initilization Parameters */
-int fwd_aging_enable = 1; /* Enable */
+bool fwd_aging_enable = 1; /* Enable */
 int fwd_max_entry = 8*1024;
 int fwd_expiry_timeout = 180; /* in sec */
 int fwd_max_vsgs = ASF_MAX_VSGS;
@@ -63,7 +63,7 @@ int fwd_hash_buckets = 8*1024;
 int fwd_l2blob_refresh_npkts = ASF_MAX_L2BLOB_REFRESH_PKT_CNT;
 int fwd_l2blob_refresh_interval = ASF_MAX_L2BLOB_REFRESH_TIME;
 
-module_param(fwd_aging_enable, int, 0644);
+module_param(fwd_aging_enable, bool, 0644);
 MODULE_PARM_DESC(fwd_aging_enable, "Enable / Disable Aging.");
 module_param(fwd_expiry_timeout, int, 0644);
 MODULE_PARM_DESC(fwd_expiry_timeout, "Expiry Timeout for Route Cache Entry");
@@ -1187,8 +1187,9 @@ unsigned int asfFwdBlobTmrCb(unsigned int ulVsgId, unsigned int ulCacheEntryPtr,
 		asf_print("Blob Tmr: CacheEntry not found {%p}.."
 			" (might happen while Caches are being deleted)!!!\n",
 							CacheEntry);
+	} else {
+		asf_print("asf not enabled: return 1.. REVIEW??\n");
 	}
-	asf_print("asf not enabled: return 1.. REVIEW??\n");
 	return 0;
 }
 

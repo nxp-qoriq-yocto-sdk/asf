@@ -112,7 +112,7 @@ typedef struct fwd_aging_s {
 
 
 /* Extern declarations */
-extern int fwd_aging_enable;
+extern bool fwd_aging_enable;
 extern int fwd_expiry_timeout;
 extern int fwd_l2blob_refresh_npkts;
 extern int fwd_l2blob_refresh_interval;
