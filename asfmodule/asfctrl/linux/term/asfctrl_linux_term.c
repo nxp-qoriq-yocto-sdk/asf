@@ -62,7 +62,6 @@ ASFTERMCap_t g_term_cap;
 atomic_t	g_dynamic_flow_learning;
 /* Dummy Commom Interface ID for sending the self packets out*/
 ASF_uint32_t g_dummy_cii = 5;
-ASF_uint32_t g_out_cii = 4; /*eth2*/
 
 typedef struct asfctrl_term_L2blobPktData_s {
 	ASFTERMCacheEntryTuple_t	tuple;
@@ -103,7 +102,6 @@ static ASF_int32_t asfctrl_term_XmitL2blobDummyPkt(
 			ASFTERMCacheEntryTuple_t *tpl)
 {
 	struct	sk_buff *skb;
-	struct net_device *dev;
 	int	ret;
 
 	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
@@ -112,15 +110,9 @@ static ASF_int32_t asfctrl_term_XmitL2blobDummyPkt(
 		struct iphdr *iph;
 		struct flowi fl;
 		struct rtable *rt = skb_rtable(skb);
-
-		dev = asfctrl_dev_get_dev(g_out_cii);
-		if (!dev) {
-			ASFCTRLKernelSkbFree(skb);
-			return T_FAILURE;
-		}
+		static unsigned short IPv4_IDs[NR_CPUS];
 
 		memset(&fl, 0, sizeof(fl));
-		fl.oif = dev->ifindex;
 		fl.proto = IPPROTO_UDP,
 		fl.nl_u.ip4_u.saddr = 0;
 		fl.nl_u.ip4_u.daddr = tpl->ulDestIp;
@@ -128,7 +120,7 @@ static ASF_int32_t asfctrl_term_XmitL2blobDummyPkt(
 		fl.uli_u.ports.sport = tpl->usSrcPort;
 		fl.uli_u.ports.dport = tpl->usDestPort;
 
-		ASFCTRL_DBG("dst = %x src = %x, port =%x",
+		ASFCTRL_INFO("dst = %x src = %x, port =%x",
 			tpl->ulDestIp, tpl->ulSrcIp, tpl->usSrcPort);
 
 		ret = ip_route_output_key(&init_net, &rt, &fl);
@@ -143,8 +135,9 @@ static ASF_int32_t asfctrl_term_XmitL2blobDummyPkt(
 		skb_dst_set(skb, &rt->u.dst);
 
 		ASFCTRL_INFO("Route found for dst %x, src %x, "\
-				"rt =%x - flags= %x",
+				"ifindex =%d rt =%x - flags= %x",
 				tpl->ulDestIp, tpl->ulSrcIp,
+				(skb_dst(skb)->dev)->ifindex,
 				rt, rt ? rt->rt_flags : 0);
 
 		skb->dev = skb_dst(skb)->dev;
@@ -155,6 +148,9 @@ static ASF_int32_t asfctrl_term_XmitL2blobDummyPkt(
 		iph->version = 5;
 		iph->ihl = 5;
 		iph->ttl = 1;
+		iph->tos = 0;
+		iph->frag_off = 0;
+		iph->id = IPv4_IDs[smp_processor_id()]++;
 		iph->saddr = tpl->ulSrcIp;
 		iph->daddr = tpl->ulDestIp;
 		iph->protocol = ASFCTRL_IPPROTO_DUMMY_TERM_L2BLOB;
@@ -249,7 +245,7 @@ ASF_void_t asfctrl_term_fnCacheEntryNotFound(
 				pmal_receive_skb(skb);
 				goto fexit;
 			}
-			ASFCTRL_ERR("Dropping the skb %x", (unsigned int) skb);
+			ASFCTRL_INFO("Dropping the skb %x", (unsigned int) skb);
 			pFreeFn(Buffer.nativeBuffer);
 			goto fexit;
 		}
@@ -396,11 +392,11 @@ ASF_void_t asfctrl_term_fnCacheRcvPkt(
 
 	if (!bVal)
 		local_bh_disable();
-	/*TBD - vlan case not supported need to optimize it */
 	if (skb->data != skb_mac_header(skb)) {
-		skb->data -= ETH_HLEN;
-		skb->len += ETH_HLEN;
-		memcpy(skb->data, skb_mac_header(skb), ETH_HLEN);
+		skb_push(skb, skb->mac_len);
+		if (skb->data != skb_mac_header(skb))
+			memcpy(skb->data, skb_mac_header(skb),
+				skb->mac_len);
 	}
 
 	/* Send it to for normal path handling */
@@ -646,7 +642,7 @@ int asfctrl_term_entry_add(
 #endif
 	cmd.entry1.bIPsecIn = bIPsecIn ? 1 : 0;
 	cmd.entry1.bIPsecOut = bIPsecOut ? 1 : 0;
-	/* If this is a terminating flow of outgoig flow*/
+	/* If this is a terminating flow of outgoing flow*/
 	if (!cmd.entry1.bLocalTerm)
 		cmd.entry1.bLocalTerm = bIPsecIn ? 1 : 0;
 
@@ -814,19 +810,6 @@ static int asfctrl_term_pkt_pmal_config(int type, void *param)
 		asfctrl_term_cache_flush();
 		return 0;
 	}
-	case ASF_PACKET_OUT_INTERFACE:
-	{
-		int *val = (int *)param;
-		ASFCTRL_INFO("OUT INTERFACE IS =%s", *val);
-
-		if (!asfctrl_dev_get_dev(*val)) {
-			ASFCTRL_WARN("Device not offload..ignoring");
-			return 0;
-		}
-		g_out_cii = *val;
-		return 0;
-	}
-
 	}
 	return 0;
 }
