@@ -401,6 +401,8 @@ struct pmal_buf *pmal_alloc_buffer(int fd, int size, unsigned int flag)
 		frame_id = ps->buff_list[ps->buff_index];
 		pcb = (struct pcb_s *)data_tx[frame_id].iov_base;
 		pcb->pmal_ext.data = data_tx_offset;
+		pcb->pmal_ext.buf_len = data_tx[0].iov_len -
+			data_tx_offset - PACKET_UM_END_RESERVE;
 		return &pcb->pmal_ext;
 	}
 
@@ -417,6 +419,9 @@ struct pmal_buf *pmal_alloc_buffer(int fd, int size, unsigned int flag)
 	ps->buff_index--;
 	pcb = (struct pcb_s *)data_tx[ps->buff_list[ps->buff_index]].iov_base;
 	pcb->pmal_ext.data = data_tx_offset;
+	pcb->pmal_ext.buf_len = data_tx[0].iov_len -
+		data_tx_offset - PACKET_UM_END_RESERVE;
+
 	return &pcb->pmal_ext;
 }
 

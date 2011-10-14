@@ -4,7 +4,7 @@
 /*
  * File:	pmal_demo.c
  *
- * Description: Demo code for using the PMAL Library
+ * Description: Demo code for using the PMAL Library for reflecting the packets.
  * *
  * Authors:	Hemant Agrawal <b10814@freescale.com>
  *		Himanshu Seth <b21215@freescale.com>
@@ -38,15 +38,15 @@
 #include <string.h>
 #include <signal.h>
 
+#define PMAL_DISABLE 0
+#define PMAL_ENABLE 1
 
-
-#define ASFT_UDP_PORT_IKE	500
-#define ASFT_UDP_PORT_NATT	4500
+#define ASFT_DEF_RING_SIZE	4096
 #define ASFT_UDP_PORT_GTP_U	2152
-#define ASFT_UDP_PORT_TEST	1024
 
-#define ASFT_DEF_SRC_ADDR      "192.168.1.5"
-#define ASFT_DEF_DEST_ADDR     "192.168.1.7"
+#define ASFT_DEF_SRC_ADDR	"200.200.200.10"
+#define ASFT_DEF_DEST_ADDR	"200.200.200.20"
+#define MAX_PKT_SIZE		10000
 
 #include "pmal.h"
 
@@ -55,7 +55,12 @@ int fd_rx;
 int fd_tx;
 int total_rx;
 int total_tx;
+unsigned int static_conn = PMAL_ENABLE;
 struct pmal_con_s my_conn;
+typedef void (*f_fill_frame)(struct pmal_buf *frame_tx,
+		struct pmal_buf *frame_rx, struct pkt_ipudphdr *iph_s,
+		struct pkt_ethhdr *eth_s);
+unsigned char *pkt_buff;
 
 static inline void pmal_copy(__u32 *dst, __u32 *src, int len)
 {
@@ -92,14 +97,16 @@ void process_frame(struct pmal_buf *pmal_buf,
 /*	Dummy function, which copies the received
 	ethernet and ip headers to the transmitted frame
 */
-void fill_frame(char *frame,
+void fill_frame(struct pmal_buf *frame_tx, struct pmal_buf *frame_rx,
 	struct pkt_ipudphdr *iph_s,
 	struct pkt_ethhdr *eth_s)
 {
 	struct pkt_ipudphdr *iph_d;
 	struct pkt_ethhdr *eth_d;
+	char *pframe_tx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(frame_tx);
+	char *pframe_rx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(frame_rx);
 
-	iph_d = (struct pkt_ipudphdr *)frame;
+	iph_d = (struct pkt_ipudphdr *)pframe_tx;
 
 	pmal_copy((__u32 *)iph_d, (__u32 *)iph_s, 20 + 8);
 
@@ -109,14 +116,63 @@ void fill_frame(char *frame,
 	iph_d->source = iph_s->dest;
 	iph_d->udpcheck = 0;
 
-	frame -= ETH_HLEN;
-	eth_d = (struct pkt_ethhdr *) frame;
+	pframe_tx -= ETH_HLEN;
+	eth_d = (struct pkt_ethhdr *) pframe_tx;
 	memcpy(eth_d->h_dest, eth_s->h_source, 6);
 	memcpy(eth_d->h_source, eth_s->h_dest, 6);
 	eth_d->h_proto = eth_s->h_proto;
 
 	PMAL_PRINT("Tx - pkt src=%x, len =%d", iph_d->saddr, iph_d->tot_len);
 
+	return;
+}
+
+void copy_frame(struct pmal_buf *frame_tx, struct pmal_buf *frame_rx,
+	struct pkt_ipudphdr *iph_s,
+	struct pkt_ethhdr *eth_s)
+{
+	unsigned short len = 0;
+	unsigned int i = 0;
+	char *pframe_rx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(frame_rx);
+	char *pframe_tx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(frame_tx);
+	struct pmal_buf *tmp_rx = frame_rx;
+	unsigned char *tmp_buf = pkt_buff;
+	unsigned int buf_len = 0;
+
+	memcpy(pkt_buff, pframe_rx, frame_rx->buf_len);
+	len = frame_rx->total_len;
+	tmp_buf += frame_rx->buf_len;
+	for (i = 0; i < frame_rx->num_frags; i++) {
+		pmal_frag_next(tmp_rx, &tmp_rx);
+		pframe_rx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(tmp_rx);
+		memcpy(tmp_buf, pframe_rx, frame_rx->buf_len);
+		tmp_buf += frame_rx->buf_len;
+	}
+
+	hexdump(pkt_buff, len);
+
+	/* Move the Cursor to payload */
+	tmp_rx = frame_tx;
+	tmp_buf = pkt_buff;
+	buf_len = tmp_rx->buf_len;
+
+	while (len) {
+		if (len < buf_len) {
+			memcpy(pframe_tx, tmp_buf, len);
+			tmp_rx->buf_len = len;
+			len = 0;
+			break;
+		} else {
+			memcpy(pframe_tx, tmp_buf, tmp_rx->buf_len);
+			len -= tmp_rx->buf_len;
+			tmp_buf += tmp_rx->buf_len;
+		}
+		pmal_frag_next(tmp_rx, &tmp_rx);
+		pframe_tx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(tmp_rx);
+		buf_len = tmp_rx->buf_len;
+	}
+
+	fill_frame(frame_tx, frame_rx, iph_s, eth_s);
 	return;
 }
 
@@ -149,9 +205,10 @@ static void sigproc(int signum)
 	sigemptyset( &act.sa_mask );
 	act.sa_flags = 0;
 
-	/* Do all necessary cleanups here*/
-
-	pmal_del_connection(fd_rx, &my_conn);
+	if (static_conn) {
+		/* Do all necessary cleanups here*/
+		pmal_del_connection(fd_rx, &my_conn);
+	}
 
 	if (!pmal_getsockopt(fd_rx, PMAL_STATS, (char *)&st, &len)) {
 		fprintf(stderr, "\nPMAL rcvd=%u,dropped=%u, handled=%u",
@@ -205,11 +262,15 @@ int main(int argc, char **argv)
 	unsigned int filter_port = ASFT_UDP_PORT_GTP_U;
 	unsigned int opt_val;
 	unsigned int len = 0;
-	unsigned int kernel_loopback = 0;
+	unsigned int kernel_reflect = PMAL_DISABLE;
+	unsigned int dynamic_learn = PMAL_ENABLE;
+	unsigned int perf_mode = PMAL_ENABLE;
+	unsigned int factor = 2;
 	int i = 0;
+	f_fill_frame pf_fill_frame;
+
 
 	char *pframe = NULL;
-	char *pframe_tx = NULL;
 	struct sigaction temp_action, new_action;
 
 	/* Set up the structure to specify the new action. */
@@ -235,22 +296,45 @@ int main(int argc, char **argv)
 #undef CATCH_SIGNAL
 
 	switch (argc) {
+	case 7:
+		dynamic_learn = atoi(argv[6]);
+	case 6:
+		static_conn = atoi(argv[5]);
+		if (!dynamic_learn && !static_conn) {
+			printf("\n Both dynamic and static connection"
+				"can not be 0\n");
+			return -1;
+		}
+	case 5:
+		perf_mode = atoi(argv[4]);
 	case 4:
 		filter_port = atoi(argv[3]);
 	case 3:
 		filter_ip = inet_addr(argv[2]);
+		if (!filter_port && !filter_ip) {
+			printf("\n Both filter_ip and filter_port"
+				"can not be 0\n");
+			return -1;
+		}
 	case 2:
-		kernel_loopback = atoi(argv[1]);
-		if (kernel_loopback)
-			printf("\nStarting PMAL with KERNEL_LOOPBACK");
+		kernel_reflect = atoi(argv[1]);
+	case 1:
+		printf("\nUsage: pmal_demo [kernel_reflect=%x][ip=%x][port=%d]"
+			"[perf_mode=%d][static_conn=%d] [dynamic_learn=%d]\n",
+			kernel_reflect, filter_ip, filter_port, perf_mode,
+			static_conn, dynamic_learn);
 		break;
+	default:
+		printf("\nError: Usage: pmal_demo [kernel_reflect] [ip] [port]"
+			" [perf_mode] [static_conn] [dynamic_learn]\n");
+		return -1;
 	}
 
 	memset(&s_conf, 0, sizeof(s_conf));
 
 	s_conf.type = SOCK_RAW;
-	s_conf.ring_size = 4096;
-	s_conf.dynamic_learing_enabled = 1;
+	s_conf.ring_size = ASFT_DEF_RING_SIZE;
+	s_conf.dynamic_learing_enabled = dynamic_learn;
 
 	s_conf.config_bitmap = PMAL_SOCKET_TYPE |
 			PMAL_RING_SIZE |
@@ -300,84 +384,91 @@ int main(int argc, char **argv)
 	peer_addr.sll_halen = ETH_ALEN;
 	peer_addr.sll_ifindex = i_ifindex;
 
-	my_conn.saddr.sin_family = AF_INET;
-	my_conn.saddr.sin_port = htons(filter_port);
-	my_conn.saddr.sin_addr.s_addr =
-		filter_ip ? filter_ip : inet_addr(ASFT_DEF_SRC_ADDR);
+	if (static_conn) {
+		unsigned int con_port;
+		con_port = filter_port ? filter_port : ASFT_UDP_PORT_GTP_U;
 
-	my_conn.daddr.sin_family = AF_INET;
-	my_conn.daddr.sin_port = htons(filter_port);
-	my_conn.daddr.sin_addr.s_addr = inet_addr(ASFT_DEF_DEST_ADDR);
-	my_conn.conn_id = 1;
+		my_conn.saddr.sin_family = AF_INET;
+		my_conn.saddr.sin_port = htons(con_port);
+		my_conn.saddr.sin_addr.s_addr =
+			filter_ip ? filter_ip : inet_addr(ASFT_DEF_SRC_ADDR);
 
-	pmal_add_connection(fd_rx, &my_conn);
+		my_conn.daddr.sin_family = AF_INET;
+		my_conn.daddr.sin_port = htons(con_port);
+		my_conn.daddr.sin_addr.s_addr = inet_addr(ASFT_DEF_DEST_ADDR);
+		my_conn.conn_id = 1;
 
-	if (kernel_loopback)
-		if ((pmal_setsockopt(fd_rx,
-			PMAL_KERNEL_LOOPBACK,
-			(char *)kernel_loopback, size)) != 0)
-				perror("setsockopt()");
+		pmal_add_connection(fd_rx, &my_conn);
+	}
+
+	if (perf_mode) {
+		factor = 2; /*TX 1 packet for every 2 RX packet*/
+		pf_fill_frame = fill_frame;
+	} else {
+		factor = 1;
+		pf_fill_frame = copy_frame;
+	}
+
+	pkt_buff = malloc(MAX_PKT_SIZE);
+
 	for (i = 0;;) {
-		if (!kernel_loopback) {
-			rx_wt = 0;
-			tx_wt = 0;
+		rx_wt = 0;
+		tx_wt = 0;
 
-			while (rx_wt < PMAL_RX_POLL_WT) {
-				pmal_dequeue_frame_rx(fd_rx, &pmal_buf);
-				if (pmal_buf == NULL)
-					goto _sendto;
-				pframe = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(pmal_buf);
-				total_rx++;
-				rx_wt++;
-				iph_s = (struct pkt_ipudphdr *)pframe;
-				process_frame(pmal_buf, iph_s, &eth_s);
+		while (rx_wt < PMAL_RX_POLL_WT) {
+			pmal_dequeue_frame_rx(fd_rx, &pmal_buf);
+			if (pmal_buf == NULL)
+				goto _sendto;
+			pframe = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(pmal_buf);
+			total_rx++;
+			rx_wt++;
+			iph_s = (struct pkt_ipudphdr *)pframe;
+			process_frame(pmal_buf, iph_s, &eth_s);
 
-				PMAL_PRINT("RX-%d", total_rx);
-				if (total_rx % 2) {
-					pmal_buf_tx =
-					pmal_alloc_buffer(fd_tx,
-							iph_s->tot_len + 14, 1);
-					if (pmal_buf_tx == NULL)
-						goto _free_buff;
+			PMAL_PRINT("RX-%d", total_rx);
+			if (!(total_rx % factor)) {
+				pmal_buf_tx =
+				pmal_alloc_buffer(fd_tx,
+						iph_s->tot_len + ETH_HLEN, 1);
+				if (pmal_buf_tx == NULL)
+					goto _free_buff;
 
-					if (pmal_buf_tx->num_frags) {
-						struct pmal_buf *tmp_buf_tx = pmal_buf_tx;
-						int i = pmal_buf_tx->num_frags;
-						while (i) {
-							len = (i == 1) ? (iph_s->tot_len + 14) % 1452 : 1452;
-							tmp_buf_tx = pmal_frag_next(tmp_buf_tx, &tmp_buf_tx);
-							pmal_set_data_len_frag(tmp_buf_tx, len);
-							i--;
-						}
+				if (pmal_buf_tx->num_frags) {
+					struct pmal_buf *tmp_buf_tx = pmal_buf_tx;
+					int i = pmal_buf_tx->num_frags;
+					while (i) {
+						len = (i == 1) ? (iph_s->tot_len + ETH_HLEN) % 1452 : 1452;
+						tmp_buf_tx = pmal_frag_next(tmp_buf_tx, &tmp_buf_tx);
+						pmal_set_data_len_frag(tmp_buf_tx, len);
+						i--;
 					}
-					pframe_tx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(pmal_buf_tx);
-					fill_frame(pframe_tx,
-						iph_s, eth_s);
-					pmal_enqueue_frame_tx(fd_tx,
-							pmal_buf_tx);
-					tx_wt++;
-					total_tx++;
 				}
+
+				pf_fill_frame(pmal_buf_tx,
+						pmal_buf, iph_s, eth_s);
+
+				pmal_enqueue_frame_tx(fd_tx,
+						pmal_buf_tx);
+				tx_wt++;
+				total_tx++;
+			}
 _free_buff:
-				pmal_free_buffer(fd_rx, pmal_buf);
-			} /* end of while (rx_wt < PMA ... */
+			pmal_free_buffer(fd_rx, pmal_buf);
+		} /* end of while (rx_wt < PMA ... */
 
 _sendto:
-			if (tx_wt) {
-				pmal_send(fd_tx, (struct sockaddr *)&peer_addr);
-				PMAL_PRINT("TX-%d", tx_wt);
-			}
+		if (tx_wt) {
+			pmal_send(fd_tx, (struct sockaddr *)&peer_addr);
+			PMAL_PRINT("TX-%d", tx_wt);
+		}
 
-			if (rx_wt == PMAL_RX_POLL_WT)
-				continue;
+		if (rx_wt == PMAL_RX_POLL_WT)
+			continue;
 
-			pfd.fd = fd_rx;
-			pfd.events = POLLIN|POLLERR;
-			pfd.revents = 0;
-			poll(&pfd, 1, -1);
-
-		} else
-			usleep(0xffffffff);
+		pfd.fd = fd_rx;
+		pfd.events = POLLIN|POLLERR;
+		pfd.revents = 0;
+		poll(&pfd, 1, -1);
 	}
 
 	return 0;

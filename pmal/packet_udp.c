@@ -4,7 +4,7 @@
 /*
  * File:	packet_udp.c
  *
- * Description: Contains the application for recv normal udp traffic and loopback
+ * Description: Contains the application for recv normal udp traffic and reflect
  *
  * Authors:	Hemant Agrawal <b10814@freescale.com>
  *		Himanshu Seth <b21215@freescale.com>

@@ -52,8 +52,13 @@ all:	$(APP)
 $(APP):	$(APP_OBJS)
 		$(CC) -o $@ $(APP_OBJS) $(LIBC_CC_OPTS)
 
+packet_udp:	packet_udp.o
+
+packet_udp.o: packet_udp.c
+	$(CC) $(LIBC_INC) $(CC_OPTS) $(CC_OPTS_C) -MD -c -o $@ $<
+
 clean:
-	rm -rf $(APP_OBJS) $(APP) $(APP_DEPS)
+	rm -rf *.o *.d  $(APP) packet_udp
 
 -include $(APP_DEPS)
 
