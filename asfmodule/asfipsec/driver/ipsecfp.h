@@ -347,6 +347,8 @@ typedef struct SAParams_s {
 	/* Nonce:4 bytes, followed by 8 bytes IV + 4 bytes counter */
 	ASF_IPSec_Nat_Info_t IPsecNatInfo;
 	unsigned int ulCId;
+	unsigned int softKbyteLimit;
+	unsigned int hardKbyteLimit;
 } SAParams_t;
 
 

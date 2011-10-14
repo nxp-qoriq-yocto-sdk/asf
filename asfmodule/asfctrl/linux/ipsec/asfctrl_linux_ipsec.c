@@ -687,6 +687,7 @@ static int __init asfctrl_linux_ipsec_init(void)
 	Fnptr.pFnRuntime = asfctrl_ipsec_fn_Runtime;
 	Fnptr.pFnVSGMap = asfctrl_ipsec_fn_VSGMappingNotFound;
 	Fnptr.pFnIfaceNotFound = asfctrl_ipsec_fn_InterfaceInfoNotFound;
+	Fnptr.pFnSAExpired = NULL;
 	ASFIPSecRegisterCallbacks(&Fnptr);
 
 	asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info_fn,

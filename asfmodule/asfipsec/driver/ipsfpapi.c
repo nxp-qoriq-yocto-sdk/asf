@@ -761,6 +761,9 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 	pSAParams->bEncapsulationMode = pASFSAParams->bEncapsulationMode;
 	pSAParams->ulSPI = pASFSAParams->spi;
 
+	pSAParams->softKbyteLimit = pASFSAParams->softKbyteLimit;
+	pSAParams->hardKbyteLimit = pASFSAParams->hardKbyteLimit;
+
 	if (pASFSAParams->TE_Addr.IP_Version == 4) {
 		pSAParams->tunnelInfo.bIPv4OrIPv6 = 0;
 		pSAParams->tunnelInfo.addr.iphv4.saddr = pASFSAParams->TE_Addr.srcIP.ipv4addr;

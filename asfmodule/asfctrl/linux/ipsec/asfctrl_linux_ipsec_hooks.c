@@ -308,16 +308,6 @@ static inline int is_sa_offloadable(struct xfrm_state *xfrm)
 		ASFCTRL_WARN("Non ESP protocol not supported");
 		return -EINVAL;
 	}
-
-	/* lifetime in byte or packet is not supported
-	** here XFRM_INF is  (~(__u64)0)  */
-	if (xfrm->lft.soft_byte_limit != XFRM_INF ||
-		xfrm->lft.soft_packet_limit != XFRM_INF ||
-		xfrm->lft.hard_byte_limit != XFRM_INF ||
-		xfrm->lft.hard_packet_limit != XFRM_INF) {
-		ASFCTRL_WARN("Data Based lifetime is not supported");
-		return -EINVAL;
-	}
 	return 0;
 }
 
@@ -573,6 +563,11 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	} else
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
 
+	if (xfrm->lft.hard_byte_limit != XFRM_INF) {
+		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1000;
+		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1000;
+	}
+
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
 	SAParams.handleToSOrDSCPAndFlowLabel = ASF_IPSEC_QOS_TOS_COPY;
 	/*if not copy than set - SAParams.qos = defined value */
@@ -756,6 +751,11 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.hardSecsLimit = xfrm->lft.hard_use_expires_seconds;
 	} else
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
+
+	if (xfrm->lft.hard_byte_limit != XFRM_INF) {
+		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1000;
+		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1000;
+	}
 
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
 	SAParams.handleToSOrDSCPAndFlowLabel = ASF_IPSEC_QOS_TOS_COPY;

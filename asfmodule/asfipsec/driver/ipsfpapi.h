@@ -697,6 +697,13 @@ typedef ASF_void_t    (*pASFIPSecCbPeerGatewayChange_f)(
 
 typedef ASF_void_t (*pASFIPSecCbFnAuditLog_f)(ASFLogInfo_t  *pLogInfo);
 
+typedef ASF_void_t    (*pASFIPSecCbSAExpired_f)(
+			ASF_uint32_t ulVSGId,
+			ASF_uint32_t ulSPDContainerIndex,
+			ASF_uint32_t ulSPI,
+			ASF_uint8_t  ucProtocol,
+			ASF_uchar8_t bSoftExpiry,
+			ASF_uchar8_t bOutBound);
 
 typedef struct ASFIPSecCbfFn_s {
 	pASFIPSecCbFnNoInSA_f	       pFnNoInSA;
@@ -712,6 +719,7 @@ typedef struct ASFIPSecCbfFn_s {
 	pASFIPSecCbFnConfig_f	       pFnConfig;
 	pASFIPSecCbFnRuntime_f	      pFnRuntime;
 	pASFIPSecCbPeerGatewayChange_f      pFnPeerChange;
+	pASFIPSecCbSAExpired_f	pFnSAExpired;
 } ASFIPSecCbFn_t;
 
 
