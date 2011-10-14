@@ -227,21 +227,23 @@ ASF_void_t asfctrl_term_fnCacheEntryNotFound(
 			if (!dev)
 				goto fexit;
 
-			asfctrl_term_entry_add(dev, tuple, ASF_TRUE, (void *)conn.ctxt);
+			if (asfctrl_term_entry_add(dev, tuple, ASF_TRUE,
+				(void *)conn.ctxt)) {
+				ASFCTRL_INFO("Unable to Add Entry");
+				pFreeFn(Buffer.nativeBuffer);
+				goto fexit;
+			}
 			skb->pmal_ctxt = conn.ctxt;
 
-			/*if (sendOut) can we feed it back to Process function*/
-			/*TBD - vlan case not supported need to optimize it */
-			/*TBD - IPSEC- currently not verifying the In SPD */
-			/*TBD - decrypted packet need to have the skb->sp set */
 			if (!sendOut) {
+				/*RX Packet to be sent directly to PACKET_UM*/
 				if (skb->data != skb_mac_header(skb)) {
-					skb->data -= ETH_HLEN;
-					skb->len += ETH_HLEN;
-					memcpy(skb->data,
-						skb_mac_header(skb), ETH_HLEN);
+					skb_push(skb, skb->mac_len);
+					if (skb->data != skb_mac_header(skb))
+						memcpy(skb->data,
+							skb_mac_header(skb),
+							skb->mac_len);
 				}
-				/* Send it to for normal path handling */
 				pmal_receive_skb(skb);
 				goto fexit;
 			}
@@ -554,7 +556,13 @@ int asfctrl_term_entry_add(
 	/* If ASF is disabled or mode is not TERM, simply return */
 	if ((0 == ASFGetStatus()) || !(mode & termMode)) {
 		ASFCTRL_INFO("ASF not ready or invalid mode 0x%x\n", mode);
-		return 0;
+		return -1;
+	}
+
+	if (ASF_VALIDATE_IP(tuple.ulDestIp) || ASF_VALIDATE_IP(tuple.ulSrcIp)) {
+		ASFCTRL_INFO("IP Address no valid for unicast 0x%x 0x%x\n",
+			tuple.ulDestIp, tuple.ulSrcIp);
+		return -1;
 	}
 
 	memset(&cmd, 0, sizeof(cmd));

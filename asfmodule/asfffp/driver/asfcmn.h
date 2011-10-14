@@ -146,6 +146,7 @@ static inline void asf_skb_free_func(void *obj)
  * so that spinlock may not consume l2 cache as add/delete are not so frequent.
  */
 
+#define ASF_VALIDATE_IP(ip) ((ip && ip < 0xE0000000) ? 0 : -1)
 
 #define ASF_RCU_READ_LOCK(bLockFlag) do { \
 		bLockFlag = in_softirq(); \
