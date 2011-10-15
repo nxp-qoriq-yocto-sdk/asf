@@ -228,6 +228,14 @@ int pmal_socket(int direction, struct pmal_config_s cfg)
 		return -1;
 	}
 
+	map = mmap(NULL, size,
+			PROT_READ|PROT_WRITE|PROT_EXEC,
+			MAP_SHARED, fd, 0);
+	if (map == MAP_FAILED) {
+		PMAL_ERROR("mmap failed");
+		close(fd);
+		return -1;
+	}
 	//TBD - what about filters for TX direction ?
 	if (PMAL_SOCKET_RX == direction) {
 		ret_val = setsockopt(fd,
@@ -248,16 +256,6 @@ int pmal_socket(int direction, struct pmal_config_s cfg)
 				PACKET_UM_HEAD_RESERVE +
 				PACKET_TX_IPSEC_RESERVE;
 	}
-
-	map = mmap(NULL, size,
-			PROT_READ|PROT_WRITE|PROT_EXEC,
-			MAP_SHARED, fd, 0);
-	if (map == MAP_FAILED) {
-		PMAL_ERROR("mmap failed");
-		close(fd);
-		return -1;
-	}
-
 	for (i = 0; i < PMAL_DEF_NUM_FRAMES; i++) {
 		data_dir[i].iov_base =
 			(void *)((long)map) + (i*req.tp_frame_size);
