@@ -564,8 +564,8 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
 
 	if (xfrm->lft.hard_byte_limit != XFRM_INF) {
-		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1000;
-		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1000;
+		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1024;
+		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1024;
 	}
 
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
@@ -753,8 +753,8 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
 
 	if (xfrm->lft.hard_byte_limit != XFRM_INF) {
-		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1000;
-		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1000;
+		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1024;
+		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1024;
 	}
 
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
