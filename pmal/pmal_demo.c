@@ -145,12 +145,12 @@ void copy_frame(struct pmal_buf *frame_tx, struct pmal_buf *frame_rx,
 	for (i = 0; i < frame_rx->num_frags; i++) {
 		pmal_frag_next(tmp_rx, &tmp_rx);
 		pframe_rx = PMAL_GET_DATAFRAME_FROM_PMAL_BUF(tmp_rx);
-		memcpy(tmp_buf, pframe_rx, frame_rx->buf_len);
-		tmp_buf += frame_rx->buf_len;
+		memcpy(tmp_buf, pframe_rx, tmp_rx->buf_len);
+		tmp_buf += tmp_rx->buf_len;
 	}
-
+#ifdef PMAL_DEBUG
 	hexdump(pkt_buff, len);
-
+#endif
 	/* Move the Cursor to payload */
 	tmp_rx = frame_tx;
 	tmp_buf = pkt_buff;
