@@ -5,53 +5,39 @@
 	    
 asf_open
 
-#############################################
-### LAN filer configuration Help
-#############################################
-#
-#    lan_ftr 	<lan> <rule> <queue> <cluster> <reject> <and> <cmp> <pid> <prop_val>
-#
-#    lan      ::= 0 | 1 | 2
-#    rule     ::= number, 0-255
-#    queue    ::= number, 0-63
-#    cluster  ::= true | t | 1 | yes | y | false | f | 0 | no | n
-#    reject   ::= true | t | 1 | yes | y | false | f | 0 | no | n
-#    and      ::= true | t | 1 | yes | y | false | f | 0 | no | n
-#    cmp      ::= always_match | am | always_fail | af |
-#                 equal | == | greater_equal | >= |
-#                 not_equal | != | less | <
-#    pid      ::= mask | misc | arb | dah | dal | sah | sal |
-#                 ety | vid  | pri | tos | l4p | dia | sia |
-#                 dpt | spt
-#    prop_val ::= number
-#
-
-
 #	   lan	 rule	  Q	  cluster reject and    cmp	 pid     prop_val
-lan_ftr    1	 0	  0	  f	  f	 f	af	 mask	 0xFFFFFFFF # always Fail
-lan_ftr    1	 1	  1	  f	  f	 t	==	 l4p	 0x00000004
-lan_ftr    1	 2	  2	  f	  f	 f	am	 mask	 0x00000000 # always matches
-lan_ftr    1	 3	  2	  f	  f	 f	am	 mask	 0x00000000 # always matches
+
+## Configuration for receiving packets with destination port 1024 
+lan_ftr    1	 5	  1	  f	  f	 f	==	 dpt	 0x00000400
+
+
+## Above configuration enabled by default, to use other 
+## configuration comment above lan_ftr command and uncomment lan_ftr command below.
+
+
+## For receiving packets with destination IP address 192.168.1.1 
+## on terminated ring uncomment below line
+#lan_ftr    1	 5	  1	  f	  f	 f	==	 dia	 0xC0A80101
+
+
+## For receiving packets with destination IP address 192.168.1.1 
+## and destination Port 1024 on terminated ring uncomment below two line
+#lan_ftr    1	 5	  1	  f	  f	 t	==	 dia	 0xC0A80101
+#lan_ftr    1	 6	  1	  f	  f	 f	==	 dpt	 0x00000400
+
+## For receiving packets with Destination Port 1024 or 5000 or 6000 
+## or 7000 or 8000 on terminated ring uncomment below lines
+## Lan filter rules shall be configured with RuleId as 5 to 10 
+#lan_ftr    1	 5	  1	  f	  f	 f	==	 dpt	 0x00000400
+#lan_ftr    1	 6	  1	  f	  f	 f	==	 dpt	 0x00001388
+#lan_ftr    1	 7	  1	  f	  f	 f	==	 dpt	 0x00001770
+#lan_ftr    1	 8	  1	  f	  f	 f	==	 dpt	 0x00001b58
+#lan_ftr    1	 9	  1	  f	  f	 f	==	 dpt	 0x00001f40
 
 asf_write_lan_filer 1
 
-# lan_afx <lan> <field> <control> <offset>
-#    lan     ::= 0 | 1 | 2
-#    field   ::= number 0-3
-#    control ::= none | frame | l3hdr | l4hdr
-#    offset  ::= number
-
-lan_afx 1 0 l3hdr 0x1
-asf_write_lan_afx 1
-
-lan_afx 1 3 l4hdr 0x2
-asf_write_lan_afx 1
-
-echo
 echo
 echo Ready for traffic!     
 echo
-echo
-
 
 asf_close
