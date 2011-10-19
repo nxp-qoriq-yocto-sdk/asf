@@ -194,8 +194,8 @@ int pmal_join_frags(struct pmal_buf *first,
 
 void pmal_set_data_len_frag(struct pmal_buf *frag, unsigned int data_len);
 
-#define PMAL_GET_FRAME_PHYS_ADDR(frame)
-
+#define PMAL_GET_FRAME_PHYS_ADDR_FROM_PCB(pcb)	\
+	(pcb->priv.phys_addr + pcb->pmal_ext.data)
 
 #define PMAL_ERROR(fmt, arg...)	\
 	printf("\nERROR:fn %s:%d - " fmt, __func__, __LINE__, ##arg)
