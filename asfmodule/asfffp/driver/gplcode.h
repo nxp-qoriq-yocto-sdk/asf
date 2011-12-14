@@ -50,6 +50,8 @@ int asf_ip_options_compile(struct net *net,
 				struct sk_buff  *skb,
 				struct iphdr *ipheader);
 
+
+#ifdef ASF_TOOLKIT_SUPPORT
 extern void gfar_config_afx(struct net_device *dev, unsigned int reg);
 
 extern void gfar_config_filer(struct net_device *dev,
@@ -61,5 +63,7 @@ extern void gfar_get_filer(struct net_device *dev,
 			unsigned int far,
 			unsigned int *fcr,
 			unsigned int *fpr);
+#endif
+
 #endif
 

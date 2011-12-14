@@ -72,10 +72,12 @@ MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Application Specific FastPath");
 MODULE_LICENSE("GPL");
 
+#ifdef ASF_TOOLKIT_SUPPORT
 /*! \brief Index used by Linux to register driver */
 #define ASF_HLD_MAJORNUMBER (100)
 /*! \brief Name used when mounting path */
 #define ASF_HLD_DEVICE_NAME "asf_hld"
+#endif
 
 char *asf_version = "asf-rel-0.1.0";
 /* Initilization Parameters */
@@ -3695,6 +3697,7 @@ static int __init asf_init(void)
 {
 	int err;
 
+#ifdef ASF_TOOLKIT_SUPPORT
 	/* Registering the character device */
 	if (register_chrdev(ASF_HLD_MAJORNUMBER,
 			ASF_HLD_DEVICE_NAME,
@@ -3705,6 +3708,7 @@ static int __init asf_init(void)
 		return -1;
 	}
 	spin_lock_init(&asf_app_lock);
+#endif
 
 	get_random_bytes(&rule_salt, sizeof(rule_salt));
 
@@ -3779,9 +3783,10 @@ static void __exit asf_exit(void)
 {
 /*	wait_queue_head_t dummyWq; */
 
+#ifdef ASF_TOOLKIT_SUPPORT
 	/* Unregister the character device from the kernel.*/
 	unregister_chrdev(ASF_HLD_MAJORNUMBER, ASF_HLD_DEVICE_NAME);
-
+#endif
 	asf_debug("Unregister DevFP RX Hooks!\n");
 	devfp_register_rx_hook(NULL);
 

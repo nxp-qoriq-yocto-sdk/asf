@@ -321,4 +321,3 @@ static int read_lan_filer(unsigned long arg)
 	}
 	return 0;
 }
-

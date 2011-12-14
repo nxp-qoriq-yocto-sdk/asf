@@ -38,6 +38,7 @@ EXTRA_CFLAGS += -DASF_IPSEC_FP_SUPPORT
 endif
 ifeq ($(CONFIG_ASF_TERMINATION), y)
 EXTRA_CFLAGS += -DASF_TERM_FP_SUPPORT
+EXTRA_CFLAGS += -DASF_TOOLKIT_SUPPORT
 endif
 EXTRA_CFLAGS += -DASF_FWD_FP_SUPPORT
 ifeq ($(CONFIG_GIANFAR_SG_SUPPORT), y)
@@ -54,9 +55,9 @@ asf-y := asfproc.o \
 	    asfmpool.o \
 	    asftmr.o \
 	    asftcp.o \
-	    asfreasm.o \
-	    asftoolkit.o \
-	    asfcore.o
+	    asfreasm.o
+asf-$(CONFIG_ASF_TERMINATION) += asftoolkit.o
+asf-y += asfcore.o
 
 all:
 	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) modules
