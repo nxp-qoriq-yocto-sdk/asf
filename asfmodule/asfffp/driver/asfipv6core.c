@@ -792,7 +792,6 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	if (!flow->bIPsecOut &&
 		(flow->l2blob_len == 0)) {
 		asf_debug("Generating L2blob Indication as L2blob Not found!\n");
-		printk("Generating L2blob Indication as L2blob Not found!\n");
 		L2blobRefresh = ASF_L2BLOB_REFRESH_RET_PKT_STK;
 		goto gen_indications;
 	}
