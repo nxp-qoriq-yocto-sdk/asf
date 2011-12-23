@@ -1167,7 +1167,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	int			L2blobRefresh = 0;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	int			bSpecialIndication = 0,
-				bFlowValidate = 0;
+				FlowValidate = 0;
 	unsigned int		ulTcpState = 0;
 	unsigned int		fragCnt;
 	asf_vsg_info_t		*vsgInfo;
@@ -1369,7 +1369,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				vsgInfo->configIdentity.ulConfigMagicNumber,
 
 				flow->configIdentity.ulConfigMagicNumber);
-				bFlowValidate = 1;
+				FlowValidate = ASF_FLOWVALIDATE_NORAMAL;
 			}
 			/* L2blob refersh handling for the possible change in the l2blob */
 
@@ -1407,8 +1407,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		 * flag is also used in firewall case*/
 		if (flow->bDrop) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			if (bFlowValidate)
+			if (FlowValidate) {
+				FlowValidate = ASF_FLOWVALIDATE_INVALIDFLOW;
 				goto gen_indications;
+			}
 #endif
 			XGSTATS_INC(bDropPkts);
 			asf_debug("dropping packet as bDrop is set\n");
@@ -1815,7 +1817,7 @@ gen_indications:
 				}
 			}
 			/* FlowValidate indicaion */
-			if (bFlowValidate) {
+			if (FlowValidate) {
 				if (!flow->bDeleted && ffpCbFns.pFnFlowValidate) {
 					ASFFFPFlowValidateCbInfo_t  ind;
 
@@ -1832,12 +1834,16 @@ gen_indications:
 
 					ffpCbFns.pFnFlowValidate(ulVsgId, &ind);
 				}
-				if (flow->bDrop) {
+				switch (FlowValidate) {
+				case ASF_FLOWVALIDATE_NORAMAL:
+					break;
+				case ASF_FLOWVALIDATE_INVALIDFLOW:
 					XGSTATS_INC(bDropPkts);
 					asf_debug("dropping packet as"\
-							"bDrop is set\n");
+						"bDrop is set\n");
 					goto drop_pkt;
-
+				deafult:
+					break;
 				}
 			}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
