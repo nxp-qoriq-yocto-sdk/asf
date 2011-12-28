@@ -33,7 +33,25 @@
 #define TRUE 1
 
 #define SECFP_HM_BUFFER TRUE
-
+#ifdef ASF_IPV6_FP_SUPPORT
+#define SECFP_NXTHDR_HOP_BY_HOP 0
+#define SECFP_NXTHDR_ROUTING 43
+#define SECFP_NXTHDR_FRAGMENT 44
+#define SECFP_NXTHDR_ESP 50
+#define SECFP_NXTHDR_AH 51
+#define SECFP_NXTHDR_DST_OPT 60
+#define SECFP_NXTHDR_IP 4
+#define SECFP_NXTHDR_IPV6 41
+/* Header length validation information */
+#define SECFP_IPV6_HDR_LEN	40
+#define SECFP_IPV6_TCLASS_MASK    0x0FF00000
+#define SECFP_IPV6_TCLASS_SHIFT 20
+#define ipv6_traffic_class(ipv6TClass, ipv6h) \
+{ \
+	ipv6TClass = (((*(ASF_uint32_t *)ipv6h) & SECFP_IPV6_TCLASS_MASK) \
+				>> SECFP_IPV6_TCLASS_SHIFT); \
+}
+#endif
 /* DF related bits */
 #define SECFP_DF_COPY	0
 #define SECFP_DF_CLEAR	1
@@ -173,6 +191,20 @@
 		seqnum = *(unsigned long int *)	&(skb->data[iphlen+8]); \
 	} \
 }
+#ifdef ASF_IPV6_FP_SUPPORT
+#define SECFP_EXTRACT_IPV6_PKTINFO(skb, ipv6h, iphlen, spi, seqnum)    \
+{\
+	if (ipv6h->nexthdr == SECFP_PROTO_ESP) {\
+		spi = *(unsigned long int *)    &(skb->data[iphlen]); \
+		seqnum = *(unsigned long int *) &(skb->data[iphlen+4]); \
+	} \
+	else {\
+		spi = *(unsigned long int *)    &(skb->data[iphlen+4]); \
+		seqnum = *(unsigned long int *) &(skb->data[iphlen+8]); \
+	} \
+}
+#endif
+
 #define SECFP_NUM_IV_ENTRIES 8
 
 #define secfp_compute_hash(spi)	\
@@ -315,8 +347,8 @@ typedef struct SAParams_s {
 				unsigned int daddr;
 			} iphv4;
 			struct {
-				unsigned int saddr[32];
-				unsigned int daddr[32];
+				unsigned int saddr[4];
+				unsigned int daddr[4];
 			} iphv6;
 		} addr;
 	} tunnelInfo;
@@ -417,8 +449,8 @@ typedef struct {
 } inSAList_t;
 
 struct selNode_s {
-	unsigned int ipAddrStart;
-	unsigned int ipAddrEnd;
+	ASF_IPSecRangeAddr_t ipAddrRange;
+	ASF_uint8_t	  IP_Version;
 	unsigned short int prtStart;
 	unsigned short int prtEnd;
 	unsigned char proto;
@@ -680,7 +712,7 @@ extern int try_fastroute_fwnat(struct sk_buff *skb,
 				struct net_device *dev, int length);
 extern __be16 eth_type_trans(struct sk_buff *skb,
 				struct net_device *dev);
-extern int secfp_try_fastPathInv4(struct sk_buff *skb1,
+extern int secfp_try_fastPathIn(struct sk_buff *skb1,
 				ASF_boolean_t bCheckLen, unsigned int ulVSGId,
 				ASF_uint32_t	ulCommonInterfaceId);
 
@@ -723,7 +755,7 @@ unsigned int secfp_SPDInContainerDelete(
 
 unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 				unsigned int	 ulSPDMagicNumber,
-				unsigned int	 daddr,
+				ASF_IPAddr_t	 daddr,
 				unsigned char	ucProtocol,
 				unsigned int	 ulSPI,
 				unsigned short	usDscpStart,
@@ -732,7 +764,7 @@ unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 unsigned int secfp_DeleteInSA(unsigned int	ulVSGId,
 				unsigned int	ulContainerIndex,
 				unsigned int	ulMagicNumber,
-				unsigned int	daddr,
+				ASF_IPAddr_t	daddr,
 				unsigned char	ucProtocol,
 				unsigned int	ulSPI);
 

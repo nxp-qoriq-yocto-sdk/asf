@@ -456,7 +456,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			}
 			if (secfp_DeleteOutSA(pDelSA->ulSPDContainerIndex,
 					pDelSA->ulSPDMagicNumber,
-					pDelSA->DestAddr.ipv4addr,
+					pDelSA->DestAddr,
 					pDelSA->ucProtocol,
 					pDelSA->ulSPI,
 					pDelSA->usDscpStart,
@@ -524,7 +524,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			if (secfp_DeleteInSA(ulVSGId,
 					     pDelSA->ulSPDContainerIndex,
 					     pDelSA->ulSPDMagicNumber,
-					     pDelSA->DestAddr.ipv4addr,
+					     pDelSA->DestAddr,
 					     pDelSA->ucProtocol,
 					     pDelSA->ulSPI) != SECFP_SUCCESS) {
 				ASFIPSEC_WARN("secfp_DeleteInSA returned failure");
@@ -763,14 +763,21 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 
 	pSAParams->softKbyteLimit = pASFSAParams->softKbyteLimit;
 	pSAParams->hardKbyteLimit = pASFSAParams->hardKbyteLimit;
-
+#ifdef ASF_IPV6_FP_SUPPORT
 	if (pASFSAParams->TE_Addr.IP_Version == 4) {
+#endif
 		pSAParams->tunnelInfo.bIPv4OrIPv6 = 0;
 		pSAParams->tunnelInfo.addr.iphv4.saddr = pASFSAParams->TE_Addr.srcIP.ipv4addr;
 		pSAParams->tunnelInfo.addr.iphv4.daddr = pASFSAParams->TE_Addr.dstIP.ipv4addr;
+#ifdef ASF_IPV6_FP_SUPPORT
 	} else {
 		pSAParams->tunnelInfo.bIPv4OrIPv6 = 1;
+		memcpy(pSAParams->tunnelInfo.addr.iphv6.saddr,
+			pASFSAParams->TE_Addr.srcIP.ipv6addr, 16);
+		memcpy(pSAParams->tunnelInfo.addr.iphv6.daddr,
+			pASFSAParams->TE_Addr.dstIP.ipv6addr, 16);
 	}
+#endif
 
 	if (pASFSAParams->handleToSOrDSCPAndFlowLabel == ASF_IPSEC_QOS_DSCP_COPY) {
 		pSAParams->bCopyDscp = 1;
