@@ -52,7 +52,11 @@
 #include <linux/phy_fixed.h>
 #include <net/xfrm.h>
 #include <linux/sysctl.h>
+#ifdef CONFIG_DPA
+#include <dpaa_eth_asf.h>
+#else
 #include <gianfar.h>
+#endif
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
@@ -789,13 +793,12 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 
 	gstats->ulInPkts++;
 #endif
-
-
+#ifndef CONFIG_DPA
 	/*skb->protocol = eth_type_trans(skb, real_dev);*/
 
 	/*This function resets skb->dev (affects VLAN device) */
 	skb->protocol = eth_type_trans(skb, skb->dev);
-
+#endif
 	skb->mac_len = ETH_HLEN;
 	usEthType = skb->protocol; /* *(short *)(skb->data + 12); */
 	x_hh_len = 0;
@@ -1662,7 +1665,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						iph = ip_hdr(pSkb);
 
 						pSkb->pkt_type = PACKET_FASTROUTE;
+#ifndef CONFIG_DPA
 						pSkb->asf = 1;
+#endif
 						skb_set_queue_mapping(pSkb, 0);
 
 						/* make following unconditional*/
@@ -1751,7 +1756,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			skb->pkt_type = PACKET_FASTROUTE;
+#ifndef CONFIG_DPA
 			skb->asf = 1;
+#endif
 			skb_set_queue_mapping(skb, 0);
 
 			if (flow->bVLAN)

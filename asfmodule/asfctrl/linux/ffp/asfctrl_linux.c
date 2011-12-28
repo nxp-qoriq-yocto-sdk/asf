@@ -26,7 +26,11 @@
 #include <net/dst.h>
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
+#ifdef CONFIG_DPA
+#include <dpaa_eth_asf.h>
+#else
 #include <gianfar.h>
+#endif
 #include <net/dst.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <net/route.h>

@@ -2067,11 +2067,16 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				len = (bytesLeft > ulMTU) ?  ulMTU : bytesLeft;
 				if (len < bytesLeft)
 					len &= ~7;
+#ifdef CONFIG_DPA
+				skb2 = alloc_skb(len+ihl+ulDevXmitHdrLen, GFP_ATOMIC);
+#else
 				skb2 = gfar_new_skb(skb->dev);
-
+#endif
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
+#ifndef CONFIG_DPA
 					skb2->skb_owner = NULL;
+#endif
 					pLastSkb->next = skb2;
 					pLastSkb = skb2;
 					skb2->queue_mapping = skb->queue_mapping;
@@ -2131,8 +2136,11 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					return 1;
 				}
 			}
-
+#ifdef CONFIG_DPA
+			skb2 = alloc_skb(tot_len+ihl+ulDevXmitHdrLen, GFP_ATOMIC);
+#else
 			skb2 = gfar_new_skb(skb->dev);
+#endif
 			if (!skb2)
 				goto drop;
 			skb_reset_network_header(skb2);
@@ -2236,8 +2244,11 @@ int asfIpv6Fragment(struct sk_buff *skb,
 		len = (bytesLeft > ulMTU) ?  (ulMTU & (~7)) : bytesLeft;
 
 
-
+#ifdef CONFIG_DPA
+		frag = alloc_skb(len+ip6hpexh_len+32, GFP_ATOMIC);
+#else
 		frag = gfar_new_skb(skb->dev);
+#endif
 
 		if (unlikely(!frag)) {
 			asf_reasm_debug("Skb allocation"
@@ -2251,8 +2262,9 @@ int asfIpv6Fragment(struct sk_buff *skb,
 			return 1;
 		}
 		asf_reasm_debug("Next skb\r\n");
+#ifndef CONFIG_DPA
 		frag->skb_owner = NULL;
-
+#endif
 		pLastSkb->next = frag;
 		pLastSkb = frag;
 		frag->queue_mapping = skb->queue_mapping;

@@ -27,7 +27,7 @@
 #define asfFreePerCpu(ptr)	free_percpu(ptr)
 #define asfPerCpuPtr(ptr, cpu)	per_cpu_ptr(ptr, cpu)
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM) || defined(CONFIG_DPA)
 #define asfDevHardXmit(dev, skb)	(dev->netdev_ops->ndo_start_xmit(skb, dev))
 #else
 extern int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev);

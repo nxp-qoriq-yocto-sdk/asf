@@ -31,6 +31,9 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
+#ifdef CONFIG_DPA
+#include <dpaa_eth_asf.h>
+#endif
 
 #include <asm/io.h>
 #include <asm/irq.h>

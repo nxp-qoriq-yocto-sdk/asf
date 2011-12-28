@@ -22,7 +22,13 @@ enum {
 	ASF_FAILURE = -1
 };
 
-
+#ifndef NIPQUAD
+#define NIPQUAD(addr) \
+	((unsigned char *)&addr)[0], \
+	((unsigned char *)&addr)[1], \
+	((unsigned char *)&addr)[2], \
+	((unsigned char *)&addr)[3]
+#endif
 /****** Common API ********/
 #define ASF_MAX_VSGS		(2)
 #define ASF_MAX_IFACES		(16)
