@@ -265,7 +265,7 @@ void  asfTimerDeInit(void)
 
 void asfAddTimerOn(void *tmr)
 {
-	add_timer(tmr);
+	add_timer_on(tmr, smp_processor_id());
 }
 
 void asfDelTimerOn(void *tmr)
@@ -399,11 +399,7 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 			pTmrWheel->timer.data = (ulAppId << 16 | ulInstanceId);	/* Passing the application wheel reference as callback data */
 
 			asf_timer_debug("Timer data = 0x%x\r\n", pTmrWheel->timer.data);
-			if (ii == smp_processor_id()) {
-				add_timer(&(pTmrWheel->timer));
-			} else {
-				smp_call_function_single(ii, asfAddTimerOn, &pTmrWheel->timer, 1);
-			}
+			add_timer_on(&(pTmrWheel->timer), ii);
 			asf_timer_print("Timers Added to Linux\r\n");
 		}
 		/* Timer will be started when the first timer object gets added */
@@ -777,8 +773,9 @@ static void asfTimerProc(unsigned long data)
 	}
 	/* this interval is set to zero while ASF is being removed */
 	if (pWheel->ulTimerInterval) {
-		pTmrWheel->timer.expires = jiffies + pWheel->ulTimerInterval;
-		add_timer(&pTmrWheel->timer);
+		if (!timer_pending(&pTmrWheel->timer))
+			mod_timer_pinned(&pTmrWheel->timer,
+				jiffies + pWheel->ulTimerInterval);
 	} else {
 		asf_timer_print("Not rescheduling timer. cpu=%d, appId %d instId %d",
 		smp_processor_id(), ulAppId, ulInstanceId);
