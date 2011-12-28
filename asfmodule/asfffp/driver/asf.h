@@ -12,6 +12,7 @@
 #define __ASFAPI_H
 
 #include "asfhash.h"
+#include <linux/in6.h>
 
 #define ASF_MINIMUM 1
 #define ASF_LINUX 2
@@ -25,7 +26,7 @@ enum {
 /****** Common API ********/
 #define ASF_MAX_VSGS		(2)
 #define ASF_MAX_IFACES		(16)
-#define ASF_MAX_L2BLOB_LEN	(28)
+#define ASF_MAX_L2BLOB_LEN	(68)
 
 #define ASF_MAX_L2BLOB_REFRESH_PKT_CNT	(0)
 #define ASF_MAX_L2BLOB_REFRESH_TIME	(3*60)
@@ -57,6 +58,18 @@ typedef unsigned short int ASF_uint16_t;
 typedef void ASF_void_t;
 
 typedef ASF_uint32_t ASF_IPv4Addr_t;
+
+typedef struct ASF_IPv6Addr {
+	union {
+		ASF_uint8_t            u6_addr8[16];
+		ASF_uint16_t           u6_addr16[8];
+		ASF_uint32_t           u6_addr32[4];
+	} in6_u;
+#define s6_addr                 in6_u.u6_addr8
+#define s6_addr16               in6_u.u6_addr16
+#define s6_addr32               in6_u.u6_addr32
+} ASF_IPv6Addr_t;
+
 
 /*
  * ASF_Modes_t mode - indicates the basic mode of operations such
@@ -198,8 +211,16 @@ typedef enum {
 
 
 typedef struct ASFFFPFlowTuple_s {
-	ASF_IPv4Addr_t    ulSrcIp; /* Source IP Address */
-	ASF_IPv4Addr_t    ulDestIp; /* Destination IP Address */
+	ASF_boolean_t bIPv4OrIPv6;
+	union {
+		ASF_IPv4Addr_t ulSrcIp; /* Source IP Address */
+		ASF_uint32_t ipv6SrcIp[4];
+	} ;
+
+	union {
+		ASF_IPv4Addr_t ulDestIp; /* Destination IP Address */
+		ASF_uint32_t ipv6DestIp[4];
+	} ;
 	ASF_uint16_t usSrcPort;	/* Source Port */
 	ASF_uint16_t usDestPort; /* Destination Port */
 	ASF_uint8_t ucProtocol;	/* IP Protocol */
@@ -631,11 +652,15 @@ typedef struct ASFFFPConfigIdentityInfo_s {
 
 
 typedef struct ASFFFPNATInfo_s {
-	/* Source IP Address */
-	ASF_IPv4Addr_t    ulSrcNATIp;
-
-	/* Destination IP Address */
-	ASF_IPv4Addr_t    ulDestNATIp;
+	ASF_boolean_t bIPv4OrIPv6;
+	union {
+		ASF_uint32_t ulSrcNATIp;
+		ASF_uint32_t ipv6SrcNATIp[4];
+	} ;
+	union {
+		ASF_uint32_t ulDestNATIp;
+		ASF_uint32_t ipv6DestNATIp[4];
+	} ;
 
 	/* Source NAT Port */
 	ASF_uint16_t usSrcNATPort;
@@ -824,6 +849,18 @@ typedef struct ASFFFPUpdateFlowParams_s {
 			ASF_uint16_t bTxVlan:1, bUpdatePPPoELen:1;
 
 			ASF_uint16_t usTxVlanId;
+
+			struct {
+				ASF_uint32_t
+				/* TRUE or FALSE:  indicates if IPv6-in-IPv4 tunnel outbound processing needs to happen on the flow */
+				bIP6IP4Out : 1,
+				/* TRUE or FALSE:  indicates if IPv6-in-IPv4 tunnel outbound processing needs to happen on the flow */
+				bIP6IP4In:1,
+				/* TRUE or FALSE:  indicates if IPv6-in-IPv4 tunnel outbound processing needs to happen on the flow */
+				bIP4IP6Out:1,
+				/* TRUE or FALSE:  indicates if IPv4-in-IPv6 tunnel outbound processing needs to happen on the flow */
+				bIP4IP6In:1;
+			} tunnel;
 
 		} l2blob;
 

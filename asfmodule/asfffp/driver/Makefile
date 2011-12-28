@@ -44,6 +44,9 @@ EXTRA_CFLAGS += -DASF_FWD_FP_SUPPORT
 ifeq ($(CONFIG_GIANFAR_SG_SUPPORT), y)
 EXTRA_CFLAGS += -DASF_SG_SUPPORT
 endif
+ifeq ($(CONFIG_ASF_IPV6), y)
+EXTRA_CFLAGS += -DASF_IPV6_FP_SUPPORT
+endif
 #EXTRA_CFLAGS += -DASF_DEBUG
 #EXTRA_CFLAGS += -DASF_DEBUG_L2
 #EXTRA_CFLAGS += -DASF_FFP_XTRA_STATS=1
@@ -55,9 +58,13 @@ asf-y := asfproc.o \
 	    asfmpool.o \
 	    asftmr.o \
 	    asftcp.o \
-	    asfreasm.o
+	    asfreasm.o \
+	    asfcore.o
 asf-$(CONFIG_ASF_TERMINATION) += asftoolkit.o
-asf-y += asfcore.o
+
+ifeq ($(CONFIG_ASF_IPV6), y)
+asf-y += asfipv6core.o
+endif
 
 all:
 	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) modules

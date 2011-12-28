@@ -495,7 +495,7 @@ static inline void asfRemoveTmrFromBucket(struct asfTmrWheelPerCore_s *pTmrWheel
  */
 asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanceId,
 			 unsigned int ulTmOutVal, unsigned int ulCbArg1, unsigned int ulCbArg2,
-			 unsigned int ulCbArg3, unsigned int ulCbArg4)
+			 unsigned int ulCbArg3, unsigned int ulCbArg4, unsigned int ulCbArg5)
 {
 	struct asfTmrWheelInstance_s *pWheel;
 	struct asfTmrWheelPerCore_s *pTmrWheel;
@@ -530,6 +530,7 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 	ptmr->ulCbInfo[1] = ulCbArg2;
 	ptmr->ulCbInfo[2] = ulCbArg3;
 	ptmr->ulCbInfo[3] = ulCbArg4;
+	ptmr->ulCbInfo[4] = ulCbArg5;
 	ptmr->ulPoolId = pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].ulTmrPoolId;
 	ptmr->ulTmOutVal = ulTmOutVal;
 
@@ -725,7 +726,7 @@ static void asfTimerProc(unsigned long data)
 		if (!(ptmr->bStopPeriodic) &&
 			(!pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].pFn(
 				ptmr->ulCbInfo[0], ptmr->ulCbInfo[1],
-				ptmr->ulCbInfo[2], ptmr->ulCbInfo[3])) &&
+				ptmr->ulCbInfo[2], ptmr->ulCbInfo[3], ptmr->ulCbInfo[4])) &&
 				!(ptmr->bStopPeriodic)) {
 			asf_timer_debug("Restarting timer 0x%x, stop-periodic %d",
 					ptmr, ptmr->bStopPeriodic);

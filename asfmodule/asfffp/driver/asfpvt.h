@@ -19,6 +19,9 @@
 
 #include "asfdeps.h"
 
+#define		ASF_DONE	1
+#define		ASF_RTS		2
+
 #ifdef ASF_FFP_XTRA_STATS
 typedef struct ASFFFPXtraFlowStats_s {
 
@@ -160,21 +163,41 @@ typedef struct ffp_flow_s {
 
 	ASF_uint32_t	ulVsgId;
 	ASF_uint32_t	ulZoneId;
-	ASF_IPv4Addr_t	ulSrcIp; /* Source IP Address */
-	ASF_IPv4Addr_t	ulDestIp; /* Destination IP Address */
+	union {
+		ASF_IPv4Addr_t	ulSrcIp; /* Source IP Address */
+#ifdef ASF_IPV6_FP_SUPPORT
+		ASF_IPv6Addr_t	ipv6SrcIp; /* Source IPV6 Address */
+#endif
+	};
+	union {
+		ASF_IPv4Addr_t	ulDestIp; /* Destination IP Address */
+#ifdef ASF_IPV6_FP_SUPPORT
+		ASF_IPv6Addr_t	ipv6DestIp; /* Destination IPV6 Address */
+#endif
+	};
 	ASF_uint32_t	ulPorts; /* Source Port and Destination Port */
 	ASF_uint8_t	ucProtocol; /* IP Protocol */
 	ASF_void_t	*as_flow_info;
 
 	/* Source IP Address */
-	ASF_IPv4Addr_t    ulSrcNATIp;
+	union {
+		ASF_IPv4Addr_t    ulSrcNATIp;
+#ifdef ASF_IPV6_FP_SUPPORT
+		ASF_IPv6Addr_t    ipv6SrcNATIp;
+#endif
+	};
 
 	/* Destination IP Address */
-	ASF_IPv4Addr_t    ulDestNATIp;
+	union {
+		ASF_IPv4Addr_t    ulDestNATIp;
+#ifdef ASF_IPV6_FP_SUPPORT
+		ASF_IPv6Addr_t    ipv6DestNATIp;
+#endif
+	};
 
 	ASF_uint32_t	    ulNATPorts; /* Source NAT Port and Destination NAT Port */
 
-	unsigned short	  bDrop:1, bNat:1, bVLAN:1, bPPPoE:1, bIPsecIn:1, bIPsecOut:1;
+	unsigned short	  bDrop:1, bNat:1, bVLAN:1, bPPPoE:1, bIPsecIn:1, bIPsecOut:1, bIP6IP4In:1, bIP6IP4Out:1,  bIP4IP6In:1, bIP4IP6Out:1;
 	unsigned short	  bTcpOutOfSeqCheck:1; /* TCP state processing to be on or not */
 	unsigned short	  bTcpTimeStampCheck:1; /* tcp time stamp option to be checked or not ? */
 	unsigned short	  bDeleted:1; /* tcp time stamp option to be checked or not ? */

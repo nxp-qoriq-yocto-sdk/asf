@@ -1350,7 +1350,7 @@ static int term_cmd_create_entry(ASF_uint32_t ulVsgId,
 						term_l2blob_refresh_interval,
 						ulVsgId,
 						entry1->id.ulArg1,
-						entry1->id.ulArg2, hash1);
+						entry1->id.ulArg2, hash1, 0);
 			if (!(entry1->pL2blobTmr))
 				goto down1;
 		}
@@ -1362,7 +1362,7 @@ static int term_cmd_create_entry(ASF_uint32_t ulVsgId,
 						term_l2blob_refresh_interval,
 						ulVsgId,
 						entry2->id.ulArg1,
-						entry2->id.ulArg2, hash2);
+						entry2->id.ulArg2, hash2, 0);
 			if (!(entry1->pL2blobTmr))
 				goto down2;
 		}
@@ -1373,7 +1373,7 @@ static int term_cmd_create_entry(ASF_uint32_t ulVsgId,
 					entry1->ulInacTime/4,
 					entry1->ulVsgId,
 					entry1->id.ulArg1,
-					entry1->id.ulArg2, hash1);
+					entry1->id.ulArg2, hash1, 0);
 			if (!entry1->pInacRefreshTmr)
 				goto down2;
 		}

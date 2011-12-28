@@ -562,7 +562,7 @@ static inline struct asf_reasmCb_s *asfIPv4ReasmFindOrCreateCb(
 						asf_reasmCfg[pCb->ulVSGId].ulIpRsmTimeOutVal,
 						pCb->ulVSGId,
 						pCb->ulPtrArrayIndex,
-						pCb->ulMagicNum, 0);
+						pCb->ulMagicNum, 0, 0);
 
 			if (!(pCb->ptmr)) {
 				asfRemCbFromHashList(hashVal, pCb);

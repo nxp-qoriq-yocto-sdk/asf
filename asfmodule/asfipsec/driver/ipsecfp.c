@@ -9667,7 +9667,7 @@ unsigned int secfp_createOutSA(
 					ulL2BlobRefreshTimeInSec_g,
 					ulVSGId, ulIndex,
 					ptrIArray_getMagicNum(&secFP_OutSATable,
-					ulIndex), ulSPDContainerIndex);
+					ulIndex), ulSPDContainerIndex, 0);
 			if (!pSA->pL2blobTmr) {
 				ASFIPSEC_WARN("asfTimerStart failed");
 			}

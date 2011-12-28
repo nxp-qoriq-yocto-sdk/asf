@@ -16,9 +16,9 @@
 #ifndef _ASF_TMR_H
 #define _ASF_TMR_H
 
-#define NUM_APP_CB_INFO	4
+#define NUM_APP_CB_INFO	5
 
-typedef unsigned int (*asfTmrCbFn)(unsigned int , unsigned int, unsigned int , unsigned int);
+typedef unsigned int (*asfTmrCbFn)(unsigned int , unsigned int, unsigned int , unsigned int, unsigned int);
 
 
 struct asfTmr_s {
@@ -62,7 +62,7 @@ unsigned int asfTimerWheelDeInit(unsigned short int ulAppId, unsigned  short int
 
 asfTmr_t  *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanceId,
 			 unsigned int ulTmOutVal, unsigned int ulCbArg1, unsigned int ulCbArg2,
-			 unsigned int ulCbArg3, unsigned int ulCbArg4);
+			 unsigned int ulCbArg3, unsigned int ulCbArg4, unsigned int ulCbArg5);
 
 unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 			  asfTmr_t *ptmr);

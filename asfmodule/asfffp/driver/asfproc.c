@@ -49,6 +49,7 @@
 #include "asfmpool.h"
 #include "asftmr.h"
 #include "asfpvt.h"
+#include "asfipv6pvt.h"
 #include "asftcp.h"
 
 /*
@@ -286,6 +287,9 @@ EXPORT_SYMBOL(asf_dir);
 #define ASF_PROC_VSG_STATS_NAME		"vsg_stats"
 #define ASF_PROC_IFACE_MAPS		"ifaces"
 #define ASF_PROC_FLOW_STATS_NAME	"flow_stats"
+#ifdef ASF_IPV6_FP_SUPPORT
+#define ASF_PROC_FLOW_IPV6_STATS_NAME	"flow_ipv6_stats"
+#endif
 #define ASF_PROC_FLOW_DEBUG_NAME	"flow_debug"
 
 #define GSTATS_SUM(a) (total.ul##a += gstats->ul##a)
@@ -692,6 +696,94 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 	return 0;
 }
 
+#ifdef ASF_IPV6_FP_SUPPORT
+static int display_asf_proc_flow_ipv6_stats(char *page, char **start,
+				       off_t off, int count,
+				       int *eof, void *data)
+{
+	int i, total = 0;
+	ffp_flow_t      *head, *flow;
+	char	    *buf, *p;
+	unsigned int    min_entr = ~1, max_entr = 0, max_entr_idx = ~1, cur_entr = 0, empty_entr = 0;
+	unsigned int    empty_l2blob = 0;
+	unsigned int    disp_cnt = 0, display = 0;
+
+	buf = (char *)  kmalloc(300*(ffp_debug_show_count+2), GFP_KERNEL);
+	if (!buf) {
+		printk(KERN_INFO"ffp_debug_show_count is too large : couldn't allocate memory!\n");
+		return 0;
+	}
+
+	printk(KERN_INFO"HIDX {ID}\tDST\tV/Z/P\tSIP:SPORT\tDIP:DPORT\tSNIP:SNPORT\tDNIP:DNPORT\tPKTS\n");
+	p = buf;
+	*p = '\0';
+	for (i = 0; i < ffp_hash_buckets; i++) {
+		head = (ffp_flow_t *)  &ffp_flow_table[i];
+
+		if (head == head->pNext)
+			empty_entr++;
+
+		if (i == ffp_debug_show_index)
+			display = 1;
+
+		cur_entr = 0;
+		spin_lock_bh(&ffp_flow_table[i].lock);
+		for (flow = head->pNext; flow != head; flow = flow->pNext) {
+
+			total++;
+			cur_entr++;
+			if (flow->l2blob_len == 0)
+				empty_l2blob++;
+			if (flow == flow->pNext) {
+				printk(KERN_INFO"possible infinite loop.. exiting this bucket!\n");
+				break;
+			}
+
+			if (!display)
+				continue;
+			p += sprintf(p, "%d {%lu, %lu}\t%s\t%u/%u/%s\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%u\n",
+				     i,
+				     flow->id.ulArg1, flow->id.ulArg2,
+				     flow->odev ? flow->odev->name : "UNK",
+				     flow->ulVsgId,
+				     flow->ulZoneId,
+				     (flow->ucProtocol == 6) ? "TCP" : "UDP",
+
+				     NIPQUAD(flow->ulSrcIp),
+				     ntohs((flow->ulPorts&0xffff0000) >> 16),
+				     NIPQUAD(flow->ulDestIp),
+				     ntohs(flow->ulPorts&0xffff),
+
+				     NIPQUAD(flow->ulSrcNATIp),
+				     ntohs((flow->ulNATPorts&0xffff0000) >> 16),
+				     NIPQUAD(flow->ulDestNATIp),
+				     ntohs(flow->ulNATPorts&0xffff),
+				     flow->stats.ulOutPkts);
+			disp_cnt++;
+			if (disp_cnt >= ffp_debug_show_count)
+				display = 0;
+
+		}
+		spin_unlock_bh(&ffp_flow_table[i].lock);
+
+		if (min_entr > cur_entr)
+			min_entr = cur_entr;
+		if (max_entr < cur_entr) {
+			max_entr = cur_entr;
+			max_entr_idx = i;
+		}
+	}
+	if ((p-buf) > (200*(ffp_debug_show_count+2))) {
+		printk(KERN_INFO"Ooops! buffer is overwriten! allocated %u and required %u to display %d items\n",
+		       200*(ffp_debug_show_count+2), (p-buf), ffp_debug_show_count);
+	}
+	print_bigbuf(buf);
+	printk(KERN_INFO"\nTotal %d (empty_l2blob %u)\n(max/bkt %u max-bkt-idx %u min/bkt %u empty-bkts %u)\n",
+	       total, empty_l2blob, max_entr, max_entr_idx, min_entr, empty_entr);
+	kfree(buf);
+	return 0;
+}
+#endif
 static int display_asf_proc_flow_debug(char *page, char **start,
 				       off_t off, int count,
 				       int *eof, void *data)
@@ -856,6 +948,18 @@ int asf_register_proc(void)
 		proc_file->owner = THIS_MODULE;
 #endif
 
+#ifdef ASF_IPV6_FP_SUPPORT
+	proc_file = create_proc_read_entry(
+					  ASF_PROC_FLOW_IPV6_STATS_NAME,
+					  0444, asf_dir,
+					  display_asf_proc_flow_ipv6_stats,
+					  NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
+	if (proc_file)
+		proc_file->owner = THIS_MODULE;
+#endif
+#endif
+
 #ifdef ASF_FFP_XTRA_STATS
 	proc_file = create_proc_read_entry(
 					  ASF_PROC_XTRA_FLOW_STATS_NAME,
@@ -895,6 +999,7 @@ int asf_unregister_proc(void)
 #endif
 	remove_proc_entry(ASF_PROC_IFACE_MAPS, asf_dir);
 	remove_proc_entry(ASF_PROC_FLOW_STATS_NAME, asf_dir);
+	remove_proc_entry(ASF_PROC_FLOW_IPV6_STATS_NAME, asf_dir);
 	remove_proc_entry(ASF_PROC_FLOW_DEBUG_NAME, asf_dir);
 	remove_proc_entry("asf", NULL);
 

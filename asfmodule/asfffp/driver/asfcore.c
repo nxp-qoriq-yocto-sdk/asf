@@ -36,6 +36,7 @@
 #include <linux/spinlock.h>
 #include <linux/mm.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
@@ -67,6 +68,9 @@
 #include "asfreasm.h"
 #include "asfpvt.h"
 #include "asftcp.h"
+#ifdef	ASF_IPV6_FP_SUPPORT
+#include "asfipv6pvt.h"
+#endif
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Application Specific FastPath");
@@ -146,7 +150,7 @@ static unsigned int  ffp_blob_timer_pool_id = -1;
 static unsigned int  ffp_inac_timer_pool_id = -1;
 
 ASF_boolean_t   asf_ffp_notify = ASF_FALSE;
-static ASFFFPCallbackFns_t      ffpCbFns = {0};
+ASFFFPCallbackFns_t      ffpCbFns = {0};
 
 unsigned long asf_ffp_hash_init_value;
 
@@ -161,11 +165,6 @@ static void asf_ffp_destroy_flow_table(void);
 void asf_ffp_cleanup_all_flows(void);
 
 static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *dev);
-
-#define ASF_FFP_BLOB_TIME_INTERVAL 1	/* inter bucket gap */
-#define ASF_FFP_INAC_TIME_INTERVAL 1	/* inter bucket gap */
-#define	ASF_FFP_NUM_RQ_ENTRIES	(256)
-#define ASF_FFP_AUTOMODE_FLOW_INACTIME	(300)
 
 #define FFP_HINDEX(hval) ASF_HINDEX(hval, ffp_hash_buckets)
 
@@ -748,6 +747,7 @@ void asf_display_skb_list(struct sk_buff *skb, char *msg)
 #define asf_display_one_frag(skb) do {} while (0)
 #endif
 
+
 static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -775,6 +775,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 
 	gstats->ulInPkts++;
 #endif
+
 
 	/*skb->protocol = eth_type_trans(skb, real_dev);*/
 
@@ -874,7 +875,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
 	/* By now anDev, usEthType and hh_len will have proper values */
-	if ((usEthType != __constant_htons(ETH_P_IP))) {
+	if ((usEthType != __constant_htons(ETH_P_IP)) && (usEthType != __constant_htons(ETH_P_IPV6))) {
 		XGSTATS_INC(NonIpPkts);
 		asf_debug_l2("Non IP traffic. EthType = 0x%x\n", usEthType);
 		goto ret_pkt;
@@ -882,6 +883,31 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 
 	skb->mac_len += x_hh_len;
 	skb_set_network_header(skb, x_hh_len);
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (usEthType == __constant_htons(ETH_P_IPV6)) {
+		ASF_uint32_t	ret;
+		struct ipv6hdr *ipv6h = (struct ipv6hdr *)skb_network_header(skb);
+		/*Send packet to IPv6 layer*/
+		if (ipv6h->nexthdr != 4) {
+			skb_pull(skb, x_hh_len);
+			ret = ASFFFPIPv6ProcessAndSendPkt(anDev->ulVSGId,
+					anDev->ulCommonInterfaceId,
+					abuf, (genericFreeFn_t)ASF_SKB_FREE_FUNC, skb, NULL);
+			if (ret == ASF_DONE) {
+				ASF_RCU_READ_UNLOCK(bLockFlag);
+				return AS_FP_STOLEN;
+			} else {
+				goto ret_pkt;
+			}
+		} else {
+			skb_pull(skb, sizeof(struct ipv6hdr));
+			skb_reset_network_header(skb);
+		}
+		/* need to take care the IPV4 in IPV6 case */
+	}
+#endif
+
 	iph = ip_hdr(skb);
 
 	if (unlikely(iph->version != 4)) {
@@ -919,6 +945,25 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 				abuf, (genericFreeFn_t)ASF_SKB_FREE_FUNC, skb);
 		ASF_RCU_READ_UNLOCK(bLockFlag);
 		return AS_FP_STOLEN;
+	}
+#endif
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (iph->protocol ==  IPPROTO_IPV6) {
+		ASF_uint32_t	ret;
+		skb_pull(skb, x_hh_len + sizeof(struct iphdr));
+		skb_reset_network_header(skb);
+		ret = ASFFFPIPv6ProcessAndSendPkt(anDev->ulVSGId,
+				anDev->ulCommonInterfaceId,
+				abuf, (genericFreeFn_t)ASF_SKB_FREE_FUNC, skb, NULL);
+
+		if (ret == ASF_DONE) {
+			ASF_RCU_READ_UNLOCK(bLockFlag);
+			return AS_FP_STOLEN;
+		} else {
+			skb_push(skb, x_hh_len + sizeof(struct iphdr));
+			skb_set_network_header(skb, -sizeof(struct iphdr));
+			goto ret_pkt;
+		}
 	}
 #endif
 	if (unlikely((iph->protocol != IPPROTO_TCP)
@@ -1122,6 +1167,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	unsigned long		ulZoneId;
 	struct sk_buff		*skb;
 	ASFNetDevEntry_t	*anDev;
+	unsigned int		tunnel_hdr_len = 0;
 
 	ACCESS_XGSTATS();
 
@@ -1288,7 +1334,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		}
 	}
 #endif
-
 	if (flow && (iph->ttl > 1)) {
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -1675,12 +1720,21 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				flow->l2blob_len);
 			asfCopyWords((unsigned int *)skb->data,
 				(unsigned int *)flow->l2blob, flow->l2blob_len);
+#ifdef ASF_IPV6_FP_SUPPORT
+			if (flow->bIP4IP6Out) {
+				struct ipv6hdr *ipv6h = (struct ipv6hdr *)skb_network_header(skb);
+				ipv6h -= 1;
+				ipv6h->payload_len = iph->tot_len;
+				tunnel_hdr_len = sizeof(struct ipv6hdr);
+			}
+#endif
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (flow->bPPPoE) {
 				/* PPPoE packet..
 				 * Set Payload length in PPPoE header */
-				*((short *)&(skb->data[flow->l2blob_len-4])) =
-				htons(ntohs(iph->tot_len) + 2);
+				*((short *)&(skb->data[(flow->l2blob_len - tunnel_hdr_len)-4])) =
+				htons(ntohs(iph->tot_len + tunnel_hdr_len) + 2);
 			}
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			skb->pkt_type = PACKET_FASTROUTE;
@@ -1847,7 +1901,10 @@ ret_pkt_to_stk:
 #endif
 	if (ffpCbFns.pFnNoFlowFound) {
 		ASFBuffer_t	abuf;
-
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (skb->protocol == __constant_htons(ETH_P_IPV6))
+			skb_push(skb, sizeof(struct ipv6hdr));
+#endif
 		abuf.nativeBuffer = skb;
 		ffpCbFns.pFnNoFlowFound(anDev->ulVSGId,
 			anDev->ulCommonInterfaceId, anDev->ulZoneId,
@@ -2539,14 +2596,12 @@ ASF_uint32_t ASFFFPRuntime (
 {
 	int iResult;
 	ACCESS_XGSTATS();
-
 	asf_debug("vsg %u cmd %s (%u) arg_len %u reqid_len %u (notify %d) (respCbk 0x%x)\n",
 		  ulVSGId, cmd2Str(cmd), cmd, ulArgslen, ulReqIdentifierlen,
 		  asf_ffp_notify, ffpCbFns.pFnRuntime);
 	/* invalid mode - avoid creation of flows */
 	if (!asf_ffp_check_vsg_mode(ulVSGId, fwMode))
 		return ASFFFP_RESPONSE_FAILURE;
-
 	switch (cmd) {
 	case ASF_FFP_CREATE_FLOWS:
 		{
@@ -2725,8 +2780,21 @@ EXPORT_SYMBOL(ASFSetTcpCtrlParams);
 
 static inline int ffp_flow_copy_info(ASFFFPFlowInfo_t *pInfo, ffp_flow_t *flow)
 {
-	flow->ulSrcIp = pInfo->tuple.ulSrcIp;
-	flow->ulDestIp = pInfo->tuple.ulDestIp;
+	bool	bIPv6;
+
+	bIPv6 = pInfo->tuple.bIPv4OrIPv6 ? true : false;
+#ifdef	ASF_IPV6_FP_SUPPORT
+	if (bIPv6 == true) {
+		ipv6_addr_copy((struct in6_addr *)&(flow->ipv6SrcIp),
+					(struct in6_addr *)(pInfo->tuple.ipv6SrcIp));
+		ipv6_addr_copy((struct in6_addr *)&(flow->ipv6DestIp),
+					(struct in6_addr *)(pInfo->tuple.ipv6DestIp));
+	} else
+#endif
+	{
+		flow->ulSrcIp = pInfo->tuple.ulSrcIp;
+		flow->ulDestIp = pInfo->tuple.ulDestIp;
+	}
 	flow->ulPorts = (pInfo->tuple.usSrcPort << 16)|pInfo->tuple.usDestPort;
 	flow->ucProtocol = pInfo->tuple.ucProtocol;
 
@@ -2753,8 +2821,18 @@ static inline int ffp_flow_copy_info(ASFFFPFlowInfo_t *pInfo, ffp_flow_t *flow)
 	flow->bNat = pInfo->bNAT;
 
 	if (flow->bNat) {
-		flow->ulSrcNATIp = pInfo->natInfo.ulSrcNATIp;
-		flow->ulDestNATIp = pInfo->natInfo.ulDestNATIp;
+#ifdef	ASF_IPV6_FP_SUPPORT
+		if (bIPv6 == true) {
+			ipv6_addr_copy((struct in6_addr *)&(flow->ipv6SrcNATIp),
+						(struct in6_addr *)(pInfo->natInfo.ipv6SrcNATIp));
+			ipv6_addr_copy((struct in6_addr *)&(flow->ipv6DestNATIp),
+						(struct in6_addr *)(pInfo->natInfo.ipv6DestNATIp));
+		} else
+#endif
+		{
+			flow->ulSrcNATIp = pInfo->natInfo.ulSrcNATIp;
+			flow->ulDestNATIp = pInfo->natInfo.ulDestNATIp;
+		}
 		flow->ulNATPorts = (pInfo->natInfo.usSrcNATPort << 16)|pInfo->natInfo.usDestNATPort;
 	}
 
@@ -2779,6 +2857,7 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 	unsigned int  index1, index2;
 	unsigned long hash1, hash2;
 	ffp_bucket_t  *bkt;
+	bool		bIPv6_flow1, bIPv6_flow2;
 	ACCESS_XGSTATS();
 
 	/* invalid mode - avoid creation of flows */
@@ -2792,8 +2871,23 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 		return ASFFFP_RESPONSE_FAILURE;
 	}
 
-	flow1 = ffp_flow_alloc();
-	flow2 = ffp_flow_alloc();
+	bIPv6_flow1 = p->flow1.tuple.bIPv4OrIPv6 ? true : false;
+	bIPv6_flow2 = p->flow2.tuple.bIPv4OrIPv6 ? true : false;
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6_flow1 == true)
+		flow1 = ffp_ipv6_flow_alloc();
+	else
+#endif
+		flow1 = ffp_flow_alloc();
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6_flow2 == true)
+		flow2 = ffp_ipv6_flow_alloc();
+	else
+#endif
+		flow2 = ffp_flow_alloc();
+
 	if (flow1 && flow2) {
 		flow1->ulVsgId = flow2->ulVsgId = ulVsgId;
 		flow1->as_flow_info = flow2->as_flow_info = p->ASFWInfo;
@@ -2807,27 +2901,72 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 
 		flow1->ulLastPktInAt = flow2->ulLastPktInAt = jiffies;
 
-		index1 = ptrIArray_add(&ffp_ptrary, flow1);
-		if (index1 > ffp_ptrary.nr_entries)
-			goto down;
-		index2 = ptrIArray_add(&ffp_ptrary, flow2);
-		if (index2 > ffp_ptrary.nr_entries)
-			goto down1;
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow1 == true) {
+			index1 = ptrIArray_add(&ffp_ipv6_ptrary, flow1);
+			if (index1 > ffp_ptrary.nr_entries)
+				goto down;
+		} else
+#endif
+		{
+			index1 = ptrIArray_add(&ffp_ptrary, flow1);
+			if (index1 > ffp_ptrary.nr_entries)
+				goto down;
+		}
 
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow2 == true) {
+			index2 = ptrIArray_add(&ffp_ipv6_ptrary, flow2);
+			if (index2 > ffp_ptrary.nr_entries)
+				goto down1;
+		} else
+#endif
+		{
+			index2 = ptrIArray_add(&ffp_ptrary, flow2);
+			if (index2 > ffp_ptrary.nr_entries)
+				goto down1;
+		}
+
+		/* Need consideration for NAT PT */
 		flow1->id.ulArg1 = index1;
-		flow1->id.ulArg2 = ffp_ptrary.pBase[index1].ulMagicNum;
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow1 == true)
+			flow1->id.ulArg2 = ffp_ipv6_ptrary.pBase[index1].ulMagicNum;
+#endif
+		else
+			flow1->id.ulArg2 = ffp_ptrary.pBase[index1].ulMagicNum;
 
 		flow1->other_id.ulArg1 = index2;
-		flow1->other_id.ulArg2 = ffp_ptrary.pBase[index2].ulMagicNum;
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow2 == true)
+			flow1->other_id.ulArg2 = ffp_ipv6_ptrary.pBase[index2].ulMagicNum;
+#endif
+		else
+			flow1->other_id.ulArg2 = ffp_ptrary.pBase[index2].ulMagicNum;
 
 		memcpy(&flow2->id, &flow1->other_id, sizeof(ASFFFPFlowId_t));
 		memcpy(&flow2->other_id, &flow1->id, sizeof(ASFFFPFlowId_t));
 
-
-		hash1 = ASFFFPComputeFlowHash1(flow1->ulSrcIp, flow1->ulDestIp, flow1->ulPorts,
-					       ulVsgId, flow1->ulZoneId, asf_ffp_hash_init_value);
-		hash2 = ASFFFPComputeFlowHash1(flow2->ulSrcIp, flow2->ulDestIp, flow2->ulPorts,
-					       ulVsgId, flow2->ulZoneId, asf_ffp_hash_init_value);
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow1 == true) {
+			hash1 = ASFFFPIPv6ComputeFlowHash1(&(flow1->ipv6SrcIp), &(flow1->ipv6DestIp), flow1->ulPorts,
+						       ulVsgId, flow1->ulZoneId, asf_ffp_ipv6_hash_init_value);
+		} else
+#endif
+		{
+			hash1 = ASFFFPComputeFlowHash1(flow1->ulSrcIp, flow1->ulDestIp, flow1->ulPorts,
+						       ulVsgId, flow1->ulZoneId, asf_ffp_hash_init_value);
+		}
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow2 == true) {
+			hash2 = ASFFFPIPv6ComputeFlowHash1(&(flow2->ipv6SrcIp), &(flow2->ipv6DestIp), flow2->ulPorts,
+						       ulVsgId, flow2->ulZoneId, asf_ffp_ipv6_hash_init_value);
+		} else
+#endif
+		{
+			hash2 = ASFFFPComputeFlowHash1(flow2->ulSrcIp, flow2->ulDestIp, flow2->ulPorts,
+						       ulVsgId, flow2->ulZoneId, asf_ffp_hash_init_value);
+		}
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		asf_debug_l2("creating l2blob timer (flow1)\n");
@@ -2835,7 +2974,7 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 							asf_l2blob_refresh_interval,
 							flow1->ulVsgId,
 							flow1->id.ulArg1,
-							flow1->id.ulArg2, hash1);
+							flow1->id.ulArg2, hash1, bIPv6_flow1);
 		if (!flow1->pL2blobTmr)
 			goto down2;
 
@@ -2844,7 +2983,7 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 							     flow1->ulInacTime/asf_inac_divisor,
 							     flow1->ulVsgId,
 							     flow1->id.ulArg1,
-							     flow1->id.ulArg2, hash1);
+							     flow1->id.ulArg2, hash1, bIPv6_flow1);
 		if (!flow1->pInacRefreshTmr)
 			goto down2;
 
@@ -2853,7 +2992,7 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 							asf_l2blob_refresh_interval,
 							flow2->ulVsgId,
 							flow2->id.ulArg1,
-							flow2->id.ulArg2, hash2);
+							flow2->id.ulArg2, hash2, bIPv6_flow2);
 		if (!flow2->pL2blobTmr)
 			goto down2;
 
@@ -2862,17 +3001,28 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 							     flow2->ulInacTime/asf_inac_divisor,
 							     flow2->ulVsgId,
 							     flow2->id.ulArg1,
-							     flow2->id.ulArg2, hash2);
+							     flow2->id.ulArg2, hash2, bIPv6_flow2);
 		if (!flow2->pInacRefreshTmr)
 			goto down2;
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		/* insert in the table.. but l2blob_len is zero meaning waiting for l2blob update */
-		bkt = asf_ffp_bucket_by_hash(hash1);
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow1 == true)
+			bkt = asf_ffp_ipv6_bucket_by_hash(hash1);
+		else
+#endif
+			bkt = asf_ffp_bucket_by_hash(hash1);
 		asf_ffp_flow_insert(flow1, bkt);
 		if (pHashVal)
 			*pHashVal = hash1;
 
-		bkt = asf_ffp_bucket_by_hash(hash2);
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow2 == true)
+			bkt = asf_ffp_ipv6_bucket_by_hash(hash2);
+		else
+#endif
+			bkt = asf_ffp_bucket_by_hash(hash2);
+
 		asf_ffp_flow_insert(flow2, bkt);
 
 		if (pFlow1)
@@ -2884,10 +3034,22 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 	}
 down:
 	XGSTATS_INC(CreateFlowsCmdErrDown);
-	if (flow1)
-		ffp_flow_free(flow1);
-	if (flow2)
-		ffp_flow_free(flow2);
+	if (flow1) {
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow1 == true)
+			ffp_ipv6_flow_free(flow1);
+		else
+#endif
+			ffp_flow_free(flow1);
+	}
+	if (flow2) {
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow2 == true)
+			ffp_ipv6_flow_free(flow2);
+		else
+#endif
+			ffp_flow_free(flow2);
+	}
 	asf_debug("flow creation failed!\n");
 	if (pFlow1)
 		*pFlow1 = NULL;
@@ -2897,9 +3059,20 @@ down:
 down1:
 	XGSTATS_INC(CreateFlowsCmdErrDown1);
 	asf_debug("flow creation failed!\n");
-	ptrIArray_delete(&ffp_ptrary, index1, ffp_flow_free_rcu);
-	if (flow2)
-		ffp_flow_free(flow2);
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6_flow1 == true)
+		ptrIArray_delete(&ffp_ipv6_ptrary, index1, ffp_ipv6_flow_free_rcu);
+	else
+#endif
+		ptrIArray_delete(&ffp_ptrary, index1, ffp_flow_free_rcu);
+	if (flow2) {
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6_flow2 == true)
+			ffp_ipv6_flow_free(flow2);
+		else
+#endif
+			ffp_flow_free(flow2);
+	}
 	if (pFlow1)
 		*pFlow1 = NULL;
 	if (pFlow2)
@@ -2916,8 +3089,18 @@ down2:
 		asfTimerStop(ASF_FFP_BLOB_TMR_ID, 0, flow2->pL2blobTmr);
 	if (flow2->pInacRefreshTmr)
 		asfTimerStop(ASF_FFP_INAC_REFRESH_TMR_ID, 0, flow2->pInacRefreshTmr);
-	ptrIArray_delete(&ffp_ptrary, index1, ffp_flow_free_rcu);
-	ptrIArray_delete(&ffp_ptrary, index2, ffp_flow_free_rcu);
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6_flow1 == true)
+		ptrIArray_delete(&ffp_ipv6_ptrary, index1, ffp_ipv6_flow_free_rcu);
+	else
+#endif
+		ptrIArray_delete(&ffp_ptrary, index1, ffp_flow_free_rcu);
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6_flow2 == true)
+		ptrIArray_delete(&ffp_ipv6_ptrary, index2, ffp_ipv6_flow_free_rcu);
+	else
+#endif
+		ptrIArray_delete(&ffp_ptrary, index1, ffp_flow_free_rcu);
 	return ASFFFP_RESPONSE_FAILURE;
 }
 
@@ -2928,15 +3111,32 @@ static int ffp_cmd_delete_flows(ASF_uint32_t  ulVsgId, ASFFFPDeleteFlowsInfo_t *
 	ffp_bucket_t    *bkt1, *bkt2;
 	unsigned long   hash1, hash2;
 	int	     rem_flow2_resources = 0;
-
+	bool		bIPv6;
 	/* first detach the flows */
-	hash1 = ASFFFPComputeFlowHashEx(&p->tuple, ulVsgId, p->ulZoneId, asf_ffp_hash_init_value);
+	bIPv6 = p->tuple.bIPv4OrIPv6 ? true : false;
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6 == true)
+		hash1 = ASFFFPIPv6ComputeFlowHashEx(&p->tuple, ulVsgId, p->ulZoneId, asf_ffp_ipv6_hash_init_value);
+	else
+#endif
+		hash1 = ASFFFPComputeFlowHashEx(&p->tuple, ulVsgId, p->ulZoneId, asf_ffp_hash_init_value);
 	if (pHashVal)
 		*pHashVal = hash1;
-	bkt1 = asf_ffp_bucket_by_hash(hash1);
 
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6 == true)
+		bkt1 = asf_ffp_ipv6_bucket_by_hash(hash1);
+	else
+#endif
+		bkt1 = asf_ffp_bucket_by_hash(hash1);
 	spin_lock_bh(&bkt1->lock);
-	flow1 = asf_ffp_flow_lookup_in_bkt_ex(&p->tuple, ulVsgId, p->ulZoneId, (ffp_flow_t *)  bkt1);
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6 == true)
+		flow1 = asf_ffp_ipv6_flow_lookup_in_bkt_ex(&p->tuple, ulVsgId, p->ulZoneId, (ffp_flow_t *)  bkt1);
+	else
+#endif
+		flow1 = asf_ffp_flow_lookup_in_bkt_ex(&p->tuple, ulVsgId, p->ulZoneId, (ffp_flow_t *)  bkt1);
 	if (flow1) {
 		if (unlikely(flow1->bDeleted)) {
 			spin_unlock_bh(&bkt1->lock);
@@ -2946,11 +3146,26 @@ static int ffp_cmd_delete_flows(ASF_uint32_t  ulVsgId, ASFFFPDeleteFlowsInfo_t *
 		flow1->bDeleted = 1;
 		spin_unlock_bh(&bkt1->lock);
 
-		flow2 = ffp_flow_by_id(&flow1->other_id);
+		/* Need consideration for NAT-PT */
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6 == true)
+			flow2 = ffp_ipv6_flow_by_id(&flow1->other_id);
+		else
+#endif
+			flow2 = ffp_flow_by_id(&flow1->other_id);
 		if (flow2) {
-			hash2 = ASFFFPComputeFlowHash1(flow2->ulSrcIp, flow2->ulDestIp, flow2->ulPorts,
-						       ulVsgId, flow2->ulZoneId, asf_ffp_hash_init_value);
-			bkt2 = asf_ffp_bucket_by_hash(hash2);
+#ifdef ASF_IPV6_FP_SUPPORT
+			if (bIPv6 == true) {
+				hash2 = ASFFFPIPv6ComputeFlowHash1(&flow2->ipv6SrcIp, &flow2->ipv6DestIp, flow2->ulPorts,
+							       ulVsgId, flow2->ulZoneId, asf_ffp_ipv6_hash_init_value);
+				bkt2 = asf_ffp_ipv6_bucket_by_hash(hash2);
+			} else
+#endif
+			{
+				hash2 = ASFFFPComputeFlowHash1(flow2->ulSrcIp, flow2->ulDestIp, flow2->ulPorts,
+							       ulVsgId, flow2->ulZoneId, asf_ffp_hash_init_value);
+				bkt2 = asf_ffp_bucket_by_hash(hash2);
+			}
 			spin_lock_bh(&bkt2->lock);
 			if (!flow2->bDeleted) {
 				__asf_ffp_flow_remove(flow2, bkt2);
@@ -2965,7 +3180,13 @@ static int ffp_cmd_delete_flows(ASF_uint32_t  ulVsgId, ASFFFPDeleteFlowsInfo_t *
 				if (flow2->pInacRefreshTmr) {
 					asfTimerStop(ASF_FFP_INAC_REFRESH_TMR_ID, 0, flow2->pInacRefreshTmr);
 				}
-				ptrIArray_delete(&ffp_ptrary, flow2->id.ulArg1, ffp_flow_free_rcu);
+				/* Need consideration for NAT-PT */
+#ifdef ASF_IPV6_FP_SUPPORT
+				if (bIPv6 == true)
+					ptrIArray_delete(&ffp_ipv6_ptrary, flow2->id.ulArg1, ffp_ipv6_flow_free_rcu);
+				else
+#endif
+					ptrIArray_delete(&ffp_ptrary, flow2->id.ulArg1, ffp_flow_free_rcu);
 			}
 		}
 		if (flow1->pL2blobTmr) {
@@ -2974,7 +3195,12 @@ static int ffp_cmd_delete_flows(ASF_uint32_t  ulVsgId, ASFFFPDeleteFlowsInfo_t *
 		if (flow1->pInacRefreshTmr) {
 			asfTimerStop(ASF_FFP_INAC_REFRESH_TMR_ID, 0, flow1->pInacRefreshTmr);
 		}
-		ptrIArray_delete(&ffp_ptrary, flow1->id.ulArg1, ffp_flow_free_rcu);
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6 == true)
+			ptrIArray_delete(&ffp_ipv6_ptrary, flow1->id.ulArg1, ffp_ipv6_flow_free_rcu);
+		else
+#endif
+			ptrIArray_delete(&ffp_ptrary, flow1->id.ulArg1, ffp_flow_free_rcu);
 		return 0;
 	}
 	spin_unlock_bh(&bkt1->lock);
@@ -2985,8 +3211,16 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 {
 	ffp_flow_t *flow;
 	unsigned long   hash;
+	bool		bIPv6;
 
-	flow = asf_ffp_flow_lookup_by_tuple(&p->tuple, ulVsgId, p->ulZoneId, &hash);
+	bIPv6 = p->tuple.bIPv4OrIPv6 ? true : false;
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6 == true)
+		flow = asf_ffp_ipv6_flow_lookup_by_tuple(&p->tuple, ulVsgId, p->ulZoneId, &hash);
+	else
+#endif
+		flow = asf_ffp_flow_lookup_by_tuple(&p->tuple, ulVsgId, p->ulZoneId, &hash);
 	if (flow) {
 		if (p->bL2blobUpdate) {
 			ASFNetDevEntry_t  *dev;
@@ -3013,9 +3247,17 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 				return ASFFFP_RESPONSE_FAILURE;
 			}
 
+
 			memcpy(&flow->l2blob, p->u.l2blob.l2blob, p->u.l2blob.l2blobLen);
 			flow->l2blob_len = p->u.l2blob.l2blobLen;
 			flow->pmtu = p->u.l2blob.ulPathMTU;
+#ifdef ASF_IPV6_FP_SUPPORT
+			flow->bIP6IP4Out = p->u.l2blob.tunnel.bIP6IP4Out;
+			flow->bIP6IP4In = p->u.l2blob.tunnel.bIP6IP4In;
+			flow->bIP4IP6Out = p->u.l2blob.tunnel.bIP4IP6Out;
+			flow->bIP4IP6In = p->u.l2blob.tunnel.bIP4IP6In;
+#endif
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			flow->bVLAN = p->u.l2blob.bTxVlan;
 			flow->bPPPoE = p->u.l2blob.bUpdatePPPoELen;
@@ -3052,7 +3294,7 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 							asf_l2blob_refresh_interval,
 							flow->ulVsgId,
 							flow->id.ulArg1,
-							flow->id.ulArg2, hash);
+							flow->id.ulArg2, hash, bIPv6);
 					if (!flow->pL2blobTmr) {
 						flow->bDrop = 0;
 						return ASFFFP_RESPONSE_FAILURE;
@@ -3063,7 +3305,7 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 							flow->ulInacTime/asf_inac_divisor,
 							flow->ulVsgId,
 							flow->id.ulArg1,
-							flow->id.ulArg2, hash);
+							flow->id.ulArg2, hash, bIPv6);
 					if (!flow->pInacRefreshTmr) {
 						flow->bDrop = 0;
 						asfTimerStop(ASF_FFP_BLOB_TMR_ID, 0, flow->pL2blobTmr);
@@ -3106,6 +3348,7 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 
 			return ASFFFP_RESPONSE_SUCCESS;
 		}
+
 	} else
 		asf_debug("flow is not found!\n");
 
@@ -3202,7 +3445,7 @@ int ASFGetStatus()
 EXPORT_SYMBOL(ASFGetStatus);
 
 unsigned int asfFfpBlobTmrCb(unsigned int ulVSGId,
-			     unsigned int ulIndex, unsigned int ulMagicNum, unsigned int ulHashVal)
+			     unsigned int ulIndex, unsigned int ulMagicNum, unsigned int ulHashVal, bool bIPv6)
 {
 	ffp_flow_t *flow;
 	ACCESS_XGSTATS();
@@ -3211,20 +3454,47 @@ unsigned int asfFfpBlobTmrCb(unsigned int ulVSGId,
 	XGSTATS_INC(BlobTmrCalls);
 
 	if (asf_enable) {
-		flow = ffp_flow_by_id_ex(ulIndex, ulMagicNum);
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6 == true)
+			flow = ffp_ipv6_flow_by_id_ex(ulIndex, ulMagicNum);
+		else
+#endif
+			flow = ffp_flow_by_id_ex(ulIndex, ulMagicNum);
+
 		if (flow) {
 			if (!flow->bIPsecOut && ffpCbFns.pFnFlowRefreshL2Blob) {
 				ASFFFPFlowL2BlobRefreshCbInfo_t ind;
 
-				ind.flowTuple.ulSrcIp = flow->ulSrcIp;
-				ind.flowTuple.ulDestIp = flow->ulDestIp;
+#ifdef ASF_IPV6_FP_SUPPORT
+				if (bIPv6 == true) {
+					ipv6_addr_copy(&ind.flowTuple.ipv6SrcIp, &flow->ipv6SrcIp);
+					ipv6_addr_copy(&ind.flowTuple.ipv6DestIp, &flow->ipv6DestIp);
+				} else
+#endif
+
+				{
+					ind.flowTuple.ulSrcIp = flow->ulSrcIp;
+					ind.flowTuple.ulDestIp = flow->ulDestIp;
+				}
+
+				ind.flowTuple.bIPv4OrIPv6 = bIPv6 == true ? 1 : 0;
+
 				ind.flowTuple.usSrcPort = (flow->ulPorts >> 16);
 				ind.flowTuple.usDestPort = flow->ulPorts&0xffff;
 				ind.flowTuple.ucProtocol = flow->ucProtocol;
 
 				if (flow->bNat) {
-					ind.packetTuple.ulSrcIp = flow->ulSrcNATIp;
-					ind.packetTuple.ulDestIp = flow->ulDestNATIp;
+#ifdef ASF_IPV6_FP_SUPPORT
+					if (bIPv6 == true) {
+						ipv6_addr_copy(&ind.packetTuple.ipv6SrcIp, &flow->ipv6SrcNATIp);
+						ipv6_addr_copy(&ind.packetTuple.ipv6DestIp, &flow->ipv6DestNATIp);
+					} else
+#endif
+					{
+						ind.packetTuple.ulSrcIp = flow->ulSrcNATIp;
+						ind.packetTuple.ulDestIp = flow->ulDestNATIp;
+					}
+					ind.packetTuple.bIPv4OrIPv6 = bIPv6 == true ? 1 : 0;
 					ind.packetTuple.usSrcPort = (flow->ulNATPorts >> 16);
 					ind.packetTuple.usDestPort = flow->ulNATPorts&0xffff;
 					ind.packetTuple.ucProtocol = flow->ucProtocol;
@@ -3254,19 +3524,30 @@ unsigned int asfFfpBlobTmrCb(unsigned int ulVSGId,
 
 
 unsigned int asfFfpInacRefreshTmrCb(unsigned int ulVSGId,
-				    unsigned int ulIndex, unsigned int ulMagicNum, unsigned int ulHashVal)
+				    unsigned int ulIndex, unsigned int ulMagicNum, unsigned int ulHashVal, bool bIPv6)
 {
 	ffp_flow_t *flow1, *flow2;
 	ACCESS_XGSTATS();
 
+
 	asf_debug_l2("vsg %u idx %u magic %u hash %u\n", ulVSGId, ulIndex, ulMagicNum, ulHashVal);
 	XGSTATS_INC(InacTmrCalls);
 
-	flow1 = ffp_flow_by_id_ex(ulIndex, ulMagicNum);
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6 == true)
+		flow1 = ffp_ipv6_flow_by_id_ex(ulIndex, ulMagicNum);
+	else
+#endif
+		flow1 = ffp_flow_by_id_ex(ulIndex, ulMagicNum);
 	if (flow1) {
 		unsigned long flow1_idle, flow2_idle, ulIdleTime;
 
-		flow2 = ffp_flow_by_id(&flow1->other_id);
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (bIPv6 == true)
+			flow2 = ffp_ipv6_flow_by_id(&flow1->other_id);
+		else
+#endif
+			flow2 = ffp_flow_by_id(&flow1->other_id);
 		if (!flow2) {
 			asf_debug("Other flow is not found.. doing nothing!!\n");
 			XGSTATS_INC(InacTmrCtxBadFlow2);
@@ -3282,8 +3563,18 @@ unsigned int asfFfpInacRefreshTmrCb(unsigned int ulVSGId,
 		if (ffpCbFns.pFnFlowActivityRefresh) {
 			ASFFFPFlowRefreshInfo_t ind;
 
-			ind.tuple.ulSrcIp = flow1->ulSrcIp;
-			ind.tuple.ulDestIp = flow1->ulDestIp;
+#ifdef ASF_IPV6_FP_SUPPORT
+			if (bIPv6 == true) {
+				ipv6_addr_copy(&ind.tuple.ipv6SrcIp, &flow1->ipv6SrcIp);
+				ipv6_addr_copy(&ind.tuple.ipv6DestIp, &flow1->ipv6DestIp);
+			} else {
+#endif
+				ind.tuple.ulSrcIp = flow1->ulSrcIp;
+				ind.tuple.ulDestIp = flow1->ulDestIp;
+			}
+
+			ind.tuple.bIPv4OrIPv6 = bIPv6 == true ? 1 : 0;
+
 			ind.tuple.usSrcPort = (flow1->ulPorts >> 16);
 			ind.tuple.usDestPort = flow1->ulPorts&0xffff;
 			ind.tuple.ucProtocol = flow1->ucProtocol;
@@ -3321,7 +3612,7 @@ static int asf_ffp_init_flow_table()
 	unsigned int	max_num;
 
 	/* 10% of actual max value */
-	max_num = ffp_max_flows/10;
+	max_num = ffp_max_flows/20;
 	get_random_bytes(&asf_ffp_hash_init_value, sizeof(asf_ffp_hash_init_value));
 
 	if (asfCreatePool("FfpFlow", max_num,
@@ -3774,6 +4065,15 @@ static int __init asf_init(void)
 		asf_ffp_destroy_flow_table();
 		return err;
 	}
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	err = asf_ffp_ipv6_init();
+	if (err) {
+		printk(KERN_INFO"IPV6 initialization failed\n");
+		return err;
+	}
+#endif
+
 	asf_debug("Registering hooks to DevFP\n");
 	err = devfp_register_rx_hook(&asf_ffp_devfp_rx);
 	return err;
@@ -3837,6 +4137,10 @@ static void __exit asf_exit(void)
 
 	asf_debug("Freeing VSG specific info array\n");
 	kfree(asf_vsg_info);
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	asf_ffp_ipv6_exit();
+#endif
 
 	asf_debug("Unregister DevFP TX Hooks at Last!\n");
 	devfp_register_tx_hook(NULL);

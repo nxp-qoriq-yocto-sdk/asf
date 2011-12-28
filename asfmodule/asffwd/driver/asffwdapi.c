@@ -913,7 +913,7 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 						fwd_l2blob_refresh_interval,
 						ulVsgId,
 						(unsigned int)CacheEntry,
-						0, hash);
+						0, hash, 0);
 		if (!(CacheEntry->pL2blobTmr))
 			goto down;
 #endif
@@ -944,7 +944,7 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 					pInacRefreshTmr = asfTimerStart(
 							ASF_FWD_EXPIRY_TMR_ID,
 							0, fwd_expiry_timeout,
-							ulVsgId, hash, 0, 0);
+							ulVsgId, hash, 0, 0, 0);
 				if (!(fwd_aging_table[processor_id]
 					[ulVsgId].pInacRefreshTmr))
 					goto down2;
