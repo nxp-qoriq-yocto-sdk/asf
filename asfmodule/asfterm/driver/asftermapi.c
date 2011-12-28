@@ -99,9 +99,9 @@ static ASFTERMCallbackFns_t	termCbFns = {0};
 unsigned long asf_term_hash_init_value;
 
 #ifdef ASF_IPSEC_FP_SUPPORT
-extern ASFFFPIPSecInv4_f	pFFPIPSecInv4;
-extern ASFFFPIPSecOutv4_f	pFFPIPSecOutv4;
-extern ASFFFPIPSecInVerifyV4_f	pFFPIpsecInVerifyV4;
+extern ASFFFPIPSecInv4_f	pFFPIPSecIn;
+extern ASFFFPIPSecOutv4_f	pFFPIPSecOut;
+extern ASFFFPIPSecInVerifyV4_f	pFFPIpsecInVerify;
 extern ASFFFPIPSecProcessPkt_f	pFFPIpsecProcess;
 #endif
 
@@ -629,8 +629,8 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 		}
 #endif
 		if (unlikely(iph->protocol != IPPROTO_UDP)) {
-			if (pFFPIpsecInVerifyV4) {
-				pFFPIpsecInVerifyV4(ulVsgId, skb,
+			if (pFFPIpsecInVerify) {
+				pFFPIpsecInVerify(ulVsgId, skb,
 					anDev->ulCommonInterfaceId, NULL,
 					pIpsecOpaque);
 				return;
@@ -752,8 +752,8 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 			|| usSrcPrt == ASF_IKE_NAT_FLOAT_PORT
 			|| usDstPrt == ASF_IKE_SERVER_PORT
 			|| usDstPrt == ASF_IKE_NAT_FLOAT_PORT) {
-			if (pFFPIPSecInv4 &&
-				pFFPIPSecInv4(skb, 0, anDev->ulVSGId,
+			if (pFFPIPSecIn &&
+				pFFPIPSecIn(skb, 0, anDev->ulVSGId,
 				anDev->ulCommonInterfaceId) == 0) {
 				asf_debug("UDP encapsulated ESP packet"
 					"(fraglist) absorbed by IPSEC-ASF\n");
@@ -830,7 +830,7 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 #endif
 #ifdef ASF_IPSEC_FP_SUPPORT
 	if (pIpsecOpaque) {
-		if (pFFPIpsecInVerifyV4(ulVsgId, skb,
+		if (pFFPIpsecInVerify(ulVsgId, skb,
 			anDev->ulCommonInterfaceId,
 			Cache->bIPsecIn ? &Cache->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
@@ -932,8 +932,8 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 	Cache->ulLastPktInAt = jiffies;
 #ifdef ASF_IPSEC_FP_SUPPORT
 	if (Cache->bIPsecOut) {
-		if (pFFPIPSecOutv4) {
-			if (pFFPIPSecOutv4(ulVsgId,
+		if (pFFPIPSecOut) {
+			if (pFFPIPSecOut(ulVsgId,
 				skb, &Cache->ipsecInfo) == 0) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulOutBytes += skb->len;

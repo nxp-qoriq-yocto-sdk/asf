@@ -18,6 +18,7 @@
 #define __ASF_PVT_H
 
 #include "asfdeps.h"
+#include "asfipsec.h"
 
 #define		ASF_DONE	1
 #define		ASF_RTS		2
@@ -151,6 +152,12 @@ extern int asf_tcp_fin_timeout;
 extern int asf_unregister_proc(void);
 extern int asf_register_proc(void);
 
+#ifdef ASF_IPSEC_FP_SUPPORT
+extern ASFFFPIPSecInv4_f pFFPIPSecIn;
+extern ASFFFPIPSecOutv4_f pFFPIPSecOut;
+extern ASFFFPIPSecInVerifyV4_f pFFPIpsecInVerify;
+extern ASFFFPIPSecProcessPkt_f pFFPIpsecProcess;
+#endif
 /* Need to hold (ETH_HDR+VLAN_HDR+PPPOE_HDR+PPP_HDR)
  *	14+4+6+2 = 26 (rounded to 28 to make it multiple of 4)
  */

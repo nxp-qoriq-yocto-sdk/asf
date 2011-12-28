@@ -64,36 +64,6 @@ static void asf_ffp_ipv6_destroy_flow_table(void);
 
 
 
-#if 0
-ASFFFPIPSecInv4_f pFFPIPSecInv4;
-EXPORT_SYMBOL(pFFPIPSecInv4);
-
-ASFFFPIPSecOutv4_f pFFPIPSecOutv4;
-EXPORT_SYMBOL(pFFPIPSecOutv4);
-
-ASFFFPIPSecInVerifyV4_f pFFPIpsecInVerifyV4;
-EXPORT_SYMBOL(pFFPIpsecInVerifyV4);
-
-ASFFFPIPSecProcessPkt_f pFFPIpsecProcess;
-EXPORT_SYMBOL(pFFPIpsecProcess);
-
-void ASFFFPRegisterIPSecFunctions(ASFFFPIPSecInv4_f pIn,
-				ASFFFPIPSecOutv4_f pOut,
-				ASFFFPIPSecInVerifyV4_f pIpsecInVerify,
-				ASFFFPIPSecProcessPkt_f pIpsecProcess)
-{
-	pFFPIPSecInv4 = pIn;
-	pFFPIPSecOutv4 = pOut;
-	pFFPIpsecInVerifyV4 = pIpsecInVerify;
-	pFFPIpsecProcess = pIpsecProcess;
-
-	if (pFFPIPSecInv4 && pFFPIPSecOutv4)
-		asf_ipsec_func_on = ASF_TRUE;
-	else
-		asf_ipsec_func_on = ASF_FALSE;
-}
-EXPORT_SYMBOL(ASFFFPRegisterIPSecFunctions);
-#endif
 
 static inline void ffp_copy_flow_stats(ffp_flow_t *flow, ASFFFPFlowStats_t *stats)
 {
@@ -306,7 +276,6 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	unsigned char		nexthdr;
 	unsigned int		exthdrsize = 0;
 	unsigned int pkt_len = 0;
-	struct sk_buff *pSkb;
 
 	ACCESS_XGSTATS();
 
@@ -318,7 +287,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		asf_debug("CII %u doesn't appear to be valid\n",
 			ulCommonInterfaceId);
 		pFreeFn(skb);
-		return -1;
+		return ASF_RTS;
 	}
 
 	ulZoneId = anDev->ulZoneId;
@@ -335,59 +304,10 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	hexdump(skb->data - 14, skb->len + 14);
 #endif
 
-#if 0
-
-	/* If the packet is recevied from IPsec-ASF, IPSEC-ASF it self will take care of
-	 * submitting the packet to AS */
-	/* Needed to verify checksum of the packet recieved in tunnel */
-#if 0
-	if (pIpsecOpaque) {
-		asf_debug(" DECRYPTED PACKET");
-		if (unlikely(iph->ihl < 5)) {
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			gstats->ulErrIpHdr++;
-#endif
-			pFreeFn(skb);
-			return;
-		}
-
-		if (unlikely(iph->version != 4)) {
-			asf_debug("Bad iph-version =%d", iph->version);
-			goto drop_pkt;
-		}
-
-		/* Do ip header length checks if the packet is received thru IPsec */
-		tot_len = ntohs(iph->tot_len);
-		if (unlikely((skb->len < tot_len) || (tot_len < (iph->ihl*4)))) {
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			gstats->ulErrIpHdr++;
-#endif
-			goto drop_pkt;
-		}
-
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-		XGSTATS_INC(LocalCsumVerify);
-		if (ip_fast_csum((u8 *)iph, iph->ihl)) {
-			gstats->ulErrCsum++;
-			XGSTATS_INC(LocalBadCsum);
-			asf_debug("Decrypted Packet"\
-				"Ip Checksum verification failed\n");
-			goto drop_pkt;
-		}
-#endif
-		if (unlikely((iph->protocol != IPPROTO_TCP)
-			&& (iph->protocol != IPPROTO_UDP))) {
-			if (pFFPIpsecInVerifyV4) {
-				pFFPIpsecInVerifyV4(ulVsgId, skb,
-				anDev->ulCommonInterfaceId, NULL, pIpsecOpaque);
-				return;
-			}
-			asf_err("Non supported Decrypted packet!!! ERROR!!!\n");
-			goto drop_pkt;
-		}
+	if (unlikely(ip6h->version != 6)) {
+		asf_debug("Bad iph-version =%d", ip6h->version);
+		goto drop_pkt;
 	}
-#endif
-#endif
 
 	/* IP packet need to be set in SKB */
 
@@ -478,83 +398,35 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		}
 	}
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-#if 0
-	/* TODO: how to handle fragments received on PPPoE iface and how to remember
-	 * logical device and hh_len */
-	fragCnt = 1;
-	if (unlikely((iph->frag_off) & ASF_MF_OFFSET_FLAG_NET_ORDER)) {
-		asf_display_one_frag(skb);
-		XGSTATS_INC(IpFragPkts);
-
-		skb = asfIpv4Defrag(ulVsgId, skb, NULL, NULL, NULL, &fragCnt);
-		if (!(skb)) {
-			asf_debug("Skb absorbed for re-assembly \r\n");
-			return;
-		}
-		asf_display_frags(skb, "After Defrag");
-
-		asf_debug("Defrag Completed!\n");
-
-		iph = ip_hdr(skb);
-		if (unlikely(skb->len < ((iph->ihl*4) + 8))) {
-			/* Need to have the transport headers ready */
-			asf_debug("First fragment does not have transport headers ready\n");
-			if (iph->protocol == IPPROTO_UDP)
-				iRetVal = asfReasmPullBuf(skb, 8, &fragCnt);
-			else
-				iRetVal	= asfReasmPullBuf(skb, 28, &fragCnt);
-
-			if (iRetVal) {
-				/* Failure */
-				asf_debug("Could not pull in the UDP or TCP header\r\n");
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-				gstats->ulErrIpProtoHdr++;
-#endif
-				goto drop_pkt;
-			}
-		}
-		asf_debug("DeFrag & Pull done .. proceed!! skb->len %d iph->tot_len %d fragCnt %d\n",
-			  skb->len, iph->tot_len, fragCnt);
-		asf_display_frags(skb, "After Pull");
-	}
-#endif
-#endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
-
+#ifdef ASF_IPSEC_FP_SUPPORT
 	if (nexthdr == NEXTHDR_ESP) {
-
-		panic("NEXTHDR_ESP sipport is not in ASF IPV6\n");
-
-		/* Give SKB to IPsec */
-
+		/* Give packet to ASF IPSec */
+		if (pFFPIPSecIn) {
+			if (pFFPIPSecIn(skb, 0, anDev->ulVSGId,
+				anDev->ulCommonInterfaceId) == 0) {
+				return ASF_DONE;
+			}
+		} else {
+			XGSTATS_INC(NonTcpUdpPkts);
+			return ASF_RTS;
+		}
 	}
+#endif
 
 
 	if (unlikely((nexthdr != NEXTHDR_TCP) &&
 		(nexthdr != NEXTHDR_UDP))) {
+#ifdef ASF_IPSEC_FP_SUPPORT
+			if (pIpsecOpaque && pFFPIpsecInVerify) {
+				pFFPIpsecInVerify(ulVsgId, skb,
+				anDev->ulCommonInterfaceId, NULL, pIpsecOpaque);
+				return ASF_DONE;
+			}
+#endif
 		/* Dont process non TCP/UDP packets */
 		/* return packet to linux stack */
 		return ASF_RTS;
 	}
-
-
-#if 0
-	if (nexthdr == NEXTHDR_UDP) {
-		unsigned short int usSrcPrt;
-		unsigned short int usDstPrt;
-
-		usSrcPrt = BUFGET16((char *) skb_transport_header(skb));
-		usDstPrt = BUFGET16(((char *) skb_transport_header(skb)) + 2);
-
-		if (usSrcPrt == ASF_IKE_SERVER_PORT
-			|| usSrcPrt == ASF_IKE_NAT_FLOAT_PORT
-			|| usDstPrt == ASF_IKE_SERVER_PORT
-			|| usDstPrt == ASF_IKE_NAT_FLOAT_PORT) {
-
-			/* Give packet to IPsec */
-		}
-	}
-#endif
 
 
 	ptrhdrOffset = (unsigned long int *)((unsigned char *) skb_transport_header(skb));
@@ -564,7 +436,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 					ulZoneId, nexthdr, &ulHashVal);
 
 
-	printk(KERN_INFO"ASF: %s Hash(%x:%x:%x:%x:%x:%x:%x:%x, %x:%x:%x:%x:%x:%x:%x:%x, 0x%lx, %d, %d)"\
+	asf_debug("ASF: %s Hash(%x:%x:%x:%x:%x:%x:%x:%x, %x:%x:%x:%x:%x:%x:%x:%x, 0x%lx, %d, %d)"\
 		" = %lx (hindex %lx) (hini 0x%lx) => %s\n",
 		skb->dev->name,
 		PRINT_IPV6_OTH(ip6h->saddr), PRINT_IPV6_OTH(ip6h->daddr), *ptrhdrOffset,
@@ -572,16 +444,14 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		asf_ffp_ipv6_hash_init_value, flow ? "FOUND" : "NOT FOUND");
 
 
-#if 0
-
-
+#ifdef ASF_IPSEC_FP_SUPPORT
 	if (pIpsecOpaque) {
-		if (pFFPIpsecInVerifyV4(ulVsgId, skb,
+		if (pFFPIpsecInVerify(ulVsgId, skb,
 			anDev->ulCommonInterfaceId,
 			(flow && flow->bIPsecIn) ? &flow->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
 			asf_warn("IPSEC InVerify Failed\n");
-			return;
+			return ASF_DONE;
 		}
 	}
 #endif
@@ -820,14 +690,6 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 			q = ((unsigned short int *) ptrhdrOffset) + 8;
 		}
 
-#if 0
-		inet_proto_csum_replace4(q, skb,
-			flow->iv6SrcIp, flow->ulSrcNATIp, 1);
-		inet_proto_csum_replace4(q, skb,
-			flow->iDestIp, flow->ulDestNATIp, 1);
-		inet_proto_csum_replace4(q, skb,
-			flow->ulPorts, flow->ulNATPorts, 0);
-#endif
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 
@@ -883,16 +745,16 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 	}
 
-#if 0
+#ifdef ASF_IPSEC_FP_SUPPORT
 	if (flow->bIPsecOut) {
-		if (pFFPIPSecOutv4) {
-			if (pFFPIPSecOutv4(ulVsgId,
+		if (pFFPIPSecOut) {
+			if (pFFPIPSecOut(ulVsgId,
 				skb, &flow->ipsecInfo) == 0) {
-				goto gen_indications;
-			}
+				return ASF_DONE;
+			} else
+				return ASF_RTS;
 		}
 		goto drop_pkt;
-
 	}
 #endif /*ASF_IPSEC_FP_SUPPORT*/
 	asf_debug_l2("attempting to xmit the packet\n");
@@ -912,12 +774,6 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		struct sk_buff *pTempSkb;
 		unsigned int tunnel_hdr_len = 0;
 
-		if (unlikely(((skb->len + flow->l2blob_len) >
-			(flow->odev->mtu + ETH_HLEN)))) {
-			panic("MTU handling required\n");
-			/* problem here */
-		}
-
 		pTempSkb = skb->next;
 		asf_debug("Next skb = 0x%x\r\n", pTempSkb);
 		skb->next = NULL;
@@ -925,7 +781,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		ip6h = ipv6_hdr(skb);
 
 		skb->pkt_type = PACKET_FASTROUTE;
+#ifndef CONFIG_DPA
 		skb->asf = 1;
+#endif
 		skb_set_queue_mapping(skb, 0);
 
 		/* make following unconditional*/
@@ -1119,7 +977,7 @@ drop_pkt:
 	/* TODO: ensure all fragments are also dropped. and return STOLEN
 	 always return stolen?? */
 	pFreeFn(skb);
-	return;
+	return ASF_DONE;
 }
 EXPORT_SYMBOL(ASFFFPIPv6ProcessAndSendPkt);
 

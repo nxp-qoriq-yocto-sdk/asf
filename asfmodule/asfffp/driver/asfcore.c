@@ -211,14 +211,14 @@ inline ASFFFPGlobalStats_t *get_asf_gstats() /* per cpu global stats */
 EXPORT_SYMBOL(get_asf_gstats);
 
 #ifdef ASF_IPSEC_FP_SUPPORT
-ASFFFPIPSecInv4_f pFFPIPSecInv4;
-EXPORT_SYMBOL(pFFPIPSecInv4);
+ASFFFPIPSecInv4_f pFFPIPSecIn;
+EXPORT_SYMBOL(pFFPIPSecIn);
 
-ASFFFPIPSecOutv4_f pFFPIPSecOutv4;
-EXPORT_SYMBOL(pFFPIPSecOutv4);
+ASFFFPIPSecOutv4_f pFFPIPSecOut;
+EXPORT_SYMBOL(pFFPIPSecOut);
 
-ASFFFPIPSecInVerifyV4_f pFFPIpsecInVerifyV4;
-EXPORT_SYMBOL(pFFPIpsecInVerifyV4);
+ASFFFPIPSecInVerifyV4_f pFFPIpsecInVerify;
+EXPORT_SYMBOL(pFFPIpsecInVerify);
 
 ASFFFPIPSecProcessPkt_f pFFPIpsecProcess;
 EXPORT_SYMBOL(pFFPIpsecProcess);
@@ -228,12 +228,12 @@ void ASFFFPRegisterIPSecFunctions(ASFFFPIPSecInv4_f pIn,
 				ASFFFPIPSecInVerifyV4_f pIpsecInVerify,
 				ASFFFPIPSecProcessPkt_f pIpsecProcess)
 {
-	pFFPIPSecInv4 = pIn;
-	pFFPIPSecOutv4 = pOut;
-	pFFPIpsecInVerifyV4 = pIpsecInVerify;
+	pFFPIPSecIn = pIn;
+	pFFPIPSecOut = pOut;
+	pFFPIpsecInVerify = pIpsecInVerify;
 	pFFPIpsecProcess = pIpsecProcess;
 
-	if (pFFPIPSecInv4 && pFFPIPSecOutv4)
+	if (pFFPIPSecIn && pFFPIPSecOut)
 		asf_ipsec_func_on = ASF_TRUE;
 	else
 		asf_ipsec_func_on = ASF_FALSE;
@@ -1053,8 +1053,8 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	 */
 
 	if (iph->protocol == IPPROTO_ESP) {
-		if (pFFPIPSecInv4) {
-			if (pFFPIPSecInv4(skb, 0, anDev->ulVSGId,
+		if (pFFPIPSecIn) {
+			if (pFFPIPSecIn(skb, 0, anDev->ulVSGId,
 				anDev->ulCommonInterfaceId) == 0) {
 				ASF_RCU_READ_UNLOCK(bLockFlag);
 				return AS_FP_STOLEN;
@@ -1080,8 +1080,8 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 			|| usSrcPrt  ==  ASF_IKE_SERVER_PORT
 			|| usDstPrt  ==  ASF_IKE_SERVER_PORT
 			|| usDstPrt  ==  ASF_IKE_NAT_FLOAT_PORT) {
-			if (pFFPIPSecInv4 &&
-				pFFPIPSecInv4(skb, 0, anDev->ulVSGId,
+			if (pFFPIPSecIn &&
+				pFFPIPSecIn(skb, 0, anDev->ulVSGId,
 					anDev->ulCommonInterfaceId) == 0) {
 				ASF_RCU_READ_UNLOCK(bLockFlag);
 				return AS_FP_STOLEN;
@@ -1253,8 +1253,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 		if (unlikely((iph->protocol != IPPROTO_TCP)
 			&& (iph->protocol != IPPROTO_UDP))) {
-			if (pFFPIpsecInVerifyV4) {
-				pFFPIpsecInVerifyV4(ulVsgId, skb,
+			if (pFFPIpsecInVerify) {
+				pFFPIpsecInVerify(ulVsgId, skb,
 				anDev->ulCommonInterfaceId, NULL, pIpsecOpaque);
 				return;
 			}
@@ -1315,8 +1315,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			|| usSrcPrt == ASF_IKE_NAT_FLOAT_PORT
 			|| usDstPrt == ASF_IKE_SERVER_PORT
 			|| usDstPrt == ASF_IKE_NAT_FLOAT_PORT) {
-			if (pFFPIPSecInv4 &&
-				pFFPIPSecInv4(skb, 0, anDev->ulVSGId,
+			if (pFFPIPSecIn &&
+				pFFPIPSecIn(skb, 0, anDev->ulVSGId,
 				anDev->ulCommonInterfaceId) == 0) {
 				asf_debug("UDP encapsulated ESP packet"
 					"(fraglist) absorbed by IPSEC-ASF\n");
@@ -1341,7 +1341,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 #ifdef ASF_IPSEC_FP_SUPPORT
 	if (pIpsecOpaque) {
-		if (pFFPIpsecInVerifyV4(ulVsgId, skb,
+		if (pFFPIpsecInVerify(ulVsgId, skb,
 			anDev->ulCommonInterfaceId,
 			(flow && flow->bIPsecIn) ? &flow->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
@@ -1622,8 +1622,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 #ifdef ASF_IPSEC_FP_SUPPORT
 		if (flow->bIPsecOut) {
-			if (pFFPIPSecOutv4) {
-				if (pFFPIPSecOutv4(ulVsgId,
+			if (pFFPIPSecOut) {
+				if (pFFPIPSecOut(ulVsgId,
 					skb, &flow->ipsecInfo) == 0) {
 					goto gen_indications;
 				}
