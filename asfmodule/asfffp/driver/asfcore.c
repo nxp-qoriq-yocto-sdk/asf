@@ -107,6 +107,10 @@ ASF_boolean_t asf_term_func_on;
 ASF_boolean_t asf_ipsec_func_on;
 extern unsigned long asf_reasm_hash_list_size;
 extern unsigned long asf_reasm_num_cbs;
+#ifdef ASF_IPV6_FP_SUPPORT
+extern unsigned long asf_ipv6_reasm_hash_list_size;
+extern unsigned long asf_ipv6_reasm_num_cbs;
+#endif
 
 module_param(asf_enable, bool, 0644);
 MODULE_PARM_DESC(asf_enable, "Enable or disable ASF upon loading");
@@ -129,6 +133,11 @@ MODULE_PARM_DESC(asf_reasm_hash_list_size, "Size of reassembly hash table");
 module_param(asf_reasm_num_cbs, ulong, 0444);
 MODULE_PARM_DESC(asf_reasm_num_cbs,
 				"Maximum number of Reassembly context blocks per VSG");
+#ifdef ASF_IPV6_FP_SUPPORT
+module_param(asf_ipv6_reasm_num_cbs, ulong, 0444);
+MODULE_PARM_DESC(asf_reasm_num_cbs,
+				"Maximum number of IPv6 Reassembly context blocks per VSG");
+#endif
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #define ASF_DO_INC_CHECKSUM
@@ -875,7 +884,11 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
 	/* By now anDev, usEthType and hh_len will have proper values */
-	if ((usEthType != __constant_htons(ETH_P_IP)) && (usEthType != __constant_htons(ETH_P_IPV6))) {
+	if ((usEthType != __constant_htons(ETH_P_IP))
+#ifdef ASF_IPV6_FP_SUPPORT
+		 && (usEthType != __constant_htons(ETH_P_IPV6))
+#endif
+								) {
 		XGSTATS_INC(NonIpPkts);
 		asf_debug_l2("Non IP traffic. EthType = 0x%x\n", usEthType);
 		goto ret_pkt;
@@ -3467,8 +3480,8 @@ unsigned int asfFfpBlobTmrCb(unsigned int ulVSGId,
 
 #ifdef ASF_IPV6_FP_SUPPORT
 				if (bIPv6 == true) {
-					ipv6_addr_copy(&ind.flowTuple.ipv6SrcIp, &flow->ipv6SrcIp);
-					ipv6_addr_copy(&ind.flowTuple.ipv6DestIp, &flow->ipv6DestIp);
+					ipv6_addr_copy((struct in6_addr *)&ind.flowTuple.ipv6SrcIp, (struct in6_addr *)&flow->ipv6SrcIp);
+					ipv6_addr_copy((struct in6_addr *)&ind.flowTuple.ipv6DestIp, (struct in6_addr *)&flow->ipv6DestIp);
 				} else
 #endif
 
@@ -3486,8 +3499,8 @@ unsigned int asfFfpBlobTmrCb(unsigned int ulVSGId,
 				if (flow->bNat) {
 #ifdef ASF_IPV6_FP_SUPPORT
 					if (bIPv6 == true) {
-						ipv6_addr_copy(&ind.packetTuple.ipv6SrcIp, &flow->ipv6SrcNATIp);
-						ipv6_addr_copy(&ind.packetTuple.ipv6DestIp, &flow->ipv6DestNATIp);
+						ipv6_addr_copy((struct in6_addr *)&ind.packetTuple.ipv6SrcIp, (struct in6_addr *)&flow->ipv6SrcNATIp);
+						ipv6_addr_copy((struct in6_addr *)&ind.packetTuple.ipv6DestIp, (struct in6_addr *)&flow->ipv6DestNATIp);
 					} else
 #endif
 					{
@@ -3565,8 +3578,8 @@ unsigned int asfFfpInacRefreshTmrCb(unsigned int ulVSGId,
 
 #ifdef ASF_IPV6_FP_SUPPORT
 			if (bIPv6 == true) {
-				ipv6_addr_copy(&ind.tuple.ipv6SrcIp, &flow1->ipv6SrcIp);
-				ipv6_addr_copy(&ind.tuple.ipv6DestIp, &flow1->ipv6DestIp);
+				ipv6_addr_copy((struct in6_addr *)&ind.tuple.ipv6SrcIp, (struct in6_addr *)&flow1->ipv6SrcIp);
+				ipv6_addr_copy((struct in6_addr *)&ind.tuple.ipv6DestIp, (struct in6_addr *)&flow1->ipv6DestIp);
 			} else {
 #endif
 				ind.tuple.ulSrcIp = flow1->ulSrcIp;

@@ -18,6 +18,7 @@
 #ifndef __ASF_CMN_H
 #define __ASF_CMN_H
 
+
 #define asf_err(fmt, arg...)  \
 	printk(KERN_ERR"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
 	__LINE__, __func__, ##arg)
@@ -171,8 +172,16 @@ static inline void asf_skb_free_func(void *obj)
 			rcu_read_unlock_bh(); \
 		} \
 	} while (0)
-
-
+struct _Defrag {
+	bool	bIPv6;
+	void	*iph;
+	unsigned int	fraghdr_len;
+	unsigned char	fraghdr_nexthdr;
+};
+struct ASFSkbCB {
+	struct _Defrag Defrag;
+};
+#define	ASFCB(skb) ((struct ASFSkbCB *)((skb)->cb))
 struct ASFNetDevEntry_s;
 
 #define ASF_VLAN_ARY_LEN	(4096)
@@ -302,6 +311,13 @@ extern struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 			       struct sk_buff *skb , bool *bFirstFragRcvd,
 			       unsigned int *pReasmCb1, unsigned int *pReasmCb2,
 			       unsigned int *fragCnt);
+extern int asfIpv6MakeFragment(struct sk_buff *skb,
+				struct sk_buff **pOutSkb);
+extern int asfIpv6Fragment(struct sk_buff *skb,
+	unsigned int ulMTU,
+	struct net_device *dev,
+	struct sk_buff **pOutSkb);
+
 
 extern int asfIpv4Fragment(struct sk_buff *skb,
 	unsigned int ulMTU, unsigned int ulDevXmitHdrLen,
