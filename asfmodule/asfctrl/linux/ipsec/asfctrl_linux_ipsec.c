@@ -24,7 +24,11 @@
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
+#ifdef CONFIG_DPA
+#include <dpaa_eth_asf.h>
+#else
 #include <gianfar.h>
+#endif
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/route.h>
@@ -37,6 +41,7 @@
 #endif
 
 #include "../../../asfipsec/driver/ipsfpapi.h"
+#include "../../../asfffp/driver/asfcmn.h"
 #include "../ffp/asfctrl.h"
 #include "asfctrl_linux_ipsec_hooks.h"
 
@@ -124,7 +129,9 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	iph = ip_hdr(skb);
 
 #ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
+#ifndef CONFIG_DPA
 	skb->asf = 0;
+#endif
 	/* Send the packet up for normal path IPsec processing
 		(after the NAT) has to be special function */
 #ifdef ASF_IPV6_FP_SUPPORT

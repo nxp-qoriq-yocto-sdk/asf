@@ -1,7 +1,5 @@
 /**************************************************************************
- * Copyright 2011 by Freescale Semiconductor, Inc.
- * All modifications are confidential and proprietary information
- * of Freescale Semiconductor, Inc. ALL RIGHTS RESERVED.
+ * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	ipseccaam.h
@@ -20,6 +18,7 @@
 #define __IPSEC_CAAM_H
 
 #include <desc_constr.h>
+#include <linux/debugfs.h>
 #include <intern.h>
 /*
  * per-session context
