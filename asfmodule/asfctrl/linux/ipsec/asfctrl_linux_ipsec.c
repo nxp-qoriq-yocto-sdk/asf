@@ -28,6 +28,9 @@
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/route.h>
+#ifdef ASF_IPV6_FP_SUPPORT
+#include <net/ip6_route.h>
+#endif
 #include <net/xfrm.h>
 #ifdef ASFCTRL_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
@@ -124,6 +127,9 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	skb->asf = 0;
 	/* Send the packet up for normal path IPsec processing
 		(after the NAT) has to be special function */
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (iph->version == 4) {
+#endif
 	if (0 != ip_route_input(skb, iph->daddr, iph->saddr, 0, skb->dev)) {
 		ASFCTRL_INFO("Route not found for dst %x ",
 			iph->daddr);
@@ -149,6 +155,19 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	} else
 #endif
 		ip_forward(skb);
+#ifdef ASF_IPV6_FP_SUPPORT
+	} else {
+		ip6_route_input(skb);
+		if (!skb_dst(skb)) {
+			ASFCTRL_INFO("Route not found for dst");
+			goto drop;
+		}
+		skb->pkt_type = PACKET_HOST;
+		skb->skb_iif = skb->dev->ifindex;
+		ASFCTRL_INFO("NO OUT SA Found Sending Packet Up");
+		ip6_forward(skb);
+	}
+#endif
 	goto out;
 #else
 	ASFCTRL_WARN("NO OUT SA Found Drop packet");
@@ -178,6 +197,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 					ASF_uint32_t ulCommonInterfaceId)
 {
 	struct sk_buff *skb;
+	struct sk_buff *pOutSkb = NULL;
 	struct xfrm_state *x;
 	struct net *net;
 	xfrm_address_t daddr;
@@ -216,8 +236,21 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	/*1.  find the SA (xfrm pointer) on the basis of SPI,
 	 * protcol, dest Addr */
 	net = dev_net(skb->dev);
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (DestAddr.bIPv4OrIPv6) {
+		memcpy(daddr.a6, DestAddr.ipv6addr, 16);
+		family = AF_INET6;
+		/*TODO This code shall be revisited once asf and linux
+		fraglist are compatile with each other*/
+		if (skb_shinfo(skb)->frag_list)
+			asfIpv6MakeFragment(skb, &pOutSkb);
+	} else {
+#endif
 	daddr.a4 = (DestAddr.ipv4addr);
 	family = AF_INET;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
 	x = xfrm_state_lookup(net, 0, &daddr, ulSPI, ucProtocol, family);
 #else
@@ -249,12 +282,24 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	skb->sp->xvec[skb->sp->len++] = x;
 
 	/*3. send the packet to slow path */
-	ASFCTRL_netif_receive_skb(skb);
+	if (pOutSkb)
+		while (pOutSkb) {
+			skb = pOutSkb;
+			pOutSkb = pOutSkb->next;
+			skb->next = NULL;
+			ASFCTRL_netif_receive_skb(skb);
+			ASFCTRL_WARN(" sent the packet to slow path");
+		}
+	else
+		ASFCTRL_netif_receive_skb(skb);
+
 	goto out;
 #else
 	ASFCTRL_WARN("VerifySPD Fail Found Drop packet");
 #endif
+#ifdef ASFCTRL_TERM_FP_SUPPORT
 drop:
+#endif
 	pFreeFn(Buffer.nativeBuffer);
 out:
 	if (bRevalidate)
@@ -372,25 +417,23 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 		ASF_uint32_t *pData;
 		ASFIPSecRuntimeModOutSAArgs_t *pSAData;
 		static unsigned short IPv4_IDs[NR_CPUS];
-		struct rtable *rt;
-		struct flowi fl = {
-				.nl_u = {
-				.ip4_u = {
-					.daddr = address->dstIP.ipv4addr,
-					.saddr = address->srcIP.ipv4addr,
-						},
-						},
-				.proto = IPPROTO_ICMP };
+		struct flowi fl = {};
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (address->IP_Version == 4) {
+#endif
+			struct rtable *rt;
+			fl.nl_u.ip4_u.daddr = address->dstIP.ipv4addr;
+			fl.nl_u.ip4_u.saddr = address->srcIP.ipv4addr;
+			fl.proto = IPPROTO_ICMP;
 
-		if (ip_route_output_key(&init_net, &rt, &fl)) {
-			ASFCTRL_DBG("\n Route not found for dst %x"\
-			"skb->dst: 0x%x", address->dstIP.ipv4addr,
-			skb_rtable(skb));
+			if (ip_route_output_key(&init_net, &rt, &fl)) {
+			ASFCTRL_DBG("\n Route not found for dst %x\n",\
+						address->dstIP.ipv4addr);
 			ASFCTRLKernelSkbFree(skb);
 			return ;
 		}
 
-		skb_dst_set(skb, &(rt->u.dst));
+			skb_dst_set(skb, &(rt->u.dst));
 		ASFCTRL_DBG("Route found for dst %x ",
 					address->dstIP.ipv4addr);
 		skb->dev = skb_dst(skb)->dev;
@@ -408,20 +451,69 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 		iph->saddr = (address->srcIP.ipv4addr);
 		iph->daddr = (address->dstIP.ipv4addr);
 		iph->protocol = ASFCTRL_IPPROTO_DUMMY_IPSEC_L2BLOB;
+			skb->protocol = htons(ETH_P_IP);
+#ifdef ASF_IPV6_FP_SUPPORT
+		} else if (address->IP_Version == 6) {
+			struct dst_entry *dst;
+			struct ipv6hdr *ipv6h;
+			memcpy(fl.fl6_src.s6_addr32,
+					address->srcIP.ipv6addr, 16);
+			memcpy(fl.fl6_dst.s6_addr32,
+					address->dstIP.ipv6addr, 16);
+			fl.proto = IPPROTO_ICMPV6;
+			dst = ip6_route_output(&init_net, NULL, &fl);
+			if (!dst || dst->error)	{
+				ASFCTRL_DBG("\n Route not found for dst %x"\
+						"skb->dst: 0x%x",
+						address->dstIP.ipv6addr,
+						skb_dst(skb));
+				ASFCTRLKernelSkbFree(skb);
+				return ;
+			}
 
+			skb_dst_set(skb, dst);
+			ASFCTRL_DBG("Route found for dst %x ",
+					address->dstIP.ipv4addr);
+			skb->dev = skb_dst(skb)->dev;
+			ASFCTRL_DBG("devname is skb->devname: %s ",
+					skb->dev->name);
+			skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
+			skb_reset_network_header(skb);
+			skb_put(skb, sizeof(struct ipv6hdr));
+			ipv6h = ipv6_hdr(skb);
+
+			ipv6h->version = 5;
+			ipv6h->priority = 0;
+			ipv6h->payload_len =
+				(sizeof(ASFIPSecRuntimeModOutSAArgs_t));
+			memset(ipv6h->flow_lbl , 0, 3);
+			ipv6h->hop_limit = 1;
+			memcpy(ipv6h->saddr.s6_addr32,
+				address->srcIP.ipv6addr, 16);
+			memcpy(ipv6h->daddr.s6_addr32,
+				address->dstIP.ipv6addr, 16);
+
+			ipv6h->nexthdr = ASFCTRL_IPPROTO_DUMMY_IPSEC_L2BLOB;
+			skb->protocol = htons(ETH_P_IPV6);
+			skb_set_transport_header(skb, sizeof(struct ipv6hdr));
+			IP6CB(skb)->nhoff = offsetof(struct ipv6hdr, nexthdr);
+
+		}
+#endif
 		pData = (ASF_uint32_t *)skb_put(skb,
+				sizeof(ASF_uint32_t) +
 				sizeof(ASFIPSecRuntimeModOutSAArgs_t));
-		*pData = ulVSGId;
-		pSAData = (ASFIPSecRuntimeModOutSAArgs_t *)(pData + 1);
+		*pData++ = ulVSGId;
+		pSAData = (ASFIPSecRuntimeModOutSAArgs_t *)pData;
 		pSAData->ulTunnelId = ultunnelId;
-		pSAData->DestAddr = address->dstIP;
+		memcpy(&pSAData->DestAddr,
+			&address->dstIP, sizeof(ASF_IPAddr_t));
 		pSAData->ulSPDContainerIndex =  ulOutSPDContainerIndex;
 		pSAData->ulSPDContainerMagicNumber = ulOutSPDmagicNumber;
 		pSAData->ucProtocol = ucProtocol;
 		pSAData->ulSPI = ulSPI;
 		pSAData->ucChangeType = 2;
 		pSAData->u.ulMtu  = skb->dev->mtu;
-		skb->protocol = htons(ETH_P_IP);
 		asfctrl_skb_mark_dummy(skb);
 		asf_ip_send(skb);
 	}
@@ -501,6 +593,11 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 
 	iph = (struct iphdr *)(skb->data + hh_len);
 
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (skb->protocol == ETH_P_IPV6)
+		pData = skb->data + hh_len + sizeof(struct ipv6hdr);
+	else
+#endif
 	pData = skb->data + hh_len + (iph->ihl * 4);
 
 	ulVSGId = *(ASF_uint32_t *)pData;
@@ -547,7 +644,7 @@ void asfctrl_ipsec_update_vsg_magic_number(void)
 int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 				ASFFFPIpsecInfo_t *ipsecInInfo,
 				struct net *net,
-				struct flowi fl)
+				struct flowi fl, bool bIsIpv6)
 {
 	struct xfrm_policy *pol_out = 0, *pol_in = 0;
 	int err = 0;
@@ -557,9 +654,17 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 	ASFCTRL_FUNC_TRACE;
 	*ipsec_in = ASF_FALSE;
 	*ipsec_out = ASF_FALSE;
-
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIsIpv6) {
+		pol_out = xfrm_policy_check_flow(net, &fl, AF_INET6, FLOW_DIR_OUT);
+		pol_in = xfrm_policy_check_flow(net, &fl, AF_INET6, FLOW_DIR_IN);
+	} else {
+#endif
 	pol_out = xfrm_policy_check_flow(net, &fl, AF_INET, FLOW_DIR_OUT);
 	pol_in = xfrm_policy_check_flow(net, &fl, AF_INET, FLOW_DIR_IN);
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 
 	if (pol_out) {
 		err = is_policy_offloadable(pol_out);

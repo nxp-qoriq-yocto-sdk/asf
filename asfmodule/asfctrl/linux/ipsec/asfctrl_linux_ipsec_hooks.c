@@ -49,12 +49,12 @@
 struct sa_node {
 	__be16 status;
 	__be16 ref_count;
-	__be32 saddr_a4;
-	__be32 daddr_a4;
 	__be32 spi;
 	__be32 iifindex;
 	__be32 container_id;
 	__be32 con_magic_num;
+	ASF_IPAddr_t saddr;
+	ASF_IPAddr_t daddr;
 };
 static struct sa_node sa_table[2][SECFP_MAX_SAS];
 static int current_sa_count[2];
@@ -499,6 +499,10 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	uint32_t handle;
 	int sa_id, ret = -EINVAL;
 	struct xfrm_selector *sel = NULL;
+#ifdef ASF_IPV6_FP_SUPPORT
+	bool bIPv4OrIPv6 = 0;
+	bool bSelIPv4OrIPv6 = 0;
+#endif
 	ASFIPSecRuntimeAddOutSAArgs_t outSA;
 	ASF_IPSecSASelector_t   outSASel;
 	ASF_IPSecSelectorSet_t srcSel, dstSel;
@@ -512,7 +516,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	memset(&outSA, 0, sizeof(ASFIPSecRuntimeAddOutSAArgs_t));
 
-	sel = &xfrm->sel;
+	sel = &xp->selector;
 	outSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 
 	outSA.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
@@ -522,11 +526,28 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	memset(&srcSel, 0, sizeof(ASF_IPSecSelectorSet_t));
 	memset(&dstSel, 0, sizeof(ASF_IPSecSelectorSet_t));
 	memset(&outSASel, 0, sizeof(ASF_IPSecSASelector_t));
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (sel->family == AF_INET6)
+		bSelIPv4OrIPv6 = 1;
+	if (xfrm->props.family == AF_INET6)
+		bIPv4OrIPv6 = 1;
+#endif
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (!bIPv4OrIPv6) {
+#endif
 	SAParams.bVerifyInPktWithSASelectors =
 				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
 	SAParams.bRedSideFragment = bRedSideFragment;
+#ifdef ASF_IPV6_FP_SUPPORT
+	} else {
+		SAParams.bVerifyInPktWithSASelectors =
+				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+		SAParams.bRedSideFragment =
+				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+	}
+#endif
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_ENABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
@@ -574,11 +595,23 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.handleDFBit = ASF_IPSEC_DF_COPY;
 	SAParams.protocol = ASF_IPSEC_PROTOCOL_ESP;
 
-	SAParams.TE_Addr.IP_Version = 4;
-	SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = 0;
-	SAParams.TE_Addr.srcIP.ipv4addr = xfrm->props.saddr.a4;
-	SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = 0;
-	SAParams.TE_Addr.dstIP.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv4OrIPv6) {
+		SAParams.TE_Addr.IP_Version = 6;
+		memcpy(SAParams.TE_Addr.srcIP.ipv6addr, xfrm->props.saddr.a6, 16);
+		memcpy(SAParams.TE_Addr.dstIP.ipv6addr, xfrm->id.daddr.a6, 16);
+		SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = bIPv4OrIPv6;
+		SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = bIPv4OrIPv6;
+	} else {
+#endif
+		SAParams.TE_Addr.IP_Version = 4;
+		SAParams.TE_Addr.srcIP.ipv4addr = xfrm->props.saddr.a4;
+		SAParams.TE_Addr.dstIP.ipv4addr = xfrm->id.daddr.a4;
+		SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = 0;
+		SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 
 	if (xfrm->aalg) {
 		ret = asfctrl_alg_getbyname(xfrm->aalg->alg_name,
@@ -629,19 +662,33 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			break;
 		}
 	}
-
-	srcSel.IP_Version = 4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bSelIPv4OrIPv6) {
+		srcSel.IP_Version = 6;
+		dstSel.IP_Version = 6;
+		memcpy(srcSel.addr.u.prefixAddr.v6.IPv6Addr.u.w_addr,
+			sel->saddr.a6, 16);
+		srcSel.addr.u.prefixAddr.v6.IPv6Plen = sel->prefixlen_s;
+		memcpy(dstSel.addr.u.prefixAddr.v6.IPv6Addr.u.w_addr,
+			sel->daddr.a6, 16);
+		dstSel.addr.u.prefixAddr.v6.IPv6Plen = sel->prefixlen_d;
+	} else {
+#endif
+		srcSel.IP_Version = 4;
+		dstSel.IP_Version = 4;
+		srcSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->saddr.a4;
+		srcSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_s;
+		dstSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->daddr.a4;
+		dstSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_d;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 	srcSel.protocol = dstSel.protocol = sel->proto;
 	srcSel.addr.addrType = ASF_IPSEC_ADDR_TYPE_SUBNET;
-	srcSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->saddr.a4;
-	srcSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_s;
 	srcSel.port.start = sel->sport;
 	srcSel.port.end = sel->sport + ~(sel->sport_mask);
 
-	dstSel.IP_Version = 4;
 	dstSel.addr.addrType = ASF_IPSEC_ADDR_TYPE_SUBNET;
-	dstSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->daddr.a4;
-	dstSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_d;
 	dstSel.port.start = sel->dport;
 	dstSel.port.end = sel->dport + ~(sel->dport_mask);
 
@@ -662,9 +709,23 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	xfrm->asf_sa_direction = OUT_SA;
 	xfrm->asf_sa_cookie = sa_id + 1;
 	spin_lock(&sa_table_lock);
-
-	sa_table[OUT_SA][sa_id].saddr_a4 = xfrm->props.saddr.a4;
-	sa_table[OUT_SA][sa_id].daddr_a4 = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv4OrIPv6) {
+		memcpy(sa_table[OUT_SA][sa_id].saddr.ipv6addr,
+						xfrm->props.saddr.a6, 16);
+		memcpy(sa_table[OUT_SA][sa_id].daddr.ipv6addr,
+						xfrm->id.daddr.a6, 16);
+		sa_table[OUT_SA][sa_id].saddr.bIPv4OrIPv6 = bIPv4OrIPv6;
+		sa_table[OUT_SA][sa_id].daddr.bIPv4OrIPv6 = bIPv4OrIPv6;
+	} else {
+#endif
+		sa_table[OUT_SA][sa_id].saddr.ipv4addr = xfrm->props.saddr.a4;
+		sa_table[OUT_SA][sa_id].daddr.ipv4addr = xfrm->id.daddr.a4;
+		sa_table[OUT_SA][sa_id].saddr.bIPv4OrIPv6 = 0;
+		sa_table[OUT_SA][sa_id].daddr.bIPv4OrIPv6 = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 	sa_table[OUT_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[OUT_SA][sa_id].container_id = outSA.ulSPDContainerIndex;
 	sa_table[OUT_SA][sa_id].ref_count++;
@@ -685,7 +746,10 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	uint32_t handle;
 	int sa_id, ret = -EINVAL;
 	struct xfrm_selector *sel;
-
+#ifdef ASF_IPV6_FP_SUPPORT
+	bool bIPv4OrIPv6 = 0;
+	bool bSelIPv4OrIPv6 = 0;
+#endif
 	ASFIPSecRuntimeAddInSAArgs_t inSA;
 	ASF_IPSecSASelector_t   inSASel;
 	ASF_IPSecSelectorSet_t srcSel, dstSel;
@@ -706,18 +770,41 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	inSA.ulInSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 	inSA.ulInSPDContainerIndex = xp->asf_cookie;
 
-	sel = &xfrm->sel;
+	sel = &xp->selector;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (sel->family == AF_INET6)
+		bSelIPv4OrIPv6 = 1;
+	if (xfrm->props.family == AF_INET6)
+		bIPv4OrIPv6 = 1;
+#endif
 	inSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 	inSA.ulOutSPDMagicNumber = 0;
 	inSA.ulOutSPDContainerIndex = 0;
 	inSA.ulOutSPI = 0;
-	inSA.DestAddr.bIPv4OrIPv6 = 0;
-	inSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	inSA.DestAddr.bIPv4OrIPv6 = bIPv4OrIPv6;
+		if (bIPv4OrIPv6)
+			memcpy(inSA.DestAddr.ipv6addr,
+					xfrm->id.daddr.a6, 16);
+		else
+#endif
+			inSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	SAParams.bVerifyInPktWithSASelectors =
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (!bIPv4OrIPv6) {
+#endif
+		SAParams.bVerifyInPktWithSASelectors =
 				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
-	SAParams.bRedSideFragment = bRedSideFragment;
+		SAParams.bRedSideFragment = bRedSideFragment;
+#ifdef ASF_IPV6_FP_SUPPORT
+	} else {
+		SAParams.bVerifyInPktWithSASelectors =
+				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+		SAParams.bRedSideFragment =
+				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+	}
+#endif
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_ENABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
@@ -763,12 +850,23 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.protocol = ASF_IPSEC_PROTOCOL_ESP;
 
 	SAParams.ulMtu = ASFCTRL_DEF_PMTU;
-
-	SAParams.TE_Addr.IP_Version = 4;
-	SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = 0;
-	SAParams.TE_Addr.srcIP.ipv4addr = xfrm->props.saddr.a4;
-	SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = 0;
-	SAParams.TE_Addr.dstIP.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv4OrIPv6) {
+		SAParams.TE_Addr.IP_Version = 6;
+		memcpy(SAParams.TE_Addr.srcIP.ipv6addr, xfrm->props.saddr.a6, 16);
+		memcpy(SAParams.TE_Addr.dstIP.ipv6addr, xfrm->id.daddr.a6, 16);
+		SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = bIPv4OrIPv6;
+		SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = bIPv4OrIPv6;
+	} else {
+#endif
+		SAParams.TE_Addr.IP_Version = 4;
+		SAParams.TE_Addr.srcIP.ipv4addr = xfrm->props.saddr.a4;
+		SAParams.TE_Addr.dstIP.ipv4addr = xfrm->id.daddr.a4;
+		SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = 0;
+		SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 
 	if (xfrm->aalg) {
 		ret = asfctrl_alg_getbyname(xfrm->aalg->alg_name,
@@ -818,19 +916,33 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			break;
 		}
 	}
-
-	srcSel.IP_Version = 4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bSelIPv4OrIPv6) {
+		srcSel.IP_Version = 6;
+		dstSel.IP_Version = 6;
+		memcpy(srcSel.addr.u.prefixAddr.v6.IPv6Addr.u.w_addr,
+			sel->saddr.a6, 16);
+		srcSel.addr.u.prefixAddr.v6.IPv6Plen = sel->prefixlen_s;
+		memcpy(dstSel.addr.u.prefixAddr.v6.IPv6Addr.u.w_addr,
+			sel->daddr.a6, 16);
+		dstSel.addr.u.prefixAddr.v6.IPv6Plen = sel->prefixlen_d;
+	} else {
+#endif
+		srcSel.IP_Version = 4;
+		dstSel.IP_Version = 4;
+		srcSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->saddr.a4;
+		srcSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_s;
+		dstSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->daddr.a4;
+		dstSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_d;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 	srcSel.protocol = dstSel.protocol = sel->proto;
 	srcSel.addr.addrType = ASF_IPSEC_ADDR_TYPE_SUBNET;
-	srcSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->saddr.a4;
-	srcSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_s;
 	srcSel.port.start = sel->sport;
 	srcSel.port.end = sel->sport + ~(sel->sport_mask);
 
-	dstSel.IP_Version = 4;
 	dstSel.addr.addrType = ASF_IPSEC_ADDR_TYPE_SUBNET;
-	dstSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->daddr.a4;
-	dstSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_d;
 	dstSel.port.start = sel->dport;
 	dstSel.port.end = sel->dport + ~(sel->dport_mask);
 
@@ -851,8 +963,24 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	xfrm->asf_sa_direction = IN_SA;
 	xfrm->asf_sa_cookie = sa_id + 1;
 	spin_lock(&sa_table_lock);
-	sa_table[IN_SA][sa_id].saddr_a4 = xfrm->props.saddr.a4;
-	sa_table[IN_SA][sa_id].daddr_a4 = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv4OrIPv6) {
+		memcpy(sa_table[IN_SA][sa_id].saddr.ipv6addr,
+						xfrm->props.saddr.a6, 16);
+		memcpy(sa_table[IN_SA][sa_id].daddr.ipv6addr,
+						xfrm->id.daddr.a6, 16);
+		sa_table[IN_SA][sa_id].saddr.bIPv4OrIPv6 = bIPv4OrIPv6;
+		sa_table[IN_SA][sa_id].daddr.bIPv4OrIPv6 = bIPv4OrIPv6;
+	} else {
+#endif
+		sa_table[IN_SA][sa_id].saddr.ipv4addr = xfrm->props.saddr.a4;
+		sa_table[IN_SA][sa_id].daddr.ipv4addr = xfrm->id.daddr.a4;
+		sa_table[IN_SA][sa_id].saddr.bIPv4OrIPv6 = 0;
+		sa_table[IN_SA][sa_id].daddr.bIPv4OrIPv6 = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
+
 	sa_table[IN_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[IN_SA][sa_id].container_id = inSA.ulInSPDContainerIndex;
 	sa_table[IN_SA][sa_id].ref_count++;
@@ -871,6 +999,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 {
 	struct xfrm_policy *xp = NULL;
+	unsigned int dir;
 
 	ASFCTRL_FUNC_TRACE;
 
@@ -887,7 +1016,7 @@ int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 		ASFCTRL_WARN("Policy not offloaded for this SA");
 		return -EINVAL;
 	}
-
+	dir = xfrm_policy_id2dir(xp->index);
 	if (xp->dir == OUT_SA)
 		return asfctrl_xfrm_add_outsa(xfrm, xp);
 	else
@@ -925,7 +1054,18 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 		delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		delSA.ulSPDContainerIndex = cont_id;
 		delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-		delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (xfrm->props.family == AF_INET6) {
+			delSA.DestAddr.bIPv4OrIPv6 = 1;
+			memcpy(delSA.DestAddr.ipv6addr,
+					xfrm->id.daddr.a6, 16);
+		} else {
+#endif
+			delSA.DestAddr.bIPv4OrIPv6 = 0;
+			delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+		}
+#endif
 		delSA.ucProtocol = ASF_IPSEC_PROTOCOL_ESP;
 		delSA.ulSPI = xfrm->id.spi;
 		delSA.usDscpStart = 0;
@@ -945,7 +1085,18 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 		delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		delSA.ulSPDContainerIndex = cont_id;
 		delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-		delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (xfrm->props.family == AF_INET6) {
+			delSA.DestAddr.bIPv4OrIPv6 = 1;
+			memcpy(delSA.DestAddr.ipv6addr,
+					xfrm->id.daddr.a6, 16);
+		} else {
+#endif
+			delSA.DestAddr.bIPv4OrIPv6 = 0;
+			delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+		}
+#endif
 		delSA.ucProtocol = ASF_IPSEC_PROTOCOL_ESP;
 		delSA.ulSPI = xfrm->id.spi;
 
@@ -1128,8 +1279,18 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 
 	sa_id = xfrm->asf_sa_cookie - 1;
 	Buffer.nativeBuffer = skb;
-	daddr.bIPv4OrIPv6 = 0;
-	daddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (xfrm->props.family == AF_INET6) {
+		daddr.bIPv4OrIPv6 = 1;
+		memcpy(daddr.ipv6addr,
+				xfrm->id.daddr.a6, 16);
+	} else {
+#endif
+		daddr.bIPv4OrIPv6 = 0;
+		daddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 	cont_id = sa_table[OUT_SA][sa_id].container_id;
 
 	spin_unlock(&sa_table_lock);
@@ -1157,7 +1318,9 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 	ASFBuffer_t Buffer;
 	ASF_int32_t cii;
 	struct net_device *dev = skb->dev;
-
+#ifdef ASF_IPV6_FP_SUPPORT
+	struct iphdr *iph = ip_hdr(skb);
+#endif
 	ASFCTRL_FUNC_ENTRY;
 
 	ASFCTRL_WARN("Packet received spi =0x%x", xfrm->id.spi);
@@ -1178,9 +1341,17 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 		(unsigned int)skb_network_header(skb), skb->len);
 
 	Buffer.nativeBuffer = skb;
-
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (iph->version == 6) {
+		skb->data = skb->data - sizeof(struct ipv6hdr);
+		skb->len = skb->len + sizeof(struct ipv6hdr);
+	} else {
+#endif
 	skb->len += sizeof(struct iphdr);
 	skb->data -= sizeof(struct iphdr);
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 	skb_dst_drop(skb);
 	ASFIPSecDecryptAndSendPkt(ASF_DEF_VSG,
 			Buffer,
