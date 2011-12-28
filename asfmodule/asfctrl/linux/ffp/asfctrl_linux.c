@@ -30,6 +30,9 @@
 #include <net/dst.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <net/route.h>
+#ifdef ASF_IPV6_FP_SUPPORT
+#include <net/ip6_route.h>
+#endif
 #ifdef ASFCTRL_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
@@ -38,6 +41,7 @@
 #endif
 #include "../../../asfffp/driver/asf.h"
 #include "asfctrl.h"
+#include <net/ipv6.h>
 
 
 #define ASFCTRL_LINUX_VERSION		"0.0.1"
@@ -189,6 +193,16 @@ ASF_void_t  asfctrl_invalidate_l2blob(void)
 	ASFCTRL_DBG("Exit:ulL2blobMagic =%d", asfctrl_vsg_l2blobconfig_id);
 }
 
+#ifdef ASF_IPV6_FP_SUPPORT
+ASF_void_t asfctrl_l3_ipv6_route_flush(void)
+{
+	ASFCTRL_FUNC_ENTRY;
+
+	asfctrl_invalidate_l2blob();
+
+	ASFCTRL_FUNC_EXIT;
+}
+#endif
 ASF_void_t asfctrl_l3_route_flush(void)
 {
 	ASFCTRL_FUNC_ENTRY;
@@ -485,7 +499,10 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 	ASF_uint16_t	usEthType;
 	ASF_int32_t		hh_len;
 	ASF_boolean_t	bPPPoE = 0;
-	struct iphdr       *iph;
+	struct iphdr       *iph = 0;
+	struct ipv6hdr       *ipv6h;
+	unsigned int proto;
+	unsigned int  tun_hdr = 0;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -527,12 +544,29 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 		bPPPoE = 1;
 	}
 
-	if (usEthType != __constant_htons(ETH_P_IP))
+	if (usEthType != __constant_htons(ETH_P_IP) &&
+		usEthType != __constant_htons(ETH_P_IPV6))
 		goto drop;
 
-	iph = (struct iphdr *)(skb->data+hh_len);
+	if (usEthType == __constant_htons(ETH_P_IP)) {
+		iph = (struct iphdr *)(skb->data+hh_len);
+		proto = iph->protocol;
+		if (proto == IPPROTO_IPV6) {
+			ipv6h = (struct ipv6hdr *)(skb->data+hh_len+sizeof(struct iphdr));
+			proto = ipv6h->nexthdr;
+			tun_hdr = sizeof(struct iphdr);
+		}
+	} else {
+		ipv6h = (struct ipv6hdr *)(skb->data+hh_len);
+		proto = ipv6h->nexthdr;
+		if (proto == IPPROTO_IPIP) {
+			iph = (struct iphdr *)(skb->data+hh_len+sizeof(struct ipv6hdr));
+			proto = iph->protocol;
+			tun_hdr = sizeof(struct ipv6hdr);
+		}
+	}
 
-	switch (iph->protocol) {
+	switch (proto) {
 		asf_linux_L2blobPktData_t *pData;
 		ASFFFPUpdateFlowParams_t  cmd;
 
@@ -556,8 +590,15 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 			skb->protocol, skb->data, skb_network_header(skb),
 			skb_transport_header(skb));
 
-		pData = (asf_linux_L2blobPktData_t *)(skb->data+hh_len +
-						(iph->ihl * 4));
+		if (usEthType == __constant_htons(ETH_P_IP)) {
+			pData = (asf_linux_L2blobPktData_t *)(skb->data+hh_len +
+							(iph->ihl * 4) + (tun_hdr ? sizeof(struct ipv6hdr) : 0));
+			cmd.u.l2blob.tunnel.bIP6IP4Out = tun_hdr ? 1 : 0;
+		} else {
+			pData = (asf_linux_L2blobPktData_t *)(skb->data+hh_len +
+							sizeof(struct ipv6hdr) + (tun_hdr ? sizeof(struct iphdr) : 0));
+			cmd.u.l2blob.tunnel.bIP4IP6Out = tun_hdr ? 1 : 0;
+		}
 
 		memcpy(&cmd.tuple, &pData->tuple, sizeof(cmd.tuple));
 		cmd.ulZoneId = pData->ulZoneId;
@@ -568,7 +609,7 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 		cmd.u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
 
 		/* need to include PPPOE+PPP header if any */
-		cmd.u.l2blob.l2blobLen = hh_len;
+		cmd.u.l2blob.l2blobLen = hh_len + tun_hdr;
 
 		memcpy(cmd.u.l2blob.l2blob, skb->data, cmd.u.l2blob.l2blobLen);
 #ifdef CONFIG_VLAN_8021Q
@@ -588,6 +629,7 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 	case ASFCTRL_IPPROTO_DUMMY_IPSEC_L2BLOB:
 		ASFCTRL_INFO("DUMMY_IPSEC_L2BLOB");
 
+		skb->protocol = usEthType;
 		if (fn_ipsec_l2blob_update)
 			fn_ipsec_l2blob_update(skb,
 				hh_len, asfctrl_dev_get_cii(dev));
@@ -713,6 +755,9 @@ static int __init asfctrl_init(void)
 
 	route_hook_fn_register(&asfctrl_l3_route_add,
 				&asfctrl_l3_route_flush);
+#ifdef ASF_IPV6_FP_SUPPORT
+	ipv6_route_hook_fn_register(&asfctrl_l3_ipv6_route_flush);
+#endif
 
 	asfctrl_sysfs_init();
 
@@ -741,6 +786,9 @@ static void __exit asfctrl_exit(void)
 
 	route_hook_fn_unregister();
 
+#ifdef ASF_IPV6_FP_SUPPORT
+	ipv6_route_hook_fn_unregister();
+#endif
 	devfp_register_tx_hook(NULL);
 
 	unregister_netdevice_notifier(&asfctrl_dev_notifier);

@@ -34,7 +34,7 @@
 
 #define ASF_PROTOCOL_GTP	1024
 
-#define ASFCTRL_DUMMY_SKB_CB_OFFSET	(16)
+#define ASFCTRL_DUMMY_SKB_CB_OFFSET	(32)
 #define ASFCTRL_DUMMY_SKB_MAGIC1	(0xDE)
 #define ASFCTRL_DUMMY_SKB_MAGIC2	(0xAD)
 
@@ -47,7 +47,9 @@
 #define ASF_UDP_INAC_TMOUT	(180)
 
 #define DEFVAL_INACTIVITY_DIVISOR	(4)
-
+#ifdef ASF_IPV6_FP_SUPPORT
+#define ASF_IPV6_HDR_LEN	(40)
+#endif
 #define AsfBuf2Skb(a)	((struct sk_buff *)(a.nativeBuffer))
 #define ASFCTRLKernelSkbAlloc	alloc_skb
 
@@ -158,7 +160,7 @@ extern struct kobject *asfctrl_kobj;
 typedef int (*asfctrl_ipsec_get_flow_info)(bool *ipsec_in, bool *ipsec_out,
 					ASFFFPIpsecInfo_t *ipsec_info,
 					struct net *net,
-					struct flowi flow);
+					struct flowi flow, bool bIsIpv6);
 
 typedef void (*asfctrl_ipsec_l2blob_update)(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
@@ -211,6 +213,7 @@ extern void  asfctrl_register_term_func(asfctrl_term_l2blob_update p_l2blob,
 
 extern void asfctrl_linux_unregister_ffp(void);
 extern void asfctrl_linux_register_ffp(void);
+#define PRINT_IPV6(a) printk(KERN_INFO"%x:%x:%x:%x:%x:%x:%x:%x\n", a.s6_addr16[0], a.s6_addr16[1], a.s6_addr16[2], a.s6_addr16[3], a.s6_addr16[4], a.s6_addr16[5], a.s6_addr16[6], a.s6_addr16[7])
 
 /* ********** Debugging Stuff *****************/
 

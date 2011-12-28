@@ -37,8 +37,11 @@
 #include <net/netfilter/nf_conntrack_ecache.h>
 #include <linux/netfilter/nf_conntrack_tcp.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
+#include <linux/netfilter_ipv6/ip6_tables.h>
 #include <linux/netfilter/nf_conntrack_common.h>
 #include <net/route.h>
+#include <net/ip6_route.h>
+#include <net/ipv6.h>
 
 #include "../../../asfffp/driver/asf.h"
 #include "asfctrl.h"
@@ -116,6 +119,68 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	pData->ulPathMTU = skb->dev->mtu;
 	skb->protocol = htons(ETH_P_IP);
 	asfctrl_skb_mark_dummy(skb);
+
+	asf_ip_send(skb);
+
+	ASFCTRL_FUNC_EXIT;
+
+	return T_SUCCESS;
+}
+
+static ASF_int32_t asf_linux_IPv6XmitL2blobDummyPkt(
+				ASF_uint32_t ulVsgId,
+				ASF_uint32_t ulZoneId,
+				ASFFFPFlowTuple_t *tpl,
+				struct in6_addr    *ipv6SrcIp,
+				struct in6_addr    *ipv6DestIp,
+				ASF_uint32_t priority,
+				ASF_uint32_t ulHashVal,
+				ASF_uint32_t ulCII)
+{
+	struct sk_buff *skb;
+	asf_linux_L2blobPktData_t *pData;
+	struct ipv6hdr *iph;
+	struct net_device *dev;
+
+	ASFCTRL_FUNC_ENTRY;
+
+	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
+	if (!skb)
+		return T_FAILURE;
+
+
+	/*	ASFCTRL_INFO("Route found for dst %x ", uldestIp); */
+
+	skb_reserve(skb, 64);
+	skb_reset_network_header(skb);
+	skb_put(skb, sizeof(struct ipv6hdr));
+	iph = ipv6_hdr(skb);
+	iph->version = 5;
+	iph->hop_limit = 1;
+	iph->priority = 0;
+	ipv6_addr_copy((struct in6_addr *)&(iph->saddr), (struct in6_addr *)ipv6SrcIp);
+	ipv6_addr_copy((struct in6_addr *)&(iph->daddr), (struct in6_addr *)ipv6DestIp);
+	iph->nexthdr = ASFCTRL_IPPROTO_DUMMY_L2BLOB;
+
+	dev = dev_get_by_name(&init_net, "lo");
+	skb->dev = dev;
+	ip6_route_input(skb);
+	dev_put(dev);
+	skb->dev = skb_dst(skb)->dev;
+
+
+	/* need to check for error and local route */
+
+	pData = (asf_linux_L2blobPktData_t *)skb_put(skb,
+				sizeof(asf_linux_L2blobPktData_t));
+	pData->ulZoneId = 0;
+	pData->ulVsgId = 0;
+	memcpy(&pData->tuple, tpl, sizeof(ASFFFPFlowTuple_t));
+
+	pData->ulPathMTU = skb->dev->mtu;
+	skb->protocol = htons(ETH_P_IPV6);
+	asfctrl_skb_mark_dummy(skb);
+
 
 	asf_ip_send(skb);
 
@@ -220,10 +285,17 @@ ASF_void_t asfctrl_fnFlowRefreshL2Blob(ASF_uint32_t ulVSGId,
 			ASFFFPFlowL2BlobRefreshCbInfo_t *pInfo)
 {
 	ASFCTRL_FUNC_ENTRY;
-	asf_linux_XmitL2blobDummyPkt(ulVSGId, pInfo->ulZoneId,
-			&pInfo->flowTuple, pInfo->flowTuple.ulSrcIp,
-			pInfo->packetTuple.ulDestIp, 0,
-			pInfo->ulHashVal, 0);
+	if (pInfo->flowTuple.bIPv4OrIPv6 == 1) {
+		asf_linux_IPv6XmitL2blobDummyPkt(ulVSGId, pInfo->ulZoneId,
+				&pInfo->flowTuple, (struct in6_addr *)(pInfo->flowTuple.ipv6SrcIp),
+				(struct in6_addr *)(pInfo->packetTuple.ipv6DestIp), 0,
+				pInfo->ulHashVal, 0);
+	} else {
+		asf_linux_XmitL2blobDummyPkt(ulVSGId, pInfo->ulZoneId,
+				&pInfo->flowTuple, pInfo->flowTuple.ulSrcIp,
+				pInfo->packetTuple.ulDestIp, 0,
+				pInfo->ulHashVal, 0);
+	}
 
 	ASFCTRL_FUNC_EXIT;
 }
@@ -290,42 +362,27 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 	struct nf_conntrack_tuple *ct_tuple_orig, *ct_tuple_reply;
 	struct sk_buff *skb;
 	struct iphdr *iph;
+	struct ipv6hdr *ipv6h;
 	struct tcphdr *tcph;
 	struct udphdr *udph;
 	int	result;
 	struct net_device *dev;
 	uint32_t uldestIp;
-	uint16_t usdport;
+	uint16_t usdport = pInfo->tuple.usDestPort;
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
 	bool bIPsecIn = 0, bIPsecOut = 0;
 	struct flowi fl_out;
 #endif
+	bool	bIPv6;
 	ASFCTRL_FUNC_ENTRY;
+
 
 	ct_tuple_orig = tuple(ct, IP_CT_DIR_ORIGINAL);
 
 	ct_tuple_reply = tuple(ct, IP_CT_DIR_REPLY);
 
-
+	bIPv6 = pInfo->tuple.bIPv4OrIPv6 == 1 ? true : false;
 	/* Identify whether this flow is DNAT or SNAT */
-
-	if (ct_tuple_orig->dst.u3.ip == pInfo->tuple.ulDestIp) {
-		if (pInfo->tuple.ulDestIp == ct_tuple_reply->src.u3.ip) {
-			uldestIp = pInfo->tuple.ulDestIp;
-			usdport = pInfo->tuple.usDestPort;
-		} else {
-			uldestIp = ct_tuple_reply->src.u3.ip;
-			usdport = ct_tuple_reply->src.u.tcp.port;
-		}
-	} else {
-		if (pInfo->tuple.ulDestIp == ct_tuple_orig->src.u3.ip) {
-			uldestIp = pInfo->tuple.ulDestIp;
-			usdport = pInfo->tuple.usDestPort;
-		} else {
-			uldestIp = ct_tuple_orig->src.u3.ip;
-			usdport = ct_tuple_orig->src.u.tcp.port;
-		}
-	}
 
 	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (!skb) {
@@ -333,11 +390,47 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		return;
 	}
 
-	dev = dev_get_by_name(&init_net, "lo");
+	if (bIPv6 == true) {
+		skb_reset_network_header(skb);
+		skb_put(skb, sizeof(struct ipv6hdr));
+		ipv6h = ipv6_hdr(skb);
+		ipv6h->version = 5;
+		ipv6h->hop_limit = 1;
+		ipv6h->priority = 0;
+		ipv6_addr_copy((struct in6_addr *)&(ipv6h->saddr), (struct in6_addr *)&(pInfo->tuple.ipv6SrcIp));
+		ipv6_addr_copy((struct in6_addr *)&(ipv6h->daddr), (struct in6_addr *)&(pInfo->tuple.ipv6DestIp));
+		ipv6h->nexthdr = pInfo->tuple.ucProtocol;
 
-	if ((0 != ip_route_input(skb, uldestIp, pInfo->tuple.ulSrcIp, 0, dev))
-		|| (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) {
-		ASFCTRL_INFO("Route not found for dst %x local host : %d",
+		dev = dev_get_by_name(&init_net, "lo");
+		skb->dev = dev;
+		ip6_route_input(skb);
+		dev_put(dev);
+		if (!skb_dst(skb))
+			return;
+		skb->dev = skb_dst(skb)->dev;
+	} else { /* IPv4 case */
+		if (ct_tuple_orig->dst.u3.ip == pInfo->tuple.ulDestIp) {
+			if (pInfo->tuple.ulDestIp == ct_tuple_reply->src.u3.ip) {
+				uldestIp = pInfo->tuple.ulDestIp;
+				usdport = pInfo->tuple.usDestPort;
+			} else {
+				uldestIp = ct_tuple_reply->src.u3.ip;
+				usdport = ct_tuple_reply->src.u.tcp.port;
+		}
+	} else {
+		if (pInfo->tuple.ulDestIp == ct_tuple_orig->src.u3.ip) {
+			uldestIp = pInfo->tuple.ulDestIp;
+			usdport = pInfo->tuple.usDestPort;
+		} else {
+				uldestIp = ct_tuple_orig->src.u3.ip;
+				usdport = ct_tuple_orig->src.u.tcp.port;
+			}
+		}
+		dev = dev_get_by_name(&init_net, "lo");
+
+		if ((0 != ip_route_input(skb, uldestIp, pInfo->tuple.ulSrcIp, 0, dev))
+			|| (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) {
+			ASFCTRL_INFO("Route not found for dst %x local host : %d",
 			uldestIp,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
 		dev_put(dev);
@@ -350,12 +443,13 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 	skb_reset_network_header(skb);
 	skb_put(skb, sizeof(struct iphdr));
 	iph = ip_hdr(skb);
-	iph->version = 5;
-	iph->ihl = 5;
-	iph->ttl = 1;
-	iph->saddr = pInfo->tuple.ulSrcIp;
-	iph->daddr = uldestIp;
-	iph->protocol = pInfo->tuple.ucProtocol;
+		iph->version = 5;
+		iph->ihl = 5;
+		iph->ttl = 1;
+		iph->saddr = pInfo->tuple.ulSrcIp;
+		iph->daddr = uldestIp;
+		iph->protocol = pInfo->tuple.ucProtocol;
+	}
 
 	skb_reset_transport_header(skb);
 
@@ -369,10 +463,13 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		udph->source = pInfo->tuple.usSrcPort;
 		udph->dest = usdport;
 	}
-
-
-	result = ipt_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
-			net->ipv4.iptable_filter);
+	if (bIPv6 == true) {
+		result = ip6t_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
+				net->ipv6.ip6table_filter);
+	} else {
+		result = ipt_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
+				net->ipv4.iptable_filter);
+	}
 	ASFCTRLKernelSkbFree(skb);
 
 	switch (result) {
@@ -383,8 +480,15 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		memset(&cmd, 0, sizeof(cmd));
 
 		cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
-		cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
-		cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
+
+		if (bIPv6 == true) {
+			ipv6_addr_copy((struct in6_addr *)&cmd.tuple.ipv6SrcIp, (struct in6_addr *)&(pInfo->tuple.ipv6SrcIp));
+			ipv6_addr_copy((struct in6_addr *)&cmd.tuple.ipv6DestIp, (struct in6_addr *)&(pInfo->tuple.ipv6DestIp));
+		} else {
+			cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
+			cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
+		}
+		cmd.tuple.bIPv4OrIPv6 = bIPv6 == true ? 1 : 0;
 		cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
 		cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
 
@@ -415,12 +519,17 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			fl_out.fl_ip_sport = ct_tuple_reply->dst.u.tcp.port;
 			fl_out.fl_ip_dport = ct_tuple_reply->src.u.tcp.port;
 			fl_out.proto = ct_tuple_orig->dst.protonum;
-			fl_out.fl4_dst = ct_tuple_reply->src.u3.ip;
-			fl_out.fl4_src = ct_tuple_reply->dst.u3.ip;
+			if (bIPv6 == true) {
+				ipv6_addr_copy(&fl_out.fl6_dst, &(ct_tuple_reply->src.u3.in6));
+				ipv6_addr_copy(&fl_out.fl6_src, &(ct_tuple_reply->dst.u3.in6));
+			} else {
+				fl_out.fl4_dst = ct_tuple_reply->src.u3.ip;
+				fl_out.fl4_src = ct_tuple_reply->dst.u3.ip;
+			}
 			fl_out.fl4_tos = 0;
 
 			result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
-				&ipsecInInfo, net, fl_out);
+				&ipsecInInfo, net, fl_out, bIPv6);
 			if (result) {
 				ASFCTRL_INFO("IPSEC Not Offloadable for flow");
 				goto delete_flow;
@@ -459,9 +568,15 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 
 			memset(&cmd, 0, sizeof(cmd));
 
+			if (bIPv6 == true) {
+				ipv6_addr_copy((struct in6_addr *)&cmd.tuple.ipv6SrcIp, (struct in6_addr *)&(pInfo->tuple.ipv6SrcIp));
+				ipv6_addr_copy((struct in6_addr *)&cmd.tuple.ipv6DestIp, (struct in6_addr *)&(pInfo->tuple.ipv6DestIp));
+			} else {
+				cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
+				cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
+			}
+			cmd.tuple.bIPv4OrIPv6 = bIPv6 == true ? 1 : 0;
 			cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
-			cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
-			cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
 			cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
 			cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
 
@@ -493,8 +608,14 @@ delete_flow:
 		memset(&cmd, 0, sizeof(cmd));
 
 		cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
-		cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
-		cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
+		if (bIPv6 == true) {
+			ipv6_addr_copy((struct in6_addr *)&cmd.tuple.ipv6SrcIp, (struct in6_addr *)&(pInfo->tuple.ipv6SrcIp));
+			ipv6_addr_copy((struct in6_addr *)&cmd.tuple.ipv6DestIp, (struct in6_addr *)&(pInfo->tuple.ipv6DestIp));
+		} else {
+			cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
+			cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
+		}
+		cmd.tuple.bIPv4OrIPv6 = bIPv6 == true ? 1 : 0;
 		cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
 		cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
 
@@ -523,6 +644,7 @@ static int32_t asfctrl_destroy_session(struct nf_conn *ct_event)
 {
 	struct nf_conntrack_tuple *ct_tuple_orig, *ct_tuple_reply;
 	ASFFFPDeleteFlowsInfo_t cmd;
+	bool pf_ipv6 = 0;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -547,12 +669,25 @@ static int32_t asfctrl_destroy_session(struct nf_conn *ct_event)
 		NIPQUAD(ct_tuple_reply->dst.u3.ip),
 		ct_tuple_reply->dst.u.tcp.port);
 
+	if ((ct_tuple_orig->src.l3num == PF_INET6) &&
+		(ct_tuple_reply->src.l3num == PF_INET6)) {
+		pf_ipv6 = 1;
+	}
+
 	memset(&cmd, 0, sizeof(cmd));
 
 
 	cmd.tuple.ucProtocol = ct_tuple_orig->dst.protonum;
-	cmd.tuple.ulDestIp = ct_tuple_orig->dst.u3.ip;
-	cmd.tuple.ulSrcIp = ct_tuple_orig->src.u3.ip;
+	if (pf_ipv6 == 1) {
+		ipv6_addr_copy((struct in6_addr *)&(cmd.tuple.ipv6SrcIp), (struct in6_addr *)&(ct_tuple_orig->src.u3.in6));
+		ipv6_addr_copy((struct in6_addr *)&(cmd.tuple.ipv6DestIp), (struct in6_addr *)&(ct_tuple_orig->dst.u3.in6));
+	} else {
+		cmd.tuple.ulDestIp = ct_tuple_orig->dst.u3.ip;
+		cmd.tuple.ulSrcIp = ct_tuple_orig->src.u3.ip;
+	}
+
+	cmd.tuple.bIPv4OrIPv6 = pf_ipv6;
+
 	cmd.tuple.usDestPort = ct_tuple_orig->dst.u.tcp.port;
 	cmd.tuple.usSrcPort = ct_tuple_orig->src.u.tcp.port;
 
@@ -581,6 +716,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	struct net_device *dev = NULL;
 	struct net *net = NULL;
 	int result = 0;
+	bool pf_ipv6 = false;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -612,11 +748,19 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		ct_tuple_reply->dst.u.tcp.port);
 
 	/* Non IPv4 session cannot be offloaded */
-	if ((ct_tuple_orig->src.l3num != PF_INET)
-		|| (ct_tuple_reply->src.l3num != PF_INET)) {
+	if (!((ct_tuple_orig->src.l3num == PF_INET)
+		&& (ct_tuple_reply->src.l3num == PF_INET)) &&
+		!((ct_tuple_orig->src.l3num == PF_INET6) &&
+		(ct_tuple_reply->src.l3num == PF_INET6))) {
 
-		ASFCTRL_INFO("Non IPv4 connection, ignoring");
+		ASFCTRL_INFO("Non IPv4/IPv6 connection, ignoring");
 		return -EINVAL;
+	}
+
+
+	if ((ct_tuple_orig->src.l3num == PF_INET6) &&
+		(ct_tuple_reply->src.l3num == PF_INET6)) {
+		pf_ipv6 = true;
 	}
 
 	/* Non  TCT/UDP session cannot be offloaded */
@@ -639,27 +783,29 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 	/* Session originating or terminating
 		locally cannot be offloaded  */
-	if ((inet_addr_type(net, ct_tuple_orig->src.u3.ip) == RTN_LOCAL)
-	|| (inet_addr_type(net, ct_tuple_reply->src.u3.ip) == RTN_LOCAL)) {
+	if (pf_ipv6 == false) {
+		if ((inet_addr_type(net, ct_tuple_orig->src.u3.ip) == RTN_LOCAL)
+		|| (inet_addr_type(net, ct_tuple_reply->src.u3.ip) == RTN_LOCAL)) {
 
-		/* Connection with Local IP, no need to do anything */
-		dev = ip_dev_find(net, ct_tuple_orig->src.u3.ip);
-		if (dev != NULL)
-			ASFCTRL_INFO("NH ORIG: local dst if = %s\n", dev->name);
-		dev = ip_dev_find(net, ct_tuple_reply->src.u3.ip);
-		if (dev != NULL)
-			ASFCTRL_INFO("NH ORIG: local src if = %s\n", dev->name);
-		return -EINVAL;
-	}
+			/* Connection with Local IP, no need to do anything */
+			dev = ip_dev_find(net, ct_tuple_orig->src.u3.ip);
+			if (dev != NULL)
+				ASFCTRL_INFO("NH ORIG: local dst if = %s\n", dev->name);
+			dev = ip_dev_find(net, ct_tuple_reply->src.u3.ip);
+			if (dev != NULL)
+				ASFCTRL_INFO("NH ORIG: local src if = %s\n", dev->name);
+			return -EINVAL;
+		}
 
-	/* multicast/broadcast session cannot be offloaded  */
-	if ((inet_addr_type(net, ct_tuple_orig->dst.u3.ip) == RTN_MULTICAST)
-	|| (inet_addr_type(net, ct_tuple_orig->dst.u3.ip) == RTN_BROADCAST)
-	|| (inet_addr_type(net, ct_tuple_reply->dst.u3.ip) == RTN_MULTICAST)
-	|| (inet_addr_type(net, ct_tuple_reply->dst.u3.ip) == RTN_BROADCAST)) {
+		/* multicast/broadcast session cannot be offloaded  */
+		if ((inet_addr_type(net, ct_tuple_orig->dst.u3.ip) == RTN_MULTICAST)
+		|| (inet_addr_type(net, ct_tuple_orig->dst.u3.ip) == RTN_BROADCAST)
+		|| (inet_addr_type(net, ct_tuple_reply->dst.u3.ip) == RTN_MULTICAST)
+		|| (inet_addr_type(net, ct_tuple_reply->dst.u3.ip) == RTN_BROADCAST)) {
 
-		ASFCTRL_INFO("Ignoring multicast connection");
-		return -EINVAL;
+			ASFCTRL_INFO("Ignoring multicast connection");
+			return -EINVAL;
+		}
 	}
 
 
@@ -679,10 +825,16 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	struct flowi fl_in, fl_out;
 #endif
 
-	uint32_t orig_sip = ct_tuple_orig->src.u3.ip;
-	uint32_t orig_dip = ct_tuple_orig->dst.u3.ip;
-	uint32_t reply_sip = ct_tuple_reply->src.u3.ip;
-	uint32_t reply_dip = ct_tuple_reply->dst.u3.ip;
+	uint32_t orig_sip = 0;
+	uint32_t orig_dip = 0;
+	uint32_t reply_sip = 0;
+	uint32_t reply_dip = 0;
+
+	struct in6_addr ip6_orig_sip;
+	struct in6_addr ip6_orig_dip;
+	struct in6_addr ip6_reply_sip;
+	struct in6_addr ip6_reply_dip;
+
 	uint16_t orig_sport = ct_tuple_orig->src.u.tcp.port;
 	uint16_t orig_dport = ct_tuple_orig->dst.u.tcp.port;
 	uint16_t reply_sport = ct_tuple_reply->src.u.tcp.port;
@@ -692,32 +844,66 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	uint8_t ulCommonInterfaceId = 0;
 
 
+	if (pf_ipv6 == true) {
+		ipv6_addr_copy((struct in6_addr *)&ip6_orig_sip, (struct in6_addr *)&(ct_tuple_orig->src.u3.in6));
+		ipv6_addr_copy((struct in6_addr *)&ip6_orig_dip, (struct in6_addr *)&(ct_tuple_orig->dst.u3.in6));
+		ipv6_addr_copy((struct in6_addr *)&ip6_reply_sip, (struct in6_addr *)&(ct_tuple_reply->src.u3.in6));
+		ipv6_addr_copy((struct in6_addr *)&ip6_reply_dip, (struct in6_addr *)&(ct_tuple_reply->dst.u3.in6));
+	} else {
+		orig_sip = ct_tuple_orig->src.u3.ip;
+		orig_dip = ct_tuple_orig->dst.u3.ip;
+		reply_sip = ct_tuple_reply->src.u3.ip;
+		reply_dip = ct_tuple_reply->dst.u3.ip;
+	}
+
+
 	memset(&cmd, 0, sizeof(cmd));
 
 	/* Fill command for flow 1 */
 	cmd.flow1.tuple.ucProtocol = orig_prot;
-	cmd.flow1.tuple.ulDestIp = orig_dip;
-	cmd.flow1.tuple.ulSrcIp = orig_sip;
+
+	if (pf_ipv6 == true) {
+		ipv6_addr_copy((struct in6_addr *)&(cmd.flow1.tuple.ipv6SrcIp), (struct in6_addr *)&ip6_orig_sip);
+		ipv6_addr_copy((struct in6_addr *)&(cmd.flow1.tuple.ipv6DestIp), (struct in6_addr *)&ip6_orig_dip);
+	} else {
+		cmd.flow1.tuple.ulDestIp = orig_dip;
+		cmd.flow1.tuple.ulSrcIp = orig_sip;
+	}
+
+	cmd.flow1.tuple.bIPv4OrIPv6 = pf_ipv6;
+
 	cmd.flow1.tuple.usDestPort = orig_dport;
 	cmd.flow1.tuple.usSrcPort = orig_sport;
 
 	/* Fill command for flow 2 */
 	cmd.flow2.tuple.ucProtocol = reply_prot;
-	cmd.flow2.tuple.ulDestIp = reply_dip;
-	cmd.flow2.tuple.ulSrcIp = reply_sip;
+	cmd.flow2.tuple.ucProtocol = reply_prot;
+
+	if (pf_ipv6 == true) {
+		ipv6_addr_copy((struct in6_addr *)&(cmd.flow2.tuple.ipv6SrcIp), (struct in6_addr *)&ip6_reply_sip);
+		ipv6_addr_copy((struct in6_addr *)&(cmd.flow2.tuple.ipv6DestIp), (struct in6_addr *)&ip6_reply_dip);
+	} else {
+		cmd.flow2.tuple.ulDestIp = reply_dip;
+		cmd.flow2.tuple.ulSrcIp = reply_sip;
+	}
+
+	cmd.flow2.tuple.bIPv4OrIPv6 = pf_ipv6;
+
 	cmd.flow2.tuple.usDestPort = reply_dport;
 	cmd.flow2.tuple.usSrcPort = reply_sport;
 
 	/* Check for NAT */
-	if (orig_dport == reply_sport &&
-		orig_sport == reply_dport &&
-		orig_dip == reply_sip &&
-		orig_sip == reply_dip) {
-			cmd.flow1.bNAT = 0;
-			cmd.flow2.bNAT = 0;
-	} else {
-			cmd.flow1.bNAT = 1;
-			cmd.flow2.bNAT = 1;
+	if (pf_ipv6 == false) {
+		if (orig_dport == reply_sport &&
+			orig_sport == reply_dport &&
+			orig_dip == reply_sip &&
+			orig_sip == reply_dip) {
+				cmd.flow1.bNAT = 0;
+				cmd.flow2.bNAT = 0;
+		} else {
+				cmd.flow1.bNAT = 1;
+				cmd.flow2.bNAT = 1;
+		}
 	}
 
 	/* This will be used while refereshing the flow activity and
@@ -769,14 +955,19 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		fl_out.fl_ip_sport = reply_dport;
 		fl_out.fl_ip_dport = reply_sport;
 		fl_out.proto = orig_prot;
-		fl_out.fl4_dst = reply_sip;
-		fl_out.fl4_src = reply_dip;
+		if (pf_ipv6 == true) {
+			ipv6_addr_copy(&fl_out.fl6_dst, &ip6_reply_sip);
+			ipv6_addr_copy(&fl_out.fl6_src, &ip6_reply_dip);
+		} else {
+			fl_out.fl4_dst = reply_sip;
+			fl_out.fl4_src = reply_dip;
+		}
 		fl_out.fl4_tos = 0;
 
 		dev = dev_get_by_name(&init_net, "lo");
 		net = dev_net(dev);
 		result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
-			&(cmd.flow1.ipsecInInfo), net, fl_out);
+			&(cmd.flow1.ipsecInInfo), net, fl_out, pf_ipv6);
 		if (result) {
 			ASFCTRL_INFO("IPSEC Not Offloadable for flow 1");
 			dev_put(dev);
@@ -826,12 +1017,17 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		fl_in.fl_ip_sport = reply_sport;
 		fl_in.fl_ip_dport = reply_dport;
 		fl_in.proto = reply_prot;
-		fl_in.fl4_dst = reply_dip;
-		fl_in.fl4_src = reply_sip;
+		if (pf_ipv6 == true) {
+			ipv6_addr_copy(&fl_in.fl6_dst, &ip6_reply_dip);
+			ipv6_addr_copy(&fl_in.fl6_src, &ip6_reply_sip);
+		} else {
+			fl_in.fl4_dst = reply_dip;
+			fl_in.fl4_src = reply_sip;
+		}
 		fl_in.fl4_tos = 0;
 
 		result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
-			&(cmd.flow2.ipsecInInfo), net, fl_in);
+			&(cmd.flow2.ipsecInInfo), net, fl_in, pf_ipv6);
 		dev_put(dev);
 		if (result) {
 			ASFCTRL_INFO("IPSEC Not Offloadable for flow 2");
@@ -864,22 +1060,34 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 		ASFCTRL_INFO("Flow created successfully in ASF");
 
-		if (cmd.flow1.bNAT) {
-			flow1_dip =  cmd.flow1.natInfo.ulDestNATIp;
-			flow2_dip = cmd.flow2.natInfo.ulDestNATIp;
+		if (pf_ipv6 == true) {
+			asf_linux_IPv6XmitL2blobDummyPkt(0, 0, &cmd.flow1.tuple,
+						(struct in6_addr *)(cmd.flow1.tuple.ipv6SrcIp),
+						(struct in6_addr *)(cmd.flow1.tuple.ipv6DestIp),
+						0, 0, ulCommonInterfaceId);
+			asf_linux_IPv6XmitL2blobDummyPkt(0, 0, &cmd.flow2.tuple,
+						(struct in6_addr *)(cmd.flow2.tuple.ipv6SrcIp),
+						(struct in6_addr *)(cmd.flow2.tuple.ipv6DestIp),
+						0, 0, ulCommonInterfaceId);
 		} else {
-			flow1_dip = cmd.flow1.tuple.ulDestIp;
-			flow2_dip = cmd.flow2.tuple.ulDestIp;
-		}
 
-		asf_linux_XmitL2blobDummyPkt(0, 0, &cmd.flow1.tuple,
-					cmd.flow1.tuple.ulSrcIp,
-					flow1_dip,
-					0, 0, ulCommonInterfaceId);
-		asf_linux_XmitL2blobDummyPkt(0, 0, &cmd.flow2.tuple,
-					cmd.flow2.tuple.ulSrcIp,
-					flow2_dip,
-					0, 0, ulCommonInterfaceId);
+			if (cmd.flow1.bNAT) {
+				flow1_dip =  cmd.flow1.natInfo.ulDestNATIp;
+				flow2_dip = cmd.flow2.natInfo.ulDestNATIp;
+			} else {
+				flow1_dip = cmd.flow1.tuple.ulDestIp;
+				flow2_dip = cmd.flow2.tuple.ulDestIp;
+			}
+
+			asf_linux_XmitL2blobDummyPkt(0, 0, &cmd.flow1.tuple,
+						cmd.flow1.tuple.ulSrcIp,
+						flow1_dip,
+						0, 0, ulCommonInterfaceId);
+			asf_linux_XmitL2blobDummyPkt(0, 0, &cmd.flow2.tuple,
+						cmd.flow2.tuple.ulSrcIp,
+						flow2_dip,
+						0, 0, ulCommonInterfaceId);
+		}
 		/* Session is offloaded successfuly,
 		** Mark the offload status bit is status bit
 		** this will be used when destroy event come */
@@ -923,7 +1131,6 @@ static int asfctrl_conntrack_event(unsigned int events, struct nf_ct_event *ptr)
 		ASFCTRL_INFO("IPCT_ASSURED!");
 #else
 	} else if (events & (1 << IPCT_STATUS)) {
-		ASFCTRL_INFO("IPCT_STATUS!");
 #endif
 		/* Offload the connection if status is assured */
 		if ((ct_tuple->dst.protonum == IPPROTO_TCP) &&
