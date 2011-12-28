@@ -83,10 +83,6 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 	}
 }
 
-#define ASF_FFP_BLOB_TIME_INTERVAL 1    /* inter bucket gap */
-#define ASF_FFP_INAC_TIME_INTERVAL 1    /* inter bucket gap */
-#define ASF_FFP_NUM_RQ_ENTRIES  (256)
-#define ASF_FFP_AUTOMODE_FLOW_INACTIME  (300)
 
 /* Initialization Parameters */
 #define ASF_FFP_BLOB_TMR_ID	(0)
@@ -97,10 +93,8 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 #define ASF_FWD_EXPIRY_TMR_ID	(5)
 #define ASF_TERM_BLOB_TMR_ID	(6)
 #define ASF_TERM_EXPIRY_TMR_ID	(7)
-#define ASF_FFP_IPV6_BLOB_TMR_ID	(8)
-#define ASF_FFP_IPV6_INAC_REFRESH_TMR_ID	(9)
 
-#define ASF_NUM_OF_TIMERS (ASF_FFP_IPV6_INAC_REFRESH_TMR_ID + 1)
+#define ASF_NUM_OF_TIMERS (ASF_TERM_EXPIRY_TMR_ID + 1)
 
 /* ASF Proc interface */
 #define CTL_ASF 9999

@@ -992,7 +992,9 @@ int asf_unregister_proc(void)
 #endif
 	remove_proc_entry(ASF_PROC_IFACE_MAPS, asf_dir);
 	remove_proc_entry(ASF_PROC_FLOW_STATS_NAME, asf_dir);
+#ifdef ASF_IPV6_FP_SUPPORT
 	remove_proc_entry(ASF_PROC_FLOW_IPV6_STATS_NAME, asf_dir);
+#endif
 	remove_proc_entry(ASF_PROC_FLOW_DEBUG_NAME, asf_dir);
 	remove_proc_entry("asf", NULL);
 

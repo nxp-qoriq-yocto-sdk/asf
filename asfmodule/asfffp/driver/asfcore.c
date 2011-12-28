@@ -175,6 +175,11 @@ void asf_ffp_cleanup_all_flows(void);
 
 static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *dev);
 
+#define ASF_FFP_BLOB_TIME_INTERVAL 1    /* inter bucket gap */
+#define ASF_FFP_INAC_TIME_INTERVAL 1    /* inter bucket gap */
+#define ASF_FFP_NUM_RQ_ENTRIES  (256)
+#define ASF_FFP_AUTOMODE_FLOW_INACTIME  (300)
+
 #define FFP_HINDEX(hval) ASF_HINDEX(hval, ffp_hash_buckets)
 
 /** Local functions */
@@ -814,7 +819,8 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		anDev = ASFGetVlanDev(anDev, skb->vlan_tci & VLAN_VID_MASK);
 	if (NULL == anDev)
 		goto iface_not_found;
-	if (unlikely(anDev->ulVSGId == ASF_INVALID_VSG)) {
+	if (unlikely(anDev->ulVSGId == ASF_INVALID_VSG) ||
+		unlikely(anDev->ulZoneId == ASF_INVALID_ZONE)) {
 		ffpCbFns.pFnVSGMappingNotFound(anDev->ulCommonInterfaceId,
 			abuf, (genericFreeFn_t)ASF_SKB_FREE_FUNC, skb);
 		ASF_RCU_READ_UNLOCK(bLockFlag);
@@ -902,7 +908,7 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		ASF_uint32_t	ret;
 		struct ipv6hdr *ipv6h = (struct ipv6hdr *)skb_network_header(skb);
 		/*Send packet to IPv6 layer*/
-		if (ipv6h->nexthdr != 4) {
+		if (ipv6h->nexthdr != IPPROTO_IPIP) {
 			skb_pull(skb, x_hh_len);
 			ret = ASFFFPIPv6ProcessAndSendPkt(anDev->ulVSGId,
 					anDev->ulCommonInterfaceId,
@@ -911,11 +917,12 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 				ASF_RCU_READ_UNLOCK(bLockFlag);
 				return AS_FP_STOLEN;
 			} else {
+				skb_push(skb, x_hh_len);
 				goto ret_pkt;
 			}
 		} else {
-			skb_pull(skb, sizeof(struct ipv6hdr));
-			skb_reset_network_header(skb);
+			x_hh_len += sizeof(struct ipv6hdr);
+			skb_set_network_header(skb, x_hh_len);
 		}
 		/* need to take care the IPV4 in IPV6 case */
 	}
@@ -990,13 +997,6 @@ static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		goto ret_pkt;
 	}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-	if (unlikely(anDev->ulZoneId == ASF_INVALID_ZONE)) {
-		ffpCbFns.pFnZoneMappingNotFound(anDev->ulVSGId,
-			anDev->ulCommonInterfaceId, abuf,
-			(genericFreeFn_t)ASF_SKB_FREE_FUNC, skb);
-		ASF_RCU_READ_UNLOCK(bLockFlag);
-		return AS_FP_STOLEN;
-	}
 
 	if (unlikely(skb->ip_summed != CHECKSUM_UNNECESSARY)) {
 		if ((iph->frag_off) & ASF_MF_OFFSET_FLAG_NET_ORDER)
@@ -2945,16 +2945,16 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 #ifdef ASF_IPV6_FP_SUPPORT
 		if (bIPv6_flow1 == true)
 			flow1->id.ulArg2 = ffp_ipv6_ptrary.pBase[index1].ulMagicNum;
-#endif
 		else
+#endif
 			flow1->id.ulArg2 = ffp_ptrary.pBase[index1].ulMagicNum;
 
 		flow1->other_id.ulArg1 = index2;
 #ifdef ASF_IPV6_FP_SUPPORT
 		if (bIPv6_flow2 == true)
 			flow1->other_id.ulArg2 = ffp_ipv6_ptrary.pBase[index2].ulMagicNum;
-#endif
 		else
+#endif
 			flow1->other_id.ulArg2 = ffp_ptrary.pBase[index2].ulMagicNum;
 
 		memcpy(&flow2->id, &flow1->other_id, sizeof(ASFFFPFlowId_t));
@@ -3091,7 +3091,9 @@ down1:
 	if (pFlow2)
 		*pFlow2 = NULL;
 	return ASFFFP_RESPONSE_FAILURE;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 down2:
+#endif
 	XGSTATS_INC(CreateFlowsCmdErrDown2);
 	asf_debug("timer allocation failed!\n");
 	if (flow1->pL2blobTmr)
@@ -3580,8 +3582,9 @@ unsigned int asfFfpInacRefreshTmrCb(unsigned int ulVSGId,
 			if (bIPv6 == true) {
 				ipv6_addr_copy((struct in6_addr *)&ind.tuple.ipv6SrcIp, (struct in6_addr *)&flow1->ipv6SrcIp);
 				ipv6_addr_copy((struct in6_addr *)&ind.tuple.ipv6DestIp, (struct in6_addr *)&flow1->ipv6DestIp);
-			} else {
+			} else
 #endif
+			{
 				ind.tuple.ulSrcIp = flow1->ulSrcIp;
 				ind.tuple.ulDestIp = flow1->ulDestIp;
 			}
@@ -3678,7 +3681,7 @@ static int asf_ffp_init_flow_table()
 	asf_print("Register Blob Timer App\n");
 
 	if (asfTimerAppRegister(ASF_FFP_BLOB_TMR_ID, 0,
-				asfFfpBlobTmrCb,
+				(asfTmrCbFn) asfFfpBlobTmrCb,
 				ffp_blob_timer_pool_id)) {
 		asf_debug("Error in registering Cb Fn/Pool Id\n");
 		return -ENOMEM;
@@ -3686,7 +3689,7 @@ static int asf_ffp_init_flow_table()
 
 	asf_print("Register Inac Timer App\n");
 	if (asfTimerAppRegister(ASF_FFP_INAC_REFRESH_TMR_ID, 0,
-				asfFfpInacRefreshTmrCb,
+				(asfTmrCbFn) asfFfpInacRefreshTmrCb,
 				ffp_inac_timer_pool_id)) {
 		asf_debug("Error in registering Cb Fn/Pool Id\n");
 		return -ENOMEM;

@@ -20,8 +20,8 @@
 #include "asfdeps.h"
 #include "asfparry.h"
 
-+#define PRINT_IPV6(a) printk(KERN_INFO"%x:%x:%x:%x:%x:%x:%x:%x\n", a.s6_addr16[0], a.s6_addr16[1], a.s6_addr16[2], a.s6_addr16[3], a.s6_addr16[4], a.s6_addr16[5], a.s6_addr16[6], a.s6_addr16[7])
-+#define PRINT_IPV6_OTH(a) a.s6_addr16[0], a.s6_addr16[1], a.s6_addr16[2], a.s6_addr16[3], a.s6_addr16[4], a.s6_addr16[5], a.s6_addr16[6], a.s6_addr16[7]
+#define PRINT_IPV6(a) printk(KERN_INFO"%x:%x:%x:%x:%x:%x:%x:%x\n", a.s6_addr16[0], a.s6_addr16[1], a.s6_addr16[2], a.s6_addr16[3], a.s6_addr16[4], a.s6_addr16[5], a.s6_addr16[6], a.s6_addr16[7])
+#define PRINT_IPV6_OTH(a) a.s6_addr16[0], a.s6_addr16[1], a.s6_addr16[2], a.s6_addr16[3], a.s6_addr16[4], a.s6_addr16[5], a.s6_addr16[6], a.s6_addr16[7]
 
 extern int ffp_ipv6_hash_buckets;
 #define FFP_IPV6_HINDEX(hval) ASF_HINDEX(hval, ffp_ipv6_hash_buckets)

@@ -26,7 +26,11 @@ enum {
 /****** Common API ********/
 #define ASF_MAX_VSGS		(2)
 #define ASF_MAX_IFACES		(16)
+#ifdef ASF_IPV6_FP_SUPPORT
 #define ASF_MAX_L2BLOB_LEN	(68)
+#else
+#define ASF_MAX_L2BLOB_LEN	(28)
+#endif
 
 #define ASF_MAX_L2BLOB_REFRESH_PKT_CNT	(0)
 #define ASF_MAX_L2BLOB_REFRESH_TIME	(3*60)
@@ -854,11 +858,11 @@ typedef struct ASFFFPUpdateFlowParams_s {
 				ASF_uint32_t
 				/* TRUE or FALSE:  indicates if IPv6-in-IPv4 tunnel outbound processing needs to happen on the flow */
 				bIP6IP4Out : 1,
-				/* TRUE or FALSE:  indicates if IPv6-in-IPv4 tunnel outbound processing needs to happen on the flow */
+				/* TRUE or FALSE:  indicates if IPv6-in-IPv4 tunnel inbound  processing needs to happen on the flow */
 				bIP6IP4In:1,
-				/* TRUE or FALSE:  indicates if IPv6-in-IPv4 tunnel outbound processing needs to happen on the flow */
-				bIP4IP6Out:1,
 				/* TRUE or FALSE:  indicates if IPv4-in-IPv6 tunnel outbound processing needs to happen on the flow */
+				bIP4IP6Out:1,
+				/* TRUE or FALSE:  indicates if IPv4-in-IPv6 tunnel inbound processing needs to happen on the flow */
 				bIP4IP6In:1;
 			} tunnel;
 
@@ -894,6 +898,17 @@ ASF_void_t    ASFFFPProcessAndSendPkt(
 				     genericFreeFn_t pFreeFn,
 				     ASF_void_t      *freeArg,
 				     ASF_void_t      *pIpsecOpaque);
+
+ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
+				ASF_uint32_t    ulVsgId,
+				ASF_uint32_t    ulCommonInterfaceId,
+				ASFBuffer_t     Buffer,
+				genericFreeFn_t pFreeFn,
+				ASF_void_t      *freeArg,
+				ASF_void_t      *pIpsecOpaque
+				/* pass this to VPN In Hook */
+				);
+
 
 ASF_void_t ASFFFPUpdateConfigIdentity(ASF_uint32_t ulVSGId, ASFFFPConfigIdentity_t configIdentity);
 

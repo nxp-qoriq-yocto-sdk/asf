@@ -413,7 +413,7 @@ int asfReasmInit(void)
 	/* Register the callback function and timer pool Id */
 
 	if (asfTimerAppRegister(ASF_REASM_TMR_ID, 0,
-				asfReasmTmrCb,
+				(asfTmrCbFn) asfReasmTmrCb,
 				(asf_reasmPools[ASF_REASM_TIMER_POOL_ID_INDEX]))) {
 		asf_reasm_debug("Error in registering Cb Fn/Pool Id \r\n");
 		asfReasmDeInit();
@@ -484,6 +484,7 @@ static inline void asfReasmDeleteCb(struct asf_reasmCb_s *pCb)
 
 }
 
+#ifdef ASF_IPV6_FP_SUPPORT
 static inline void asfIPv6ReasmDeleteCb(struct asf_reasmCb_s *pCb)
 {
 #ifdef ASF_REASM_DEBUG
@@ -496,6 +497,7 @@ static inline void asfIPv6ReasmDeleteCb(struct asf_reasmCb_s *pCb)
 
 
 }
+#endif
 
 static inline unsigned int asfReasmComputeHash(unsigned int word_a, unsigned int word_b, unsigned int word_c)
 { /* Bob jenkins hash */
@@ -738,6 +740,7 @@ static inline struct asf_reasmCb_s *asfIPv4ReasmFindOrCreateCb(
 }
 
 
+#ifdef ASF_IPV6_FP_SUPPORT
 static inline struct asf_reasmCb_s *asfIPv6ReasmFindOrCreateCb(
 							      unsigned int ulVSGId, struct sk_buff *skb,
 							      unsigned int  hashVal) {
@@ -839,6 +842,7 @@ static inline struct asf_reasmCb_s *asfIPv6ReasmFindOrCreateCb(
 	gstats->ulErrAllocFailures++;
 	return NULL;
 }
+#endif
 static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 				       int *offset,  unsigned int *flags, unsigned int *ulSegLen,
 				       int *pIhl, unsigned int ulVSGId)
@@ -1334,13 +1338,16 @@ unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 #ifdef ASF_REASM_DEBUG
 	asf_reasm_debug("Timer Cb called: ulIndex = %d, ulMagicNum = %d\r\n", ulIndex, ulMagicNum);
 #endif
+#ifdef ASF_IPV6_FP_SUPPORT
 	if (pCbArg4 == 1) {
 		mgnum = ptrIArray_getMagicNum(
 					       &(asfPerCpuPtr(asf_ipv6_ReasmCbPtrIndexArray,
 							      smp_processor_id())->ptrArrayInfo[ulVSGId].ptrArray),
 					       ulIndex);
 
-	} else {
+	} else
+#endif
+	{
 		mgnum = ptrIArray_getMagicNum(
 					       &(asfPerCpuPtr(asf_ReasmCbPtrIndexArray,
 							      smp_processor_id())->ptrArrayInfo[ulVSGId].ptrArray),
@@ -1353,10 +1360,13 @@ unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 		asf_reasm_debug("Magic number matched\r\n");
 #endif
 
+#ifdef ASF_IPV6_FP_SUPPORT
 		if (pCbArg4 == 1) {
 			pCb = ptrIArray_getData(&(asfPerCpuPtr(asf_ipv6_ReasmCbPtrIndexArray,
 						       smp_processor_id())->ptrArrayInfo[ulVSGId].ptrArray), ulIndex);
-		} else {
+		} else
+#endif
+		{
 			pCb = ptrIArray_getData(&(asfPerCpuPtr(asf_ReasmCbPtrIndexArray,
 						       smp_processor_id())->ptrArrayInfo[ulVSGId].ptrArray), ulIndex);
 		}
@@ -1370,10 +1380,13 @@ unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 		if (ulTimeDiff  >= asf_reasmCfg[ulVSGId].ulTimeOutInJiffies) {
 			asf_reasm_debug("Need to delete the Cb\r\n");
 			/* Remove from hash list */
+#ifdef ASF_IPV6_FP_SUPPORT
 			if (pCbArg4 == 1) {
 				asfIPv6RemCbFromHashList(pCb->ulHashVal,  pCb);
 				asfIPv6ReasmDeleteCb(pCb);
-			} else {
+			} else
+#endif
+			{
 				asfRemCbFromHashList(pCb->ulHashVal,  pCb);
 				asfReasmDeleteCb(pCb);
 			}
@@ -1414,8 +1427,8 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 	struct asf_reasmCb_s *pCb;
 	unsigned int hashVal;
 	unsigned int ulOffset;
-	unsigned int flags;
-	unsigned int ulSegLen;
+	unsigned int flags = 0;
+	unsigned int ulSegLen = 0;
 	unsigned int ihl;
 	struct asf_fragInfo_s *pFrag;
 	struct sk_buff *pTempSkb;
@@ -1641,7 +1654,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 #ifdef ASF_IPV6_FP_SUPPORT
 					if (bIPv6 == true) {
 						pHeadSkb->data -= *(unsigned int *)&(pHeadSkb->cb[4]);;
-						memmove(pHeadSkb->data, *(unsigned int *)&(pHeadSkb->cb[0]), *(unsigned int *)&(pHeadSkb->cb[4]));
+						memmove(pHeadSkb->data, (void *)(*(unsigned int *)&(pHeadSkb->cb[0])), *(unsigned int *)&(pHeadSkb->cb[4]));
 						ip6h = (struct ipv6hdr *)pHeadSkb->data;
 						ip6h->payload_len = pCb->ulTotLen + *(unsigned int *)&(pHeadSkb->cb[4]);
 						if (ip6h->nexthdr == NEXTHDR_HOP) {
@@ -1694,21 +1707,27 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 					asf_reasm_debug("returning skbs to caller\r\n");
 					if ((pReasmCb1 == NULL) || (pReasmCb2 == NULL)) {
 						/* Remove from hash list */
+#ifdef ASF_IPV6_FP_SUPPORT
 						if (bIPv6 == true)
 							asfIPv6RemCbFromHashList(pCb->ulHashVal,  pCb);
 						else
+#endif
 							asfRemCbFromHashList(pCb->ulHashVal,  pCb);
 						/* Stop the timer */
 						asfTimerStop(ASF_REASM_TMR_ID, 0, pCb->ptmr);
+#ifdef ASF_IPV6_FP_SUPPORT
 						if (bIPv6 == true)
 							asfIPv6ReasmDeleteCb(pCb);
 						else
+#endif
 							asfReasmDeleteCb(pCb);
 					} else {
 						/* Need to look at this */
+#ifdef ASF_IPV6_FP_SUPPORT
 						if (bIPv6 == true)
 							asfIPv6RemCbFromHashList(hashVal, pCb);
 						else
+#endif
 							asfRemCbFromHashList(hashVal, pCb);
 						asfTimerStop(ASF_REASM_TMR_ID, 0, pCb->ptmr);
 						/* Expecting application to call asfReasmDeleteCb */
@@ -2114,6 +2133,8 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			}
 
 			skb2 = gfar_new_skb(skb->dev);
+			if (!skb2)
+				goto drop;
 			skb_reset_network_header(skb2);
 
 			asfSkbCopyBits(skb, 0,
@@ -2140,6 +2161,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			return 0;
 		}
 	}
+drop:
 	asf_reasm_debug("default error case!\n");
 	ASFSkbFree(skb);
 	*pOutSkb = NULL;
@@ -2154,12 +2176,11 @@ int asfIpv6Fragment(struct sk_buff *skb,
 {
 	struct ipv6hdr *ip6h = ipv6_hdr(skb);
 	struct frag_hdr *fhdr;
-	struct sk_buff *skb2, *pLastSkb;
+	struct sk_buff *pLastSkb;
 	unsigned int offset = 0;
 	bool bNewSkb = 1;
 	struct sk_buff *pSkb, *frag;
 	unsigned int	ip6hpexh_len = 0;
-	unsigned int	payload_len = 0;
 	unsigned int ident = asfReasmGetNextId();
 	unsigned int	bytesLeft, len, ptr;
 	unsigned	char nexthdr;
@@ -2203,9 +2224,6 @@ int asfIpv6Fragment(struct sk_buff *skb,
 
 	bytesLeft = skb->len - ip6hpexh_len;
 
-	payload_len = len + ip6hpexh_len - sizeof(struct ipv6hdr) + sizeof(struct frag_hdr);
-			/* The first fragment will be created at the end */
-
 	offset = 0;
 	ptr = ip6hpexh_len;
 			asf_reasm_debug("bytesLeft %d, Offset %d, len %d \r\n",
@@ -2219,41 +2237,41 @@ int asfIpv6Fragment(struct sk_buff *skb,
 
 
 
-		skb2 = gfar_new_skb(skb->dev);
+		frag = gfar_new_skb(skb->dev);
 
-		if (unlikely(!skb2)) {
+		if (unlikely(!frag)) {
 			asf_reasm_debug("Skb allocation"
 					" failed in fragmenation\r\n");
-			skb2 = skb;
-			while (skb2) {
-				pLastSkb = skb2->next;
-				ASFSkbFree(skb2);
-				skb2 = pLastSkb;
+			while (skb) {
+				frag = skb;;
+				skb = skb->next;
+				frag->next = NULL;
+				ASFSkbFree(frag);
 			}
 			return 1;
 		}
 		asf_reasm_debug("Next skb\r\n");
-		skb2->skb_owner = NULL;
+		frag->skb_owner = NULL;
 
-		pLastSkb->next = skb2;
-		pLastSkb = skb2;
-		skb2->queue_mapping = skb->queue_mapping;
+		pLastSkb->next = frag;
+		pLastSkb = frag;
+		frag->queue_mapping = skb->queue_mapping;
 
-		skb_put(skb2, ip6hpexh_len + sizeof(struct frag_hdr) + len);
+		skb_put(frag, ip6hpexh_len + sizeof(struct frag_hdr) + len);
 
-		skb_reset_network_header(skb2);
+		skb_reset_network_header(frag);
 
-		skb_set_transport_header(skb2, ip6hpexh_len + sizeof(struct frag_hdr));
+		skb_set_transport_header(frag, ip6hpexh_len + sizeof(struct frag_hdr));
 
 		/*
 		 *	Copy the packet header
 		 *	into the new buffer.
 		*/
-		memcpy(skb_network_header(skb2), skb_network_header(skb), ip6hpexh_len);
+		memcpy(skb_network_header(frag), skb_network_header(skb), ip6hpexh_len);
 
 		asfSkbCopyBits(skb,
 				ptr,
-				skb_transport_header(skb2),
+				skb_transport_header(frag),
 				len);
 
 		bytesLeft -= len;
@@ -2261,10 +2279,10 @@ int asfIpv6Fragment(struct sk_buff *skb,
 		/*
 		*	Fill in the new header fields.
 		*/
-		ip6h = ipv6_hdr(skb2);
+		ip6h = ipv6_hdr(frag);
 		ip6h->payload_len = htons(len + ip6hpexh_len + sizeof(struct frag_hdr));
 
-		fhdr = (struct frag_hdr *)(skb_network_header(skb2) + ip6hpexh_len);
+		fhdr = (struct frag_hdr *)(skb_network_header(frag) + ip6hpexh_len);
 		fhdr->nexthdr = nexthdr;
 		fhdr->frag_off = ((offset >> 3) << 3);
 		fhdr->frag_off |= (bytesLeft != 0);
