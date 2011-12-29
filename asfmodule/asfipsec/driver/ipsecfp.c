@@ -2444,6 +2444,8 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		skb->data_len += SECFP_ICV_LEN;
 	}
 	skb->data = skb->data - ipHdrLen - usNatOverHead;
+	if (pSA->SAParams.bAuth)
+		skb->tail += SECFP_ICV_LEN;
 	skb->len +=  usNatOverHead;
 	ASFIPSEC_PRINT("Finish packet: ulSecLenIncrease = %d, IP_HDR_LEN=%d "\
 		"Updated skb->data = 0x%x",
