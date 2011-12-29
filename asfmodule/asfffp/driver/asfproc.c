@@ -31,9 +31,6 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
-#ifdef CONFIG_DPA
-#include <dpaa_eth_asf.h>
-#endif
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -629,11 +626,11 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 		return 0;
 	}
 
+	printk(KERN_INFO"HIDX {ID}\tDST\tV/Z/P\tSIP:SPORT\tDIP:DPORT\tSNIP:SNPORT\tDNIP:DNPORT\tPKTS\n");
 	p = buf;
 	*p = '\0';
-	p += sprintf(p, "\n======================================================================\n");
-	for (i = 0; i < ffp_ipv6_hash_buckets; i++) {
-		head = (ffp_flow_t *)  &ffp_ipv6_flow_table[i];
+	for (i = 0; i < ffp_hash_buckets; i++) {
+		head = (ffp_flow_t *)  &ffp_flow_table[i];
 
 		if (head == head->pNext)
 			empty_entr++;
@@ -656,23 +653,30 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 
 			if (!display)
 				continue;
-			p += sprintf(p, "Src IP      = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6SrcIp), ntohs((flow->ulPorts&0xffff0000) >> 16));
-			p += sprintf(p, "Dest IP     = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestIp), ntohs(flow->ulPorts&0xffff));
-			p += sprintf(p, "NAT Src IP  = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6SrcNATIp), ntohs((flow->ulNATPorts&0xffff0000) >> 16));
-			p += sprintf(p, "NAT Dest IP = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestNATIp), ntohs(flow->ulNATPorts&0xffff));
-			p += sprintf(p, "Proto = %s  Out dev = %s   l2blob len = %u   VSG = %u  Zone = %u\n", ((flow->ucProtocol == 6) ? "TCP" : "UDP"),
-																(flow->odev ? flow->odev->name : "UNK"),
-																flow->l2blob_len,
-																flow->ulVsgId,
-																flow->ulZoneId);
-			p += sprintf(p, "In pkts = %u	Out pkts = %u\n", flow->stats.ulInPkts, flow->stats.ulOutPkts);
-			p += sprintf(p, "======================================================================\n\n");
+			p += sprintf(p, "%d {%lu, %lu}\t%s\t%u/%u/%s\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%u\n",
+				     i,
+				     flow->id.ulArg1, flow->id.ulArg2,
+				     flow->odev ? flow->odev->name : "UNK",
+				     flow->ulVsgId,
+				     flow->ulZoneId,
+				     (flow->ucProtocol == 6) ? "TCP" : "UDP",
+
+				     NIPQUAD(flow->ulSrcIp),
+				     ntohs((flow->ulPorts&0xffff0000) >> 16),
+				     NIPQUAD(flow->ulDestIp),
+				     ntohs(flow->ulPorts&0xffff),
+
+				     NIPQUAD(flow->ulSrcNATIp),
+				     ntohs((flow->ulNATPorts&0xffff0000) >> 16),
+				     NIPQUAD(flow->ulDestNATIp),
+				     ntohs(flow->ulNATPorts&0xffff),
+				     flow->stats.ulOutPkts);
 			disp_cnt++;
 			if (disp_cnt >= ffp_debug_show_count) {
 				display = 0;
 			}
 		}
-		spin_unlock_bh(&ffp_ipv6_flow_table[i].lock);
+		spin_unlock_bh(&ffp_flow_table[i].lock);
 
 		if (min_entr > cur_entr)
 			min_entr = cur_entr;
@@ -710,11 +714,11 @@ static int display_asf_proc_flow_ipv6_stats(char *page, char **start,
 		return 0;
 	}
 
-	printk(KERN_INFO"HIDX {ID}\tDST\tV/Z/P\tSIP:SPORT\tDIP:DPORT\tSNIP:SNPORT\tDNIP:DNPORT\tPKTS\n");
 	p = buf;
 	*p = '\0';
-	for (i = 0; i < ffp_hash_buckets; i++) {
-		head = (ffp_flow_t *)  &ffp_flow_table[i];
+	p += sprintf(p, "\n======================================================================\n");
+	for (i = 0; i < ffp_ipv6_hash_buckets; i++) {
+		head = (ffp_flow_t *)  &ffp_ipv6_flow_table[i];
 
 		if (head == head->pNext)
 			empty_entr++;
@@ -737,30 +741,22 @@ static int display_asf_proc_flow_ipv6_stats(char *page, char **start,
 
 			if (!display)
 				continue;
-			p += sprintf(p, "%d {%lu, %lu}\t%s\t%u/%u/%s\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%u\n",
-				     i,
-				     flow->id.ulArg1, flow->id.ulArg2,
-				     flow->odev ? flow->odev->name : "UNK",
-				     flow->ulVsgId,
-				     flow->ulZoneId,
-				     (flow->ucProtocol == 6) ? "TCP" : "UDP",
-
-				     NIPQUAD(flow->ulSrcIp),
-				     ntohs((flow->ulPorts&0xffff0000) >> 16),
-				     NIPQUAD(flow->ulDestIp),
-				     ntohs(flow->ulPorts&0xffff),
-
-				     NIPQUAD(flow->ulSrcNATIp),
-				     ntohs((flow->ulNATPorts&0xffff0000) >> 16),
-				     NIPQUAD(flow->ulDestNATIp),
-				     ntohs(flow->ulNATPorts&0xffff),
-				     flow->stats.ulOutPkts);
+			p += sprintf(p, "Src IP      = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6SrcIp), ntohs((flow->ulPorts&0xffff0000) >> 16));
+			p += sprintf(p, "Dest IP     = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestIp), ntohs(flow->ulPorts&0xffff));
+			p += sprintf(p, "NAT Src IP  = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6SrcNATIp), ntohs((flow->ulNATPorts&0xffff0000) >> 16));
+			p += sprintf(p, "NAT Dest IP = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestNATIp), ntohs(flow->ulNATPorts&0xffff));
+			p += sprintf(p, "Proto = %s  Out dev = %s   l2blob len = %u   VSG = %u  Zone = %u\n", ((flow->ucProtocol == 6) ? "TCP" : "UDP"),
+																(flow->odev ? flow->odev->name : "UNK"),
+																flow->l2blob_len,
+																flow->ulVsgId,
+																flow->ulZoneId);
+			p += sprintf(p, "In pkts = %u	Out pkts = %u\n", flow->stats.ulInPkts, flow->stats.ulOutPkts);
+			p += sprintf(p, "======================================================================\n\n");
 			disp_cnt++;
 			if (disp_cnt >= ffp_debug_show_count)
 				display = 0;
-
 		}
-		spin_unlock_bh(&ffp_flow_table[i].lock);
+		spin_unlock_bh(&ffp_ipv6_flow_table[i].lock);
 
 		if (min_entr > cur_entr)
 			min_entr = cur_entr;
