@@ -76,6 +76,11 @@ extern ASFTERMProcessPkt_f	pTermProcessPkt;
 #define debug(format, arg...) printk(format, arg)
 #define SECFP_ERROR_STR_MAX		302
 #define MAX_IPSEC_RECYCLE_DESC		128
+
+struct split_key_result {
+	struct completion completion;
+	int err;
+};
 #endif
 
 struct device *pdev;
@@ -2017,6 +2022,7 @@ static void secfp_prepareInCaamJobDescriptor(struct ipsec_esp_edesc *edesc,
 static void secfp_splitKeyDone(struct device *dev, void *desc, u32 error,
 				void *context)
 {
+	struct split_key_result *res = context;
 	if (error) {
 #ifdef ASFIPSEC_DEBUG_FRAME
 		char tmp[SECFP_ERROR_STR_MAX];
@@ -2025,7 +2031,8 @@ static void secfp_splitKeyDone(struct device *dev, void *desc, u32 error,
 #endif
 	}
 
-	kfree(desc);
+	res->err = error;
+	complete(&res->completion);
 }
 
 /*
@@ -2048,6 +2055,7 @@ static unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 	u32 *desc;
 	dma_addr_t dma_addr_in, dma_addr_out;
 	int ret = 0;
+	struct split_key_result result;
 
 	desc = kzalloc(CAAM_CMD_SZ * 6 + CAAM_PTR_SZ * 2, GFP_KERNEL | GFP_DMA);
 
@@ -2107,11 +2115,24 @@ static unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 			DUMP_PREFIX_ADDRESS, 16, 4, desc, desc_bytes(desc), 1);
 #endif
 
-	ret = secfp_caam_submit(ctx->jrdev, desc, secfp_splitKeyDone, NULL);
-	if (ret) {
-		ASFIPSEC_DEBUG("secfp_caam_submit failed ");
-		kfree(desc);
+	result.err = 0;
+	init_completion(&result.completion);
+
+	ret = secfp_caam_submit(ctx->jrdev, desc, secfp_splitKeyDone,
+				&result);
+
+	if (!ret) {
+		/* Wait till key genration is done */
+		wait_for_completion_interruptible(&result.completion);
+		ret = result.err;
+#ifdef DEBUG
+		print_hex_dump(KERN_ERR, "ctx.key@"xstr(__LINE__)": ",
+			DUMP_PREFIX_ADDRESS, 16, 4, ctx->key,
+			ctx->split_key_pad_len, 1);
+#endif
 	}
+
+	kfree(desc);
 
 	return ret;
 }
