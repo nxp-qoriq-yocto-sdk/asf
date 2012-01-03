@@ -2435,6 +2435,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 	/* Update the skb fields */
 	skb->len += pSA->ulSecLenIncrease;
+	skb->protocol = etherproto;
 	if (skb_shinfo(skb)->nr_frags) {
 		unsigned int total_frags;
 		skb_frag_t *frag;
