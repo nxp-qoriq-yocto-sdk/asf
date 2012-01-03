@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	ipsecfp.c
@@ -76,11 +76,6 @@ extern ASFTERMProcessPkt_f	pTermProcessPkt;
 #define debug(format, arg...) printk(format, arg)
 #define SECFP_ERROR_STR_MAX		302
 #define MAX_IPSEC_RECYCLE_DESC		128
-
-struct split_key_result {
-	struct completion completion;
-	int err;
-};
 #endif
 
 struct device *pdev;
@@ -2022,7 +2017,6 @@ static void secfp_prepareInCaamJobDescriptor(struct ipsec_esp_edesc *edesc,
 static void secfp_splitKeyDone(struct device *dev, void *desc, u32 error,
 				void *context)
 {
-	struct split_key_result *res = context;
 	if (error) {
 #ifdef ASFIPSEC_DEBUG_FRAME
 		char tmp[SECFP_ERROR_STR_MAX];
@@ -2031,8 +2025,7 @@ static void secfp_splitKeyDone(struct device *dev, void *desc, u32 error,
 #endif
 	}
 
-	res->err = error;
-	complete(&res->completion);
+	kfree(desc);
 }
 
 /*
@@ -2055,7 +2048,6 @@ static unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 	u32 *desc;
 	dma_addr_t dma_addr_in, dma_addr_out;
 	int ret = 0;
-	struct split_key_result result;
 
 	desc = kzalloc(CAAM_CMD_SZ * 6 + CAAM_PTR_SZ * 2, GFP_KERNEL | GFP_DMA);
 
@@ -2115,24 +2107,11 @@ static unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 			DUMP_PREFIX_ADDRESS, 16, 4, desc, desc_bytes(desc), 1);
 #endif
 
-	result.err = 0;
-	init_completion(&result.completion);
-
-	ret = secfp_caam_submit(ctx->jrdev, desc, secfp_splitKeyDone,
-				&result);
-
-	if (!ret) {
-		/* Wait till key genration is done */
-		wait_for_completion_interruptible(&result.completion);
-		ret = result.err;
-#ifdef DEBUG
-		print_hex_dump(KERN_ERR, "ctx.key@"xstr(__LINE__)": ",
-			DUMP_PREFIX_ADDRESS, 16, 4, ctx->key,
-			ctx->split_key_pad_len, 1);
-#endif
+	ret = secfp_caam_submit(ctx->jrdev, desc, secfp_splitKeyDone, NULL);
+	if (ret) {
+		ASFIPSEC_DEBUG("secfp_caam_submit failed ");
+		kfree(desc);
 	}
-
-	kfree(desc);
 
 	return ret;
 }
@@ -2150,13 +2129,13 @@ static int secfp_buildProtocolDesc(struct caam_ctx *ctx)
 	 */
 	if ((DESC_AEAD_GIVENCRYPT_TEXT_LEN +
 	     DESC_AEAD_SHARED_TEXT_LEN) * CAAM_CMD_SZ +
-	    ctx->split_key_pad_len + ctx->enckeylen <= CAAM_DESC_BYTES_MAX)
+	    ctx->enckeylen <= CAAM_DESC_BYTES_MAX)
 		keys_fit_inline = 1;
 
 	/* build shared descriptor for this session */
 	sh_desc = kzalloc(CAAM_CMD_SZ * DESC_AEAD_SHARED_TEXT_LEN +
 			  (keys_fit_inline ?
-			   ctx->split_key_pad_len + ctx->enckeylen :
+			   ctx->enckeylen :
 			   CAAM_PTR_SZ * 2), GFP_DMA | GFP_KERNEL);
 	if (!sh_desc) {
 		ASFIPSEC_WARN("Could not allocate shared descriptor");
@@ -2171,21 +2150,16 @@ static int secfp_buildProtocolDesc(struct caam_ctx *ctx)
 	 * indicate no IP header,
 	 * rather a jump instruction and key specification follow
 	 */
-	if (keys_fit_inline) {
-		append_key_as_imm(sh_desc, ctx->key, ctx->split_key_pad_len,
-				  ctx->split_key_len,
-				  CLASS_2 | KEY_DEST_MDHA_SPLIT | KEY_ENC);
+	append_key(sh_desc, ctx->key_phys, ctx->split_key_len, CLASS_2 |
+		   KEY_DEST_MDHA_SPLIT | KEY_ENC);
 
+	if (keys_fit_inline)
 		append_key_as_imm(sh_desc, (void *)ctx->key +
 				  ctx->split_key_pad_len, ctx->enckeylen,
 				  ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
-	} else {
-		append_key(sh_desc, ctx->key_phys, ctx->split_key_len, CLASS_2 |
-			   KEY_DEST_MDHA_SPLIT | KEY_ENC);
-
+	else
 		append_key(sh_desc, ctx->key_phys + ctx->split_key_pad_len,
 			   ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
-	}
 
 	/* update jump cmd now that we are at the jump target */
 	set_jump_tgt_here(sh_desc, jump_cmd);
