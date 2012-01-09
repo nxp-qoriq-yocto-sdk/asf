@@ -2068,7 +2068,8 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				if (len < bytesLeft)
 					len &= ~7;
 #ifdef CONFIG_DPA
-				skb2 = alloc_skb(len+ihl+ulDevXmitHdrLen, GFP_ATOMIC);
+				skb2 = alloc_skb(len+ihl+ulDevXmitHdrLen+
+					dev->needed_headroom, GFP_ATOMIC);
 #else
 				skb2 = gfar_new_skb(skb->dev);
 #endif
@@ -2076,6 +2077,10 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					asf_reasm_debug("Next skb\r\n");
 #ifndef CONFIG_DPA
 					skb2->skb_owner = NULL;
+#else
+					skb_reserve(skb2, ulDevXmitHdrLen +
+							dev->needed_headroom);
+					skb2->protocol = ETH_P_IP;
 #endif
 					pLastSkb->next = skb2;
 					pLastSkb = skb2;
@@ -2137,12 +2142,19 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				}
 			}
 #ifdef CONFIG_DPA
-			skb2 = alloc_skb(tot_len+ihl+ulDevXmitHdrLen, GFP_ATOMIC);
+			skb2 = alloc_skb(tot_len+ihl+ulDevXmitHdrLen+
+					dev->needed_headroom, GFP_ATOMIC);
 #else
 			skb2 = gfar_new_skb(skb->dev);
 #endif
 			if (!skb2)
 				goto drop;
+
+#ifdef CONFIG_DPA
+			skb_reserve(skb2, ulDevXmitHdrLen +
+					dev->needed_headroom);
+			skb2->protocol = ETH_P_IP;
+#endif
 			skb_reset_network_header(skb2);
 
 			asfSkbCopyBits(skb, 0,
