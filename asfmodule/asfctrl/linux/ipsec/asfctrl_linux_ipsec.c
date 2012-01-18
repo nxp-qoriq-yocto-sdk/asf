@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfctrl_linux_ipsec.c
@@ -390,13 +390,9 @@ ASF_void_t asfctrl_ipsec_fn_Config(ASF_uint32_t ulVSGId,
 
 	if (Response != T_SUCCESS) {
 		if (Cmd == ASF_IPSEC_CONFIG_ADD_OUTSPDCONTAINER) {
-			free_container_index(xp->asf_cookie,
-				ASF_OUT_CONTANER_ID);
-			xp->asf_cookie = 0;
+			free_container_index(xp, ASF_OUT_CONTANER_ID);
 		} else if (Cmd == ASF_IPSEC_CONFIG_ADD_INSPDCONTAINER) {
-			free_container_index(xp->asf_cookie,
-				ASF_IN_CONTANER_ID);
-			xp->asf_cookie = 0;
+			free_container_index(xp, ASF_IN_CONTANER_ID);
 		};
 	}
 	if (!bVal)
@@ -805,8 +801,8 @@ static int __init asfctrl_linux_ipsec_init(void)
 	asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info_fn,
 				asfctrl_ipsec_l2blob_update_fn,
 				asfctrl_ipsec_update_vsg_magic_number);
-	init_container_indexes(1);
-	init_sa_indexes(1);
+	init_container_indexes(ASF_TRUE);
+	init_sa_indexes(ASF_TRUE);
 	ASFCTRL_DBG("ASF Control Module - IPsec Loaded\n");
 	return 0;
 }

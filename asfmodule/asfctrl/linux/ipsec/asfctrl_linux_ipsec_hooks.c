@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * This file implements the hook used to offload the security
@@ -95,7 +95,7 @@ void asfctrl_generic_free(ASF_void_t *freeArg)
 
 /**** Container Indices ***/
 static spinlock_t cont_lock;
-static ASF_boolean_t
+static ASF_uint32_t
 	containers_ids[MAX_POLICY_CONT_ID][ASFCTRL_MAX_SPD_CONTAINERS];
 static int current_index[MAX_POLICY_CONT_ID];
 
@@ -108,10 +108,10 @@ void init_container_indexes(bool init)
 		spin_lock(&cont_lock);
 
 	memset(containers_ids[ASF_OUT_CONTANER_ID], 0,
-		sizeof(ASF_boolean_t) * ASFCTRL_MAX_SPD_CONTAINERS);
+		sizeof(ASF_uint32_t) * ASFCTRL_MAX_SPD_CONTAINERS);
 
 	memset(containers_ids[ASF_IN_CONTANER_ID], 0,
-		sizeof(ASF_boolean_t) * ASFCTRL_MAX_SPD_CONTAINERS);
+		sizeof(ASF_uint32_t) * ASFCTRL_MAX_SPD_CONTAINERS);
 
 	current_index[ASF_OUT_CONTANER_ID] = 1;
 	current_index[ASF_IN_CONTANER_ID] = 1;
@@ -121,14 +121,15 @@ void init_container_indexes(bool init)
 
 }
 
-static inline int alloc_container_index(int cont_dir)
+static inline int alloc_container_index(struct xfrm_policy *xp, int cont_dir)
 {
-	int i, cur_id;
+	int i = 0, cur_id;
 
 	spin_lock(&cont_lock);
 	cur_id = current_index[cont_dir];
 	if (containers_ids[cont_dir][cur_id - 1] == 0) {
-		containers_ids[cont_dir][cur_id - 1] = 1;
+		containers_ids[cont_dir][cur_id - 1] = xp->index;
+		xp->asf_cookie = cur_id;
 		current_index[cont_dir]++;
 		if (current_index[cont_dir] > asfctrl_max_policy_cont)
 			current_index[cont_dir] = 1;
@@ -139,7 +140,8 @@ static inline int alloc_container_index(int cont_dir)
 
 	for (i = 1; i <= asfctrl_max_policy_cont; i++) {
 		if (containers_ids[cont_dir][i - 1] == 0) {
-			containers_ids[cont_dir][i - 1] = 1;
+			containers_ids[cont_dir][i - 1] = xp->index;
+			xp->asf_cookie = i;
 			if (i == asfctrl_max_policy_cont)
 				current_index[cont_dir] = 1;
 			else
@@ -147,31 +149,53 @@ static inline int alloc_container_index(int cont_dir)
 			goto ret_id;
 		}
 	}
-	i = -1;
+	i = 0;
 ret_id:
 	spin_unlock(&cont_lock);
 	return i;
 }
 
-int free_container_index(int index, int cont_dir)
+int free_container_index(struct xfrm_policy *xp, int cont_dir)
 {
+	int index = xp->asf_cookie;
+	spin_lock(&cont_lock);
 	if (index > 0 && index <= asfctrl_max_policy_cont) {
-		spin_lock(&cont_lock);
 		containers_ids[cont_dir][index - 1] = 0;
-		spin_unlock(&cont_lock);
-
-		return 0;
+		xp->asf_cookie = 0;
+		goto ret_id;
 	}
-	return -1;
+
+	for (index = 1; index <= asfctrl_max_policy_cont; index++) {
+		if (containers_ids[cont_dir][index - 1] == xp->index) {
+			containers_ids[cont_dir][index - 1] = 0;
+			goto ret_id;
+		}
+	}
+	index = 0;
+ret_id:
+	spin_unlock(&cont_lock);
+	return index;
 }
 
-static inline int verify_container_index(int index, int cont_dir)
+static inline int verify_container_index(struct xfrm_policy *xp, int cont_dir)
 {
+	int index = xp->asf_cookie;
+	spin_lock(&cont_lock);
 	if (index > 0 && index <= asfctrl_max_policy_cont) {
-		if (containers_ids[cont_dir][index - 1])
-			return 0;
+		if (containers_ids[cont_dir][index - 1] == xp->index)
+			goto ret_id;
 	}
-	return -1;
+
+	for (index = 1; index <= asfctrl_max_policy_cont; index++) {
+		if (containers_ids[cont_dir][index - 1] == xp->index) {
+			xp->asf_cookie = index;
+			goto ret_id;
+		}
+	}
+	index = 0;
+ret_id:
+	spin_unlock(&cont_lock);
+	return index;
 }
 
 void init_sa_indexes(bool init)
@@ -218,7 +242,7 @@ static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 		goto ret_unlock;
 	}
 
-	if (current_sa_count[dir] >= asfctrl_max_sas)
+	if (unlikely(current_sa_count[dir] >= asfctrl_max_sas))
 		goto ret_unlock;
 
 	for (cur_id = 0; cur_id < asfctrl_max_sas; cur_id++) {
@@ -299,12 +323,17 @@ int is_policy_offloadable(struct xfrm_policy *xp)
 
 static inline int is_sa_offloadable(struct xfrm_state *xfrm)
 {
-	if (!xfrm) {
+	if (unlikely(!xfrm)) {
 		ASFCTRL_WARN("Invalid Pointer");
 		return -EINVAL;
 	}
 
-	if (xfrm->id.proto != IPPROTO_ESP) {
+	if (unlikely(xfrm->km.state != XFRM_STATE_VALID)) {
+		ASFCTRL_WARN("Invalid State %d", xfrm->km.state);
+		return -EINVAL;
+	}
+
+	if (unlikely(xfrm->id.proto != IPPROTO_ESP)) {
 		ASFCTRL_WARN("Non ESP protocol not supported");
 		return -EINVAL;
 	}
@@ -321,22 +350,19 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 	if (is_policy_offloadable(xp))
 		return -EINVAL;
 
-	if (dir == OUT_SA) {
+	if (dir == XFRM_POLICY_OUT) {
 		ASFIPSecConfigAddOutSPDContainerArgs_t outSPDContainer;
 		ASF_IPSecPolicy_t			spdParams;
 
-		if (xp->asf_cookie &&
-			!(verify_container_index(xp->asf_cookie,
-					ASF_OUT_CONTANER_ID))) {
-			ASFCTRL_WARN("Policy is already offloaded cookie = %x",
-				xp->asf_cookie);
+		if (verify_container_index(xp, ASF_OUT_CONTANER_ID)) {
+			ASFCTRL_WARN("Offloaded Policy cookie = 0x%x id = %u",
+				xp->asf_cookie, xp->index);
 			goto fn_return;
 		} else {
-			i = alloc_container_index(ASF_OUT_CONTANER_ID);
+			i = alloc_container_index(xp, ASF_OUT_CONTANER_ID);
 			if (i >= 0) {
 				ASFCTRL_TRACE("Out Container Index %d", i);
 				outSPDContainer.ulSPDContainerIndex = i;
-				xp->asf_cookie = i;
 				outSPDContainer.ulMagicNumber =
 					asfctrl_vsg_ipsec_cont_magic_id;
 			} else {
@@ -361,22 +387,19 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 			sizeof(uint32_t));
 		/* Changing the VSG Magic Number of Policy Delete */
 		asfctrl_invalidate_sessions();
-	} else if (dir == IN_SA) {
+	} else if (dir == XFRM_POLICY_IN) {
 		ASFIPSecConfigAddInSPDContainerArgs_t	inSPDContainer;
 		ASF_IPSecPolicy_t			spdParams;
 
-		if (xp->asf_cookie &&
-			!(verify_container_index(xp->asf_cookie,
-					ASF_IN_CONTANER_ID))) {
-			ASFCTRL_WARN("Policy is already offloaded cookie = %x",
-				xp->asf_cookie);
+		if (verify_container_index(xp, ASF_IN_CONTANER_ID)) {
+			ASFCTRL_WARN("Offloaded Policy cookie = 0x%x id = %u",
+				xp->asf_cookie, xp->index);
 			goto fn_return;
 		} else {
-			i = alloc_container_index(ASF_IN_CONTANER_ID);
+			i = alloc_container_index(xp, ASF_IN_CONTANER_ID);
 			if (i >= 0) {
 				ASFCTRL_TRACE("In Container Index %d", i);
 				inSPDContainer.ulSPDContainerIndex = i;
-				xp->asf_cookie = i;
 				inSPDContainer.ulMagicNumber =
 					asfctrl_vsg_ipsec_cont_magic_id;
 
@@ -404,10 +427,11 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 		/* Changing the VSG Magic Number of Policy Delete */
 		asfctrl_invalidate_sessions();
 	} else {
-		ASFCTRL_DBG("\nPOLICY is neither IN nor OUT\n");
+		ASFCTRL_DBG("\nPOLICY is FWD");
 	}
 
-	ASFCTRL_INFO("Policy =0x%x COKKIE = 0x%x", xp, xp->asf_cookie);
+	ASFCTRL_INFO("Policy =%p COOKIE = 0x%x, id = %d",
+		xp, xp->asf_cookie, xp->index);
 fn_return:
 	ASFCTRL_FUNC_EXIT;
 
@@ -423,16 +447,18 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (!xp->asf_cookie) {
-		ASFCTRL_WARN("Not offloaded policy xp=0x%x", xp);
+	if (!verify_container_index(xp, dir)) {
+		ASFCTRL_WARN("Not Offloaded Policy = %x id = %u",
+				xp->asf_cookie, xp->index);
 		return -EINVAL;
 	}
-	if (dir == OUT_SA) {
+	if (dir == XFRM_POLICY_OUT) {
 		ASFIPSecConfigDelOutSPDContainerArgs_t outSPDContainer;
 
 		outSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		outSPDContainer.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-		outSPDContainer.ulContainerIndex = xp->asf_cookie;
+		outSPDContainer.ulContainerIndex =
+			free_container_index(xp, ASF_OUT_CONTANER_ID);
 
 		ASFIPSecConfig(ASF_DEF_VSG,
 			ASF_IPSEC_CONFIG_DEL_OUTSPDCONTAINER,
@@ -440,18 +466,17 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 			sizeof(ASFIPSecConfigDelOutSPDContainerArgs_t),
 			&handle,
 			sizeof(uint32_t));
-		xp->asf_cookie = 0;
-		free_container_index(outSPDContainer.ulContainerIndex,
-			ASF_OUT_CONTANER_ID);
+
 		/* Changing the VSG Magic Number of Policy Delete */
 		asfctrl_invalidate_sessions();
 
-	} else if (dir == IN_SA) {
+	} else if (dir == XFRM_POLICY_IN) {
 		ASFIPSecConfigDelInSPDContainerArgs_t	inSPDContainer;
 
 		inSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		inSPDContainer.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-		inSPDContainer.ulContainerIndex = xp->asf_cookie;
+		inSPDContainer.ulContainerIndex =
+			free_container_index(xp, ASF_IN_CONTANER_ID);
 
 		ASFIPSecConfig(ASF_DEF_VSG,
 			ASF_IPSEC_CONFIG_DEL_INSPDCONTAINER,
@@ -459,13 +484,11 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 			sizeof(ASFIPSecConfigDelInSPDContainerArgs_t),
 			&handle,
 			sizeof(uint32_t));
-		xp->asf_cookie = 0;
-		free_container_index(inSPDContainer.ulContainerIndex,
-			ASF_IN_CONTANER_ID);
+
 		/* Changing the VSG Magic Number of Policy Delete */
 		asfctrl_invalidate_sessions();
 	}
-	ASFCTRL_DBG("COKKIE %d", xp->asf_cookie);
+	ASFCTRL_DBG("COKKIE %d id =%d", xp->asf_cookie, xp->index);
 
 	ASFCTRL_FUNC_EXIT;
 
@@ -474,7 +497,11 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 int asfctrl_xfrm_update_policy(struct xfrm_policy *xp, int dir)
 {
 	ASFCTRL_FUNC_TRACE;
-	ASFCTRL_WARN("***Policy Update Message** COOKIE = %d", xp->asf_cookie);
+
+	if (verify_container_index(xp, dir))
+		ASFCTRL_WARN("Offloaded Policy with cookie = %x id = %u",
+				xp->asf_cookie, xp->index);
+
 	return 0;
 }
 
@@ -549,7 +576,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	}
 #endif
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
-				ASF_IPSEC_ADAPT_PEER_GATEWAY_ENABLE;
+				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 
 	SAParams.bDoAntiReplayCheck =
@@ -806,7 +833,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	}
 #endif
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
-				ASF_IPSEC_ADAPT_PEER_GATEWAY_ENABLE;
+				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 	SAParams.bDoAntiReplayCheck =
 		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
@@ -1003,21 +1030,25 @@ int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 
 	ASFCTRL_FUNC_TRACE;
 
-	if (!xfrm) {
-		ASFCTRL_WARN("NULL Pointer");
-		return -EINVAL;
-	}
-
-	if (is_sa_offloadable(xfrm))
+	if (unlikely(is_sa_offloadable(xfrm)))
 		return -EINVAL;
 
 	xp = xfrm_state_policy_mapping(xfrm);
-	if (!xp || !xp->asf_cookie) {
-		ASFCTRL_WARN("Policy not offloaded for this SA");
+	if (!xp) {
+		ASFCTRL_WARN("Policy not Available for this SA");
 		return -EINVAL;
 	}
 	dir = xfrm_policy_id2dir(xp->index);
-	if (xp->dir == OUT_SA)
+	if (!xp->asf_cookie) {
+		ASFCTRL_WARN("Policy not offloaded, xp = %p DIR=%d(%s) ",
+			xp, dir, XFRM_DIR(dir));
+		if (asfctrl_xfrm_add_policy(xp, dir)) {
+			ASFCTRL_WARN("Unable to offload Policy");
+			return -EINVAL;
+		}
+	}
+
+	if (dir == XFRM_POLICY_OUT)
 		return asfctrl_xfrm_add_outsa(xfrm, xp);
 	else
 		return asfctrl_xfrm_add_insa(xfrm, xp);
@@ -1033,7 +1064,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 
 	if (!xfrm->asf_sa_cookie || xfrm->asf_sa_cookie > asfctrl_max_sas) {
 		ASFCTRL_WARN("Not an offloaded SA");
-		return -1;
+		return -EINVAL;
 	}
 	dir = xfrm->asf_sa_direction;
 
@@ -1042,7 +1073,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 	if (match_sa_index_no_lock(xfrm, dir) < 0) {
 		ASFCTRL_WARN("Not an offloaded SA -1");
 		spin_unlock(&sa_table_lock);
-		return -1;
+		return -EINVAL;
 	}
 	cont_id = sa_table[dir][xfrm->asf_sa_cookie - 1].container_id;
 	spin_unlock(&sa_table_lock);
@@ -1142,21 +1173,19 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 		return -EINVAL;
 
 	/* Check if Container is already configured down. */
-	if (xp->asf_cookie && !(verify_container_index(xp->asf_cookie,
-					ASF_OUT_CONTANER_ID))) {
-		ASFCTRL_WARN("Policy is already offloaded cookie = %x",
-			xp->asf_cookie);
+	if (verify_container_index(xp, ASF_OUT_CONTANER_ID)) {
+		ASFCTRL_WARN("Policy is already offloaded cookie = %x id =%u",
+			xp->asf_cookie, xp->index);
 		goto sa_check;
 	} else {
 		/* Offloading the out policy */
 		ASFIPSecConfigAddOutSPDContainerArgs_t outSPDContainer;
 		ASF_IPSecPolicy_t			spdParams;
 
-		i = alloc_container_index(ASF_OUT_CONTANER_ID);
+		i = alloc_container_index(xp, ASF_OUT_CONTANER_ID);
 		if (i >= 0) {
 			ASFCTRL_TRACE("Out Container Index %d", i);
 			outSPDContainer.ulSPDContainerIndex = i;
-			xp->asf_cookie = i;
 			outSPDContainer.ulMagicNumber =
 				asfctrl_vsg_ipsec_cont_magic_id;
 		} else {
@@ -1212,20 +1241,18 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 		return -EINVAL;
 
 	/* Check if Container is already configured down. */
-	if (xp->asf_cookie && !(verify_container_index(xp->asf_cookie,
-					ASF_IN_CONTANER_ID))) {
-		ASFCTRL_WARN("Policy is already offloaded cookie = %x",
-			xp->asf_cookie);
+	if (verify_container_index(xp, ASF_IN_CONTANER_ID)) {
+		ASFCTRL_WARN("Offloaded  Policy cookie = %x id =%d",
+			xp->asf_cookie, xp->index);
 		goto sa_check;
 	} else {
 		ASFIPSecConfigAddInSPDContainerArgs_t	inSPDContainer;
 		ASF_IPSecPolicy_t			spdParams;
 
-		i = alloc_container_index(ASF_IN_CONTANER_ID);
+		i = alloc_container_index(xp, ASF_IN_CONTANER_ID);
 		if (i >= 0) {
 			ASFCTRL_TRACE("In Container Index %d", i);
 			inSPDContainer.ulSPDContainerIndex = i;
-			xp->asf_cookie = i;
 			inSPDContainer.ulMagicNumber =
 				asfctrl_vsg_ipsec_cont_magic_id;
 		} else {
@@ -1437,7 +1464,8 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 		break;
 	case XFRM_MSG_NEWPOLICY:
 		ASFCTRL_INFO("XFRM_MSG_NEWPOLICY-%s",
-		 (dir == IN_SA) ? "IN" : ((dir == OUT_SA) ? "OUT" : "FWD"));
+		(dir == XFRM_POLICY_IN) ? "IN" :
+		((dir == XFRM_POLICY_OUT) ? "OUT" : "FWD"));
 		asfctrl_xfrm_add_policy(xp, dir);
 		break;
 	case XFRM_MSG_UPDPOLICY:
@@ -1541,29 +1569,28 @@ void asfctrl_xfrm_dump_tmpl(struct xfrm_tmpl *t)
 void asfctrl_xfrm_dump_policy(struct xfrm_policy *xp, u8 dir)
 {
 	struct xfrm_sec_ctx *uctx = xp->security;
-	struct xfrm_tmpl *t ;
 
-	ASFCTRL_INFO("  POLICY - %d(%s)- %s, proto=%d",
-		dir, XFRM_DIR(dir), XFRM_ACTION(xp->action),
-		xp->selector.proto);
+	ASFCTRL_INFO("xp=0x%x POLICY - %d(%s)- %s, proto=%d, prio = %d, id=%d,"\
+		"cookie=0x%x", xp, dir, XFRM_DIR(dir), XFRM_ACTION(xp->action),
+		xp->selector.proto, xp->priority, xp->index, xp->asf_cookie);
+
+	ASFCTRL_INFO("type=%d, Flags =0x%x  NR=%d, tmpl = %p, security = %p",
+		xp->type, xp->flags, xp->xfrm_nr, xp->xfrm_vec, xp->security);
 
 	ASFCTRL_INFO(" SELECTOR - saddr =0x%x, daddr 0x%x, prefix_s=%u,"
-			"sport=%u, prefix_d=%u, dport=%u, IFINDEX=%d",
-			xp->selector.saddr.a4, xp->selector.daddr.a4,
-			xp->selector.prefixlen_s, xp->selector.sport,
-			xp->selector.prefixlen_d, xp->selector.dport,
-			xp->selector.ifindex);
+		"sport=%u, prefix_d=%u, dport=%u, IFINDEX=%d",
+		xp->selector.saddr.a4, xp->selector.daddr.a4,
+		xp->selector.prefixlen_s, xp->selector.sport,
+		xp->selector.prefixlen_d, xp->selector.dport,
+		xp->selector.ifindex);
 
-	t = xp->xfrm_vec;
-	ASFCTRL_INFO("  NR=%d, tmpl = %p, security = %p",
-				xp->xfrm_nr, t, uctx);
 	if (uctx) {
 		ASFCTRL_INFO("  ctx_doi=%u, ctx_alg=%u,"
 			"ctx_len=%u, ctx_sid=%u",
 			uctx->ctx_doi, uctx->ctx_alg,
 			uctx->ctx_len, uctx->ctx_sid);
 	}
-	asfctrl_xfrm_dump_tmpl(t);
+	asfctrl_xfrm_dump_tmpl(xp->xfrm_vec);
 }
 
 void asfctrl_xfrm_dump_state(struct xfrm_state *xfrm)
@@ -1591,7 +1618,7 @@ void asfctrl_xfrm_dump_state(struct xfrm_state *xfrm)
 	}
 
 	ASFCTRL_INFO(" ID -daddr = %x, spi=%x, proto=%x, saddr = %x"
-	"\nreqid = %d, eal=%x, aal=%x, cal =%x aead=%p, esp =%p\n",
+	"\nreqid = %d, eal=%x, aal=%x, cal =%x aead=%p, esp =%p",
 	xfrm->id.daddr.a4, xfrm->id.spi, xfrm->id.proto, xfrm->props.saddr.a4,
 	xfrm->props.reqid, xfrm->props.ealgo, xfrm->props.aalgo,
 	xfrm->props.calgo, xfrm->aead, esp);
@@ -1599,15 +1626,19 @@ void asfctrl_xfrm_dump_state(struct xfrm_state *xfrm)
 	if (xfrm->aalg) {
 		ASFCTRL_INFO(" EALG alg_name = %s,(%d), key is 0x",
 				xfrm->aalg->alg_name, xfrm->aalg->alg_key_len);
+#ifdef ASFCTRL_IPSEC_DEBUG2
 		for (i = 0; i < xfrm->aalg->alg_key_len/8; i++)
 			printk(KERN_INFO "%x", xfrm->aalg->alg_key[i]);
+#endif
 	}
 
 	if (xfrm->ealg) {
 		ASFCTRL_INFO(" EALG alg_name = %s,(%d), key is 0x",
 				xfrm->ealg->alg_name, xfrm->ealg->alg_key_len);
+#ifdef ASFCTRL_IPSEC_DEBUG2
 		for (i = 0; i < xfrm->ealg->alg_key_len/8; i++)
 			printk(KERN_INFO "%x", xfrm->ealg->alg_key[i]);
+#endif
 	}
 
 	if (aead && esp)

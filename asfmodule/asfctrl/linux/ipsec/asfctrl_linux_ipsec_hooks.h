@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * Author:	Sandeep Malik <Sandeep.Malik@freescale.com>
@@ -48,7 +48,7 @@ enum alg_type {
 
 void init_container_indexes(bool init);
 void init_sa_indexes(bool init);
-int free_container_index(int index, int cont_dir);
+int free_container_index(struct xfrm_policy *xp, int cont_dir);
 int is_policy_offloadable(struct xfrm_policy *xp);
 
 int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb, struct xfrm_state *xfrm);
