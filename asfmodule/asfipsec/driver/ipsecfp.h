@@ -237,8 +237,8 @@ extern dma_addr_t talitos_dma_unmap_single(void *data,
 	talitos_dma_unmap_single(data, len, DMA_TO_DEVICE)
 #else
 #define SECFP_DMA_MAP_SINGLE(data, len, dir) (0)
-#define SECFP_DMA_UNMAP_SINGLE(data, len, dir) (0)
-#define SECFP_UNMAP_SINGLE_DESC(data, len) (0)
+#define SECFP_DMA_UNMAP_SINGLE(data, len, dir) {}
+#define SECFP_UNMAP_SINGLE_DESC(data, len) {}
 #endif
 
 

@@ -219,7 +219,7 @@ typedef enum asfIPSecPolicyPPStats {
 #define ASF_IPSEC4_PP_POL_CNT_MAX  ASF_IPSEC_PP_POL_CNT_MAX
 
 typedef enum asfIPSecGlobalPPStats {
-	ASF_IPSEC_PP_GBL_CNT1  = 1, /* Total Received Inbound Pkts*/
+	ASF_IPSEC_PP_GBL_CNT1 = 0, /* Total Received Inbound Pkts*/
 	ASF_IPSEC_PP_GBL_CNT2, /* Total Processed Inbound Pkts */
 	ASF_IPSEC_PP_GBL_CNT3, /* Total Received Outbound Pkts */
 	ASF_IPSEC_PP_GBL_CNT4, /* Total Processed Outbound Pkts */
@@ -231,7 +231,7 @@ typedef enum asfIPSecGlobalPPStats {
 	ASF_IPSEC_PP_GBL_CNT10, /*No of packets Invalid ESP */
 	ASF_IPSEC_PP_GBL_CNT11, /*Decrypted Protocol != IPV4 88  */
 	ASF_IPSEC_PP_GBL_CNT12, /*Invalid Pad legth */
-	ASF_IPSEC_PP_GBL_CNT13, /*Inbound Submission to SEC failed 83*/
+	ASF_IPSEC_PP_GBL_CNT13, /*Submission to SEC failed 83*/
 	ASF_IPSEC_PP_GBL_CNT14, /*Invalid sequence number */
 	ASF_IPSEC_PP_GBL_CNT15, /*Anti-replay window check failed */
 	ASF_IPSEC_PP_GBL_CNT16, /*Replay packet */

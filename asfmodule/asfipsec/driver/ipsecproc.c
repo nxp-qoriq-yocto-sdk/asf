@@ -234,7 +234,7 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT11]);
 	printk(KERN_INFO"%u (Invalid Pad length)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
-	printk(KERN_INFO"%u (Inbound Submission to SEC failed)",
+	printk(KERN_INFO"%u (Submission to SEC failed)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
 	printk(KERN_INFO"%u (Invalid sequence number )",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT14]);
