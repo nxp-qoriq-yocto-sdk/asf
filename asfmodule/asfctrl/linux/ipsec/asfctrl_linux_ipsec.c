@@ -70,7 +70,7 @@ uint32_t asfctrl_vsg_ipsec_cont_magic_id;
 uint32_t asfctrl_max_sas = SECFP_MAX_SAS;
 uint32_t asfctrl_max_policy_cont = ASFCTRL_MAX_SPD_CONTAINERS;
 int bRedSideFragment = ASF_TRUE;
-int bAntiReplayCheck = ASF_TRUE;
+int bAntiReplayCheck = ASF_FALSE;
 
 struct asf_ipsec_callbackfn_s asf_sec_fns = {
 		asfctrl_xfrm_enc_hook,
