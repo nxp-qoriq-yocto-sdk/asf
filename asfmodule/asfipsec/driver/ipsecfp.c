@@ -62,9 +62,6 @@ extern ASFTERMProcessPkt_f	pTermProcessPkt;
 /* max IV is max of AES_BLOCK_SIZE, DES3_EDE_BLOCK_SIZE */
 #define CAAM_MAX_IV_LENGTH              16
 
-/*This flag is for IPSEC sequential support
- shall be enabled in TERMINTAION and for multicore boards*/
-#define ASF_IPSEC_SEQ_SUPPORT
 /* length of descriptors text */
 #define DESC_AEAD_SHARED_TEXT_LEN       4
 #define DESC_AEAD_ENCRYPT_TEXT_LEN      21
@@ -2599,8 +2596,8 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	unsigned short orig_pktlen;
 	unsigned int ulLoSeqNum, ulHiSeqNum;
 	struct sk_buff *pHeadSkb, *pTailSkb;
-	skb_frag_t *frag;
-	unsigned char *charp;
+	skb_frag_t *frag = NULL;
+	unsigned char *charp = NULL;
 	unsigned char tos;
 	unsigned int total_frags;
 
@@ -4051,8 +4048,9 @@ inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 				ASFIPSEC_DEBUG("Packet size is > Path MTU and fragment bit set in SA or packet");
 				/* Need to send to normal path */
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
+				ASFSkbFree(skb);
 				rcu_read_unlock();
-				return 1;
+				return 0;
 			}
 			ASFIPSEC_DEBUG("outv6: skb = 0x%x skb1 = 0x%x, nextSkb = 0x%x",
 				(unsigned int) skb, (unsigned int) skb1, (unsigned int) pNextSkb);
@@ -4106,11 +4104,10 @@ inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 #endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 				secfp_prepareOutDescriptor(skb, pSA, desc, 0);
-#ifdef ASF_IPSEC_SEQ_SUPPORT
+
 			(*pSA->finishOutPktFnPtr)(skb, pSA, pContainer,
 				pOuterIpHdr, ulVSGId,
 				pSecInfo->outContainerInfo.ulSPDContainerId);
-#endif /*ASF_IPSEC_SEQ_SUPPORT */
 
 #ifdef ASFIPSEC_DEBUG_FRAME
 			ASFIPSEC_PRINT("secfp_out: Pkt Post Processing %d",
@@ -4148,6 +4145,7 @@ inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 				return 0;
 			}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifndef CONFIG_ASF_SEC4x
 			if (pSA->option[1] != SECFP_NONE) {
 				ASFIPSEC_DEBUG("2nd Iteration");
 				/* 2nd iteration required ICV */
@@ -4178,15 +4176,9 @@ inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 #endif
 					secfp_prepareOutDescriptor(skb, pSA, desc, 1);
 
-#ifndef CONFIG_ASF_SEC4x
 				if (secfp_talitos_submit(pdev, desc,
 						secfp_outComplete,
 						(void *)skb) == -EAGAIN) {
-#else
-				if (secfp_caam_submit(pSA->ctx.jrdev, desc,
-						secfp_outComplete,
-						(void *)skb)) {
-#endif
 					ASFIPSEC_WARN("Outbound Submission to"\
 							"SEC failed ");
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
@@ -4207,26 +4199,11 @@ inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 					return 0;
 				}
 			}
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
-#ifndef ASF_IPSEC_SEQ_SUPPORT
-			(*pSA->finishOutPktFnPtr)(skb, pSA, pContainer, pOuterIpHdr, ulVSGId, pSecInfo->outContainerInfo.ulSPDContainerId);
-#ifdef ASFIPSEC_DEBUG_FRAME
-			ASFIPSEC_PRINT("secfp_out: Pkt Post Processing");
-			hexdump(skb->data, skb->len);
-			ASFIPSEC_PRINT("nf_frags after finish function = %d", skb_shinfo(skb)->nr_frags);
 #endif
-#endif /* ASF_IPSEC_SEQ_SUPPORT */
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			skb->cb[SECFP_REF_INDEX]--;
-			if (skb->cb[SECFP_REF_INDEX] == 0) {
-				/* Some error happened in the c/b. Free the skb */
-				ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
-				skb->data_len = 0;
-				ASFSkbFree(skb);
-				rcu_read_unlock();
-				return 0;
-			}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		}
 		rcu_read_unlock();
@@ -4560,11 +4537,10 @@ int secfp_try_fastPathOutv4 (
 #endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 				secfp_prepareOutDescriptor(skb, pSA, desc, 0);
-#ifdef ASF_IPSEC_SEQ_SUPPORT
+
 			(*pSA->finishOutPktFnPtr)(skb, pSA, pContainer,
 				pOuterIpHdr, ulVSGId,
 				pSecInfo->outContainerInfo.ulSPDContainerId);
-#endif /*ASF_IPSEC_SEQ_SUPPORT */
 
 #ifdef ASFIPSEC_DEBUG_FRAME
 			ASFIPSEC_PRINT("secfp_out: Pkt Post Processing %d",
@@ -4601,7 +4577,9 @@ int secfp_try_fastPathOutv4 (
 				rcu_read_unlock();
 				return 0;
 			}
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifndef CONFIG_ASF_SEC4x
 			if (pSA->option[1] != SECFP_NONE) {
 				ASFIPSEC_DEBUG("2nd Iteration");
 				/* 2nd iteration required ICV */
@@ -4632,15 +4610,9 @@ int secfp_try_fastPathOutv4 (
 #endif
 					secfp_prepareOutDescriptor(skb, pSA, desc, 1);
 
-#ifndef CONFIG_ASF_SEC4x
 				if (secfp_talitos_submit(pdev, desc,
 						secfp_outComplete,
 						(void *)skb) == -EAGAIN) {
-#else
-				if (secfp_caam_submit(pSA->ctx.jrdev, desc,
-						secfp_outComplete,
-						(void *)skb)) {
-#endif
 					ASFIPSEC_WARN("Outbound Submission to"\
 							"SEC failed ");
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
@@ -4661,27 +4633,11 @@ int secfp_try_fastPathOutv4 (
 					return 0;
 				}
 			}
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
-#ifndef ASF_IPSEC_SEQ_SUPPORT
-			(*pSA->finishOutPktFnPtr)(skb, pSA, pContainer, pOuterIpHdr, ulVSGId, pSecInfo->outContainerInfo.ulSPDContainerId);
-#ifdef ASFIPSEC_DEBUG_FRAME
-			ASFIPSEC_PRINT("secfp_out: Pkt Post Processing");
-			hexdump(skb->data, skb->len);
-			nr_frags = skb_shinfo(skb)->nr_frags;
-			ASFIPSEC_PRINT("nf_frags after finish function = %d", nr_frags);
 #endif
-#endif /* ASF_IPSEC_SEQ_SUPPORT */
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			skb->cb[SECFP_REF_INDEX]--;
-			if (skb->cb[SECFP_REF_INDEX] == 0) {
-				/* Some error happened in the c/b. Free the skb */
-				ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
-				skb->data_len = 0;
-				ASFSkbFree(skb);
-				rcu_read_unlock();
-				return 0;
-			}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		}
 		rcu_read_unlock();
@@ -4763,13 +4719,6 @@ void secfp_outComplete(struct device *dev, void *pdesc,
 	secfp_desc_free(desc);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	skb->cb[SECFP_REF_INDEX]--;
-	if (skb->cb[SECFP_REF_INDEX]) {
-		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
-		/* Waiting for another iteration to complete */
-		if (error)
-			skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
-		return;
-	}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 	SECFP_UNMAP_SINGLE_DESC((void *)(*(unsigned int *)
 			&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
@@ -4845,7 +4794,7 @@ void secfp_outComplete(struct device *dev, void *pdesc,
 #endif
 					skb->data += pSA->ulL2BlobLen;
 					skb->len -= pSA->ulL2BlobLen;
-					iph = ip_hdr(pOutSkb);
+					iph = ip_hdr(skb);
 #ifdef ASF_IPV6_FP_SUPPORT
 					if (iph->version == 4) {
 #endif
@@ -5378,12 +5327,12 @@ unsigned int ulNumIter[NR_CPUS];
 static inline int secfp_inCompleteCheckAndTrimPkt(struct sk_buff *pHeadSkb, struct sk_buff * pTailSkb,
 						  unsigned int *pTotLen, unsigned char *pNextProto) {
 	unsigned int ulPadLen;
-	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);;
+	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
 	ASF_IPAddr_t daddr;
 	inSA_t *pSA;
 	int total_frag = 0;
-	skb_frag_t *frag;
-	unsigned char *charp;
+	skb_frag_t *frag = NULL;
+	unsigned char *charp = NULL;
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 6) {
 		struct ipv6hdr *ipv6h;
@@ -5789,13 +5738,13 @@ void secfp_inCompleteWithFrags(struct device *dev, void *pdesc,
 	unsigned char ucNextProto;
 	unsigned char *pOrgEthHdr;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
-	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(skb1->cb[SECFP_IPHDR_INDEX]);;
+	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(skb1->cb[SECFP_IPHDR_INDEX]);
 	ASF_IPAddr_t daddr;
 	inSA_t *pSA;
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;
 	ASFIPSecOpqueInfo_t IPSecOpque;
-	unsigned int ulCommonInterfaceId, ulBeforeTrimLen;
+	unsigned int ulCommonInterfaceId = 0, ulBeforeTrimLen;
 #ifdef CONFIG_ASF_SEC4x
 	struct ipsec_esp_edesc *desc;
 	desc = (struct ipsec_esp_edesc *)((char *)pdesc -
@@ -5824,7 +5773,7 @@ void secfp_inCompleteWithFrags(struct device *dev, void *pdesc,
 	}
 #endif
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#if 0 /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	skb1->cb[SECFP_REF_INDEX]--;
 #else
 	skb1->cb[SECFP_REF_INDEX] = 0;
@@ -6074,7 +6023,7 @@ void secfp_inComplete(struct device *dev, void *pdesc,
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	inSA_t *pSA;
 	ASF_IPAddr_t daddr;
-	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(skb->cb[SECFP_IPHDR_INDEX]);;
+	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(skb->cb[SECFP_IPHDR_INDEX]);
 	ASFLogInfo_t AsfLogInfo;
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFIPSecOpqueInfo_t  IPSecOpque;
@@ -6107,7 +6056,7 @@ void secfp_inComplete(struct device *dev, void *pdesc,
 			"refIndex = %d\n", ++ulNumIter[smp_processor_id()],
 			(unsigned int) desc, err, skb->cb[SECFP_REF_INDEX]);
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#if 0 /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	skb->cb[SECFP_REF_INDEX]--;
 #else
 	skb->cb[SECFP_REF_INDEX] = 0;
@@ -7353,15 +7302,9 @@ inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 	struct ipv6hdr  *ipv6h = ipv6_hdr(skb1);
 	unsigned int ulLowerBoundSeqNum;
 	unsigned int ulHashVal = usMaxInSAHashTaleSize_g;
-	struct sk_buff *pHeadSkb, *pTailSkb;
-#ifdef SECFP_SG_SUPPORT
-	struct sk_buff *pTailPrevSkb = 0;
-	int ii;
-	unsigned int ulICVInPrevFrag;
-	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr, *pNewICVLocBytePtr;
-#endif
+	struct sk_buff *pHeadSkb = NULL, *pTailSkb = NULL;
 	bool bScatterGather;
-	unsigned int len;
+	unsigned int len = 0;
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
@@ -7376,6 +7319,14 @@ inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 	unsigned int ulIpv6Exthl = 0;
 	unsigned int ulIpv6hl = 0;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifdef SECFP_SG_SUPPORT
+	unsigned int fragCnt = 0;
+	struct sk_buff *pTailPrevSkb = 0;
+	int ii;
+	unsigned int ulICVInPrevFrag;
+	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr;
+	unsigned char *pNewICVLocBytePtr;
+#endif
 	SPDInContainer_t *pContainer;
 	unsigned int *pCurICVLoc = 0, *pNewICVLoc = 0;
 	ASFIPSEC_DEBUG("v6 packet recieved");
@@ -7732,7 +7683,6 @@ So all these special boundary cases need to be handled for nr_frags*/
 #endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
-#ifdef ASF_IPSEC_SEQ_SUPPORT
 		/* Post submission, we can move the data pointer beyond the ESP header */
 		/* Trim the length accordingly */
 		/* Since we will be giving packet to fwnat processing,
@@ -7748,7 +7698,6 @@ So all these special boundary cases need to be handled for nr_frags*/
 		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
 			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
-#endif /* ASF_IPSEC_SEQ_SUPPORT*/
 
 		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
@@ -7777,14 +7726,10 @@ So all these special boundary cases need to be handled for nr_frags*/
 			rcu_read_unlock();
 			return 0;
 		}
-#ifndef ASF_IPSEC_SEQ_SUPPORT
-		pHeadSkb->len -= (pSA->ulSecHdrLen);
-		pHeadSkb->data += (pSA->ulSecHdrLen);
-		pHeadSkb->cb[SECFP_REF_INDEX]--;
-#endif /*ASF_IPSEC_SEQ_SUPPORT*/
 
 		/* length of skb memory to unmap upon completion */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifndef CONFIG_ASF_SEC4x
 		if (pSA->option[1] != SECFP_NONE) {
 			pHeadSkb->cb[SECFP_REF_INDEX]++;
 
@@ -7814,17 +7759,10 @@ So all these special boundary cases need to be handled for nr_frags*/
 			else
 #endif
 				secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
-#ifndef CONFIG_ASF_SEC4x
 			if (secfp_talitos_submit(pdev, desc,
 				(secin_sg_flag & SECFP_SCATTER_GATHER)
 				? secfp_inCompleteWithFrags : secfp_inComplete,
 				(void *)pHeadSkb) == -EAGAIN) {
-#else
-			if (secfp_caam_submit(pSA->ctx.jrdev, desc,
-				(secin_sg_flag & SECFP_SCATTER_GATHER)
-				? secfp_inCompleteWithFrags : secfp_inComplete,
-				(void *)pHeadSkb)) {
-#endif
 				ASFIPSEC_WARN("Inbound Submission to SEC failed");
 
 				/* Mark SKB action index to drop */
@@ -7846,16 +7784,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 		/* Since we will be giving packet to fwnat processing, keep the data pointer as 14 bytes before data start */
 		ASFIPSEC_DEBUG("In: Offseting data by ulSecHdrLen = %d",
 					pSA->ulSecHdrLen);
-#ifndef ASF_IPSEC_SEQ_SUPPORT
-		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
-			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
-		if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
-			ASFIPSEC_TRACE;
-			pHeadSkb->data_len = 0;
-			/* CB already finished processing the skb & there was an error*/
-			ASFSkbFree(pHeadSkb);
-		}
-#endif /* ASF_IPSEC_SEQ_SUPPORT */
+#endif /*(CONFIG_ASF_SEC4x)*/
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		/* Assumes successful processing of the Buffer */
 		pSA->ulBytes[smp_processor_id()] += len;
@@ -8038,17 +7967,9 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	struct iphdr *iph = ip_hdr(skb1);
 	unsigned int ulLowerBoundSeqNum;
 	unsigned int ulHashVal = usMaxInSAHashTaleSize_g;
-	unsigned int fragCnt = 0;
-	struct sk_buff *pHeadSkb, *pTailSkb;
-#ifdef SECFP_SG_SUPPORT
-	struct sk_buff *pTailPrevSkb = 0;
-	int ii;
-	unsigned int ulICVInPrevFrag;
-	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr, *pNewICVLocBytePtr;
-#endif
+	struct sk_buff *pHeadSkb = NULL, *pTailSkb = NULL;
 	bool bScatterGather;
-	unsigned int len;
-	signed int iRetVal;
+	unsigned int len = 0;
 	char  aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
@@ -8056,8 +7977,17 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	unsigned char  aSkipHeader[32], ucSkipLen = 0;
 	unsigned char secin_sg_flag;
 	struct talitos_desc *desc;
+	unsigned int fragCnt = 0;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifdef SECFP_SG_SUPPORT
+	struct sk_buff *pTailPrevSkb = 0;
+	int ii;
+	unsigned int ulICVInPrevFrag;
+	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr;
+	unsigned char *pNewICVLocBytePtr;
+#endif
+	signed int iRetVal;
 	SPDInContainer_t *pContainer;
 	unsigned int *pCurICVLoc = 0, *pNewICVLoc = 0;
 
@@ -8164,10 +8094,10 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 				&& (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL)) {
 				/* We go into gather input , single output */
 				/* use skb->prev for indicating single output */
-				skb1->prev = SECFP_IN_GATHER_NO_SCATTER;
+				skb1->prev = (void *) SECFP_IN_GATHER_NO_SCATTER;
 			} else {
 				/* We go into gather input, scatter output */
-				skb1->prev = SECFP_IN_GATHER_SCATTER;
+				skb1->prev = (void *) SECFP_IN_GATHER_SCATTER;
 			}
 			len = iph->tot_len;
 #else
@@ -8435,7 +8365,6 @@ So all these special boundary cases need to be handled for nr_frags*/
 #endif
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
-#ifdef ASF_IPSEC_SEQ_SUPPORT
 		/* Post submission, we can move the data pointer beyond the ESP header */
 		/* Trim the length accordingly */
 		/* Since we will be giving packet to fwnat processing,
@@ -8451,7 +8380,6 @@ So all these special boundary cases need to be handled for nr_frags*/
 		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
 			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
-#endif /* ASF_IPSEC_SEQ_SUPPORT*/
 
 		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
@@ -8480,14 +8408,10 @@ So all these special boundary cases need to be handled for nr_frags*/
 			rcu_read_unlock();
 			return 0;
 		}
-#ifndef ASF_IPSEC_SEQ_SUPPORT
-		pHeadSkb->len -= (pSA->ulSecHdrLen);
-		pHeadSkb->data += (pSA->ulSecHdrLen);
-		pHeadSkb->cb[SECFP_REF_INDEX]--;
-#endif /*ASF_IPSEC_SEQ_SUPPORT*/
 
 		/* length of skb memory to unmap upon completion */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifndef CONFIG_ASF_SEC4x
 		if (pSA->option[1] != SECFP_NONE) {
 			pHeadSkb->cb[SECFP_REF_INDEX]++;
 
@@ -8517,17 +8441,10 @@ So all these special boundary cases need to be handled for nr_frags*/
 			else
 #endif
 				secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
-#ifndef CONFIG_ASF_SEC4x
 			if (secfp_talitos_submit(pdev, desc,
 				(secin_sg_flag & SECFP_SCATTER_GATHER)
 				? secfp_inCompleteWithFrags : secfp_inComplete,
 				(void *)pHeadSkb) == -EAGAIN) {
-#else
-			if (secfp_caam_submit(pSA->ctx.jrdev, desc,
-				(secin_sg_flag & SECFP_SCATTER_GATHER)
-				? secfp_inCompleteWithFrags : secfp_inComplete,
-				(void *)pHeadSkb)) {
-#endif
 				ASFIPSEC_WARN("Inbound Submission to SEC failed");
 
 				/* Mark SKB action index to drop */
@@ -8549,16 +8466,13 @@ So all these special boundary cases need to be handled for nr_frags*/
 		/* Since we will be giving packet to fwnat processing, keep the data pointer as 14 bytes before data start */
 		ASFIPSEC_DEBUG("In: Offseting data by ulSecHdrLen = %d",
 					pSA->ulSecHdrLen);
-#ifndef ASF_IPSEC_SEQ_SUPPORT
-		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
-			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
 		if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
 			ASFIPSEC_TRACE;
 			pHeadSkb->data_len = 0;
 			/* CB already finished processing the skb & there was an error*/
 			ASFSkbFree(pHeadSkb);
 		}
-#endif /* ASF_IPSEC_SEQ_SUPPORT */
+#endif /*(CONFIG_ASF_SEC4x)*/
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		/* Assumes successful processing of the Buffer */
 		pSA->ulBytes[smp_processor_id()] += len;
@@ -9329,6 +9243,10 @@ unsigned int secfp_createOutSA(
 	outSA_t *pOldSA;
 	SPDOutSALinkNode_t *pOutSALinkNode;
 	ASF_IPAddr_t    daddr;
+	int bVal = in_softirq();
+
+	if (!bVal)
+		local_bh_disable();
 
 	daddr.bIPv4OrIPv6 = SAParams->tunnelInfo.bIPv4OrIPv6;
 	if (SAParams->tunnelInfo.bIPv4OrIPv6)
@@ -9336,10 +9254,6 @@ unsigned int secfp_createOutSA(
 	else
 		daddr.ipv4addr = SAParams->tunnelInfo.addr.iphv4.daddr;
 
-	int bVal = in_softirq();
-
-	if (!bVal)
-		local_bh_disable();
 
 	pContainer = (SPDOutContainer_t *)ptrIArray_getData(&(secfp_OutDB),
 							   ulSPDContainerIndex);
