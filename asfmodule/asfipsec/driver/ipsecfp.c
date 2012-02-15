@@ -17,11 +17,7 @@
 
 #include <linux/ip.h>
 #include <net/ip.h>
-#ifdef CONFIG_DPA
-#include <dpaa_eth_asf.h>
-#else
 #include <gianfar.h>
-#endif
 #include <linux/device.h>
 #include <linux/crypto.h>
 #include <linux/skbuff.h>
@@ -10960,16 +10956,24 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		pSkb->protocol = htons(ASF_IPV4_MAC_CODE);
 		iph->tot_len = htons(ASF_IPLEN + ASF_ICMPLEN + iplen + 8);
 		pSkb->len = htons(iph->tot_len);
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 		fl.oif = 0;
 		fl.fl4_dst =  iph->daddr;
 		fl.fl4_src =  0;
 		fl.fl4_tos = 0;
 		if (ip_route_output_key(&init_net, &pRt, &fl)) {
+	#else
+		fl.flowi_oif = 0;
+		fl.u.ip4.daddr = iph->daddr;
+		fl.u.ip4.saddr = 0;
+		fl.u.ip4.flowi4_tos = 0;
+		if (ip_route_output_key(&init_net, &fl.u.ip4)) {
+	#endif
 			ASFKernelSkbFree(pSkb);
 			return 1;
 		}
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
-		skb_dst_set(pSkb, dst_clone(&pRt->u.dst));
+		skb_dst_set(pSkb, dst_clone(&(pRt->dst)));
 		ip_rt_put(pRt);
 		pSkb->dev = skb_dst(pSkb)->dev;
 		in_dev = (struct in_device *)(pSkb->dev->ip_ptr);
@@ -10986,7 +10990,7 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		else
 			ASFKernelSkbFree(pSkb);
 #else
-		pskb->dev = pSkb->dst->dev;
+		skb_dst_set(pSkb, dst_clone(&(pRt->u.dst)));
 		ip_rt_put(pRt);
 		pSkb->dev = skb_dst(pSkb)->dev;
 		in_dev = (struct in_device *)pSkb->dev->ip_ptr;
@@ -10999,7 +11003,7 @@ int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		if (pSkb->dst->hh)
 			neigh_hh_output(pSkb->dst->hh, pSkb);
 		else if ((pSkb->dst->neighbour)
-			pSkb->dst->neighbour->output(pSb);
+			pSkb->dst->neighbour->output(pSkb);
 		else
 			ASFKernelSkbFree(pSkb);
 #endif

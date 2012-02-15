@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2011-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asftoolkit.c
@@ -36,7 +36,11 @@
 #include <linux/module.h>
 #include <linux/dma-mapping.h>
 #include <linux/sysctl.h>
+#ifdef CONFIG_DPA
+#include <dpaa_eth_asf.h>
+#else
 #include <gianfar.h>
+#endif
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
@@ -50,13 +54,20 @@
 
 #define MAX_ETH_IF 4
 
+#ifndef CONFIG_DPA
 static int config_lan_afx(unsigned long);
 static int config_lan_filer(unsigned long);
 static int read_lan_filer(unsigned long);
+#endif
+
 static int asf_interface_open(struct inode *inode, struct file *filp);
 static int asf_interface_release(struct inode *inode, struct file *filp);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 static int asf_interface_ioctl(struct inode *inode,
 			       struct file *filp,
+#else
+static long asf_interface_ioctl(struct file *filp,
+#endif
 			       unsigned int cmd,
 			       unsigned long arg);
 /*!
@@ -65,7 +76,11 @@ static int asf_interface_ioctl(struct inode *inode,
 const struct file_operations asf_interface_fops = {
 	.open =		asf_interface_open,
 	.release =	asf_interface_release,
-	.ioctl =	asf_interface_ioctl,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
+	.ioctl =		asf_interface_ioctl,
+#else
+	.unlocked_ioctl = asf_interface_ioctl,
+#endif
 };
 
 spinlock_t		asf_app_lock;
@@ -127,8 +142,12 @@ static int asf_interface_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 static int asf_interface_ioctl(struct inode *inode,
 				struct file *filp,
+#else
+static long asf_interface_ioctl(struct file *filp,
+#endif
 				unsigned int cmd,
 				unsigned long arg)
 {
@@ -140,6 +159,7 @@ static int asf_interface_ioctl(struct inode *inode,
 		asf_debug("Runnng ASF Test CMD #%d\n", (cmd - HLD_TEST_0));
 
 	switch (cmd) {
+#ifndef CONFIG_DPA
 	case HLD_CONFIG_LAN_FILER:
 		ret =  config_lan_filer(arg);
 		break;
@@ -151,6 +171,7 @@ static int asf_interface_ioctl(struct inode *inode,
 	case HLD_CONFIG_LAN_AFX:
 		ret =  config_lan_afx(arg);
 		break;
+#endif
 
 	case HLD_CONFIG_LAN_PARSE_DEPTH:
 	case HLD_CONFIG_LAN_VLAN:
@@ -172,6 +193,7 @@ static int asf_interface_ioctl(struct inode *inode,
 	return ret;
 }
 
+#ifndef CONFIG_DPA
 static int config_lan_afx(unsigned long arg)
 {
 	ioctl_config_lan_afx_t		config;
@@ -221,6 +243,8 @@ static int config_lan_afx(unsigned long arg)
 	vfree(afx);
 	return 0;
 }
+#endif
+
 static int config_lan_filer(unsigned long arg)
 {
 	ioctl_config_lan_filer_t	lan_filer;

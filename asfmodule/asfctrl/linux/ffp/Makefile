@@ -23,6 +23,10 @@ HOSTCC=/usr/bin/gcc
 
 #ETHDRVDIR=$(shell dirname $(shell pwd))/gianfar
 
+ifeq ($(CONFIG_DPA), y)
+include $(KERNEL_PATH)/drivers/net/dpa/NetCommSw/ncsw_config.mk
+endif
+
 ifneq ($(CONFIG_AS_FASTPATH),y)
  fatal := $(error ASF is Disabled in Kernel. Try to fix)
 endif

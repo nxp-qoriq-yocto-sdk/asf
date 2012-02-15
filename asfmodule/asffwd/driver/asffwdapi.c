@@ -242,7 +242,11 @@ static inline unsigned long ASFFWDComputeFlowHash(
 			unsigned long initval)
 {
 	ulSrcIp += rule_salt;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 	ulDestIp += JHASH_GOLDEN_RATIO;
+#else
+	ulDestIp += JHASH_INITVAL;
+#endif
 	ulDscp += initval;
 	ASF_BJ3_MIX(ulSrcIp, ulDestIp, ulDscp);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)

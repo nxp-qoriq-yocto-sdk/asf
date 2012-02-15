@@ -53,7 +53,7 @@
 #include <net/xfrm.h>
 #include <linux/sysctl.h>
 #ifdef CONFIG_DPA
-#include <dpaa_eth_asf.h>
+#include <dpa/dpaa_eth.h>
 #else
 #include <gianfar.h>
 #endif
@@ -293,7 +293,11 @@ static inline unsigned long ASFFFPComputeFlowHash1(
 				unsigned long initval)
 {
 	ulSrcIp += rule_salt;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 	ulDestIp += JHASH_GOLDEN_RATIO;
+#else
+	ulDestIp += JHASH_INITVAL;
+#endif
 	ulPorts += initval;
 	ASF_BJ3_MIX(ulSrcIp, ulDestIp, ulPorts);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)

@@ -35,6 +35,7 @@ ifeq ($(CONFIG_ASF_IPV6), y)
 EXTRA_CFLAGS += -DASF_IPV6_FP_SUPPORT
 endif
 
+KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfipsec/driver/Module.symvers
 KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfctrl/linux/ffp/Module.symvers
 export KBUILD_EXTRA_SYMBOLS
 

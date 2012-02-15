@@ -27,7 +27,7 @@
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
 #ifdef CONFIG_DPA
-#include <dpaa_eth_asf.h>
+#include <dpa/dpaa_eth.h>
 #else
 #include <gianfar.h>
 #endif

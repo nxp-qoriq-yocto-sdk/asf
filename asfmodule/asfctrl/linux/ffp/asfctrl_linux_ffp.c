@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfctrl_linux_ffp.c
@@ -516,6 +516,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			memset(&cmd, 0, sizeof(cmd));
 
 			memset(&fl_out, 0, sizeof(fl_out));
+		#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 			fl_out.fl_ip_sport = ct_tuple_reply->dst.u.tcp.port;
 			fl_out.fl_ip_dport = ct_tuple_reply->src.u.tcp.port;
 			fl_out.proto = ct_tuple_orig->dst.protonum;
@@ -527,6 +528,14 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 				fl_out.fl4_src = ct_tuple_reply->dst.u3.ip;
 			}
 			fl_out.fl4_tos = 0;
+		#else
+			fl_out.u.ip4.fl4_sport = ct_tuple_reply->dst.u.tcp.port;
+			fl_out.u.ip4.fl4_dport = ct_tuple_reply->src.u.tcp.port;
+			fl_out.flowi_proto = ct_tuple_orig->dst.protonum;
+			fl_out.u.ip4.daddr = ct_tuple_reply->src.u3.ip;
+			fl_out.u.ip4.saddr = ct_tuple_reply->dst.u3.ip;
+			fl_out.flowi_tos = 0;
+		#endif
 
 			result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
 				&ipsecInInfo, net, fl_out, bIPv6);
@@ -952,6 +961,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
 	if (fn_ipsec_get_flow4) {
 		memset(&fl_out, 0, sizeof(fl_out));
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 		fl_out.fl_ip_sport = reply_dport;
 		fl_out.fl_ip_dport = reply_sport;
 		fl_out.proto = orig_prot;
@@ -963,6 +973,14 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			fl_out.fl4_src = reply_dip;
 		}
 		fl_out.fl4_tos = 0;
+	#else
+		fl_out.u.ip4.fl4_sport = reply_sport;
+		fl_out.u.ip4.fl4_dport = reply_dport;
+		fl_out.flowi_proto = orig_prot;
+		fl_out.u.ip4.daddr = reply_dip;
+		fl_out.u.ip4.saddr = reply_sip;
+		fl_out.flowi_tos = 0;
+	#endif
 
 		dev = dev_get_by_name(&init_net, "lo");
 		net = dev_net(dev);
@@ -1014,6 +1032,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
 	if (fn_ipsec_get_flow4) {
 		memset(&fl_in, 0, sizeof(fl_out));
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 		fl_in.fl_ip_sport = reply_sport;
 		fl_in.fl_ip_dport = reply_dport;
 		fl_in.proto = reply_prot;
@@ -1025,6 +1044,14 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			fl_in.fl4_src = reply_sip;
 		}
 		fl_in.fl4_tos = 0;
+	#else
+		fl_in.u.ip4.fl4_sport = reply_sport;
+		fl_in.u.ip4.fl4_dport = reply_dport;
+		fl_in.flowi_proto = orig_prot;
+		fl_in.u.ip4.daddr = reply_dip;
+		fl_in.u.ip4.saddr = reply_sip;
+		fl_in.flowi_tos = 0;
+	#endif
 
 		result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
 			&(cmd.flow2.ipsecInInfo), net, fl_in, pf_ipv6);

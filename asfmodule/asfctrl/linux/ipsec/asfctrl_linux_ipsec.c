@@ -24,11 +24,7 @@
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
-#ifdef CONFIG_DPA
-#include <dpaa_eth_asf.h>
-#else
 #include <gianfar.h>
-#endif
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/route.h>
@@ -425,46 +421,67 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 		if (address->IP_Version == 4) {
 #endif
 			struct rtable *rt;
+		#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 			fl.nl_u.ip4_u.daddr = address->dstIP.ipv4addr;
 			fl.nl_u.ip4_u.saddr = address->srcIP.ipv4addr;
 			fl.proto = IPPROTO_ICMP;
 
 			if (ip_route_output_key(&init_net, &rt, &fl)) {
-			ASFCTRL_DBG("\n Route not found for dst %x\n",\
-						address->dstIP.ipv4addr);
-			ASFCTRLKernelSkbFree(skb);
-			return ;
-		}
+		#else
+			fl.u.ip4.daddr = address->dstIP.ipv4addr;
+			fl.u.ip4.saddr = address->srcIP.ipv4addr;
+			fl.u.__fl_common.flowic_proto = IPPROTO_ICMP;
 
+			if (ip_route_output_key(&init_net, &fl.u.ip4)) {
+		#endif
+				ASFCTRL_DBG("\n Route not found for dst %x\n",\
+							address->dstIP.ipv4addr);
+				ASFCTRLKernelSkbFree(skb);
+				return ;
+			}
+
+		#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 			skb_dst_set(skb, &(rt->u.dst));
-		ASFCTRL_DBG("Route found for dst %x ",
-					address->dstIP.ipv4addr);
-		skb->dev = skb_dst(skb)->dev;
-		ASFCTRL_DBG("devname is skb->devname: %s", skb->dev->name);
-		skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
-		skb_reset_network_header(skb);
-		skb_put(skb, sizeof(struct iphdr));
-		iph = ip_hdr(skb);
-		iph->version = 5;
-		iph->ihl = 5;
-		iph->ttl = 1;
-		iph->id = IPv4_IDs[smp_processor_id()]++;
-		iph->tos = 0;
-		iph->frag_off = 0;
-		iph->saddr = (address->srcIP.ipv4addr);
-		iph->daddr = (address->dstIP.ipv4addr);
-		iph->protocol = ASFCTRL_IPPROTO_DUMMY_IPSEC_L2BLOB;
+		#else
+			skb_dst_set(skb, &(rt->dst));
+		#endif
+			ASFCTRL_DBG("Route found for dst %x ",
+						address->dstIP.ipv4addr);
+			skb->dev = skb_dst(skb)->dev;
+			ASFCTRL_DBG("devname is skb->devname: %s", skb->dev->name);
+			skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
+			skb_reset_network_header(skb);
+			skb_put(skb, sizeof(struct iphdr));
+			iph = ip_hdr(skb);
+			iph->version = 5;
+			iph->ihl = 5;
+			iph->ttl = 1;
+			iph->id = IPv4_IDs[smp_processor_id()]++;
+			iph->tos = 0;
+			iph->frag_off = 0;
+			iph->saddr = (address->srcIP.ipv4addr);
+			iph->daddr = (address->dstIP.ipv4addr);
+			iph->protocol = ASFCTRL_IPPROTO_DUMMY_IPSEC_L2BLOB;
 			skb->protocol = htons(ETH_P_IP);
 #ifdef ASF_IPV6_FP_SUPPORT
 		} else if (address->IP_Version == 6) {
 			struct dst_entry *dst;
 			struct ipv6hdr *ipv6h;
+		#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 			memcpy(fl.fl6_src.s6_addr32,
 					address->srcIP.ipv6addr, 16);
 			memcpy(fl.fl6_dst.s6_addr32,
 					address->dstIP.ipv6addr, 16);
 			fl.proto = IPPROTO_ICMPV6;
 			dst = ip6_route_output(&init_net, NULL, &fl);
+		#else
+			memcpy(fl.u.ip6.saddr.s6_addr,
+					address->srcIP.ipv6addr, 16);
+			memcpy(fl.u.ip6.daddr.s6_addr,
+					address->dstIP.ipv6addr, 16);
+			fl.u.__fl_common.flowic_proto = IPPROTO_ICMPV6;
+			dst = ip6_route_output(&init_net, NULL, &fl.u.ip6);
+		#endif
 			if (!dst || dst->error)	{
 				ASFCTRL_DBG("\n Route not found for dst %x"\
 						"skb->dst: 0x%x",

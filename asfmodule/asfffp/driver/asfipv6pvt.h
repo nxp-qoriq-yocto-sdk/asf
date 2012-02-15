@@ -70,7 +70,11 @@ static inline unsigned long ASFFFPIPv6ComputeFlowHash1(
 		ulDestIp += ip6DestIp->s6_addr32[i];
 
 	ulSrcIp += ipv6_rule_salt;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 	ulDestIp += JHASH_GOLDEN_RATIO;
+#else
+	ulDestIp += JHASH_INITVAL;
+#endif
 	ulPorts += initval;
 	ASF_BJ3_MIX(ulSrcIp, ulDestIp, ulPorts);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)

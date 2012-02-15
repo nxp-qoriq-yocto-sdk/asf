@@ -38,9 +38,6 @@
 #include <linux/version.h>
 #include <linux/proc_fs.h>
 #include "asffwd_pvt.h"
-#ifdef CONFIG_DPA
-#include <dpaa_eth_asf.h>
-#endif
 /*
  * Implement following proc
  *	/proc/sys/asf/fwd/

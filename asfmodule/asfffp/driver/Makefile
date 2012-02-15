@@ -25,6 +25,11 @@ HOSTCC=/usr/bin/gcc
 ifneq ($(CONFIG_AS_FASTPATH),y)
  fatal := $(error ASF is Disabled in Kernel. Try to fix)
 endif
+
+ifeq ($(CONFIG_DPA), y)
+include $(KERNEL_PATH)/drivers/net/dpa/NetCommSw/ncsw_config.mk
+endif
+
 ifeq ($(CONFIG_ASF_FEATURE_OPTION_FULL),y)
 EXTRA_CFLAGS += -DASF_FEATURE_OPTION=3
 else
