@@ -180,7 +180,9 @@ void asf_ffp_cleanup_all_flows(void);
 static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *dev);
 
 #define ASF_FFP_BLOB_TIME_INTERVAL 1    /* inter bucket gap */
+#define ASF_FFP_BLOB_TIMER_BUCKT 500    /* Max L2blob timer value */
 #define ASF_FFP_INAC_TIME_INTERVAL 1    /* inter bucket gap */
+#define ASF_FFP_INAC_TIMER_BUCKT 2048    /* Max inactity timer value  */
 #define ASF_FFP_NUM_RQ_ENTRIES  (256)
 #define ASF_FFP_AUTOMODE_FLOW_INACTIME  (300)
 
@@ -3672,7 +3674,7 @@ static int asf_ffp_init_flow_table()
 	asf_print("Instantiating blob timer wheels\n");
 
 	if (asfTimerWheelInit(ASF_FFP_BLOB_TMR_ID, 0,
-			      ffp_hash_buckets, ASF_TMR_TYPE_SEC_TMR,
+			      ASF_FFP_BLOB_TIMER_BUCKT, ASF_TMR_TYPE_SEC_TMR,
 			      ASF_FFP_BLOB_TIME_INTERVAL, ASF_FFP_NUM_RQ_ENTRIES) == 1) {
 		asf_err("Error in initializing L2blob Timer wheel\n");
 		return -ENOMEM;
@@ -3681,7 +3683,7 @@ static int asf_ffp_init_flow_table()
 	asf_print("Instantiating inac timer wheels\n");
 
 	if (asfTimerWheelInit(ASF_FFP_INAC_REFRESH_TMR_ID, 0,
-			      ffp_hash_buckets, ASF_TMR_TYPE_SEC_TMR,
+			      ASF_FFP_INAC_TIMER_BUCKT, ASF_TMR_TYPE_SEC_TMR,
 			      ASF_FFP_INAC_TIME_INTERVAL, ASF_FFP_NUM_RQ_ENTRIES) == 1) {
 		asf_err("Error in initializing Inac Timer wheel\n");
 		return -ENOMEM;

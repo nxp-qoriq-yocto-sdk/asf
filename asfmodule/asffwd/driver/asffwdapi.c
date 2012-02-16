@@ -1472,7 +1472,7 @@ static int asf_fwd_init_cache_table(void)
 	asf_print("Instantiating blob timer wheels\n");
 
 	if (asfTimerWheelInit(ASF_FWD_BLOB_TMR_ID, 0,
-		fwd_hash_buckets, ASF_TMR_TYPE_SEC_TMR,
+		ASF_FWD_BLOB_TIMER_BUCKT, ASF_TMR_TYPE_SEC_TMR,
 		ASF_FWD_BLOB_TIME_INTERVAL, ASF_FWD_NUM_RQ_ENTRIES) == 1) {
 		asf_err("Error in initializing L2blob Timer wheel\n");
 		goto err3;
@@ -1481,7 +1481,7 @@ static int asf_fwd_init_cache_table(void)
 	asf_print("Instantiating Cache Expiry Timer Wheels\n");
 
 	if (asfTimerWheelInit(ASF_FWD_EXPIRY_TMR_ID, 0,
-		fwd_hash_buckets, ASF_TMR_TYPE_SEC_TMR,
+		ASF_FWD_EXPIRY_TIMER_BUCKT, ASF_TMR_TYPE_SEC_TMR,
 		ASF_FWD_EXPIRY_TIME_INTERVAL, fwd_max_vsgs) == 1) {
 		asf_err("Error in initializing Cache Timer wheel\n");
 		goto err4;
