@@ -2075,9 +2075,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 #endif
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
-#ifndef CONFIG_DPA
-					skb2->skb_owner = NULL;
-#else
+#ifdef CONFIG_DPA
 					skb_reserve(skb2, ulDevXmitHdrLen +
 							dev->needed_headroom);
 					skb2->protocol = ETH_P_IP;
@@ -2274,9 +2272,6 @@ int asfIpv6Fragment(struct sk_buff *skb,
 			return 1;
 		}
 		asf_reasm_debug("Next skb\r\n");
-#ifndef CONFIG_DPA
-		frag->skb_owner = NULL;
-#endif
 		pLastSkb->next = frag;
 		pLastSkb = frag;
 		frag->queue_mapping = skb->queue_mapping;

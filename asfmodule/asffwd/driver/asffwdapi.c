@@ -357,9 +357,6 @@ inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 			iph = ip_hdr(pSkb);
 
 			pSkb->pkt_type = PACKET_FASTROUTE;
-#ifndef CONFIG_DPA
-			pSkb->asf = 1;
-#endif
 			skb_set_queue_mapping(pSkb, 0);
 
 			if (Cache->bVLAN)
@@ -574,9 +571,6 @@ ASF_void_t ASFFWDProcessPkt(ASF_uint32_t	ulVsgId,
 			if (Cache->bVLAN)
 				skb->vlan_tci = Cache->tx_vlan_id;
 			skb->pkt_type = PACKET_FASTROUTE;
-#ifndef CONFIG_DPA
-			skb->asf = 1;
-#endif
 			skb_set_queue_mapping(skb, 0);
 
 			asf_print("invoke hard_start_xmit skb-packet"

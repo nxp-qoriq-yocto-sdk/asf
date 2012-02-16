@@ -36,7 +36,7 @@ else
 EXTRA_CFLAGS += -DASF_FEATURE_OPTION=1
 endif
 
-KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfipsec/driver/Module.symvers
+KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfffp/driver/Module.symvers
 export KBUILD_EXTRA_SYMBOLS
 
 EXTRA_CFLAGS += -DCONFIG_ASF=1 -DCONFIG_AS_FASTPATH=1 -I$(KERNEL_PATH)/net/bridge
