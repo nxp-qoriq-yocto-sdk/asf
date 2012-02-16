@@ -22,7 +22,7 @@ build:
 ifeq ($(CONFIG_ASF_TERMINATION), y)
 	make -w -C asfterm -f Makefile
 endif
-ifeq ($(CONFIG_XFRM), y)
+ifeq ($(CONFIG_ASF_IPSEC), y)
 	make -w -C asfipsec -f Makefile
 endif
 	make -w -C asfctrl -f Makefile

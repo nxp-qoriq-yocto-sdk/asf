@@ -19,7 +19,7 @@ all: build
 
 build:
 	make -w -C ffp -f Makefile
-ifeq ($(CONFIG_XFRM), y)
+ifeq ($(CONFIG_ASF_IPSEC), y)
 	make -w -C ipsec -f Makefile
 endif
 	make -w -C fwd -f Makefile
