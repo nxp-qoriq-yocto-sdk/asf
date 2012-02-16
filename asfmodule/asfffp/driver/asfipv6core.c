@@ -781,6 +781,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		ip6h = ipv6_hdr(skb);
 
 		skb->pkt_type = PACKET_FASTROUTE;
+#ifndef CONFIG_DPA
+		skb->asf = 1;
+#endif
 		skb_set_queue_mapping(skb, 0);
 
 		/* make following unconditional*/
