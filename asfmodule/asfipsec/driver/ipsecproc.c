@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	ipsecproc.c
@@ -38,6 +38,43 @@ enum {
 	SECFP_L2BLOB_REFRESH_NPKTS,
 	SECFP_L2BLOB_REFRESH_INTERVAL
 } ;
+struct algo_info {
+	const char *alg_name;
+	int alg_type;
+};
+
+#define IPSEC_PROC_MAX_ALGO 8
+
+static const struct algo_info algo_types[2][IPSEC_PROC_MAX_ALGO] = {
+	{
+		{"cbc(aes)", SECFP_AES},
+		{"cbc(des3_ede)", SECFP_3DES},
+		{"cbc(des)", SECFP_DES},
+		{"null", SECFP_ESP_NULL},
+		{"aes-ctr)", SECFP_AESCTR},
+		{NULL, -1}
+	},
+	{
+		{"hmac(sha1)", SECFP_HMAC_SHA1},
+		{"hmac(sha256)", SECFP_HMAC_SHA256},
+		{"hmac(sha384)", SECFP_HMAC_SHA384},
+		{"hmac(sha512)", SECFP_HMAC_SHA512},
+		{"hmac(md5)", SECFP_HMAC_MD5},
+		{"aes-xcbc-mac)", SECFP_HMAC_AES_XCBC_MAC},
+		{"null", SECFP_HMAC_NULL},
+		{NULL, -1}
+	}
+};
+
+char *algo_getname(int type, int algo)
+{
+	int i;
+	for (i = 0; i < IPSEC_PROC_MAX_ALGO; i++) {
+		if (algo == algo_types[type][i].alg_type)
+			return algo_types[type][i].alg_name;
+	}
+	return "NULL";
+}
 
 char secfp_proc_cmdbuf[1024] = "";
 
@@ -410,9 +447,11 @@ static void print_SAParams(SAParams_t *SAParams)
 		SAParams->ulSPI);
 
 	printk(KERN_INFO"\nProtocol = 0x%x, Dscp = 0x%x,"\
-		"AuthAlgo =%d(Len=%d), CipherAlgo = %d (Len=%d) ",
+		"AuthAlgo =%s(%d)(Len=%d), CipherAlgo = %s(%d) (Len=%d) ",
 		SAParams->ucProtocol, SAParams->ucDscp,
+		algo_getname(1, SAParams->ucAuthAlgo),
 		SAParams->ucAuthAlgo, SAParams->AuthKeyLen,
+		algo_getname(0, SAParams->ucCipherAlgo),
 		SAParams->ucCipherAlgo, SAParams->EncKeyLen);
 
 	printk(KERN_INFO"AntiReplay = %d, UDPEncap(NAT-T) = %d\n",

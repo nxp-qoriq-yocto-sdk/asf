@@ -8692,9 +8692,11 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 		switch (pSA->SAParams.ucAuthAlgo) {
 		case SECFP_HMAC_MD5:
 			pSA->ctx.class2_alg_type = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_MD5 |
 						OP_ALG_AAI_HMAC_PRECOMP;
-			pSA->ctx.alg_op = OP_PCL_IPSEC_HMAC_MD5_96 |
-						OP_TYPE_CLASS2_ALG;
+			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_MD5 |
+						OP_ALG_AAI_HMAC;
 			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
 						OP_ALG_ALGSEL_SUBMASK) >>
 						OP_ALG_ALGSEL_SHIFT] * 2;
@@ -8729,6 +8731,45 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 			pSA->ctx.split_key_pad_len =
 					ALIGN(pSA->ctx.split_key_len, 16);
 
+			break;
+		case SECFP_HMAC_SHA256:
+			pSA->ctx.class2_alg_type = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA256 |
+						OP_ALG_AAI_HMAC_PRECOMP;
+			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA256 |
+						OP_ALG_AAI_HMAC;
+			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
+						OP_ALG_ALGSEL_SUBMASK) >>
+						OP_ALG_ALGSEL_SHIFT] * 2;
+			pSA->ctx.split_key_pad_len =
+					ALIGN(pSA->ctx.split_key_len, 16);
+			break;
+		case SECFP_HMAC_SHA384:
+			pSA->ctx.class2_alg_type = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA384 |
+						OP_ALG_AAI_HMAC_PRECOMP;
+			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA384 |
+						OP_ALG_AAI_HMAC;
+			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
+						OP_ALG_ALGSEL_SUBMASK) >>
+						OP_ALG_ALGSEL_SHIFT] * 2;
+			pSA->ctx.split_key_pad_len =
+					ALIGN(pSA->ctx.split_key_len, 16);
+			break;
+		case SECFP_HMAC_SHA512:
+			pSA->ctx.class2_alg_type = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA512|
+						OP_ALG_AAI_HMAC_PRECOMP;
+			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA512 |
+						OP_ALG_AAI_HMAC;
+			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
+						OP_ALG_ALGSEL_SUBMASK) >>
+						OP_ALG_ALGSEL_SHIFT] * 2;
+			pSA->ctx.split_key_pad_len =
+					ALIGN(pSA->ctx.split_key_len, 16);
 			break;
 		default:
 			ASFIPSEC_DEBUG("Invalid ucAuthAlgo");
@@ -8861,9 +8902,11 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 		switch (pSAParams->ucAuthAlgo) {
 		case SECFP_HMAC_MD5:
 			pSA->ctx.class2_alg_type = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_MD5 |
 						OP_ALG_AAI_HMAC_PRECOMP;
-			pSA->ctx.alg_op = OP_PCL_IPSEC_HMAC_MD5_96 |
-						OP_TYPE_CLASS2_ALG;
+			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_MD5 |
+						OP_ALG_AAI_HMAC;
 			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
 						OP_ALG_ALGSEL_SUBMASK) >>
 						OP_ALG_ALGSEL_SHIFT] * 2;
@@ -8892,6 +8935,45 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
 							OP_PCL_IPSEC_AES_XCBC_MAC_96 |
 							OP_ALG_AAI_HMAC;
+			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
+						OP_ALG_ALGSEL_SUBMASK) >>
+						OP_ALG_ALGSEL_SHIFT] * 2;
+			pSA->ctx.split_key_pad_len =
+					ALIGN(pSA->ctx.split_key_len, 16);
+			break;
+		case SECFP_HMAC_SHA256:
+			pSA->ctx.class2_alg_type = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA256 |
+						OP_ALG_AAI_HMAC_PRECOMP;
+			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA256 |
+						OP_ALG_AAI_HMAC;
+			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
+						OP_ALG_ALGSEL_SUBMASK) >>
+						OP_ALG_ALGSEL_SHIFT] * 2;
+			pSA->ctx.split_key_pad_len =
+					ALIGN(pSA->ctx.split_key_len, 16);
+			break;
+		case SECFP_HMAC_SHA384:
+			pSA->ctx.class2_alg_type = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA384 |
+						OP_ALG_AAI_HMAC_PRECOMP;
+			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA384 |
+						OP_ALG_AAI_HMAC;
+			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
+						OP_ALG_ALGSEL_SUBMASK) >>
+						OP_ALG_ALGSEL_SHIFT] * 2;
+			pSA->ctx.split_key_pad_len =
+					ALIGN(pSA->ctx.split_key_len, 16);
+			break;
+		case SECFP_HMAC_SHA512:
+			pSA->ctx.class2_alg_type = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA512|
+						OP_ALG_AAI_HMAC_PRECOMP;
+			pSA->ctx.alg_op = OP_TYPE_CLASS2_ALG |
+						OP_ALG_ALGSEL_SHA512 |
+						OP_ALG_AAI_HMAC;
 			pSA->ctx.split_key_len = mdpadlen[(pSA->ctx.alg_op &
 						OP_ALG_ALGSEL_SUBMASK) >>
 						OP_ALG_ALGSEL_SHIFT] * 2;

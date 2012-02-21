@@ -65,11 +65,14 @@ algo_types[MAX_ALGO_TYPE][MAX_AUTH_ENC_ALGO] = {
 	{
 		{"cbc(aes)", ASF_IPSEC_EALG_AES},
 		{"cbc(des3_ede)", ASF_IPSEC_EALG_3DESCBC},
+		{"cbc(des)", ASF_IPSEC_EALG_DESCBC},
 		{NULL, -1}
 	},
 	{
 		{"hmac(sha1)", ASF_IPSEC_AALG_SHA1HMAC},
 		{"hmac(sha256)", ASF_IPSEC_AALG_SHA256HMAC},
+		{"hmac(sha384)", ASF_IPSEC_AALG_SHA384HMAC},
+		{"hmac(sha512)", ASF_IPSEC_AALG_SHA512HMAC},
 		{"hmac(md5)", ASF_IPSEC_AALG_MD5HMAC},
 		{NULL, -1}
 	}

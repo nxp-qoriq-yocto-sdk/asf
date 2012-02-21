@@ -90,6 +90,9 @@
 #define SECFP_HMAC_SHA1		2
 #define SECFP_HMAC_AES_XCBC_MAC	3
 #define SECFP_HMAC_NULL		4 /* No Authentication */
+#define SECFP_HMAC_SHA256	5
+#define SECFP_HMAC_SHA384	6
+#define SECFP_HMAC_SHA512	7
 #define SECFP_DES		2 /* generic DES transform using DES-SBC */
 #define SECFP_3DES		3 /* generic triple-DES transform	*/
 #define SECFP_ESP_NULL		11

@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	ipsfpapi.c
@@ -606,16 +606,20 @@ ASF_void_t ASFIPSecGetCapabilities(ASFIPSecCap_t *pCap)
 
 		pCap->ulFragOptions = 0; /* Fragmentation options not handled */
 
-		/* Authentication algorithms MD5, SHA1 and AES_XBC are supported */
+		/* Authentication algorithms MD5, SHA1 & SHA2 are supported */
 		pCap->AuthAlgoCap.bMD5 = 1;
 		pCap->AuthAlgoCap.bSHA1 = 1;
-		pCap->AuthAlgoCap.bAES_XBC = 1;
+		pCap->AuthAlgoCap.bSHA2 = 1;
+		/* This Authentication Algorithm is not supported by IDC_ASF */
+		pCap->AuthAlgoCap.bAES_XBC = 0;
 
-		/* Encryption algorithm DES, 3DES, AES and AES CTR are supported */
+		/* Encryption algorithm DES, 3DES, AES are supported */
 		pCap->EncryptAlgoCap.bDES = 1;
 		pCap->EncryptAlgoCap.b3DES = 1;
 		pCap->EncryptAlgoCap.bAES = 1;
-		pCap->EncryptAlgoCap.bAES_CTR = 1;
+		/* These Encryption Algorithms are not supported by IDC_ASF */
+		pCap->EncryptAlgoCap.bAES_CTR = 0;
+		pCap->EncryptAlgoCap.bNULL = 0;
 
 		/* Modules parameters */
 		pCap->ulMaxVSGs = ulMaxVSGs_g;
@@ -700,12 +704,28 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 {
 	if (pASFSAParams->authKey) {
 		pSAParams->bAuth = TRUE;
-		if (pASFSAParams->authAlgo == ASF_IPSEC_AALG_MD5HMAC) {
+		switch (pASFSAParams->authAlgo) {
+		case ASF_IPSEC_AALG_MD5HMAC:
 			pSAParams->ucAuthAlgo = SECFP_HMAC_MD5;
-		} else if (pASFSAParams->authAlgo == ASF_IPSEC_AALG_SHA1HMAC) {
+			break;
+		case ASF_IPSEC_AALG_SHA1HMAC:
 			pSAParams->ucAuthAlgo = SECFP_HMAC_SHA1;
-		} else {
+			break;
+		case ASF_IPSEC_AALG_AESXCBC:
 			pSAParams->ucAuthAlgo = SECFP_HMAC_AES_XCBC_MAC;
+			break;
+		case ASF_IPSEC_AALG_SHA256HMAC:
+			pSAParams->ucAuthAlgo = SECFP_HMAC_SHA256;
+			break;
+		case ASF_IPSEC_AALG_SHA384HMAC:
+			pSAParams->ucAuthAlgo = SECFP_HMAC_SHA384;
+			break;
+		case ASF_IPSEC_AALG_SHA512HMAC:
+			pSAParams->ucAuthAlgo = SECFP_HMAC_SHA512;
+			break;
+		default:
+			return SECFP_FAILURE;
+			break;
 		}
 		pSAParams->AuthKeyLen = pASFSAParams->authKeyLenBits/8;
 		memcpy(pSAParams->ucAuthKey, pASFSAParams->authKey,
@@ -1319,12 +1339,28 @@ static unsigned int asf_FillSAParams(ASF_IPSecSA_t *pASFSAParams,
 				     SAParams_t    *pSAParams)
 {
 	if (pSAParams->AuthKeyLen) {
-		if (pSAParams->ucAuthAlgo == SECFP_HMAC_MD5) {
-			pASFSAParams->authAlgo = ASF_IPSEC_AALG_MD5HMAC;
-		} else if (pSAParams->ucAuthAlgo == SECFP_HMAC_SHA1) {
-			pASFSAParams->authAlgo = ASF_IPSEC_AALG_SHA1HMAC;
-		} else {
-			pASFSAParams->authAlgo = ASF_IPSEC_AALG_AESXCBC;
+		switch (pSAParams->ucAuthAlgo) {
+		case ASF_IPSEC_AALG_MD5HMAC:
+			pASFSAParams->authAlgo = SECFP_HMAC_MD5;
+			break;
+		case ASF_IPSEC_AALG_SHA1HMAC:
+			pASFSAParams->authAlgo = SECFP_HMAC_SHA1;
+			break;
+		case ASF_IPSEC_AALG_AESXCBC:
+			pASFSAParams->authAlgo = SECFP_HMAC_AES_XCBC_MAC;
+			break;
+		case ASF_IPSEC_AALG_SHA256HMAC:
+			pASFSAParams->authAlgo = SECFP_HMAC_SHA256;
+			break;
+		case ASF_IPSEC_AALG_SHA384HMAC:
+			pASFSAParams->authAlgo = SECFP_HMAC_SHA384;
+			break;
+		case ASF_IPSEC_AALG_SHA512HMAC:
+			pASFSAParams->authAlgo = SECFP_HMAC_SHA512;
+			break;
+		default:
+			return SECFP_FAILURE;
+			break;
 		}
 		pASFSAParams->authKeyLenBits = pSAParams->AuthKeyLen/8;
 		memcpy(pASFSAParams->authKey, pSAParams->ucAuthKey, pASFSAParams->authKeyLenBits);

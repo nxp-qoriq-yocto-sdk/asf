@@ -32,15 +32,16 @@ typedef atomic_t ASFAtomic_t;
 typedef struct ASFIPSecAuthAlgoCap_s {
 	ASF_uint32_t bMD5:1,
 	bSHA1:1,
+	bSHA2:1,
 	bAES_XBC:1;
 } ASFIPSecAuthAlgoCap_t;
-
 
 typedef struct ASFIPSecEncryptAlgoCap_s {
 	ASF_uint32_t bDES:1,
 	b3DES:1,
 	bAES:1,
-	bAES_CTR:1;
+	bAES_CTR:1,
+	bNULL:1;
 } ASFIPSecEncryptAlgoCap_t;
 
 typedef struct ASFIPSecCap_s {
@@ -957,16 +958,21 @@ typedef struct ASFIPSecGlobalErrorCounters_st {
 	unsigned int ulOutSASPDContainerMisMatch; /* SPD container value in InSA is not matching */
 } ASFIPSecGlobalErrorCounters_t;
 
-#define ASF_IPSEC_AALG_NONE		    0
-#define ASF_IPSEC_AALG_MD5HMAC		 2
+#define ASF_IPSEC_AALG_NONE		0
+#define ASF_IPSEC_AALG_MD5HMAC		2
 #define ASF_IPSEC_AALG_SHA1HMAC		3
-#define ASF_IPSEC_AALG_AESXCBC		 4
+#define ASF_IPSEC_AALG_AESXCBC		4
 #define ASF_IPSEC_AALG_SHA256HMAC	5
+#define ASF_IPSEC_AALG_SHA384HMAC	6
+#define ASF_IPSEC_AALG_SHA512HMAC	7
 
 #define ASF_IPSEC_AALG_NONE_KEYBITS_LENGTH     0
 #define ASF_IPSEC_AALG_MD5HMAC_KEYBITS_LENGTH  128
 #define ASF_IPSEC_AALG_SHA1HMAC_KEYBITS_LENGTH 160
 #define ASF_IPSEC_AALG_AESXCBC_KEYBITS_LENGTH  128
+#define ASF_IPSEC_AALG_SHA256HMAC_KEYBITS_LENGTH 256
+#define ASF_IPSEC_AALG_SHA384HMAC_KEYBITS_LENGTH 384
+#define ASF_IPSEC_AALG_SHA512HMAC_KEYBITS_LENGTH 512
 
 
 #define ASF_IPSEC_EALG_NONE		    0
