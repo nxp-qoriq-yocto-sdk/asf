@@ -220,14 +220,14 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 		if (skb_dst(skb))
 			skb->dev = skb_dst(skb)->dev;
 		else
-			ASFCTRL_ERR("No Dev pointer!!");
+			ASFCTRL_WARN("No Dev pointer!!");
 	}
 #ifdef ASFCTRL_TERM_FP_SUPPORT
 	if (skb->mapped) {
 		struct sk_buff *nskb;
 		/* Allocate new skb from kernel pool */
 		nskb = skb_copy(skb, GFP_ATOMIC);
-		if (!nskb) {
+		if (unlikely(!nskb)) {
 			goto drop;
 		} else {
 			pFreeFn(Buffer.nativeBuffer);
@@ -251,8 +251,8 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 			asfIpv6MakeFragment(skb, &pOutSkb);
 	} else {
 #endif
-	daddr.a4 = (DestAddr.ipv4addr);
-	family = AF_INET;
+		daddr.a4 = (DestAddr.ipv4addr);
+		family = AF_INET;
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
 #endif
@@ -261,9 +261,8 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 #else
 	x = xfrm_state_lookup(net, &daddr, ulSPI, ucProtocol, family);
 #endif
-	if (x == NULL) {
-		ASFCTRL_WARN("Unable to get the match SPD"\
-			"for the decrypted packet");
+	if (unlikely(x == NULL)) {
+		ASFCTRL_WARN("Unable to retrive SA");
 		pFreeFn(Buffer.nativeBuffer);
 		goto fnexit;
 	}
@@ -439,7 +438,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 				ASFCTRL_DBG("\n Route not found for dst %x\n",\
 							address->dstIP.ipv4addr);
 				ASFCTRLKernelSkbFree(skb);
-				return ;
+				goto out;
 			}
 
 		#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
@@ -450,7 +449,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 			ASFCTRL_DBG("Route found for dst %x ",
 						address->dstIP.ipv4addr);
 			skb->dev = skb_dst(skb)->dev;
-			ASFCTRL_DBG("devname is skb->devname: %s", skb->dev->name);
+			ASFCTRL_DBG("skb->devname: %s", skb->dev->name);
 			skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
 			skb_reset_network_header(skb);
 			skb_put(skb, sizeof(struct iphdr));
@@ -490,7 +489,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 						address->dstIP.ipv6addr,
 						skb_dst(skb));
 				ASFCTRLKernelSkbFree(skb);
-				return ;
+				goto out;
 			}
 
 			skb_dst_set(skb, dst);
@@ -539,6 +538,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 		asfctrl_skb_mark_dummy(skb);
 		asf_ip_send(skb);
 	}
+out:
 	if (!bVal)
 		local_bh_enable();
 	return;
@@ -602,7 +602,6 @@ ASF_void_t asfctrl_ipsec_fn_Runtime(ASF_uint32_t ulVSGId,
 	return;
 }
 
-/*todo add IPv6 Support */
 ASF_void_t asfctrl_ipsec_fn_SAExpired(ASF_uint32_t ulVSGId,
 			ASF_uint32_t ulSPDContainerIndex,
 			ASF_uint32_t ulSPI,
@@ -625,9 +624,13 @@ ASF_void_t asfctrl_ipsec_fn_SAExpired(ASF_uint32_t ulVSGId,
 	/*1.  find the SA (xfrm pointer) on the basis of SPI,
 	 * protcol, dest Addr */
 
-	family = AF_INET;
-	daddr.a4 = (DestAddr.ipv4addr);
-
+	if (DestAddr.bIPv4OrIPv6) {
+		family = AF_INET6;
+		memcpy(daddr.a6, DestAddr.ipv6addr, 16);
+	} else {
+		family = AF_INET;
+		daddr.a4 = (DestAddr.ipv4addr);
+	}
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
 	x = xfrm_state_lookup(&init_net, 0, &daddr, ulSPI, ucProtocol, family);
 #else

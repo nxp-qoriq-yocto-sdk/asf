@@ -291,28 +291,28 @@ int is_policy_offloadable(struct xfrm_policy *xp)
 	struct xfrm_tmpl 	*tmpl;
 
 	ASFCTRL_FUNC_ENTRY;
-	if (!xp) {
+	if (unlikely(!xp)) {
 		ASFCTRL_WARN("Invalid Policy Pointer");
 		return -EINVAL;
 	}
-	if (xp->action != XFRM_POLICY_ALLOW) {
+	if (unlikely(xp->action != XFRM_POLICY_ALLOW)) {
 		ASFCTRL_WARN("Not a IPSEC policy");
 		return -EINVAL;
 	}
-	if (xp->xfrm_nr > 1) {
+	if (unlikely(xp->xfrm_nr > 1)) {
 		ASFCTRL_WARN("Multiple Transforms not supported");
 		return -EINVAL;
 	}
 	tmpl = &(xp->xfrm_vec[0]);
-	if (!tmpl) {
+	if (unlikely(!tmpl)) {
 		ASFCTRL_WARN("NULL IPSEC Template");
 		return -EINVAL;
 	}
-	if (tmpl->mode != XFRM_MODE_TUNNEL) {
+	if (unlikely(tmpl->mode != XFRM_MODE_TUNNEL)) {
 		ASFCTRL_WARN("IPSEC Transport Mode not supported");
 		return -EINVAL;
 	}
-	if (tmpl->id.proto != IPPROTO_ESP) {
+	if (unlikely(tmpl->id.proto != IPPROTO_ESP)) {
 		ASFCTRL_WARN("Non ESP protocol not supported");
 		return -EINVAL;
 	}
@@ -562,21 +562,17 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	if (xfrm->props.family == AF_INET6)
 		bIPv4OrIPv6 = 1;
 #endif
-
+	SAParams.bVerifyInPktWithSASelectors =
+				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (!bIPv4OrIPv6) {
 #endif
-	SAParams.bVerifyInPktWithSASelectors =
-				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
 	SAParams.bRedSideFragment = bRedSideFragment;
 #ifdef ASF_IPV6_FP_SUPPORT
-	} else {
-		SAParams.bVerifyInPktWithSASelectors =
-				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+	} else
 		SAParams.bRedSideFragment =
 				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
-	}
 #endif
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
@@ -596,8 +592,6 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASFCTRL_INFO("Out Replay window size = %d ", xfrm->props.replay_window);
 
 #else
-	SAParams.bVerifyInPktWithSASelectors =
-				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
 	SAParams.bRedSideFragment =
 				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
@@ -825,23 +819,20 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 #endif
 			inSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-#ifdef ASF_IPV6_FP_SUPPORT
-	if (!bIPv4OrIPv6) {
-#endif
-		SAParams.bVerifyInPktWithSASelectors =
-				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
-		SAParams.bRedSideFragment = bRedSideFragment;
-#ifdef ASF_IPV6_FP_SUPPORT
-	} else {
-		SAParams.bVerifyInPktWithSASelectors =
+	SAParams.bVerifyInPktWithSASelectors =
 				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
-		SAParams.bRedSideFragment =
-				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
-	}
-#endif
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (!bIPv4OrIPv6)
+#endif
+		SAParams.bRedSideFragment = bRedSideFragment;
+#ifdef ASF_IPV6_FP_SUPPORT
+	 else
+		SAParams.bRedSideFragment =
+				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+#endif
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
 	SAParams.bDoAntiReplayCheck =
 		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
@@ -857,12 +848,8 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASFCTRL_INFO("In  Replay window size = %d ", xfrm->props.replay_window);
 
 #else
-	SAParams.bVerifyInPktWithSASelectors =
-				ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
 	SAParams.bRedSideFragment =
 				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
-	SAParams.bDoPeerGWIPAddressChangeAdaptation =
-				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
 	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_OFF;
 
 	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
@@ -911,7 +898,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	if (xfrm->aalg) {
 		ret = asfctrl_alg_getbyname(xfrm->aalg->alg_name,
 					AUTHENTICATION);
-		if (ret == -EINVAL) {
+		if (unlikely(ret == -EINVAL)) {
 			ASFCTRL_WARN("Auth algorithm not supported");
 			return ret;
 		}
@@ -919,10 +906,9 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.authKeyLenBits = xfrm->aalg->alg_key_len;
 		SAParams.authKey = xfrm->aalg->alg_key;
 	}
-
 	if (xfrm->ealg) {
 		ret = asfctrl_alg_getbyname(xfrm->ealg->alg_name, ENCRYPTION);
-		if (ret == -EINVAL) {
+		if (unlikely(ret == -EINVAL)) {
 			ASFCTRL_WARN("Encryption algorithm not supported");
 			return ret;
 		}
@@ -1039,7 +1025,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 {
 	struct xfrm_policy *xp = NULL;
-	unsigned int dir;
+	int dir;
 
 	ASFCTRL_FUNC_TRACE;
 
@@ -1242,9 +1228,9 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
 
-	if (!xp) {
+	if (unlikely(!xp)) {
 		xp = xfrm_state_policy_mapping(xfrm);
-		if (!xp) {
+		if (unlikely(!xp)) {
 			ASFCTRL_WARN("Policy not found for this SA");
 			return -EINVAL;
 		}
@@ -1322,8 +1308,7 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (xfrm->props.family == AF_INET6) {
 		daddr.bIPv4OrIPv6 = 1;
-		memcpy(daddr.ipv6addr,
-				xfrm->id.daddr.a6, 16);
+		memcpy(daddr.ipv6addr, xfrm->id.daddr.a6, 16);
 	} else {
 #endif
 		daddr.bIPv4OrIPv6 = 0;
@@ -1453,7 +1438,7 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 				struct km_event *c)
 {
 	ASFCTRL_FUNC_ENTRY;
-	ASFCTRL_INFO("EVENT = %d xp=%x\n", c->event, (unsigned int) xp);
+	ASFCTRL_INFO("EVENT = %d xp=%x", c->event, (unsigned int) xp);
 
 	if (xp && xp->type != XFRM_POLICY_TYPE_MAIN) {
 		ASFCTRL_INFO("Policy Type=%d ", xp->type);
