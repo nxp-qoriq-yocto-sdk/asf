@@ -19,6 +19,7 @@
 #include <linux/if_bridge.h>
 #include <linux/if_arp.h>
 #include <linux/ip.h>
+#include <linux/of.h>
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
@@ -2014,9 +2015,25 @@ static int __init ASFIPSec_Init(void)
 {
 	int  err = -EINVAL;
 	ASFCap_t	asf_cap;
+	struct device_node *dev_node;
 
 	ASFIPSEC_DEBUG("Entry");
 
+#ifdef CONFIG_ASF_SEC4x
+	dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v4.0");
+	if (!dev_node) {
+		ASFIPSEC_ERR("ASF compiled for SEC4X, However "
+			"Compatiable SEC4X device not found\n");
+		return -ENODEV;
+	}
+#else
+	dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec3.0");
+	if (!dev_node) {
+		ASFIPSEC_ERR("ASF compiled for SEC3X, However "
+			"Compatiable SEC3X device not found\n");
+		return -ENODEV;
+	}
+#endif
 	/* Get ASF Capabilities and store them for future use. */
 	ASFGetCapabilities(&asf_cap);
 
