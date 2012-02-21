@@ -2489,11 +2489,10 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		skb_set_network_header(skb, pSA->ulL2BlobLen);
 		skb_set_transport_header(skb, (ipHdrLen + pSA->ulL2BlobLen));
 	} else {
-ret_pkt:
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
 		ASFIPSEC_DEBUG("OutSA - L2blob info not available");
 		skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
-		return;
+		goto ret_pkt;
 	}
 
 
@@ -2555,8 +2554,78 @@ send_l2blob:
 		}
 	}
 	if (bl2blobRefresh == ASF_L2BLOB_REFRESH_DROP_PKT)
-		goto ret_pkt;
+		skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
+
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+ret_pkt:
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	if (ASFIPSecCbFn.pFnSAExpired) {
+		int cpu;
+		ASF_boolean_t bHard = ASF_FALSE;
+		ASF_boolean_t bExpiry = ASF_FALSE;
+
+		if (pSA->SAParams.hardKbyteLimit) {
+			unsigned long ulKBytes = 0;
+			for_each_possible_cpu(cpu) {
+				ulKBytes += pSA->ulBytes[cpu];
+			}
+			ulKBytes = ulKBytes/1024;
+
+			if (pSA->SAParams.softKbyteLimit <= ulKBytes) {
+				if (pSA->SAParams.hardKbyteLimit <= ulKBytes) {
+					bHard = ASF_TRUE;
+					skb->cb[SECFP_ACTION_INDEX] =
+						SECFP_DROP;
+					goto sa_expired1;
+				} else
+					bExpiry = ASF_TRUE;
+
+				ASFIPSEC_WARN(
+				"SA Expired KB=%u (hard=%d) SPI=0x%x",
+				ulKBytes, bHard, pSA->SAParams.ulSPI);
+			}
+		}
+		if (pSA->SAParams.hardPacketLimit) {
+			unsigned long uPacket = 0;
+
+			for_each_possible_cpu(cpu) {
+				uPacket += pSA->ulPkts[cpu];
+			}
+			if (pSA->SAParams.softPacketLimit <= uPacket) {
+				if (pSA->SAParams.hardPacketLimit <= uPacket) {
+					bHard = ASF_TRUE;
+					skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
+				} else
+					bExpiry = ASF_TRUE;
+
+				ASFIPSEC_WARN(
+				"SA Expired Pkt=%lu (hard=%d) SPI=0x%x",
+				uPacket, bHard, pSA->SAParams.ulSPI);
+			}
+		}
+sa_expired1:
+		if (bHard || (bExpiry && !pSA->bSoftExpiry)) {
+			ASF_IPAddr_t DestAddr;
+			if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+				DestAddr.ipv4addr =
+					pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+			} else {
+				DestAddr.bIPv4OrIPv6 = 1;
+				memcpy(DestAddr.ipv6addr,
+					pSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
+			}
+			ASFIPSecCbFn.pFnSAExpired(ulVSGId,
+				ulSPDContainerIndex,
+				pSA->SAParams.ulSPI,
+				pSA->SAParams.ucProtocol,
+				DestAddr,
+				bHard,
+				SECFP_OUT);
+			pSA->bSoftExpiry = ASF_TRUE;
+		}
+	}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+	return;
 }
 
 #ifdef CONFIG_ASF_SEC3x
@@ -7323,6 +7392,9 @@ inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr;
 	unsigned char *pNewICVLocBytePtr;
 #endif
+	ASF_boolean_t bHard = ASF_FALSE;
+	ASF_boolean_t bExpiry = ASF_FALSE;
+	ASF_IPAddr_t saDestAddr;
 	SPDInContainer_t *pContainer;
 	unsigned int *pCurICVLoc = 0, *pNewICVLoc = 0;
 	ASFIPSEC_DEBUG("v6 packet recieved");
@@ -7693,8 +7765,73 @@ So all these special boundary cases need to be handled for nr_frags*/
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
 			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 
+		if (ASFIPSecCbFn.pFnSAExpired) {
+			int cpu;
+			if (pSA->SAParams.hardKbyteLimit) {
+				unsigned long ulKBytes = len;
+				for_each_possible_cpu(cpu) {
+					ulKBytes += pSA->ulBytes[cpu];
+				}
+				ulKBytes = ulKBytes/1024;
+
+				if (pSA->SAParams.softKbyteLimit <= ulKBytes) {
+					saDestAddr.bIPv4OrIPv6 = 1;
+					memcpy(saDestAddr.ipv6addr,
+						ipv6h->daddr.s6_addr32,
+						sizeof(struct in6_addr));
+
+					if (pSA->SAParams.hardKbyteLimit <= ulKBytes) {
+						bHard = ASF_TRUE;
+						pHeadSkb->cb[SECFP_ACTION_INDEX] =
+							SECFP_DROP;
+						ASF_IPSEC_PPS_ATOMIC_INC(
+							IPSec4GblPPStats_g.IPSec4GblPPStat
+							[ASF_IPSEC_PP_GBL_CNT27]);
+						goto sa_expired;
+					} else
+						bExpiry = ASF_TRUE;
+
+					ASFIPSEC_WARN(
+					"SA Expired KB=%u (hard=%d) SPI=0x%x",
+					ulKBytes, bHard, pSA->SAParams.ulSPI);
+				}
+			}
+			if (pSA->SAParams.hardPacketLimit) {
+				unsigned long uPacket = 1;
+
+				for_each_possible_cpu(cpu) {
+					uPacket += pSA->ulPkts[cpu];
+				}
+				if (pSA->SAParams.softPacketLimit <= uPacket) {
+					saDestAddr.bIPv4OrIPv6 = 1;
+					memcpy(saDestAddr.ipv6addr,
+						ipv6h->daddr.s6_addr32,
+						sizeof(struct in6_addr));
+					if (pSA->SAParams.hardPacketLimit <= uPacket) {
+						bHard = ASF_TRUE;
+						pHeadSkb->cb[SECFP_ACTION_INDEX] =
+							SECFP_DROP;
+						ASF_IPSEC_PPS_ATOMIC_INC(
+							IPSec4GblPPStats_g.IPSec4GblPPStat
+							[ASF_IPSEC_PP_GBL_CNT27]);
+					} else
+						bExpiry = ASF_TRUE;
+
+					ASFIPSEC_WARN(
+					"SA Expired Pkt=%lu (hard=%d) SPI=0x%x",
+					uPacket, bHard, pSA->SAParams.ulSPI);
+				}
+			}
+		}
+sa_expired:
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+		if (pHeadSkb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {
+			pHeadSkb->data_len = 0;
+			secfp_desc_free(desc);
+			ASFSkbFree(pHeadSkb);
+			goto sa_error;
+		}
 		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
 		if (secfp_talitos_submit(pdev, desc,
@@ -7786,7 +7923,22 @@ So all these special boundary cases need to be handled for nr_frags*/
 		pSA->ulBytes[smp_processor_id()] += len;
 		pSA->ulPkts[smp_processor_id()]++;
 		pIPSecPolicyPPStats->NumInBoundOutPkts++;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+sa_error:
+		if (unlikely(bHard || (bExpiry && !pSA->bSoftExpiry))) {
+			pSA->bSoftExpiry = ASF_TRUE;
+			rcu_read_unlock();
 
+			ASFIPSecCbFn.pFnSAExpired(ulVSGId,
+				pSA->ulSPDInContainerIndex,
+				pSA->SAParams.ulSPI,
+				pSA->SAParams.ucProtocol,
+				saDestAddr,
+				bHard,
+				SECFP_IN);
+			return 0;
+		}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		rcu_read_unlock();
 		return 0;
 	} else {
@@ -7984,6 +8136,9 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	unsigned char *pNewICVLocBytePtr;
 #endif
 	signed int iRetVal;
+	ASF_boolean_t bHard = ASF_FALSE;
+	ASF_boolean_t bExpiry = ASF_FALSE;
+	ASF_IPAddr_t saDestAddr;
 	SPDInContainer_t *pContainer;
 	unsigned int *pCurICVLoc = 0, *pNewICVLoc = 0;
 
@@ -8375,8 +8530,66 @@ So all these special boundary cases need to be handled for nr_frags*/
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (pSA->SAParams.bAuth && pSA->SAParams.bDoAntiReplayCheck)
 			secfp_checkSeqNum(pSA, ulSeqNum, ulLowerBoundSeqNum, pHeadSkb);
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 
+		if (ASFIPSecCbFn.pFnSAExpired) {
+			int cpu;
+			if (pSA->SAParams.hardKbyteLimit) {
+				unsigned long ulKBytes = len;
+				for_each_possible_cpu(cpu) {
+					ulKBytes += pSA->ulBytes[cpu];
+				}
+				ulKBytes = ulKBytes/1024;
+
+				if (pSA->SAParams.softKbyteLimit <= ulKBytes) {
+					saDestAddr.ipv4addr = iph->daddr;
+					if (pSA->SAParams.hardKbyteLimit <= ulKBytes) {
+						bHard = ASF_TRUE;
+						pHeadSkb->cb[SECFP_ACTION_INDEX] =
+							SECFP_DROP;
+						ASF_IPSEC_PPS_ATOMIC_INC(
+							IPSec4GblPPStats_g.IPSec4GblPPStat
+							[ASF_IPSEC_PP_GBL_CNT27]);
+						goto sa_expired;
+					} else
+						bExpiry = ASF_TRUE;
+
+					ASFIPSEC_WARN(
+					"SA Expired KB=%u (hard=%d) SPI=0x%x",
+					ulKBytes, bHard, pSA->SAParams.ulSPI);
+				}
+			}
+			if (pSA->SAParams.hardPacketLimit) {
+				unsigned long uPacket = 1;
+
+				for_each_possible_cpu(cpu) {
+					uPacket += pSA->ulPkts[cpu];
+				}
+				if (pSA->SAParams.softPacketLimit <= uPacket) {
+					saDestAddr.ipv4addr = iph->daddr;
+					if (pSA->SAParams.hardPacketLimit <= uPacket) {
+						bHard = ASF_TRUE;
+						pHeadSkb->cb[SECFP_ACTION_INDEX] =
+							SECFP_DROP;
+						ASF_IPSEC_PPS_ATOMIC_INC(
+							IPSec4GblPPStats_g.IPSec4GblPPStat
+							[ASF_IPSEC_PP_GBL_CNT27]);
+					} else
+						bExpiry = ASF_TRUE;
+
+					ASFIPSEC_WARN(
+					"SA Expired Pkt=%lu (hard=%d) SPI=0x%x",
+					uPacket, bHard, pSA->SAParams.ulSPI);
+				}
+			}
+		}
+sa_expired:
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+		if (pHeadSkb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {
+			pHeadSkb->data_len = 0;
+			secfp_desc_free(desc);
+			ASFSkbFree(pHeadSkb);
+			goto sa_error;
+		}
 		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
 		if (secfp_talitos_submit(pdev, desc,
@@ -8474,7 +8687,19 @@ So all these special boundary cases need to be handled for nr_frags*/
 		pSA->ulBytes[smp_processor_id()] += len;
 		pSA->ulPkts[smp_processor_id()]++;
 		pIPSecPolicyPPStats->NumInBoundOutPkts++;
-
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+sa_error:
+		if (bHard || (bExpiry && !pSA->bSoftExpiry)) {
+			ASFIPSecCbFn.pFnSAExpired(ulVSGId,
+				pSA->ulSPDInContainerIndex,
+				pSA->SAParams.ulSPI,
+				pSA->SAParams.ucProtocol,
+				saDestAddr,
+				bHard,
+				SECFP_IN);
+			pSA->bSoftExpiry = ASF_TRUE;
+		}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		rcu_read_unlock();
 		return 0;
 	} else {
@@ -9552,7 +9777,7 @@ unsigned int secfp_createOutSA(
 		}
 		pSA->ulIvSizeInWords = pSA->SAParams.ulIvSize/4;
 		pSA->ulSecHdrLen = SECFP_ESP_HDR_LEN + pSA->SAParams.ulIvSize;
-
+		pSA->bSoftExpiry = 0;
 		/* starting the seq number from 2 to avoid the conflict
 		with the Networking Stack seq number */
 		atomic_set(&pSA->ulLoSeqNum, 2);
@@ -10104,6 +10329,7 @@ unsigned int secfp_CreateInSA(
 				local_bh_enable();
 			return SECFP_FAILURE;
 		}
+		pSA->bSoftExpiry = 0;
 		pSA->ulRcvMTU = ulMtu;
 		/* Update the magic number and index in SPI table for easy reference */
 		pSA->ulSPDInContainerIndex = ulContainerIndex;

@@ -614,9 +614,14 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	} else
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
 
-	if (xfrm->lft.hard_byte_limit != XFRM_INF) {
+	if (bVolumeBasedExpiry && xfrm->lft.hard_byte_limit != XFRM_INF) {
 		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1024;
 		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1024;
+	}
+
+	if (bPacketBasedExpiry && xfrm->lft.hard_packet_limit != XFRM_INF) {
+		SAParams.softPacketLimit = xfrm->lft.soft_packet_limit;
+		SAParams.hardPacketLimit = xfrm->lft.hard_packet_limit;
 	}
 
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
@@ -869,9 +874,14 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	} else
 		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
 
-	if (xfrm->lft.hard_byte_limit != XFRM_INF) {
+	if (bVolumeBasedExpiry && xfrm->lft.hard_byte_limit != XFRM_INF) {
 		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1024;
 		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1024;
+	}
+
+	if (bPacketBasedExpiry && xfrm->lft.hard_packet_limit != XFRM_INF) {
+		SAParams.softPacketLimit = xfrm->lft.soft_packet_limit;
+		SAParams.hardPacketLimit = xfrm->lft.hard_packet_limit;
 	}
 
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
@@ -1648,6 +1658,11 @@ void asfctrl_xfrm_dump_state(struct xfrm_state *xfrm)
 		ASFCTRL_INFO(" alg_name=%s, key_len=%d, icv_len=%d",
 		aead->alg_name, aead->alg_key_len, aead->alg_icv_len);
 
+	ASFCTRL_INFO(" LifeTime Soft-Hard = %u -%u KBytes = %u - %u",
+		xfrm->lft.soft_use_expires_seconds,
+		xfrm->lft.hard_use_expires_seconds,
+		xfrm->lft.soft_byte_limit/1024,
+		xfrm->lft.hard_byte_limit/1024);
 }
 #endif
 

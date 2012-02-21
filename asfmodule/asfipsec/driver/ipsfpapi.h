@@ -55,6 +55,7 @@ typedef struct ASFIPSecCap_s {
 	bMultiSecProto:1,
 	bLifeTimeSec:1,
 	bLifeTimeKB:1,
+	bLifeTimePacket:1,
 	bNATTraversal:1,
 	bRedSideFragmentation:1,
 	bPeerGWAdoption:1,
@@ -246,6 +247,7 @@ typedef enum asfIPSecGlobalPPStats {
 	ASF_IPSEC_PP_GBL_CNT24, /*Out SA not Found*/
 	ASF_IPSEC_PP_GBL_CNT25, /*Out L2blob not Found*/
 	ASF_IPSEC_PP_GBL_CNT26, /*Desc alloc Failure*/
+	ASF_IPSEC_PP_GBL_CNT27, /*SA Expired*/
 	ASF_IPSEC_PP_GBL_CNT_MAX
 } asfIPSecGlobalPPStats_e;
 
@@ -450,10 +452,12 @@ typedef struct {
 	protocol:8;
 	int   authAlgo;
 	int  encAlgo;
-	ASF_uint32_t softKbyteLimit;
-	ASF_uint32_t hardKbyteLimit;
-	__u64 softSecsLimit;
-	__u64 hardSecsLimit;
+	ASF_uint64_t softKbyteLimit;
+	ASF_uint64_t hardKbyteLimit;
+	ASF_uint64_t softPacketLimit;
+	ASF_uint64_t hardPacketLimit;
+	ASF_uint64_t softSecsLimit;
+	ASF_uint64_t hardSecsLimit;
 	ASF_IPSecTunEndAddr_t TE_Addr;
 	ASF_uint8_t   *authKey;
 	ASF_uint32_t   authKeyLenBits;
@@ -702,8 +706,9 @@ typedef ASF_void_t    (*pASFIPSecCbSAExpired_f)(
 			ASF_uint32_t ulVSGId,
 			ASF_uint32_t ulSPDContainerIndex,
 			ASF_uint32_t ulSPI,
-			ASF_uint8_t  ucProtocol,
-			ASF_uchar8_t bSoftExpiry,
+			ASF_uint8_t ucProtocol,
+			ASF_IPAddr_t DestAddr,
+			ASF_uchar8_t bHardExpiry,
 			ASF_uchar8_t bOutBound);
 
 typedef struct ASFIPSecCbfFn_s {
@@ -828,8 +833,8 @@ typedef struct ASFIPSecGetSAQueryParams_s {
 } ASFIPSecGetSAQueryParams_t;
 
 typedef struct ASFSAStats_s {
-	ASF_uint32_t ulPkts;
-	ASF_uint32_t ulBytes;
+	ASF_uint64_t ulPkts;
+	ASF_uint64_t ulBytes;
 } ASFSAStats_t;
 
 /* Max capacity default values */

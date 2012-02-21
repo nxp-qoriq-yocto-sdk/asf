@@ -65,8 +65,10 @@ ASFIPSecCap_t g_ipsec_cap;
 uint32_t asfctrl_vsg_ipsec_cont_magic_id;
 uint32_t asfctrl_max_sas = SECFP_MAX_SAS;
 uint32_t asfctrl_max_policy_cont = ASFCTRL_MAX_SPD_CONTAINERS;
-int bRedSideFragment = ASF_TRUE;
-int bAntiReplayCheck = ASF_FALSE;
+bool bRedSideFragment = ASF_TRUE;
+bool bAntiReplayCheck = ASF_FALSE;
+bool bVolumeBasedExpiry = ASF_FALSE;
+bool bPacketBasedExpiry = ASF_FALSE;
 
 struct asf_ipsec_callbackfn_s asf_sec_fns = {
 		asfctrl_xfrm_enc_hook,
@@ -600,6 +602,64 @@ ASF_void_t asfctrl_ipsec_fn_Runtime(ASF_uint32_t ulVSGId,
 	return;
 }
 
+/*todo add IPv6 Support */
+ASF_void_t asfctrl_ipsec_fn_SAExpired(ASF_uint32_t ulVSGId,
+			ASF_uint32_t ulSPDContainerIndex,
+			ASF_uint32_t ulSPI,
+			ASF_uint8_t ucProtocol,
+			ASF_IPAddr_t DestAddr,
+			ASF_uchar8_t bHardExpiry,
+			ASF_uchar8_t bOutBound)
+{
+	struct xfrm_state *x;
+	xfrm_address_t daddr;
+	unsigned short family;
+	int bVal = in_softirq();
+	if (!bVal)
+		local_bh_disable();
+
+	ASFCTRL_FUNC_TRACE;
+	ASFCTRL_WARN("SA Expired (dir=%d) hard=%d for SPI = 0x%x",
+		bOutBound, bHardExpiry, ulSPI);
+
+	/*1.  find the SA (xfrm pointer) on the basis of SPI,
+	 * protcol, dest Addr */
+
+	family = AF_INET;
+	daddr.a4 = (DestAddr.ipv4addr);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
+	x = xfrm_state_lookup(&init_net, 0, &daddr, ulSPI, ucProtocol, family);
+#else
+	x = xfrm_state_lookup(&init_net, &daddr, ulSPI, ucProtocol, family);
+#endif
+	if (unlikely(!x)) {
+		ASFCTRL_INFO("Unable to get SA SPI=0x%x, dest=0x%x",
+				ulSPI, daddr.a4);
+		goto back;
+	}
+	if (unlikely(x->km.state != XFRM_STATE_VALID)) {
+		ASFCTRL_INFO("Invalid SA SPI=0x%x, dest=0x%x",
+				ulSPI, daddr.a4);
+		goto back;
+	}
+
+	x->km.dying = 1;
+
+	if (bHardExpiry) {
+		x->km.state = XFRM_STATE_EXPIRED;
+		km_state_expired(x, 1, 0);
+		tasklet_hrtimer_start(&x->mtimer, ktime_set(0, 0),
+				HRTIMER_MODE_REL);
+	} else
+		km_state_expired(x, 0, 0);
+back:
+	if (!bVal)
+		local_bh_enable();
+	return;
+}
+
+
 ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
 					ASF_uint16_t ulDeviceID)
@@ -732,6 +792,14 @@ module_param(bAntiReplayCheck, bool, 0444);
 MODULE_PARM_DESC(bAntiReplayCheck, "Bool - Whether ASF-IPsec "\
 	"Anti Replay Check is Enabled");
 
+module_param(bVolumeBasedExpiry, bool, 0444);
+MODULE_PARM_DESC(bVolumeBasedExpiry, "Bool - Whether ASF-IPsec "\
+	"volume-based SA Expiry is Enabled");
+
+module_param(bPacketBasedExpiry, bool, 0444);
+MODULE_PARM_DESC(bPacektBasedExpiry, "Bool - Whether ASF-IPsec "\
+	"Packet-based SA Expiry is Enabled");
+
 static int __init asfctrl_linux_ipsec_init(void)
 {
 	ASFIPSecCbFn_t Fnptr;
@@ -812,7 +880,11 @@ static int __init asfctrl_linux_ipsec_init(void)
 	Fnptr.pFnRuntime = asfctrl_ipsec_fn_Runtime;
 	Fnptr.pFnVSGMap = asfctrl_ipsec_fn_VSGMappingNotFound;
 	Fnptr.pFnIfaceNotFound = asfctrl_ipsec_fn_InterfaceInfoNotFound;
-	Fnptr.pFnSAExpired = NULL;
+	if (bPacketBasedExpiry || bVolumeBasedExpiry)
+		Fnptr.pFnSAExpired = asfctrl_ipsec_fn_SAExpired;
+	else
+		Fnptr.pFnSAExpired = NULL;
+
 	ASFIPSecRegisterCallbacks(&Fnptr);
 
 	asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info_fn,

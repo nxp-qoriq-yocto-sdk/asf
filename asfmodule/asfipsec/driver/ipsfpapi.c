@@ -597,7 +597,8 @@ ASF_void_t ASFIPSecGetCapabilities(ASFIPSecCap_t *pCap)
 
 		pCap->bEsn = 1;	/* ESN feature supported */
 		pCap->bMultiSecProto = 0; /* Multi security protocol not supported */
-		pCap->bLifeTimeKB = 0; /* Life Time in Kilo bytes not supported */
+		pCap->bLifeTimeKB = 1; /*LifeTime in KiloBytes supported*/
+		pCap->bLifeTimePacket = 1; /* Life Time in Packet supported */
 		pCap->bLifeTimeSec = 1;	/* Life Time in Seconds supported */
 		pCap->bNATTraversal = 1; /* Nat traversal supported */
 		pCap->bRedSideFragmentation = 1; /* Redside fragmentation supported */
@@ -783,6 +784,9 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 
 	pSAParams->softKbyteLimit = pASFSAParams->softKbyteLimit;
 	pSAParams->hardKbyteLimit = pASFSAParams->hardKbyteLimit;
+	pSAParams->softPacketLimit = pASFSAParams->softPacketLimit;
+	pSAParams->hardPacketLimit = pASFSAParams->hardPacketLimit;
+
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (pASFSAParams->TE_Addr.IP_Version == 4) {
 #endif

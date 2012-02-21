@@ -22,7 +22,6 @@
 #include "ipsecfp.h"
 #include "ipseccmn.h"
 #include <linux/proc_fs.h>
-
 /*
  * Implement following proc
  *	/proc/asf/ipsec/flows
@@ -300,6 +299,8 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
 	printk(KERN_INFO"%u (Desc Alloc Error )\n",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
+	printk(KERN_INFO"%u (SA Expired )\n",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT27]);
 	return 0;
 }
 
@@ -458,6 +459,13 @@ static void print_SAParams(SAParams_t *SAParams)
 		SAParams->bDoAntiReplayCheck,
 		SAParams->bDoUDPEncapsulationForNATTraversal);
 
+	printk(KERN_INFO "LifeKBytes Soft = %lu - Hard = %lu:",
+		SAParams->softKbyteLimit,
+		SAParams->hardKbyteLimit);
+
+	printk(KERN_INFO "LifePacket Soft = %lu - Hard = %lu:",
+		SAParams->softPacketLimit,
+		SAParams->hardPacketLimit);
 }
 
 static int display_secfp_proc_out_sa(char *page, char **start,
@@ -522,9 +530,6 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 				ASFIPSecGetSAQueryParams_t inParams;
 
 				print_SAParams(&pOutSA->SAParams);
-				printk(KERN_INFO"L2BlobLen = %d, Magic = %d\n",
-					pOutSA->ulL2BlobLen,
-				pOutSA->l2blobConfig.ulL2blobMagicNumber);
 
 				inParams.ulVSGId = ulVSGId;
 				inParams.ulTunnelId = ulTunnelId;
@@ -536,9 +541,12 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 						pOutSA->SAParams.ucProtocol;
 				inParams.bDir = SECFP_OUT;
 				ASFIPSecSAQueryStats(&inParams, &outParams);
-				printk(KERN_INFO"Stats:ulBytes= %u, ulPkts= %u",
+				printk(KERN_INFO"Stats:ulBytes=%lu, ulPkts=%lu",
 					outParams.ulBytes, outParams.ulPkts);
 
+				printk(KERN_INFO"L2BlobLen = %d, Magic = %d\n",
+					pOutSA->ulL2BlobLen,
+				pOutSA->l2blobConfig.ulL2blobMagicNumber);
 			}
 		}
 		printk(KERN_INFO"\n");
@@ -625,7 +633,7 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 					pInSA->SAParams.ucProtocol;
 				inParams.bDir = SECFP_IN;
 				ASFIPSecSAQueryStats(&inParams, &outParams);
-				printk(KERN_INFO"Stats:ulBytes= %u, ulPkts= %u",
+				printk(KERN_INFO"Stats:ulBytes=%lu,ulPkts= %lu",
 					outParams.ulBytes, outParams.ulPkts);
 			}
 		}

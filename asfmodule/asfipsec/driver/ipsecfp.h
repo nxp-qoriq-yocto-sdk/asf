@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	ipsecfp.h
@@ -382,8 +382,10 @@ typedef struct SAParams_s {
 	/* Nonce:4 bytes, followed by 8 bytes IV + 4 bytes counter */
 	ASF_IPSec_Nat_Info_t IPsecNatInfo;
 	unsigned int ulCId;
-	unsigned int softKbyteLimit;
-	unsigned int hardKbyteLimit;
+	unsigned long softPacketLimit;
+	unsigned long hardPacketLimit;
+	unsigned long softKbyteLimit;
+	unsigned long hardKbyteLimit;
 } SAParams_t;
 
 
@@ -428,9 +430,9 @@ typedef struct inSA_s {
 					for high order sequence number
 					 if AH, ICV length */
 	unsigned int ulRcvMTU;
-	unsigned int ulPkts[NR_CPUS];
-	unsigned int ulBytes[NR_CPUS];
 	unsigned int ulTunnelId;
+	unsigned long ulPkts[NR_CPUS];
+	unsigned long ulBytes[NR_CPUS];
 	AsfSPDPolicyPPStats_t	PolicyPPStats[NR_CPUS];
 	AsfSPDPolPPStats_t	 PPStats;
 	/* For Gateway Adaptation purposes */
@@ -438,11 +440,12 @@ typedef struct inSA_s {
 	unsigned int ulSPDOutContainerMagicNumber;
 	unsigned int ulOutSPI;
 	unsigned int ulHOSeqNum;
-	unsigned char bVerifySASel:1,
-	bVerifySPDSel:1,
-	bSendPktToNormalPath:1;
 	unsigned int ulHashVal;
-	char bHeap;
+	unsigned char bVerifySASel:1,
+		bVerifySPDSel:1,
+		bSendPktToNormalPath:1,
+		bSoftExpiry:1,
+		bHeap:1;
 	struct inSA_s *pNext;
 	struct inSA_s *pPrev;
 } inSA_t;
@@ -608,22 +611,23 @@ typedef struct outSA_s {
 	unsigned int ulSecOverHead;
 	unsigned int ulSecLenIncrease;
 	unsigned int ulPathMTU;
-	unsigned int ulPkts[NR_CPUS];
-	unsigned int ulBytes[NR_CPUS];
+	unsigned long ulPkts[NR_CPUS];
+	unsigned long ulBytes[NR_CPUS];
 	AsfSPDPolicyPPStats_t	PolicyPPStats[NR_CPUS];
-	AsfSPDPolPPStats_t	 PPStats;
+	AsfSPDPolPPStats_t	PPStats;
 	unsigned int macAddr[6];
 	unsigned int ulTunnelId;
 	struct net_device *odev;
 	OutSelList_t *pSelList;
-	bool bl2blob;
-	asfTmr_t			*pL2blobTmr;
-	bool bIVDataPresent;
-	char bHeap;
+	unsigned short bSoftExpiry:1,
+		bIVDataPresent:1,
+		bl2blob:1,
+		bHeap:1;
 	unsigned short bVLAN:1, bPPPoE:1;
 	unsigned char	l2blob[ASF_MAX_L2BLOB_LEN];
 	unsigned short	ulL2BlobLen;
 	unsigned short	tx_vlan_id; /*valid if bVLAN is 1*/
+	asfTmr_t			*pL2blobTmr;
 	ASFFFPL2blobConfig_t	l2blobConfig;
 	unsigned int ulCompleteOverHead;
 
