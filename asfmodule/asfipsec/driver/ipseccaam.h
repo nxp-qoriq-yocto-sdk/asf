@@ -26,16 +26,19 @@
 struct caam_ctx {
 	struct device *jrdev;
 	u32 *sh_desc;
+	u32 *sh_desc_mem;
 	dma_addr_t shared_desc_phys;
 	u32 class1_alg_type;
 	u32 class2_alg_type;
+	u32 class1_alg;
+	u32 class2_alg;
 	u32 alg_op;
 	u8 *key;
 	dma_addr_t key_phys;
-	unsigned int enckeylen;
-	unsigned int split_key_len;
-	unsigned int split_key_pad_len;
-	unsigned int authsize;
+	u32 enckeylen;
+	u32 split_key_len;
+	u32 split_key_pad_len;
+	u32 authsize;
 };
 
 struct link_tbl_entry {
