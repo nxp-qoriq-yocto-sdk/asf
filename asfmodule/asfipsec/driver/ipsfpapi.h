@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	ipsfpapi.h
@@ -16,16 +16,9 @@
 #ifndef IPS_FP_API_H
 #define IPS_FP_API_H
 
-#ifdef VQA_IPSEC_ASF_SUPPORT
-#include "asf.h"
-#else
 #include "../../asfffp/driver/asf.h"
-#include "../../asfffp/driver/asfipsec.h"
-#endif
-#include <linux/types.h>
-
-#define ASF_IPSEC_IKE_NATtV1    1
-#define ASF_IPSEC_IKE_NATtV2    2
+#define ASF_IPSEC_IKE_NATtV1 1
+#define ASF_IPSEC_IKE_NATtV2 2
 
 typedef atomic_t ASFAtomic_t;
 
@@ -267,17 +260,14 @@ typedef struct asfIPSecPPGlobalStats_st {
 
 typedef struct ASFIPSec4GlobalPPStats_st {
 	ASF_uint32_t IPSec4GblPPStat[ASF_IPSEC4_PP_GBL_CNT_MAX];
-	ASF_uint32_t ulMax;
 } ASFIPSec4GlobalPPStats_t;
 
 typedef struct ASFSPDPolPPStats_st {
-	ASF_uint32_t  IPSecPolPPStats[ASF_IPSEC_PP_POL_CNT_MAX];
-	ASF_uint32_t ulMax;
+	ASF_uint32_t IPSecPolPPStats[ASF_IPSEC_PP_POL_CNT_MAX];
 } ASFSPDPolPPStats_t;
 
 typedef struct asfIPSec4GlobalPPStats_st {
 	ASFAtomic_t IPSec4GblPPStat[ASF_IPSEC4_PP_GBL_CNT_MAX];
-	ASF_uint32_t ulMax;
 } AsfIPSec4GlobalPPStats_t;
 
 typedef struct asfSPDPolicyPPStats_st {
@@ -517,6 +507,13 @@ typedef struct ASFIPSecRuntimeDelInSAArgs_s {
 	ASF_IPAddr_t DestAddr;
 	ASF_uint8_t  ucProtocol;
 } ASFIPSecRuntimeDelInSAArgs_t;
+
+typedef enum {
+	ASFIPSEC_UPDATE_LOCAL_GW = 0,
+	ASFIPSEC_UPDATE_PEER_GW = 1,
+	ASFIPSEC_UPDATE_MTU = 2,
+	ASFIPSEC_UPDATE_L2BLOB = 3
+} ASFIPSecModifySAChangeType;
 
 typedef struct ASFIPSecRuntimeModOutSAArgs_s {
 	ASF_uint32_t ulTunnelId;
@@ -1017,29 +1014,5 @@ typedef struct ASFIPSecGlobalErrorCounters_st {
   atomic_inc((atomic_t *) &(pSA->PPStats.IPSecPolPPStats[Var]));\
 } \
 }
-
-#define ASFIPSEC_ERR	asf_err
-
-#ifdef ASF_IPSEC_DEBUG
-#define ASFIPSEC_PRINT	asf_print
-#define ASFIPSEC_WARN	asf_warn
-#define ASFIPSEC_DEBUG	asf_debug
-#define ASFIPSEC_DBGL2	asf_debug_l2
-
-#define ASFIPSEC_TRACE	asf_trace
-#define ASFIPSEC_FENTRY	asf_fentry
-#define ASFIPSEC_FEXIT	asf_fexit
-#else
-
-#define ASFIPSEC_PRINT(fmt, arg...)
-#define ASFIPSEC_WARN(fmt, arg...)
-#define ASFIPSEC_DEBUG(fmt, arg...)
-#define ASFIPSEC_DBGL2(fmt, arg...)
-
-
-#define ASFIPSEC_TRACE
-#define ASFIPSEC_FENTRY
-#define ASFIPSEC_FEXIT
-#endif
 
 #endif

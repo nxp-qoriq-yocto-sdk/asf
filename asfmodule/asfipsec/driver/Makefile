@@ -1,5 +1,5 @@
 #/**************************************************************************
-# * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+# * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
 # ***************************************************************************/
 #/*
 # * File:	Makefile
@@ -45,8 +45,10 @@ EXTRA_CFLAGS += -DASF_IPSEC_FP_SUPPORT
 ifeq ($(CONFIG_ASF_TERMINATION), y)
 EXTRA_CFLAGS += -DASF_TERM_FP_SUPPORT
 endif
+ifeq ($(CONFIG_ASF_FEATURE_OPTION_FULL),y)
 ifeq ($(CONFIG_GIANFAR_SG_SUPPORT), y)
 EXTRA_CFLAGS += -DASF_SG_SUPPORT -DSECFP_SG_SUPPORT
+endif
 endif
 #EXTRA_CFLAGS += -DASF_DEBUG
 #EXTRA_CFLAGS += -DASF_IPSEC_DEBUG
@@ -56,10 +58,13 @@ endif
 obj-m += asfipsec.o
 
 asfipsec-y := \
-	     ipsecfp.o \
-	     ipsfpapi.o \
-	     ipsecproc.o
+	ipsecfp.o \
+	ipsfpapi.o \
+	ipsecproc.o \
+	ipsecfp_innerapi.o
 
+asfipsec-$(CONFIG_ASF_SEC3x) += ipsecfp_sec3x.o
+asfipsec-$(CONFIG_ASF_SEC4x) += ipsecfp_sec4x.o
 all:
 	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) modules
 

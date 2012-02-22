@@ -64,18 +64,6 @@ ASFIPSecCbFn_t ASFIPSecCbFn;
 	if (ulMagicNumber == 0)
 
 
-extern ptrIArry_tbl_t secfp_InDB;
-extern ptrIArry_tbl_t secfp_OutDB;
-extern ptrIArry_tbl_t secFP_OutSATable;
-extern AsfIPSec4GlobalPPStats_t IPSec4GblPPStats_g;
-extern   inSAList_t *secFP_SPIHashTable;
-extern SecTunnelIface_t **secFP_TunnelIfaces;
-extern spinlock_t secfp_TunnelIfaceCIIndexListLock;
-
-extern unsigned int    *pulVSGMagicNumber;
-extern unsigned int    *pulVSGL2blobMagicNumber;
-extern unsigned int  **pulTunnelMagicNumber;
-extern unsigned int ulTimeStamp_g;
 extern void secfp_removeCINodeFromTunnelList(unsigned int ulVSGId,
 					     unsigned int ulTunnelId,  struct SPDCILinkNode_s *pCINode, bool bDir);
 static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
@@ -630,7 +618,7 @@ ASF_void_t ASFIPSecGetCapabilities(ASFIPSecCap_t *pCap)
 		pCap->ulMaxSPDContainers = ulMaxSPDContainers_g;
 		pCap->ulMaxSupportedIPSecSAs = ulMaxSupportedIPSecSAs_g;
 
-		pCap->bBufferHomogenous = SECFP_HM_BUFFER; /* Homogenous buffer supported */
+		pCap->bBufferHomogenous = ASF_TRUE; /* Homogenous buffer */
 
 		ASFIPSEC_FEXIT;
 		return;
@@ -706,7 +694,7 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 				       SAParams_t    *pSAParams)
 {
 	if (pASFSAParams->authKey) {
-		pSAParams->bAuth = TRUE;
+		pSAParams->bAuth = ASF_TRUE;
 		switch (pASFSAParams->authAlgo) {
 		case ASF_IPSEC_AALG_MD5HMAC:
 			pSAParams->ucAuthAlgo = SECFP_HMAC_MD5;
@@ -735,11 +723,11 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 				pSAParams->AuthKeyLen);
 	} else {
 		pSAParams->ucAuthAlgo = SECFP_HMAC_NULL;
-		pSAParams->bAuth = FALSE;
+		pSAParams->bAuth = ASF_FALSE;
 	}
 
 	if (pASFSAParams->encDecKey) {
-		pSAParams->bEncrypt = TRUE;
+		pSAParams->bEncrypt = ASF_TRUE;
 		switch (pASFSAParams->encAlgo) {
 		case ASF_IPSEC_EALG_DESCBC:
 			pSAParams->ucCipherAlgo = SECFP_DES;
@@ -768,7 +756,7 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 					pSAParams->EncKeyLen);
 	} else {
 		pSAParams->ucCipherAlgo = SECFP_ESP_NULL;
-		pSAParams->bEncrypt = FALSE;
+		pSAParams->bEncrypt = ASF_FALSE;
 		pSAParams->ulBlockSize = 0;
 		pSAParams->ulIvSize = 0;
 	}
@@ -884,7 +872,7 @@ ASF_void_t ASFIPSecSPDContainerQueryStats(ASFIPSecGetContainerQueryParams_t *pIn
 			for (pSA = secFP_SPIHashTable[hashVal].pHeadSA;
 			    pSA != NULL; pSA = pSA->pNext) {
 				rcu_read_lock();
-				for (Index = 0; Index < NR_CPUS; Index++) {
+				for_each_possible_cpu(Index) {
 					ASF_IPSEC_ATOMIC_ADD(pInContainer->PPStats.IPSecPolPPStats[0], pSA->PolicyPPStats[Index].NumInBoundInPkts);
 					ASF_IPSEC_ATOMIC_ADD(pInContainer->PPStats.IPSecPolPPStats[1], pSA->PolicyPPStats[Index].NumInBoundOutPkts);
 					ASF_IPSEC_ATOMIC_ADD(pInContainer->PPStats.IPSecPolPPStats[2], pSA->PolicyPPStats[Index].NumOutBoundInPkts);
@@ -923,7 +911,7 @@ ASF_void_t ASFIPSecSPDContainerQueryStats(ASFIPSecGetContainerQueryParams_t *pIn
 
 				pOldSA = pOutSA;
 				rcu_read_lock();
-				for (Index = 0; Index < NR_CPUS; Index++) {
+				for_each_possible_cpu(Index) {
 					ASF_IPSEC_ATOMIC_ADD(pOutContainer->PPStats.IPSecPolPPStats[0], pOutSA->PolicyPPStats[Index].NumInBoundInPkts);
 					ASF_IPSEC_ATOMIC_ADD(pOutContainer->PPStats.IPSecPolPPStats[1], pOutSA->PolicyPPStats[Index].NumInBoundOutPkts);
 					ASF_IPSEC_ATOMIC_ADD(pOutContainer->PPStats.IPSecPolPPStats[2], pOutSA->PolicyPPStats[Index].NumOutBoundInPkts);
@@ -946,7 +934,7 @@ ASF_void_t ASFIPSecSPDContainerQueryStats(ASFIPSecGetContainerQueryParams_t *pIn
 			pOutSA = (outSA_t *)  ptrIArray_getData(&secFP_OutSATable, pOutSALinkNode->ulSAIndex);
 			rcu_read_lock();
 			if (pOutSA) {
-				for (Index = 0; Index < NR_CPUS; Index++) {
+				for_each_possible_cpu(Index) {
 					ASF_IPSEC_ATOMIC_ADD(pOutContainer->PPStats.IPSecPolPPStats[0], pOutSA->PolicyPPStats[Index].NumInBoundInPkts);
 					ASF_IPSEC_ATOMIC_ADD(pOutContainer->PPStats.IPSecPolPPStats[1], pOutSA->PolicyPPStats[Index].NumInBoundOutPkts);
 					ASF_IPSEC_ATOMIC_ADD(pOutContainer->PPStats.IPSecPolPPStats[2], pOutSA->PolicyPPStats[Index].NumOutBoundInPkts);
@@ -1018,11 +1006,11 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 	}
 	if (pInParams->bDir == SECFP_IN) {
 		rcu_read_lock();
-		pInSA = ASF_findInv4SA(pInParams->ulVSGId,
+		pInSA = secfp_findInSA(pInParams->ulVSGId,
 				pInParams->ucProtocol, pInParams->ulSPI,
-				pInParams->gwAddr.ipv4addr, &hashVal);
+				pInParams->gwAddr, &hashVal);
 		if (pInSA) {
-			for (Index = 0; Index < NR_CPUS; Index++) {
+			for_each_possible_cpu(Index) {
 				pOutParams->ulPkts += pInSA->ulPkts[Index];
 				pOutParams->ulBytes += pInSA->ulBytes[Index];
 			}
@@ -1046,7 +1034,7 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 				if (pOutSA && (pOutSA->SAParams.ulSPI == pInParams->ulSPI) &&
 				    (pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr ==  pInParams->gwAddr.ipv4addr) &&
 				    (pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
-					for (Index = 0; Index < NR_CPUS; Index++) {
+					for_each_possible_cpu(Index) {
 						pOutParams->ulPkts += pOutSA->ulPkts[Index];
 						pOutParams->ulBytes += pOutSA->ulBytes[Index];
 					}
@@ -1065,7 +1053,7 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 			if (pOutSA && (pOutSA->SAParams.ulSPI == pInParams->ulSPI &&
 				       pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr == pInParams->gwAddr.ipv4addr &&
 				       pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
-				for (Index = 0; Index < NR_CPUS; Index++) {
+				for_each_possible_cpu(Index) {
 					pOutParams->ulPkts += pOutSA->ulPkts[Index];
 					pOutParams->ulBytes += pOutSA->ulBytes[Index];
 				}
@@ -1148,7 +1136,7 @@ ASF_void_t ASFIPSecGetFirstNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 			if (ulCount == pParams->ulNumSPDContainers) {
 				pSPDContainers->ulNumSPDContainers = ulCount;
 				if (pCINode->pNext != NULL)
-					pSPDContainers->ucMoreSPDs = TRUE;
+					pSPDContainers->ucMoreSPDs = ASF_TRUE;
 				break;
 			}
 		}
@@ -1241,7 +1229,7 @@ ASF_void_t  ASFIPSecGetNextNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 			if (ulCount == pParams->ulNumSPDContainers) {
 				pSPDContainers->ulNumSPDContainers = ulCount;
 				if (pCINode->pNext != NULL)
-					pSPDContainers->ucMoreSPDs = TRUE;
+					pSPDContainers->ucMoreSPDs = ASF_TRUE;
 				break;
 			}
 		}
@@ -1526,7 +1514,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 						pOutSA = (outSA_t *)  ptrIArray_getData(&secFP_OutSATable,
 										      pOutContainer->SAHolder.ulSAIndex[ii]);
 						if (pOutSA) {
-							pSAs->ucMoreSAs = TRUE;
+							pSAs->ucMoreSAs = ASF_TRUE;
 							break;
 						}
 					}
@@ -1560,7 +1548,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 				pOutSA = (outSA_t *)  ptrIArray_getData(&secFP_OutSATable,
 								      pOutSALinkNode->ulSAIndex);
 				if ((pOutSA)) {
-					pSAs->ucMoreSAs = TRUE;
+					pSAs->ucMoreSAs = ASF_TRUE;
 					break;
 				}
 			}
@@ -1600,7 +1588,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 		}
 		pSAs->ulNumSAs = ulCount;
 		if ((pInSA)) {
-			pSAs->ucMoreSAs = TRUE;
+			pSAs->ucMoreSAs = ASF_TRUE;
 		}
 	}
 	if (!bVal)
@@ -1619,7 +1607,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 	outSA_t *pOutSA  = NULL, *pOldSA = NULL;
 	inSA_t  *pInSA =  NULL;
 	unsigned int ulHashVal;
-	ASF_boolean_t  bMark = FALSE;
+	ASF_boolean_t bMark = ASF_FALSE;
 
 	if ((!pSAParams->ulNumSAs) || (!pSAs->SA)) {
 		ASFIPSEC_DEBUG("Supplied NULL as input ");
@@ -1672,10 +1660,10 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 					if (pOutSA->SAParams.ulSPI == pSAs->SA[ulCount].ulSPI &&
 					    pOutSA->SAParams.ucProtocol == pSAs->SA[ulCount].ucProtocol &&
 					    pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr  == pSAs->SA[ulCount].gwAddr.ipv4addr) {
-						bMark = TRUE;
+						bMark = ASF_TRUE;
 						continue;
 					}
-					if (bMark == TRUE) {
+					if (bMark == ASF_TRUE) {
 						pSAs->SA[ulCount].ulSPI = pOutSA->SAParams.ulSPI;
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 						pSAs->SA[ulCount].ucProtocol = pOutSA->SAParams.ucProtocol;
@@ -1699,7 +1687,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 						pOutSA = (outSA_t *)  ptrIArray_getData(&secFP_OutSATable,
 										      pOutContainer->SAHolder.ulSAIndex[ii]);
 						if (pOutSA) {
-							pSAs->ucMoreSAs = TRUE;
+							pSAs->ucMoreSAs = ASF_TRUE;
 							break;
 						}
 					}
@@ -1713,10 +1701,10 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 					if (pOutSA->SAParams.ulSPI == pSAs->SA[ulCount].ulSPI &&
 					    pOutSA->SAParams.ucProtocol == pSAs->SA[ulCount].ucProtocol &&
 					    pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr  == pSAs->SA[ulCount].gwAddr.ipv4addr) {
-						bMark = TRUE;
+						bMark = ASF_TRUE;
 						continue;
 					}
-					if (bMark == TRUE) {
+					if (bMark == ASF_TRUE) {
 						pSAs->SA[ulCount].ulSPI = pOutSA->SAParams.ulSPI;
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 						pSAs->SA[ulCount].ucProtocol = pOutSA->SAParams.ucProtocol;
@@ -1739,7 +1727,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 				pOutSA = (outSA_t *)  ptrIArray_getData(&secFP_OutSATable,
 								      pOutSALinkNode->ulSAIndex);
 				if ((pOutSA)) {
-					pSAs->ucMoreSAs = TRUE;
+					pSAs->ucMoreSAs = ASF_TRUE;
 					break;
 				}
 			}
@@ -1761,10 +1749,10 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 				if ((pInSA->SAParams.ucProtocol == pSAParams->SPDContainer.SAInfo[ulCount].ucProtocol)
 				    && (pInSA->SAParams.ulSPI == pSAParams->SPDContainer.SAInfo[ulCount].ulSPI)
 				    && (pInSA->SAParams.tunnelInfo.addr.iphv4.daddr == pSAParams->SPDContainer.SAInfo[ulCount].gwAddr.ipv4addr)) {
-					bMark = TRUE;
+					bMark = ASF_TRUE;
 					continue;
 				}
-				if (bMark == TRUE) {
+				if (bMark == ASF_TRUE) {
 					if ((pInSA->ulSPDInContainerIndex == pSAParams->SPDContainer.ulContainerId)
 					    && (pInSA->SAParams.ulSPI == pSPILinkNode->ulSPIVal)) {
 						pSAs->SA[ulCount].ulSPI = pInSA->SAParams.ulSPI;
@@ -1787,7 +1775,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 		}
 		pSAs->ulNumSAs = ulCount;
 		if ((pInSA)) {
-			pSAs->ucMoreSAs = TRUE;
+			pSAs->ucMoreSAs = ASF_TRUE;
 		}
 	}
 	if (!bVal)
