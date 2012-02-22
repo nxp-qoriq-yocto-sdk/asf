@@ -14,10 +14,12 @@
 */
 /***************************************************************************/
 
+#include <linux/version.h>
 #include <linux/skbuff.h>
 #include "../../asfffp/driver/asf.h"
 #include "../../asfffp/driver/asfparry.h"
 #include "../../asfffp/driver/asftmr.h"
+#include "../../asfffp/driver/gplcode.h"
 #include "ipsfpapi.h"
 #include "ipsecfp.h"
 #include "ipseccmn.h"
@@ -75,55 +77,8 @@ char *algo_getname(int type, int algo)
 	return "NULL";
 }
 
-char secfp_proc_cmdbuf[1024] = "";
-
-void secfp_exec_cmd_clear_stats(void)
-{
-	int cpu;
-
-	printk(KERN_INFO"Clearing Global Stats & errors\n");
-
-	for_each_online_cpu(cpu)
-	{
-		memset(&IPSecPPGlobalStats_g[cpu], 0,
-			sizeof(AsfIPSecPPGlobalStats_t));
-	}
-	memset(&GlobalErrors, 0, sizeof(ASFIPSecGlobalErrorCounters_t));
-}
-
-
-void secfp_exec_cmd(void)
-{
-	char *cmd = secfp_proc_cmdbuf;
-
-	printk(KERN_INFO"SECFP_EXEC_CMD: '%s'\n", secfp_proc_cmdbuf);
-	/* fixed string commands for now .. enhance it to parse words */
-	if (!strcasecmp(cmd, "clear stats"))
-		secfp_exec_cmd_clear_stats();
-}
-
-static int proc_secfp_proc_exec_cmd(ctl_table *ctl, int write,
-				void __user *buffer,
-				size_t *lenp, loff_t *ppos)
-{
-	int ret;
-	ret = proc_dostring(ctl, write, buffer, lenp, ppos);
-
-	if (write) {
-		secfp_exec_cmd();
-		memset(secfp_proc_cmdbuf, 0, sizeof(secfp_proc_cmdbuf));
-	}
-	return ret;
-}
 
 static struct ctl_table secfp_proc_table[] = {
-	{
-		.procname       = "command",
-		.data	   = secfp_proc_cmdbuf,
-		.maxlen	 = sizeof(secfp_proc_cmdbuf),
-		.mode	   = 0644,
-		.proc_handler   = proc_secfp_proc_exec_cmd,
-	} ,
 	{
 		.procname       = "ulMaxTunnels_g",
 		.data	   = &ulMaxTunnels_g,
@@ -183,6 +138,7 @@ static struct ctl_table_header *secfp_proc_header;
 
 static struct proc_dir_entry *secfp_dir;
 #define SECFP_PROC_GLOBAL_STATS_NAME	"global_stats"
+#define SECFP_PROC_RESET_STATS_NAME	"reset_stats"
 #define SECFP_PROC_GLOBAL_ERROR_NAME	"global_error"
 #define SECFP_PROC_OUT_SPD		"out_spd"
 #define SECFP_PROC_IN_SPD		"in_spd"
@@ -200,10 +156,9 @@ static int display_secfp_proc_global_stats(char *page, char **start,
 
 	memset(&total, 0, sizeof(total));
 
-	for_each_online_cpu(cpu)
-	{
+	for_each_online_cpu(cpu) {
 		AsfIPSecPPGlobalStats_t *gstats;
-		gstats = &IPSecPPGlobalStats_g[cpu];
+		gstats = asfPerCpuPtr(pIPSecPPGlobalStats_g, cpu);
 		GSTATS_SUM(TotInRecvPkts);
 		GSTATS_SUM(TotInProcPkts);
 		GSTATS_SUM(TotOutRecvPkts);
@@ -214,15 +169,41 @@ static int display_secfp_proc_global_stats(char *page, char **start,
 		GSTATS_SUM(TotOutPktsSecAppled);
 	}
 
-	printk(KERN_INFO"\n    InRcv %lu \t InProc %lu \tOutRcv %lu OutProc %lu\n",
+	printk(KERN_INFO"\n    InRcv %lu\tInProc %lu\tOutRcv %lu OutProc %lu\n",
 		GSTATS_TOTAL(TotInRecvPkts), GSTATS_TOTAL(TotInProcPkts),
 		GSTATS_TOTAL(TotOutRecvPkts), GSTATS_TOTAL(TotOutProcPkts));
 
-	printk(KERN_INFO"\nSEC-InRcv %lu \t InProc %lu \tOutRcv %lu OutProc %lu\n",
+	printk(KERN_INFO"\nSEC-InRcv %lu\tInProc %lu\tOutRcv %lu OutProc %lu\n",
 		GSTATS_TOTAL(TotInRecvSecPkts),
 		GSTATS_TOTAL(TotInProcSecPkts),
 		GSTATS_TOTAL(TotOutRecvPktsSecApply),
 		GSTATS_TOTAL(TotOutPktsSecAppled));
+
+	return 0;
+}
+
+static int reset_secfp_proc_global_stats(char *page, char **start,
+					off_t off, int count,
+					int *eof, void *data)
+{
+	ASFIPSec4GlobalPPStats_t Outparams;
+
+	ASFIPSecGlobalQueryStats(&Outparams, ASF_TRUE);
+	memset(&GlobalErrors, 0, sizeof(ASFIPSecGlobalErrorCounters_t));
+
+	printk(KERN_INFO"\n    InRcv %u \t InProc %u \tOutRcv %u OutProc %u\n",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT1],
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT2],
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT3],
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT4]);
+
+	printk(KERN_INFO"\nSEC-InRcv %u \t InProc %u \tOutRcv %u OutProc %u\n",
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT5],
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT6],
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT7],
+		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT8]);
+
+	printk(KERN_INFO"Resetting IPSEC Global Stats\n");
 
 	return 0;
 }
@@ -260,7 +241,7 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 	GLBERR_DISP(InSASPDContainerMisMatch);
 	GLBERR_DISP(OutSASPDContainerMisMatch);
 
-	ASFIPSecGlobalQueryStats(&Outparams);
+	ASFIPSecGlobalQueryStats(&Outparams, ASF_FALSE);
 	printk(KERN_INFO" \nERRORS:");
 	printk(KERN_INFO"%u (Does not enough tail room to continue)",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT9]);
@@ -441,7 +422,7 @@ static int display_secfp_proc_in_spd(char *page, char **start,
 
 static void print_SAParams(SAParams_t *SAParams)
 {
-	printk(KERN_INFO"CId = %d Tunnel Info saddr = 0x%x, daddr = 0x%x SPI=0x%x",
+	printk(KERN_INFO"CId = %d TunnelInfo src = 0x%x,dst = 0x%x SPI=0x%x",
 		SAParams->ulCId,
 		SAParams->tunnelInfo.addr.iphv4.saddr,
 		SAParams->tunnelInfo.addr.iphv4.daddr,
@@ -666,6 +647,12 @@ int secfp_register_proc(void)
 					NULL);
 
 	create_proc_read_entry(
+					SECFP_PROC_RESET_STATS_NAME,
+					0444, secfp_dir,
+					reset_secfp_proc_global_stats,
+					NULL);
+
+	create_proc_read_entry(
 					SECFP_PROC_GLOBAL_ERROR_NAME,
 					0444, secfp_dir,
 					display_secfp_proc_global_errors,
@@ -705,6 +692,7 @@ int secfp_unregister_proc(void)
 		unregister_sysctl_table(secfp_proc_header);
 
 	remove_proc_entry(SECFP_PROC_GLOBAL_STATS_NAME, secfp_dir);
+	remove_proc_entry(SECFP_PROC_RESET_STATS_NAME, secfp_dir);
 	remove_proc_entry(SECFP_PROC_GLOBAL_ERROR_NAME, secfp_dir);
 	remove_proc_entry(SECFP_PROC_OUT_SPD, secfp_dir);
 	remove_proc_entry(SECFP_PROC_IN_SPD, secfp_dir);

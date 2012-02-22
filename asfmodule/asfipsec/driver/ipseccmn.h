@@ -35,7 +35,7 @@ extern int ulL2BlobRefreshTimeInSec_g;
 extern int bFirewallCoExistence_g;
 extern int bTightlyIntegrated_g;
 extern ASFIPSecGlobalErrorCounters_t  GlobalErrors;
-extern AsfIPSecPPGlobalStats_t IPSecPPGlobalStats_g[NR_CPUS];
+extern AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats_g;
 
 extern ASFIPSecCbFn_t	ASFIPSecCbFn;
 

@@ -108,7 +108,7 @@ int secfp_try_fastPathOut(unsigned int ulVSGId,
 		return secfp_try_fastPathOutv4(ulVSGId, skb, pSecInfo);
 }
 
-AsfIPSecPPGlobalStats_t IPSecPPGlobalStats_g[NR_CPUS];
+AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats_g;
 AsfIPSec4GlobalPPStats_t IPSec4GblPPStats_g;
 
 static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
@@ -776,6 +776,8 @@ void secfp_deInit(void)
 
 		kmem_cache_destroy(desc_cache);
 	}
+	if (pIPSecPPGlobalStats_g)
+		asfFreePerCpu(pIPSecPPGlobalStats_g);
 }
 
 int secfp_init(void)
@@ -833,7 +835,6 @@ int secfp_init(void)
 		return SECFP_FAILURE;
 	}
 
-	memset(&IPSecPPGlobalStats_g, 0x0, sizeof(IPSecPPGlobalStats_g));
 	memset(&IPSec4GblPPStats_g, 0x0, sizeof(IPSec4GblPPStats_g));
 	memset(aNonIkeMarker_g, 0, ASF_IPSEC_MAX_NON_IKE_MARKER_LEN);
 	memset(aNonESPMarker_g, 0, ASF_IPSEC_MAX_NON_ESP_MARKER_LEN);
@@ -859,6 +860,12 @@ int secfp_init(void)
 	if (desc_cache == NULL)
 		return -ENOMEM;
 #endif
+	pIPSecPPGlobalStats_g = asfAllocPerCpu(sizeof(AsfIPSecPPGlobalStats_t));
+	if (!pIPSecPPGlobalStats_g) {
+		secfp_deInit();
+		ASFIPSEC_ERR("Failed to allocate per-cpu memory for stats\n");
+		return -ENOMEM;
+	}
 
 	ASFFFPRegisterIPSecFunctions(secfp_try_fastPathIn,
 					secfp_try_fastPathOut,
@@ -4017,7 +4024,7 @@ inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	rcu_read_lock();
 
 	ipv6_traffic_class(ipv6TClass, ipv6h);
-	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutRecvPkts++;
 
 #ifdef ASFIPSEC_DEBUG_FRAME
@@ -4359,7 +4366,7 @@ int secfp_try_fastPathOutv4 (
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	rcu_read_lock();
 
-	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutRecvPkts++;
 
 #ifdef ASFIPSEC_DEBUG_FRAME
@@ -4777,7 +4784,7 @@ void secfp_outComplete(struct device *dev, void *pdesc,
 	desc = (struct ipsec_esp_edesc *)((char *)pdesc -
 			offsetof(struct ipsec_esp_edesc, hw_desc));
 #endif
-	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
 
 	ASFIPSEC_DEBUG(" Entry");
@@ -5815,7 +5822,7 @@ void secfp_inCompleteWithFrags(struct device *dev, void *pdesc,
 	desc = (struct ipsec_esp_edesc *)((char *)pdesc -
 		offsetof(struct ipsec_esp_edesc, hw_desc));
 #endif
-	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
 
 	memset(&IPSecOpque, 0 , sizeof(IPSecOpque));
@@ -6112,7 +6119,8 @@ void secfp_inComplete(struct device *dev, void *pdesc,
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
 #endif
-	pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+	pIPSecPPGlobalStats =
+		asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
 
 	memset(&IPSecOpque, 0 , sizeof(IPSecOpque));
@@ -7440,7 +7448,7 @@ inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 	if (pSA) {
 
 		ASFIPSEC_DEBUG(" pSA Found coreId=%d",  smp_processor_id());
-		pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+		pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 		pIPSecPPGlobalStats->ulTotInRecvPkts++;
 
 		pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);
@@ -8209,7 +8217,7 @@ int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	if (pSA) {
 
 		ASFIPSEC_DEBUG(" pSA Found coreId=%d",  smp_processor_id());
-		pIPSecPPGlobalStats = &(IPSecPPGlobalStats_g[smp_processor_id()]);
+		pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 		pIPSecPPGlobalStats->ulTotInRecvPkts++;
 
 		pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);

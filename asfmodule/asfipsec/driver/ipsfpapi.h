@@ -929,7 +929,9 @@ ASF_void_t  ASFIPSecv4MapFlowToContainer(ASF_uint32_t ulVSGId,
    bIPsecOutProcess:1, SYAM*/
 					);
 ASF_void_t ASFIPSecSPDContainerQueryStats(ASFIPSecGetContainerQueryParams_t *pInParams, ASFSPDPolPPStats_t *pOutParams);
-ASF_void_t ASFIPSecGlobalQueryStats(ASFIPSec4GlobalPPStats_t *pOutparams);
+ASF_void_t ASFIPSecGlobalQueryStats(
+				ASFIPSec4GlobalPPStats_t *pOutparams,
+				bool bReset);
 ASF_void_t  ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams, ASFSAStats_t *pOutParams);
 ASF_void_t  ASFIPSecInitConfigIdentity(ASFIPSecInitConfigIdentity_t  *pConfigIdentity);
 ASF_void_t  ASFIPSecUpdateTunnelMagicNumber(ASFIPSecUpdateTunnelMagicNumber_t *pTunnelMagicInfo);

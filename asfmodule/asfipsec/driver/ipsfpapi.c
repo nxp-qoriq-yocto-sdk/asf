@@ -23,13 +23,15 @@
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
-
+#include <linux/version.h>
 #include "../../asfffp/driver/asf.h"
 #include "../../asfffp/driver/asfparry.h"
 #include "../../asfffp/driver/asftmr.h"
 #include "../../asfffp/driver/asfcmn.h"
+#include "../../asfffp/driver/gplcode.h"
 #include "ipsfpapi.h"
 #include "ipsecfp.h"
+#include "ipseccmn.h"
 
 int  ulMaxVSGs_g = ASF_MAX_VSGS;
 int  ulMaxTunnels_g = SECFP_MAX_NUM_TUNNEL_IFACES;
@@ -65,7 +67,6 @@ ASFIPSecCbFn_t ASFIPSecCbFn;
 extern ptrIArry_tbl_t secfp_InDB;
 extern ptrIArry_tbl_t secfp_OutDB;
 extern ptrIArry_tbl_t secFP_OutSATable;
-extern AsfIPSecPPGlobalStats_t IPSecPPGlobalStats_g[];
 extern AsfIPSec4GlobalPPStats_t IPSec4GblPPStats_g;
 extern   inSAList_t *secFP_SPIHashTable;
 extern SecTunnelIface_t **secFP_TunnelIfaces;
@@ -971,25 +972,34 @@ ASF_void_t ASFIPSecSPDContainerQueryStats(ASFIPSecGetContainerQueryParams_t *pIn
 }
 
 
-ASF_void_t ASFIPSecGlobalQueryStats(ASFIPSec4GlobalPPStats_t *pOutparams)
+ASF_void_t ASFIPSecGlobalQueryStats(ASFIPSec4GlobalPPStats_t *pOutparams,
+				bool bReset)
 {
 	ASF_uint32_t Index;
+	AsfIPSecPPGlobalStats_t *gstats;
 	for (Index = 0; Index < 8; Index++) {
-		pOutparams->IPSec4GblPPStat[Index]  = 0;
+		pOutparams->IPSec4GblPPStat[Index] = 0;
 	}
-	for (Index = 0; Index < NR_CPUS; Index++) {
-		pOutparams->IPSec4GblPPStat[0] += IPSecPPGlobalStats_g[Index].ulTotInRecvPkts;
-		pOutparams->IPSec4GblPPStat[1] += IPSecPPGlobalStats_g[Index].ulTotInProcPkts;
-		pOutparams->IPSec4GblPPStat[2] += IPSecPPGlobalStats_g[Index].ulTotOutRecvPkts;
-		pOutparams->IPSec4GblPPStat[3] += IPSecPPGlobalStats_g[Index].ulTotOutProcPkts;
-		pOutparams->IPSec4GblPPStat[4] += IPSecPPGlobalStats_g[Index].ulTotInRecvSecPkts;
-		pOutparams->IPSec4GblPPStat[5] += IPSecPPGlobalStats_g[Index].ulTotInProcSecPkts;
-		pOutparams->IPSec4GblPPStat[6] += IPSecPPGlobalStats_g[Index].ulTotOutRecvPktsSecApply;
-		pOutparams->IPSec4GblPPStat[7] += IPSecPPGlobalStats_g[Index].ulTotOutPktsSecAppled;
+	for_each_possible_cpu(Index) {
+		gstats = asfPerCpuPtr(pIPSecPPGlobalStats_g, Index);
+		pOutparams->IPSec4GblPPStat[0] += gstats->ulTotInRecvPkts;
+		pOutparams->IPSec4GblPPStat[1] += gstats->ulTotInProcPkts;
+		pOutparams->IPSec4GblPPStat[2] += gstats->ulTotOutRecvPkts;
+		pOutparams->IPSec4GblPPStat[3] += gstats->ulTotOutProcPkts;
+		pOutparams->IPSec4GblPPStat[4] += gstats->ulTotInRecvSecPkts;
+		pOutparams->IPSec4GblPPStat[5] += gstats->ulTotInProcSecPkts;
+		pOutparams->IPSec4GblPPStat[6] += gstats->ulTotOutRecvPktsSecApply;
+		pOutparams->IPSec4GblPPStat[7] += gstats->ulTotOutPktsSecAppled;
+		if (bReset)
+			memset(gstats, 0, sizeof(AsfIPSecPPGlobalStats_t));
 	}
 	for (Index = 8; Index < ASF_IPSEC4_PP_GBL_CNT_MAX; Index++) {
-		pOutparams->IPSec4GblPPStat[Index] = ASF_IPSEC_ATOMIC_READ(IPSec4GblPPStats_g.IPSec4GblPPStat[Index]);
+		pOutparams->IPSec4GblPPStat[Index] =
+			ASF_IPSEC_ATOMIC_READ(IPSec4GblPPStats_g.IPSec4GblPPStat[Index]);
 	}
+	if (bReset)
+		memset(&IPSec4GblPPStats_g, 0,
+			sizeof(ASFIPSec4GlobalPPStats_t));
 	return;
 }
 ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
