@@ -22,6 +22,9 @@ enum {
 	ASF_FAILURE = -1
 };
 
+#define		ASF_DONE	1
+#define		ASF_RTS		2
+
 #ifndef NIPQUAD
 #define NIPQUAD(addr) \
 	((unsigned char *)&addr)[0], \

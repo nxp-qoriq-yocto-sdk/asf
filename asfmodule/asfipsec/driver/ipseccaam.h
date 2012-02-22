@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2011-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	ipseccaam.h

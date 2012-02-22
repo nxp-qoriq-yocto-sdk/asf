@@ -20,8 +20,6 @@
 #include "asfdeps.h"
 #include "asfipsec.h"
 
-#define		ASF_DONE	1
-#define		ASF_RTS		2
 
 #ifdef ASF_FFP_XTRA_STATS
 typedef struct ASFFFPXtraFlowStats_s {

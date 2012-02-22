@@ -23,6 +23,12 @@
 	printk(KERN_ERR"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
 	__LINE__, __func__, ##arg)
 
+#define asf_dperr(fmt, arg...) do { \
+	if (net_ratelimit()) \
+		printk(KERN_ERR"[CPU %d ln %d fn %s] - " fmt,\
+		smp_processor_id(), __LINE__, __func__, ##arg); \
+	} while (0)
+
 #ifdef ASF_DEBUG
 #define asf_warn(fmt, arg...)  \
 	printk(KERN_WARNING"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
@@ -294,7 +300,19 @@ static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 	}
 }
 
-#define BUFGET16(cp)	(*(unsigned short *) (cp))
+#define UCHAR(x) ((unsigned char) (x))
+
+#define BUFGET16(cp)	\
+	(((u16)(*(u8 *)(cp)) << 8 & 0xFF00) | (*((u8 *)(cp) + 1) & 0xFF))
+
+#define BUFPUT16(cp, val)				\
+{							\
+	*((u8 *) (cp)) = (u8) (val >> 8) & 0xFF;	\
+	*((u8 *) (cp) + 1) = (u8) val & 0xFF;		\
+}
+
+#define BUFGET32(cp)		(*(unsigned int *) (cp))
+#define BUFPUT32(cp, val) (*((unsigned int *) (cp)) = (unsigned int) (val))
 
 extern ASFNetDevEntry_t *ASFCiiToNetDev(ASF_uint32_t ulCommonInterfaceId);
 extern ASFNetDevEntry_t *ASFNetDev(struct net_device *dev);
