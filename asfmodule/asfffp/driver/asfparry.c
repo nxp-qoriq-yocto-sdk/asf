@@ -59,6 +59,9 @@ void ptrIArray_setup(ptrIArry_tbl_t *pTable,  ptrIArry_nd_t *pNode,
 	pNode[ii].pNext = NULL;
 	pNode[ii].pPrev = &(pNode[ii-1]);
 
+	if (b_lock)
+		spin_lock_init(&pTable->tblLock);
+
 	pTable->bLock = b_lock;
 }
 

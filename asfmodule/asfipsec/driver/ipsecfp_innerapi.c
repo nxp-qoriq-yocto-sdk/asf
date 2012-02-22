@@ -871,8 +871,8 @@ static inline void secfp_deleteInContainerSelList(SPDInContainer_t *pContainer,
 		if (pNode->pPrev)
 			pNode->pPrev->pNext = pNode->pNext;
 	}
-	call_rcu((struct rcu_head *) pNode, secfp_freeLinkNode);
 	spin_unlock(&pContainer->spinlock);
+	call_rcu((struct rcu_head *) pNode, secfp_freeLinkNode);
 }
 
 /* Updates SPI value index in a linked node in the SDD In container
@@ -926,8 +926,8 @@ static inline void secfp_deleteInContainerSPIList(SPDInContainer_t *pContainer,
 		if (pNode->pPrev)
 			pNode->pPrev->pNext = pNode->pNext;
 	}
-	call_rcu((struct rcu_head *) pNode, secfp_freeSPILinkNode);
 	spin_unlock(&pContainer->spinlock);
+	call_rcu((struct rcu_head *) pNode, secfp_freeSPILinkNode);
 }
 
 /* Free/alloc functions for In Selector sets */
@@ -1035,14 +1035,14 @@ SPDInSelTblIndexLinkNode_t *secfp_updateInSelSet(
 		pNode = secfp_allocLinkNode();
 		if (pNode) {
 			ulIndex = ptrIArray_add(&secFP_InSelTable, pList);
-			if (ulIndex != secFP_InSelTable.nr_entries) {
+			if (ulIndex < secFP_InSelTable.nr_entries) {
 				pNode->ulIndex = ulIndex;
 				/* Success condition */
 				secfp_updateInContainerSelList(pContainer,
 								pNode);
 			} else {
 				GlobalErrors.ulInSAFull++;
-				ASFIPSEC_WARN("Could not find index to hold"
+				ASFIPSEC_DPERR("Could not find index to hold"
 					"Selector:Maximum count reached ");
 				secfp_freeInSelSet((struct rcu_head *) pList);
 				secfp_freeLinkNode((struct rcu_head *) pNode);
@@ -1164,8 +1164,8 @@ static inline void secfp_deleteInSAFromSPIList(inSA_t *pSA)
 			if (pTempSA->pPrev)
 				pTempSA->pPrev->pNext = pTempSA->pNext;
 		}
-		call_rcu((struct rcu_head *) pTempSA, secfp_freeInSA);
 		spin_unlock_bh(&secFP_InSATableLock);
+		call_rcu((struct rcu_head *) pTempSA, secfp_freeInSA);
 	}
 }
 
@@ -2038,10 +2038,8 @@ static void secfp_delOutSALinkNode(SPDOutContainer_t *pContainer,
 		if (pOutSALinkNode->pNext)
 			pOutSALinkNode->pNext->pPrev = pOutSALinkNode->pPrev;
 	}
-
-	call_rcu((struct rcu_head *) pOutSALinkNode, secfp_freeOutSALinkNode);
 	spin_unlock_bh(&pContainer->spinlock);
-
+	call_rcu((struct rcu_head *) pOutSALinkNode, secfp_freeOutSALinkNode);
 }
 
 
@@ -2233,8 +2231,8 @@ void secfp_removeCINodeFromTunnelList(unsigned int ulVSGId,
 		if (pCINode->pPrev)
 			pCINode->pPrev->pNext = pCINode->pNext;
 	}
-	call_rcu((struct rcu_head *)pCINode, secfp_freeSDPCILinkNode);
 	spin_unlock(&secfp_TunnelIfaceCIIndexListLock);
+	call_rcu((struct rcu_head *)pCINode, secfp_freeSDPCILinkNode);
 }
 
 
@@ -2294,7 +2292,7 @@ unsigned int secfp_SPDOutContainerCreate(unsigned int	ulVSGId,
 		}
 
 		pCINode->ulIndex = ulContainerIndex;
-
+		spin_lock_init(&pContainer->spinlock);
 		/* Append it to the list */
 		secfp_appendCINodeToTunnelList(ulVSGId, ulTunnelId,
 				pCINode, SECFP_OUT);
@@ -2402,6 +2400,7 @@ unsigned int secfp_SPDInContainerCreate(unsigned int ulVSGId,
 			return ASF_IPSEC_INVALID_CONTAINER_ID;
 		}
 		pCINode->ulIndex = ulContainerIndex;
+		spin_lock_init(&pContainer->spinlock);
 		/* Append it to the list */
 		secfp_appendCINodeToTunnelList(ulVSGId, ulTunnelId,
 				pCINode, SECFP_IN);
@@ -2709,7 +2708,7 @@ unsigned int secfp_createOutSA(
 	secfp_createOutSATalitosDesc(pSA);
 #endif
 	ulIndex = ptrIArray_add(&secFP_OutSATable, pSA);
-	if (ulIndex != secFP_OutSATable.nr_entries) {
+	if (ulIndex < secFP_OutSATable.nr_entries) {
 		if (pContainer->SPDParams.bOnlySaPerDSCP) {
 			for (ii = usDscpStart; ii < usDscpEnd; ii++)
 				pContainer->SAHolder.ulSAIndex[ii] = ulIndex;
@@ -3169,7 +3168,7 @@ unsigned int secfp_CreateInSA(
 					&secFP_InSelTable, pNode->ulIndex);
 		secfp_appendInSAToSPIList(pSA);
 	} else {
-		ASFIPSEC_WARN("Could not allocate In SA");
+		ASFIPSEC_DPERR("Could not allocate In SA");
 		GlobalErrors.ulResourceNotAvailable++;
 		if (!bVal)
 			local_bh_enable();

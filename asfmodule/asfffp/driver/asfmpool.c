@@ -257,6 +257,7 @@ int asfCreatePool(char *name, unsigned int ulNumGlobalPoolEntries,
 					poolPtr->ulNumEntries = ulPerCoreEntries;
 					poolPtr->ulNumPerCoreMaxEntries = ulPerCoreEntries;
 					poolPtr->ulDataSize = ulDataSize;
+					spin_lock_init(&poolPtr->lock);
 					for (jj = 0, pLinkNode = (struct asf_poolLinkNode_s *)  (poolPtr->head) ;
 					    jj < (ulPerCoreEntries-2); jj++) {
 						cptr = (unsigned char *)  (pLinkNode) + poolPtr->ulDataElemSize;
