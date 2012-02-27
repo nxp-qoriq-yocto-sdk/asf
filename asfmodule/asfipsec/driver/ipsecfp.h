@@ -29,10 +29,6 @@
 #include "ipseccaam.h"
 #endif
 
-#define FALSE 0
-#define TRUE 1
-
-#define SECFP_HM_BUFFER TRUE
 #ifdef ASF_IPV6_FP_SUPPORT
 #define SECFP_NXTHDR_HOP_BY_HOP 0
 #define SECFP_NXTHDR_ROUTING 43
@@ -62,10 +58,11 @@
 #define SECFP_PROTO_AH		51
 #define SECFP_PROTO_IP		4
 #define SECFP_PROTO_IPV6	41
+#define SECFP_IPPROTO_ICMP	IPPROTO_ICMP /*1*/
 
 /* Header length validation information */
 #define SECFP_ESP_HDR_LEN	8
-#define SECFP_IP_HDR_LEN	20
+#define SECFP_IPV4_HDR_LEN	20
 #define SECFP_AH_MAX_HDR_LEN	16
 #define SECFP_ESP_TRAILER_LEN	2
 #define SECFP_ICV_LEN		12
@@ -93,11 +90,20 @@
 #define SECFP_HMAC_SHA256	5
 #define SECFP_HMAC_SHA384	6
 #define SECFP_HMAC_SHA512	7
+#define SECFP_HMAC_SHA1_160	8
+
 #define SECFP_DES		2 /* generic DES transform using DES-SBC */
 #define SECFP_3DES		3 /* generic triple-DES transform	*/
 #define SECFP_ESP_NULL		11
 #define SECFP_AES		12
 #define SECFP_AESCTR		13
+#define SECFP_AES_CCM_ICV8	14
+#define SECFP_AES_CCM_ICV12	15
+#define SECFP_AES_CCM_ICV16	16
+#define SECFP_AES_GCM_ICV8	18
+#define SECFP_AES_GCM_ICV12	19
+#define SECFP_AES_GCM_ICV16	20
+
 #define DES_CBC_BLOCK_SIZE	8
 #define TDES_CBC_BLOCK_SIZE	8
 #define AES_CBC_BLOCK_SIZE	16
@@ -132,7 +138,8 @@
 
 /* Inbound */
 #define SECFP_LOOKUP_SA_INDEX		9
-#define SECFP_SA_OPTION_INDEX		10
+#define SECFP_3X_SA_OPTION_INDEX	10
+#define SECFP_4X_NAT_HDR_SIZE		10
 #define SECFP_SPI_INDEX			12
 #define SECFP_IPHDR_INDEX		16
 #define SECFP_HASH_VALUE_INDEX		20
@@ -179,6 +186,16 @@
 /* Bit position 2 */
 #define SECFP_NO_SCATTER_GATHER 0
 #define SECFP_SCATTER_GATHER	2
+
+#define ASF_IPSEC_MAX_NON_IKE_MARKER_LEN 8
+#define ASF_IPSEC_MAX_NON_ESP_MARKER_LEN 4
+
+#define SECFP_MAX_UDP_HDR_LEN 8
+
+#define SECFP_ESN_MARKER_POSITION	\
+	(12 + SECFP_NOUNCE_IV_LEN + SECFP_APPEND_BUF_LEN_FIELD)
+
+#define SECFP_ERROR_STR_MAX		302
 
 /* Assumes skb->data points to beginning of IP header */
 /* assumes ESP or AH only */
@@ -275,6 +292,13 @@ extern dma_addr_t talitos_dma_unmap_single(void *data,
 
 
 #define SECFP_MAX_32BIT_VALUE	0xffffffff /* 2^32-1 */
+
+typedef struct ASFIPSecOpqueInfo_st {
+	unsigned int ulInSPDContainerId;
+	unsigned int ulInSPDMagicNumber;
+	unsigned char ucProtocol;
+	ASF_IPAddr_t DestAddr;
+} ASFIPSecOpqueInfo_t;
 
 #define IGW_SAD_SET_BIT_IN_WINDOW(pSA, ulNunOfBits, ucSize, ucCnt, ucCo_efficient, ucRemainder) \
 {\
@@ -441,6 +465,8 @@ typedef struct inSA_s {
 	unsigned int ulOutSPI;
 	unsigned int ulHOSeqNum;
 	unsigned int ulHashVal;
+	unsigned char usNatHdrSize;
+	unsigned short ucIfaceId;
 	unsigned char bVerifySASel:1,
 		bVerifySPDSel:1,
 		bSendPktToNormalPath:1,
@@ -619,6 +645,7 @@ typedef struct outSA_s {
 	unsigned int ulTunnelId;
 	struct net_device *odev;
 	OutSelList_t *pSelList;
+	unsigned short usNatHdrSize;
 	unsigned short bSoftExpiry:1,
 		bIVDataPresent:1,
 		bl2blob:1,
@@ -638,15 +665,6 @@ struct saInfo_s {
 	unsigned int ulSAIndex;
 	unsigned int ulMagicNum;
 };
-
-/*
-struct secfp_info_s
-{
-	unsigned int ulCIndex;
-	unsigned int ulMagicNum;
-	struct saInfo_s saInfo[SECFP_MAX_DSCP_SA];
-};
-*/
 
 typedef struct secfp_sgEntry_s {
 	__be16 len;
@@ -680,18 +698,10 @@ typedef struct secfp_ivInfo_s {
 	unsigned int ulUpdateIndex;
 } secfp_ivInfo_t;
 
+#ifndef CONFIG_ASF_SEC4x
 /* to satisfy the compiler */
 struct talitos_desc;
 
-extern	void secfp_prepareOutDescriptor(struct sk_buff *skb,
-				void *pSA, void *, unsigned int);
-extern	void secfp_prepareInDescriptor(struct sk_buff *skb,
-				void *pSA, void *, unsigned int);
-void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
-				void *pData, void *, unsigned int);
-void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb,
-				void *pData, void *, unsigned int);
-#ifndef CONFIG_ASF_SEC4x
 extern void secfp_outComplete(struct device *dev,
 				struct talitos_desc *desc,
 				void *context, int error);
@@ -701,7 +711,23 @@ extern void secfp_inComplete(struct device *dev,
 extern void secfp_inCompleteWithFrags(struct device *dev,
 				struct talitos_desc *desc,
 				void *context, int err);
+extern unsigned int secfp_inHandleICVCheck3x(void *dsc,
+	struct sk_buff *skb);
+
+extern void secfp_dma_unmap_sglist(struct sk_buff *skb);
+extern int secfp_createInSATalitosDesc(inSA_t *pSA);
+extern int secfp_createOutSATalitosDesc(outSA_t *pSA);
+
+extern int secfp_talitos_submit(struct device *dev, struct talitos_desc *desc,
+		void (*callback)(struct device *dev, struct talitos_desc *desc,
+		void *context, int err), void *context);
+
+extern int secfp_rng_read_data(unsigned int *ptr);
+extern struct device *talitos_getdevice(void);
 #else
+
+#define MAX_IPSEC_RECYCLE_DESC		128
+
 /* This is due to different prototype of the SEC return function*/
 extern void secfp_outComplete(struct device *dev,
 		void *pdesc, u32 error, void *context);
@@ -709,29 +735,39 @@ extern void secfp_inComplete(struct device *dev,
 		void *pdesc, u32 err, void *context);
 extern void secfp_inCompleteWithFrags(struct device *dev,
 		void *pdesc, u32 err, void *context);
+
+int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir);
+
+extern int secfp_createInSACaamCtx(inSA_t *pSA);
+extern int secfp_createOutSACaamCtx(outSA_t *pSA);
+
+extern int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
+		inSA_t *pSA, bool keys_fit_inline);
+
+extern int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
+		outSA_t *pSA, bool keys_fit_inline);
 #endif
 
-extern inline void secfp_inv6Complete(struct talitos_desc *desc,
-				struct sk_buff *context, int err);
 extern int gfar_start_xmit(struct sk_buff *skb,
 				struct net_device *dev);
-extern int try_fastroute_fwnat(struct sk_buff *skb,
-				struct net_device *dev, int length);
 extern __be16 eth_type_trans(struct sk_buff *skb,
 				struct net_device *dev);
 extern int secfp_try_fastPathIn(struct sk_buff *skb1,
 				ASF_boolean_t bCheckLen, unsigned int ulVSGId,
 				ASF_uint32_t	ulCommonInterfaceId);
 
+/* Initialization Data Structures Interfaces */
+int secfp_data_init(void);
+void secfp_data_deinit(void);
 int secfp_init(void);
 void secfp_deInit(void);
 int secfp_register_proc(void);
 int secfp_unregister_proc(void);
 
-inSA_t *ASF_findInv4SA(unsigned int ulVSGId,
+inSA_t *secfp_findInSA(unsigned int ulVSGId,
 			unsigned char ucProto,
 			unsigned long int ulSPI,
-			unsigned int daddr,
+			ASF_IPAddr_t daddr,
 			unsigned int *pHashVal);
 
 unsigned int secfp_SPDOutContainerCreate(
@@ -809,5 +845,73 @@ unsigned int secfp_CreateInSA(
 				unsigned int ulSPDOutContainerIndex,
 				unsigned int ulOutSPI,
 				unsigned int ulMtu);
+
+extern inline SPDInSPIValLinkNode_t *secfp_findInSPINode(
+		SPDInContainer_t *pContainer,
+		unsigned int ulSPIVal);
+
+extern SPDOutSALinkNode_t *secfp_findOutSALinkNode(
+		SPDOutContainer_t *pContainer,
+		ASF_IPAddr_t	daddr,
+		unsigned char	ucProtocol,
+		unsigned int	ulSPI);
+
+extern outSA_t *secfp_findOutSA(
+		unsigned int ulVsgId,
+		ASFFFPIpsecInfo_t *pSecInfo,
+		struct sk_buff *skb,
+		unsigned char tos,
+		SPDOutContainer_t **ppContainer,
+		ASF_boolean_t *pbRevalidate);
+
+extern inSA_t *secfp_findInv6SA(unsigned int ulVSGId,
+		unsigned char ucProto,
+		unsigned long int ulSPI,
+		unsigned int *daddr,
+		unsigned int *pHashVal);
+
+extern inSA_t *secfp_findInv4SA(unsigned int ulVSGId,
+		unsigned char ucProto,
+		unsigned long int ulSPI,
+		unsigned int daddr,
+		unsigned int *pHashVal);
+
+extern SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
+		SPDOutContainer_t *pContainer,
+		struct sk_buff *skb);
+
+extern bool secfp_verifySASels(inSA_t *pSA,
+		unsigned char protocol,
+		unsigned short int sport,
+		unsigned short int dport,
+		ASF_IPAddr_t saddr,
+		ASF_IPAddr_t daddr);
+
+extern void secfp_finishOutPacket(
+		struct sk_buff *skb, outSA_t *pSA,
+		SPDOutContainer_t *pContainer,
+		unsigned int *pOuterIpHdr,
+		unsigned int ulVSGId,
+		unsigned int ulSPDContainerIndex);
+extern void secfp_prepareOutPacket(
+		struct sk_buff *skb1, outSA_t *pSA,
+		SPDOutContainer_t *pContainer,
+		unsigned int **pOuterIpHdr);
+
+extern	void secfp_prepareOutDescriptor(
+		struct sk_buff *skb,
+		void *pSA, void *, unsigned int);
+
+extern	void secfp_prepareInDescriptor(
+		struct sk_buff *skb,
+		void *pSA, void *, unsigned int);
+
+extern void secfp_prepareInDescriptorWithFrags(
+		struct sk_buff *skb,
+		void *pData, void *, unsigned int);
+
+extern void secfp_prepareOutDescriptorWithFrags(
+		struct sk_buff *skb,
+		void *pData, void *, unsigned int);
 
 #endif
