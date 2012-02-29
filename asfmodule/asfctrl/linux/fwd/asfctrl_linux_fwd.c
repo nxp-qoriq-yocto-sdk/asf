@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfctrl_linux_fwd.c
@@ -67,62 +67,60 @@ static ASF_int32_t asfctrl_fwd_XmitL2blobDummyPkt(ASFFWDCacheEntryTuple_t *tpl)
 {
 	struct	sk_buff *skb;
 	int	ret;
+	asfctrl_fwd_L2blobPktData_t *pData;
+	struct iphdr *iph;
+	static unsigned short IPv4_IDs[NR_CPUS];
+	struct flowi4 fl = {};
+	struct rtable *rt;
+
+	fl.daddr = tpl->ulDestIp;
+	fl.saddr = tpl->ulSrcIp;
+	fl.flowi4_oif = 0;
+	fl.flowi4_flags = FLOWI_FLAG_ANYSRC;
+	rt = ip_route_output_key(&init_net, &fl);
+	if (!rt) {
+		ASFCTRL_INFO("Route not found for dst %x\n",
+						tpl->ulDestIp);
+		return T_FAILURE;
+	}
+	ASFCTRL_INFO("Route found for dst %x, src %x, tos %d ",
+			tpl->ulDestIp, tpl->ulSrcIp, tpl->ucDscp);
 
 	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
-	if (skb) {
-		asfctrl_fwd_L2blobPktData_t *pData;
-		struct iphdr *iph;
-		struct net_device *dev;
-		static unsigned short IPv4_IDs[NR_CPUS];
+	if (!skb)
+		return T_FAILURE;
 
-		dev = dev_get_by_name(&init_net, "lo");
+	skb_dst_set(skb, &(rt->dst));
+	skb->dev = skb_dst(skb)->dev;
+	skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
+	skb_reset_network_header(skb);
+	skb_put(skb, sizeof(struct iphdr));
+	iph = ip_hdr(skb);
+	iph->version = 5;
+	iph->ihl = 5;
+	iph->ttl = 1;
+	iph->id = IPv4_IDs[smp_processor_id()]++;
+	iph->frag_off = 0;
+	iph->saddr = tpl->ulSrcIp;
+	iph->daddr = tpl->ulDestIp;
+	iph->tos = tpl->ucDscp;
+	iph->protocol = ASFCTRL_IPPROTO_DUMMY_FWD_L2BLOB;
 
-		if (0 != ip_route_input(skb, tpl->ulDestIp,
-					tpl->ulSrcIp, tpl->ucDscp, dev) ||
-			(!skb_rtable(skb) ||
-			(skb_rtable(skb)->rt_flags & RTCF_LOCAL))) {
+	pData = (asfctrl_fwd_L2blobPktData_t *)skb_put(skb,
+		sizeof(asfctrl_fwd_L2blobPktData_t));
+	pData->ulVsgId = ASF_DEF_VSG;
+	memcpy(&pData->tuple, tpl, sizeof(ASFFWDCacheEntryTuple_t));
 
-			ASFCTRL_INFO("Route not found for"
-				" dst %x local host : %d", tpl->ulDestIp,
-			(!skb_rtable(skb) || (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) ? 1 : 0);
-			dev_put(dev);
-			ASFCTRLKernelSkbFree(skb);
-			return T_FAILURE;
-		}
-		dev_put(dev);
-		ASFCTRL_INFO("Route found for dst %x, src %x, tos %d ",
-				tpl->ulDestIp, tpl->ulSrcIp, tpl->ucDscp);
-		skb->dev = skb_dst(skb)->dev;
-		skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
-		skb_reset_network_header(skb);
-		skb_put(skb, sizeof(struct iphdr));
-		iph = ip_hdr(skb);
-		iph->version = 5;
-		iph->ihl = 5;
-		iph->ttl = 1;
-		iph->id = IPv4_IDs[smp_processor_id()]++;
-		iph->frag_off = 0;
-		iph->saddr = tpl->ulSrcIp;
-		iph->daddr = tpl->ulDestIp;
-		iph->tos = tpl->ucDscp;
-		iph->protocol = ASFCTRL_IPPROTO_DUMMY_FWD_L2BLOB;
+	pData->ulPathMTU = skb->dev->mtu;
+	skb->protocol = htons(ETH_P_IP);
+	asfctrl_skb_mark_dummy(skb);
+	ASFCTRL_INFO("\n DUmmy Mark [0x%X] [0x%X]\n",
+		skb->cb[ASFCTRL_DUMMY_SKB_CB_OFFSET],
+		skb->cb[ASFCTRL_DUMMY_SKB_CB_OFFSET+1]);
+	ret = asf_ip_send(skb);
+	if (ret == -EINVAL)
+		ASFCTRL_ERR("Sending L2Blob Dummy packet Failed.\n");
 
-		pData = (asfctrl_fwd_L2blobPktData_t *)skb_put(skb,
-			sizeof(asfctrl_fwd_L2blobPktData_t));
-		pData->ulVsgId = ASF_DEF_VSG;
-		memcpy(&pData->tuple, tpl, sizeof(ASFFWDCacheEntryTuple_t));
-
-		pData->ulPathMTU = skb->dev->mtu;
-		skb->protocol = htons(ETH_P_IP);
-		asfctrl_skb_mark_dummy(skb);
-		ASFCTRL_INFO("\n DUmmy Mark [0x%X] [0x%X] \n",
-			skb->cb[ASFCTRL_DUMMY_SKB_CB_OFFSET],
-			skb->cb[ASFCTRL_DUMMY_SKB_CB_OFFSET+1]);
-
-		ret = asf_ip_send(skb);
-		if (ret == -EINVAL)
-			ASFCTRL_ERR("Sending L2Blob Dummy packet Failed.\n");
-	}
 	return T_SUCCESS;
 }
 

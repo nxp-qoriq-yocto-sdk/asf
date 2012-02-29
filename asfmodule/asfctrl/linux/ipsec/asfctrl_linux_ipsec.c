@@ -431,9 +431,11 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 		#else
 			fl.u.ip4.daddr = address->dstIP.ipv4addr;
 			fl.u.ip4.saddr = address->srcIP.ipv4addr;
-			fl.u.__fl_common.flowic_proto = IPPROTO_ICMP;
+			fl.u.flowi4_oif = 0;
+			fl.u.flowi4_flags = FLOWI_FLAG_ANYSRC;
 
-			if (ip_route_output_key(&init_net, &fl.u.ip4)) {
+			rt = ip_route_output_key(&init_net, &fl.u.ipv4) {
+			if (!rt) {
 		#endif
 				ASFCTRL_DBG("\n Route not found for dst %x\n",\
 							address->dstIP.ipv4addr);

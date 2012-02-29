@@ -73,29 +73,29 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	asf_linux_L2blobPktData_t *pData;
 	struct iphdr *iph;
 	struct net_device *dev;
-
+	struct flowi4 fl = {};
+	struct rtable *rt;
 	static unsigned short IPv4_IDs[NR_CPUS];
 
 	ASFCTRL_FUNC_ENTRY;
+
+	fl.daddr = uldestIp;
+	fl.saddr = ulSrcIp;
+	fl.flowi4_oif = 0;
+	fl.flowi4_flags = FLOWI_FLAG_ANYSRC;
+
+	rt = ip_route_output_key(&init_net, &fl);
+	if (!rt) {
+		ASFCTRL_INFO("Route not found for dst %x\n", uldestIp);
+		return T_FAILURE;
+	}
+	ASFCTRL_INFO("Route found for dst %x ", uldestIp);
 
 	skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
 	if (!skb)
 		return T_FAILURE;
 
-	dev = dev_get_by_name(&init_net, "lo");
-
-	if ((0 != ip_route_input(skb, uldestIp, ulSrcIp, 0, dev)) ||
-			(!skb_rtable(skb) ||
-			(skb_rtable(skb)->rt_flags & RTCF_LOCAL))) {
-		ASFCTRL_INFO("Route not found for dst %x local host : %d",
-			uldestIp,
-			(!skb_rtable(skb) || (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) ? 1 : 0);
-		dev_put(dev);
-		ASFCTRLKernelSkbFree(skb);
-		return T_FAILURE;
-	}
-	dev_put(dev);
-	ASFCTRL_INFO("Route found for dst %x ", uldestIp);
+	skb_dst_set(skb, &(rt->dst));
 	skb->dev = skb_dst(skb)->dev;
 	skb_reserve(skb, LL_RESERVED_SPACE(skb->dev));
 	skb_reset_network_header(skb);
