@@ -190,7 +190,7 @@ static inline ffp_flow_t  *asf_ffp_ipv6_flow_lookup(
 		if (ulCount >= SEARCH_MAX_PER_BUCKET) {
 			asf_debug("Max (%u) scanned in bucket (%d)"\
 			"... aborting search!\n",
-			SEARCH_MAX_PER_BUCKET, FFP_HINDEX(*pHashVal));
+			SEARCH_MAX_PER_BUCKET, FFP_IPV6_HINDEX(*pHashVal));
 			return NULL;
 		}
 #endif

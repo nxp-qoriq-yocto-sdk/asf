@@ -2154,6 +2154,8 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			skb2->protocol = ETH_P_IP;
 #endif
 			skb_reset_network_header(skb2);
+			skb2->transport_header =
+				skb2->network_header + ihl;
 
 			asfSkbCopyBits(skb, 0,
 					skb_put(skb2, tot_len),
