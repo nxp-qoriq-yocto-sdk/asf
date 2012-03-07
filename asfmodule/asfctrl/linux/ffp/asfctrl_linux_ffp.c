@@ -532,8 +532,15 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			fl_out.u.ip4.fl4_sport = ct_tuple_reply->dst.u.tcp.port;
 			fl_out.u.ip4.fl4_dport = ct_tuple_reply->src.u.tcp.port;
 			fl_out.flowi_proto = ct_tuple_orig->dst.protonum;
-			fl_out.u.ip4.daddr = ct_tuple_reply->src.u3.ip;
-			fl_out.u.ip4.saddr = ct_tuple_reply->dst.u3.ip;
+			if (bIPv6 == true) {
+				ipv6_addr_copy(&fl_out.u.ip6.daddr,
+					&(ct_tuple_reply->src.u3.in6));
+				ipv6_addr_copy(&fl_out.u.ip6.saddr,
+					&(ct_tuple_reply->dst.u3.in6));
+			} else {
+				fl_out.u.ip4.daddr = ct_tuple_reply->src.u3.ip;
+				fl_out.u.ip4.saddr = ct_tuple_reply->dst.u3.ip;
+			}
 			fl_out.flowi_tos = 0;
 		#endif
 
@@ -977,8 +984,13 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		fl_out.u.ip4.fl4_sport = reply_sport;
 		fl_out.u.ip4.fl4_dport = reply_dport;
 		fl_out.flowi_proto = orig_prot;
-		fl_out.u.ip4.daddr = reply_dip;
-		fl_out.u.ip4.saddr = reply_sip;
+		if (pf_ipv6 == true) {
+			ipv6_addr_copy(&fl_out.u.ip6.daddr, &ip6_reply_sip);
+			ipv6_addr_copy(&fl_out.u.ip6.saddr, &ip6_reply_dip);
+		} else {
+			fl_out.u.ip4.daddr = reply_sip;
+			fl_out.u.ip4.saddr = reply_dip;
+		}
 		fl_out.flowi_tos = 0;
 	#endif
 
@@ -1048,8 +1060,13 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		fl_in.u.ip4.fl4_sport = reply_sport;
 		fl_in.u.ip4.fl4_dport = reply_dport;
 		fl_in.flowi_proto = orig_prot;
-		fl_in.u.ip4.daddr = reply_dip;
-		fl_in.u.ip4.saddr = reply_sip;
+		if (pf_ipv6 == true) {
+			ipv6_addr_copy(&fl_in.u.ip6.daddr, &ip6_reply_dip);
+			ipv6_addr_copy(&fl_in.u.ip6.saddr, &ip6_reply_sip);
+		} else {
+			fl_in.u.ip4.daddr = reply_dip;
+			fl_in.u.ip4.saddr = reply_sip;
+		}
 		fl_in.flowi_tos = 0;
 	#endif
 
