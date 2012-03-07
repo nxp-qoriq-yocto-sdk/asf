@@ -32,6 +32,10 @@ enum {
 	((unsigned char *)&addr)[2], \
 	((unsigned char *)&addr)[3]
 #endif
+#ifndef NIPQUAD_FMT
+#define NIPQUAD_FMT "%u.%u.%u.%u"
+#endif
+
 /****** Common API ********/
 #define ASF_MAX_VSGS		(2)
 #define ASF_MAX_IFACES		(16)
