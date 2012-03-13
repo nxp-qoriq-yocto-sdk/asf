@@ -201,7 +201,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 					ASF_uchar8_t bRevalidate,
 					ASF_uint32_t ulCommonInterfaceId)
 {
-	struct sk_buff *skb;
+	struct sk_buff *skb, *skb1;
 	struct sk_buff *pOutSkb = NULL;
 	struct xfrm_state *x;
 	struct net *net;
@@ -241,6 +241,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	/*1.  find the SA (xfrm pointer) on the basis of SPI,
 	 * protcol, dest Addr */
 	net = dev_net(skb->dev);
+	pOutSkb = skb;
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (DestAddr.bIPv4OrIPv6) {
 		memcpy(daddr.a6, DestAddr.ipv6addr, 16);
@@ -266,36 +267,36 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 		pFreeFn(Buffer.nativeBuffer);
 		goto fnexit;
 	}
-	/*2. Set the sec_path security context into the skb */
-	/* Allocate new secpath or COW existing one. */
-	if (!skb->sp || atomic_read(&skb->sp->refcnt) != 1) {
-		struct sec_path *sp;
+	while (pOutSkb) {
+		skb1 = pOutSkb;
+		pOutSkb = pOutSkb->next;
+		skb1->next = NULL;
+		/*2. Set the sec_path security context into the skb */
+		/* Allocate new secpath or COW existing one. */
+		if (!skb1->sp || atomic_read(&skb1->sp->refcnt) != 1) {
+			struct sec_path *sp;
 
-		sp = secpath_dup(skb->sp);
-		if (!sp) {
-			/* Drop the packet */
-			pFreeFn(Buffer.nativeBuffer);
-			goto fnexit;
+			sp = secpath_dup(skb1->sp);
+			if (!sp) {
+				/* Drop the packet */
+				pFreeFn(Buffer.nativeBuffer);
+				goto fnexit;
+			}
+			if (skb1->sp)
+				secpath_put(skb1->sp);
+			skb1->sp = sp;
 		}
-		if (skb->sp)
-			secpath_put(skb->sp);
-		skb->sp = sp;
+
+		/*fill the details of secpath */
+		skb1->sp->xvec[skb1->sp->len++] = x;
+
+		if (skb1 != skb)
+			xfrm_state_hold(x);
+
+		/*3. send the packet to slow path */
+		ASFCTRL_netif_receive_skb(skb1);
+		ASFCTRL_WARN(" sent the packet to slow path");
 	}
-
-	/*fill the details of secpath */
-	skb->sp->xvec[skb->sp->len++] = x;
-
-	/*3. send the packet to slow path */
-	if (pOutSkb)
-		while (pOutSkb) {
-			skb = pOutSkb;
-			pOutSkb = pOutSkb->next;
-			skb->next = NULL;
-			ASFCTRL_netif_receive_skb(skb);
-			ASFCTRL_WARN(" sent the packet to slow path");
-		}
-	else
-		ASFCTRL_netif_receive_skb(skb);
 
 	goto out;
 #else
