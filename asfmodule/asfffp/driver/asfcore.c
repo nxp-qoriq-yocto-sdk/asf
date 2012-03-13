@@ -1673,9 +1673,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						iph = ip_hdr(pSkb);
 
 						pSkb->pkt_type = PACKET_FASTROUTE;
-#ifndef CONFIG_DPA
-						pSkb->asf = 1;
-#endif
 						skb_set_queue_mapping(pSkb, 0);
 
 						/* make following unconditional*/
@@ -1764,9 +1761,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			skb->pkt_type = PACKET_FASTROUTE;
-#ifndef CONFIG_DPA
-			skb->asf = 1;
-#endif
 			skb_set_queue_mapping(skb, 0);
 
 			if (flow->bVLAN)
