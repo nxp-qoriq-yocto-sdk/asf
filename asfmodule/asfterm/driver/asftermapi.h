@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asf_termapi.h
@@ -19,6 +19,10 @@
 
 #ifndef __ASFTERMAPI_H
 #define __ASFTERMAPI_H
+
+/* ASF Termination MAX Capacity */
+#define ASF_TERM_MAX_ENTRY (1024)
+#define ASF_TERM_MAX_HASH_BKT ASF_TERM_MAX_ENTRY
 
 /****** Termination API (Term API) **********/
 typedef struct ASFTERMCacheEntryStats_s {

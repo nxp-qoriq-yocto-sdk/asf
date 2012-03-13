@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfreasm.c
@@ -53,27 +53,27 @@ extern ASFFFPGlobalStats_t *asf_gstats;
 #define ASF_REASM_BASE   (GFAR_SRAM_PBASE + GFAR_SRAM_SIZE  + SECFP_TOT_SRAM_SIZE)
 #endif
 
-unsigned long asf_reasm_hash_list_size = 256;
-unsigned long asf_reasm_num_cbs = 1024;
+unsigned long asf_reasm_num_cbs = ASF_REASM_MAX_NUM_CBS;
+unsigned long asf_reasm_hash_list_size = ASF_REASM_MAX_HASH_LIST_SIZE;
 #define ASF_REASM_NUM_CB_HASH_TBL_ENTRIES (asf_reasm_hash_list_size)
 #define ASF_REASM_NUM_CBS		(asf_reasm_num_cbs)
 
 #ifdef ASF_IPV6_FP_SUPPORT
-unsigned long asf_ipv6_reasm_hash_list_size = 256;
-unsigned long asf_ipv6_reasm_num_cbs = 1024;
+unsigned long asf_ipv6_reasm_num_cbs = ASF_REASM_MAX_NUM_CBS;
+unsigned long asf_ipv6_reasm_hash_list_size = ASF_REASM_MAX_HASH_LIST_SIZE;
 #define ASF_IPV6_REASM_NUM_CB_HASH_TBL_ENTRIES (asf_ipv6_reasm_hash_list_size)
 #define ASF_IPV6_REASM_NUM_CBS		(asf_ipv6_reasm_num_cbs)
 #endif
 
 #define ASF_NUM_FRAG_CBS_PER_REASM_CB	16
-#define ASF_REASM_NUM_FRAG_CBS		(1024 * ASF_NUM_FRAG_CBS_PER_REASM_CB)
+#define ASF_REASM_NUM_FRAG_CBS \
+		(ASF_REASM_MAX_NUM_CBS * ASF_NUM_FRAG_CBS_PER_REASM_CB)
 #define ASF_REASM_CB_PTRARRAY_SIZE \
 	(NR_CPUS * sizeof(ptrIArry_nd_t *) * ASF_REASM_NUM_CBS)
 #define ASF_REASM_TOT_SIZE \
 	(ASF_REASM_HASH_TBL_SIZE + ASF_REASM_CB_PTRARRAY_SIZE)
 
-#define ASF_REASM_NUM_TMR_BUCKETS 1024
-
+#define ASF_REASM_NUM_TMR_BUCKETS ASF_REASM_MAX_NUM_CBS
 
 #define ASF_REASM_NUM_APP_INFO_VARS	4
 

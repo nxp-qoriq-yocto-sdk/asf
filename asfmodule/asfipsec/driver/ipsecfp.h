@@ -67,13 +67,6 @@
 #define SECFP_ESP_TRAILER_LEN	2
 #define SECFP_ICV_LEN		12
 
-/* Capacity information */
-#define SECFP_MAX_OB_SAS		600
-#define SECFP_MAX_SPI_ENTRIES		64
-#define SECFP_MAX_DSCP_SA		8
-#define SECFP_MAX_SPD_CONTAINERS	300
-#define SECFP_MAX_NUM_TUNNEL_IFACES	64
-
 /* Options to set up descriptors */
 #define SECFP_AUTH		1
 #define SECFP_CIPHER		2

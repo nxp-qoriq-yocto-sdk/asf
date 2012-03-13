@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2011-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asftermapi.c
@@ -54,10 +54,10 @@ char *asf_term_version = ASF_TERM_VERSION;
 
 /* Initilization Parameters */
 bool term_aging_enable = 1; /* Enable */
-int term_max_entry = 1024;
+int term_max_entry = ASF_TERM_MAX_ENTRY;
 int term_max_vsgs = ASF_MAX_VSGS;
 int term_max_ifaces = ASF_MAX_IFACES;
-int term_hash_buckets = 1024;
+int term_hash_buckets = ASF_TERM_MAX_HASH_BKT;
 int term_l2blob_refresh_npkts = ASF_MAX_L2BLOB_REFRESH_PKT_CNT;
 int term_l2blob_refresh_interval = ASF_MAX_L2BLOB_REFRESH_TIME;
 

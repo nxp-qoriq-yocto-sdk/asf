@@ -20,6 +20,14 @@
 #define ASF_IPSEC_IKE_NATtV1 1
 #define ASF_IPSEC_IKE_NATtV2 2
 
+/* IPSEC Max capacity default values */
+#define SECFP_MAX_SPD_CONTAINERS	256
+#define SECFP_MAX_SAS			256 /*including DSCP_SAs*/
+#define SECFP_MAX_DSCP_SA		8
+#define SECFP_MAX_SPI_ENTRIES		SECFP_MAX_SAS
+#define SECFP_MAX_NUM_TUNNEL_IFACES	SECFP_MAX_SAS
+#define SECFP_INSA_HASH_TABLE_SZE	SECFP_MAX_SAS
+
 typedef atomic_t ASFAtomic_t;
 
 typedef struct ASFIPSecAuthAlgoCap_s {
@@ -833,10 +841,6 @@ typedef struct ASFSAStats_s {
 	ASF_uint64_t ulPkts;
 	ASF_uint64_t ulBytes;
 } ASFSAStats_t;
-
-/* Max capacity default values */
-#define SECFP_MAX_SAS	      600
-#define SECFP_INSA_HASH_TABLE_SZE  64
 
 enum ASFIPSecErrorCodes {
 	ASF_IPSEC_INVALID_VSG_ID = 1,

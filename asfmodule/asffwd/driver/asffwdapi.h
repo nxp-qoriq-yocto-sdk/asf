@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asffwdapi.h
@@ -21,6 +21,10 @@
 
 #ifndef __ASFFWDAPI_H
 #define __ASFFWDAPI_H
+
+/* ASF Forwarding MAX Capacity */
+#define ASF_FWD_MAX_ENTRY (8*1024)
+#define ASF_FWD_MAX_HASH_BKT ASF_FWD_MAX_ENTRY
 
 /****** Forwarding API (FFP API) **********/
 typedef struct ASFFWDCacheEntryStats_s {

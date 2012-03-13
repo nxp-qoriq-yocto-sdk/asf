@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfcore.c
@@ -87,19 +87,19 @@ MODULE_LICENSE("GPL");
 #define ASF_HLD_DEVICE_NAME "asf_hld"
 #endif
 
-char *asf_version = "asf-rel-0.1.0";
+char *asf_version = "asf-rel-0.2.0";
 /* Initilization Parameters */
 int asf_enable;
-int ffp_max_flows = 128*1024;
+int ffp_max_flows = ASF_FFP_MAX_FLOWS;
 int asf_max_vsgs = ASF_MAX_VSGS;
 int asf_max_ifaces = ASF_MAX_IFACES;
-int ffp_hash_buckets = 8*1024;
-int asf_inac_divisor = 4;
+int ffp_hash_buckets = ASF_FFP_MAX_HASH_BKT;
+int asf_inac_divisor = ASF_FFP_FLOW_INAC_DIVISOR;
 int asf_l2blob_refresh_npkts = ASF_MAX_L2BLOB_REFRESH_PKT_CNT;
 int asf_l2blob_refresh_interval = ASF_MAX_L2BLOB_REFRESH_TIME;
-int asf_reasm_timeout = 60; /* in seconds ? */
-int asf_reasm_maxfrags = 47;
-int asf_reasm_min_fragsize = 28;
+int asf_reasm_timeout = ASF_REASM_REASM_TIMEOUT; /* in seconds ? */
+int asf_reasm_maxfrags = ASF_REASM_MAX_NUM_FRAGS;
+int asf_reasm_min_fragsize = ASF_REASM_MIN_FRAGSIZE;
 int asf_tcp_drop_oos;
 #ifdef ASF_TERM_FP_SUPPORT
 int asf_default_mode = fwMode | termMode;

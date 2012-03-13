@@ -43,14 +43,6 @@
  *	/proc/sys/asf/fwd/
  *	/proc/asf/fwd
  */
-enum {
-	ASF_FWD_AGING_ENABLE = 1,
-	ASF_FWD_EXP_TIMEOUT,
-	ASF_FWD_L2BLOB_REFRESH_NPKTS,
-	ASF_FWD_L2BLOB_REFRESH_INTERVAL,
-	ASF_FWD_MAX_ENTRY
-};
-
 
 static int proc_asf_cache_stats(char *page, char **start,
 				 off_t off, int count,

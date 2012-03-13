@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfproc.c
@@ -57,18 +57,6 @@
  *	/proc/asf/flows
  *	/proc/asf/stats
  */
-enum {
-	ASF_PROC_COMMAND = 1,
-	ASF_ENABLE,
-	ASF_AUTO_MODE,
-	ASF_FFP_MAX_FLOWS,
-	ASF_FFP_MAX_VSGS,
-	ASF_FFP_HASH_BUCKETS,
-	ASF_L2BLOB_REFRESH_NPKTS,
-	ASF_L2BLOB_REFRESH_INTERVAL,
-	ASF_FFP_DEBUG_SKIP_FIRST,
-	ASF_FFP_DEBUG_SHOW_COUNT
-} ;
 
 static int ffp_debug_show_index;
 static int ffp_debug_show_count = 50;

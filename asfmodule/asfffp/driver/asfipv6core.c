@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfipv6core.c
@@ -41,8 +41,8 @@
 
 #define ASF_DO_INC_CHECKSUM
 /* Initilization Parameters */
-int ffp_ipv6_max_flows = 128*1024;
-int ffp_ipv6_hash_buckets = 8*1024;
+int ffp_ipv6_max_flows = ASF_FFP_IPV6_MAX_FLOWS;
+int ffp_ipv6_hash_buckets = ASF_FFP_IPV6_MAX_HASH_BKT;
 
 module_param(ffp_ipv6_max_flows, int, 0444);
 MODULE_PARM_DESC(ffp_ipv6_max_flows, "Maximum number of FFP IPv6 flows");

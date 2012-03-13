@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asffwdapi.c
@@ -55,11 +55,11 @@ char *asf_fwd_version = ASF_FWD_VERSION;
 
 /* Initilization Parameters */
 bool fwd_aging_enable = 1; /* Enable */
-int fwd_max_entry = 8*1024;
+int fwd_max_entry = ASF_FWD_MAX_ENTRY;
 int fwd_expiry_timeout = 180; /* in sec */
 int fwd_max_vsgs = ASF_MAX_VSGS;
 int fwd_max_ifaces = ASF_MAX_IFACES;
-int fwd_hash_buckets = 8*1024;
+int fwd_hash_buckets = ASF_FWD_MAX_HASH_BKT;
 int fwd_l2blob_refresh_npkts = ASF_MAX_L2BLOB_REFRESH_PKT_CNT;
 int fwd_l2blob_refresh_interval = ASF_MAX_L2BLOB_REFRESH_TIME;
 

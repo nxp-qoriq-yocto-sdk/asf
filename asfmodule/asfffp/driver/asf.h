@@ -1,5 +1,5 @@
 /***************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ****************************************************************************/
 /*
  * File:	asf.h
@@ -17,6 +17,27 @@
 #define ASF_MINIMUM 1
 #define ASF_LINUX 2
 #define ASF_FULL 3
+
+/* ASF MAX CAPACITY DEFAULT INFORMATION */
+#define ASF_MAX_VSGS		(2)
+#define ASF_MAX_IFACES		(16)
+#define ASF_FFP_MAX_FLOWS	(128*1024)
+#define ASF_FFP_MAX_HASH_BKT	(ASF_FFP_MAX_FLOWS/16)
+#define ASF_FFP_FLOW_INAC_DIVISOR	(4)
+
+#define ASF_FFP_IPV6_MAX_FLOWS	(128*1024)
+#define ASF_FFP_IPV6_MAX_HASH_BKT	(ASF_FFP_IPV6_MAX_FLOWS/16)
+
+#define ASF_REASM_MAX_NUM_CBS		1024
+#define ASF_REASM_MAX_HASH_LIST_SIZE	(ASF_REASM_MAX_NUM_CBS/4)
+#define ASF_REASM_MAX_NUM_FRAGS		47
+#define ASF_REASM_MIN_FRAGSIZE		28
+
+#define ASF_REASM_REASM_TIMEOUT		(60)
+#define ASF_MAX_L2BLOB_REFRESH_PKT_CNT	(0)
+#define ASF_MAX_L2BLOB_REFRESH_TIME	(3*60)
+#define	ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT	(10*HZ)
+
 enum {
 	ASF_SUCCESS = 0,
 	ASF_FAILURE = -1
@@ -37,19 +58,11 @@ enum {
 #endif
 
 /****** Common API ********/
-#define ASF_MAX_VSGS		(2)
-#define ASF_MAX_IFACES		(16)
 #ifdef ASF_IPV6_FP_SUPPORT
 #define ASF_MAX_L2BLOB_LEN	(68)
 #else
 #define ASF_MAX_L2BLOB_LEN	(28)
 #endif
-
-#define ASF_MAX_L2BLOB_REFRESH_PKT_CNT	(0)
-#define ASF_MAX_L2BLOB_REFRESH_TIME	(3*60)
-
-#define	ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT	(10*HZ)
-
 
 #define ASF_L2BLOB_REFRESH_NORMAL	(1)
 #define ASF_L2BLOB_REFRESH_RET_PKT_STK	(2)
