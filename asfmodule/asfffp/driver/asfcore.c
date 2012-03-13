@@ -2049,13 +2049,14 @@ EXPORT_SYMBOL(asf_ffp_check_vsg_mode);
 
 asf_vsg_info_t *asf_ffp_get_vsg_info_node(ASF_uint32_t ulVSGId)
 {
-	asf_vsg_info_t  *vsg;
+	asf_vsg_info_t *vsg;
+	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
 	if (ulVSGId >= asf_max_vsgs)
 		return NULL;
 	if (asf_vsg_info[ulVSGId])
 		return asf_vsg_info[ulVSGId];
-	vsg = kzalloc(sizeof(asf_vsg_info_t), GFP_KERNEL);
+	vsg = kzalloc(sizeof(asf_vsg_info_t), flags);
 	if (!vsg)
 		return NULL;
 
@@ -2106,6 +2107,7 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 {
 	ASFInterfaceInfo_t      *info = asfInterface;
 	ASFNetDevEntry_t	*dev;
+	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
 	asf_debug(" begin cii %u type %u\n", ulCommonInterfaceId, info->ulDevType);
 
@@ -2127,7 +2129,7 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 		return ASF_FAILURE;
 	}
 
-	dev = (ASFNetDevEntry_t *)  kzalloc(sizeof(*dev), GFP_KERNEL);
+	dev = kzalloc(sizeof(*dev), flags);
 	if (!dev) {
 		asf_debug("failed allocate memory for ASFNetDevEntry_t\n");
 		return ASF_FAILURE;
@@ -2275,7 +2277,8 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 					goto free_and_ret_err;
 				}
 			} else {
-				parent_dev->pVlanDevArray = (ASFVlanDevArray_t *)  kzalloc(sizeof(ASFVlanDevArray_t), GFP_KERNEL);
+				parent_dev->pVlanDevArray =
+					kzalloc(sizeof(ASFVlanDevArray_t), flags);
 				if (!parent_dev->pVlanDevArray) {
 					asf_debug("Failed alloc VLAN Dev array!\n");
 					goto free_and_ret_err;
@@ -2503,8 +2506,8 @@ ASF_uint32_t ASFUnMapInterface (ASF_uint32_t ulCommonInterfaceId)
 	}
 	asf_debug(" exit .. success cii %u\n", ulCommonInterfaceId);
 	asf_ifaces[ulCommonInterfaceId] = NULL;
-	call_rcu((struct rcu_head *)  dev, asfNetDevFreeRcu);
 	spin_unlock_bh(&asf_iface_lock);
+	call_rcu((struct rcu_head *)  dev, asfNetDevFreeRcu);
 	return ASF_SUCCESS;
 }
 EXPORT_SYMBOL(ASFUnMapInterface);

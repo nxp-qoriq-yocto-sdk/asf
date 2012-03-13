@@ -121,7 +121,9 @@ int asfInitPools(void)
 				asf_mpool_debug("asf_init_pools failed for core Id =%d\r\n", ii);
 				return 1;
 			}
+#ifdef ASF_MPOOL_USE_SRAM
 			memset(ptr->vaddr, 0, ASF_MAX_POOLS * sizeof(struct asf_pool_s));
+#endif
 			ptr->pHead = (struct asf_pool_s *)  (ptr->vaddr);
 			asf_mpool_debug("Per CPU Pools: ptr->vaddr = 0x%x, ptr-pHead = 0x%x\r\n", ptr->vaddr, ptr->pHead);
 		}
@@ -149,7 +151,9 @@ int asfInitPools(void)
 				asf_mpool_debug("asf_init_pools  failed for global pool Id =%d\r\n", ii);
 				return 1;
 			}
+#ifdef ASF_MPOOL_USE_SRAM
 			memset(ptr->vaddr, 0, sizeof(struct asf_pool_s));
+#endif
 			ptr->pHead = (struct asf_pool_s *)  (ptr->vaddr);
 			asf_mpool_debug("Global Pools%d  : ptr->paddr = 0x%x, ptr->vaddr = 0x%x, ptr-pHead = 0x%x\r\n", ii, ptr->paddr, ptr->vaddr, ptr->pHead);
 		}
@@ -290,6 +294,7 @@ int asfCreatePool(char *name, unsigned int ulNumGlobalPoolEntries,
 				poolPtr->ulNumEntries = ulPerCoreEntries;
 				poolPtr->ulNumPerCoreMaxEntries = ulPerCoreEntries;
 				poolPtr->ulDataSize = ulDataSize;
+				spin_lock_init(&poolPtr->lock);
 				for (jj = 0, pLinkNode = (struct asf_poolLinkNode_s *)  (poolPtr->head) ; jj < (ulPerCoreEntries-2);
 				    jj++) {
 					cptr = (unsigned char *)  (pLinkNode) + poolPtr->ulDataElemSize;
