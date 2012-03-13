@@ -457,8 +457,7 @@ inline void asfFragmentAndSendPkt(term_cache_t	*Cache,
 	struct sk_buff *pSkb, *pTempSkb;
 	/* Need to call fragmentation routine */
 	asf_print("attempting to fragment and xmit");
-	if (!asfIpv4Fragment(skb, (Cache->odev->mtu < Cache->pmtu ?
-			skb->dev->mtu : Cache->pmtu),
+	if (!asfIpv4Fragment(skb, Cache->pmtu,
 			/*32*/ Cache->l2blob_len,
 			0 /* FALSE */, Cache->odev, &pSkb)) {
 		int ulFrags = 0;
@@ -984,9 +983,8 @@ ASF_void_t ASFTERMProcessPkt(ASF_uint32_t	ulVsgId,
 
 		/* Cache->l2blob_len > 0 && Cache->odev != NULL
 		from this point onwards */
-		if ((((skb->len > Cache->pmtu) &&
-			(skb->len + Cache->l2blob_len) >
-			(Cache->odev->mtu + ETH_HLEN))) ||
+		if (((skb->len + Cache->l2blob_len) >
+			(Cache->pmtu + ETH_HLEN)) ||
 			(skb_shinfo(skb)->frag_list)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (iph->frag_off & IP_DF)
@@ -1580,7 +1578,8 @@ static int term_cmd_update_cache(ASF_uint32_t ulVsgId,
 			memcpy(&Cache->l2blob, p->u.l2blob.l2blob,
 					p->u.l2blob.l2blobLen);
 			Cache->l2blob_len = p->u.l2blob.l2blobLen;
-			Cache->pmtu = p->u.l2blob.ulPathMTU;
+			Cache->pmtu = (dev->ndev->mtu < p->u.l2blob.ulPathMTU) ?
+					dev->ndev->mtu : p->u.l2blob.ulPathMTU;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			Cache->bVLAN = p->u.l2blob.bTxVlan;
 			Cache->bPPPoE = p->u.l2blob.bUpdatePPPoELen;

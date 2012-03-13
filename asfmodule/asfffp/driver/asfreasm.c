@@ -26,6 +26,7 @@
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
+#include <8021q/vlan.h>
 #include "asfparry.h"
 #include "asfmpool.h"
 #include "asftmr.h"
@@ -2025,6 +2026,20 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 		}
 
 		if (bNewSkb) {
+			struct net_device *ndev;
+			/* Special Handling for VLAN Interfaces.
+			   All the SKBs must be allocated from parent
+			   device pool only.
+			 */
+			if (skb->dev->priv_flags & IFF_802_1Q_VLAN) {
+
+				ndev = vlan_dev_info(skb->dev)->real_dev;
+				/* Return Error if Parent device not found */
+				if (!ndev)
+					return 1;
+			} else
+				ndev = skb->dev;
+
 			ulMTU -= ihl;
 			asf_reasm_debug("Re-using incoming Skb"
 						" as first fragment.\r\n");
@@ -2071,7 +2086,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 				skb2 = alloc_skb(len+ihl+ulDevXmitHdrLen+
 					dev->needed_headroom, GFP_ATOMIC);
 #else
-				skb2 = gfar_new_skb(skb->dev);
+				skb2 = gfar_new_skb(ndev);
 #endif
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
@@ -2143,7 +2158,7 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 			skb2 = alloc_skb(tot_len+ihl+ulDevXmitHdrLen+
 					dev->needed_headroom, GFP_ATOMIC);
 #else
-			skb2 = gfar_new_skb(skb->dev);
+			skb2 = gfar_new_skb(ndev);
 #endif
 			if (!skb2)
 				goto drop;

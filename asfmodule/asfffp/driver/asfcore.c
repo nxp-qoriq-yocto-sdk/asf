@@ -1643,9 +1643,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 			/* flow->l2blob_len > 0 && flow->odev != NULL
 			from this point onwards */
-			if (((((skb->len + flow->l2blob_len) >
-				(flow->odev->mtu + ETH_HLEN))
-				&& (skb->len > flow->pmtu))) ||
+			if (((skb->len + flow->l2blob_len) >
+				(flow->pmtu + ETH_HLEN)) ||
 				(skb_shinfo(skb)->frag_list)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				struct sk_buff *pSkb, *pTempSkb;
@@ -1658,10 +1657,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				/* Need to call fragmentation routine */
 				asf_debug("attempting to fragment and xmit\n");
 
-				if (!asfIpv4Fragment(skb,
-						     (flow->odev->mtu < flow->pmtu ?
-						      skb->dev->mtu : flow->pmtu), /*32*/ flow->l2blob_len,
-						     0 /* FALSE */, flow->odev, &pSkb)) {
+				if (!asfIpv4Fragment(skb, flow->pmtu,
+						/*32*/ flow->l2blob_len,
+						0 /* FALSE */, flow->odev,
+						&pSkb)) {
 					int ulFrags = 0;
 					/* asf_display_frags(pSkb, "Before Xmit");*/
 					asf_display_skb_list(pSkb, "Before Xmit");
@@ -3278,7 +3277,8 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 
 			memcpy(&flow->l2blob, p->u.l2blob.l2blob, p->u.l2blob.l2blobLen);
 			flow->l2blob_len = p->u.l2blob.l2blobLen;
-			flow->pmtu = p->u.l2blob.ulPathMTU;
+			flow->pmtu = (dev->ndev->mtu < p->u.l2blob.ulPathMTU) ?
+					dev->ndev->mtu : p->u.l2blob.ulPathMTU;
 #ifdef ASF_IPV6_FP_SUPPORT
 			flow->bIP6IP4Out = p->u.l2blob.tunnel.bIP6IP4Out;
 			flow->bIP6IP4In = p->u.l2blob.tunnel.bIP6IP4In;
