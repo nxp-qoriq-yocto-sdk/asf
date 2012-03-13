@@ -31,6 +31,7 @@
 #else
 #include <gianfar.h>
 #endif
+#include <net/neighbour.h>
 #include <net/dst.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <net/route.h>
@@ -222,13 +223,24 @@ ASF_void_t asfctrl_l3_route_flush(void)
 int asf_ip_send(struct sk_buff *skb)
 {
 	struct dst_entry *dst = skb_dst(skb);
+	struct neighbour *neigh;
+	int res;
 	ASFCTRL_FUNC_ENTRY;
+	rcu_read_lock();
 
-	if (dst->hh)
-		return neigh_hh_output(dst->hh, skb);
-	else if (dst->neighbour)
-		return dst->neighbour->output(skb);
-
+	if (dst->hh) {
+		res = neigh_hh_output(dst->hh, skb);
+		rcu_read_unlock();
+		return res;
+	} else {
+		neigh = dst_get_neighbour(dst);
+		if (neigh) {
+			res = neigh->output(skb);
+			rcu_read_unlock();
+			return res;
+		}
+	}
+	rcu_read_unlock();
 	ASFCTRL_DBG(" Packet send failure");
 	ASFCTRLKernelSkbFree(skb);
 
