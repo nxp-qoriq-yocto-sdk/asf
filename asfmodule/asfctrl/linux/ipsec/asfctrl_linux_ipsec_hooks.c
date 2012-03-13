@@ -43,6 +43,10 @@
 #include "../ffp/asfctrl.h"
 #include "asfctrl_linux_ipsec_hooks.h"
 
+
+#define ASF_IPSEC_NEEDED_HEADROOM	128
+#define ASF_IPSEC_NEEDED_TAILROOM	128
+
 #define XFRM_ACTION(act) (act ? "BLOCK" : "ALLOW")
 #define XFRM_MODE(mode) (mode ? "TUNNEL" : "TRANSPORT")
 
@@ -1290,6 +1294,7 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 	ASFBuffer_t Buffer;
 	ASF_IPAddr_t daddr;
 	int sa_id, cont_id;
+	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -1321,6 +1326,20 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 	spin_unlock(&sa_table_lock);
 
 	skb_dst_drop(skb);
+
+	if ((skb_tailroom(skb) < ASF_IPSEC_NEEDED_TAILROOM)
+		|| (skb_headroom(skb) < ASF_IPSEC_NEEDED_HEADROOM)) {
+		int headroom, tailroom;
+		tailroom = ASF_IPSEC_NEEDED_TAILROOM - skb_tailroom(skb);
+		headroom = ASF_IPSEC_NEEDED_HEADROOM - skb_headroom(skb);
+
+		if (pskb_expand_head(skb, (headroom > 0) ? headroom : 0,
+			(tailroom > 0) ? tailroom : 0, flags)) {
+			ASFCTRL_ERR("Packet does not have enough"
+				"eadroom & tailroom for IPSEC");
+			return -EINVAL;
+		}
+	}
 
 	ASFIPSecEncryptAndSendPkt(ASF_DEF_VSG,
 			ASF_DEF_IPSEC_TUNNEL_ID,
