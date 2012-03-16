@@ -55,9 +55,6 @@ ptrIArry_tbl_t secfp_OutDB;
 /*SPDInContainer_t */
 ptrIArry_tbl_t secfp_InDB;
 
-/* An array of outbound SAs */
-spinlock_t outSATableBitMapLock;
-
 ptrIArry_tbl_t secFP_OutSATable;
 
 /* Pointer table to hold inbound selector sets */
@@ -1732,7 +1729,6 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 			ASFIPSEC_DEBUG("Invalid ucAuthAlgo");
 			return -1;
 		}
-		pSA->ctx.class2_alg = pSA->SAParams.ucAuthAlgo;
 	}
 
 	if (pSA->SAParams.bEncrypt) {
@@ -1765,7 +1761,6 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 			ASFIPSEC_WARN("Invalid ucEncryptAlgo");
 			return -1;
 		}
-		pSA->ctx.class1_alg = pSA->SAParams.ucCipherAlgo;
 	}
 
 	return 0;
@@ -1939,7 +1934,6 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 			ASFIPSEC_DEBUG("Invalid ucAuthAlgo");
 			return -1;
 		}
-		pSA->ctx.class2_alg = pSA->SAParams.ucAuthAlgo;
 
 	}
 	if (pSA->SAParams.bEncrypt) {
@@ -1971,7 +1965,6 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 			ASFIPSEC_WARN("Invalid ucEncryptAlgo");
 			return -1;
 		}
-		pSA->ctx.class1_alg = pSA->SAParams.ucCipherAlgo;
 	}
 
 	return 0;
@@ -2683,8 +2676,6 @@ unsigned int secfp_createOutSA(
 		pSA->option[0] = SECFP_CIPHER;
 	else
 		pSA->option[0] = SECFP_AUTH;
-	pSA->ctx.class1_alg = pSA->SAParams.ucCipherAlgo;
-	pSA->ctx.class2_alg = pSA->SAParams.ucAuthAlgo;
 
 	if (pSA->SAParams.bEncrypt)
 		if (secfp_createOutSACaamCtx(pSA)) {

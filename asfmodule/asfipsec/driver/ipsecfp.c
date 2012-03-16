@@ -3428,9 +3428,9 @@ inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	ulIpv6hl = SECFP_IPV6_HDR_LEN + ulIpv6Exthl;
 	ipv6_traffic_class(ipv6TClass, ipv6h);
-	if (ipv6h->nexthdr == SECFP_NXTHDR_FRAGMENT ||
-		ipv6h->nexthdr == SECFP_NXTHDR_HOP_BY_HOP ||
-		ipv6h->nexthdr == SECFP_NXTHDR_ROUTING) {
+	if (ipv6h->nexthdr == NEXTHDR_FRAGMENT ||
+		ipv6h->nexthdr == NEXTHDR_HOP ||
+		ipv6h->nexthdr == NEXTHDR_ROUTING) {
 		ASFIPSEC_WARN("fragmentation header should have been removed");
 		return 1; /* Send it up to Stack */
 	}

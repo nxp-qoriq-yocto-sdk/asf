@@ -30,14 +30,6 @@
 #endif
 
 #ifdef ASF_IPV6_FP_SUPPORT
-#define SECFP_NXTHDR_HOP_BY_HOP 0
-#define SECFP_NXTHDR_ROUTING 43
-#define SECFP_NXTHDR_FRAGMENT 44
-#define SECFP_NXTHDR_ESP 50
-#define SECFP_NXTHDR_AH 51
-#define SECFP_NXTHDR_DST_OPT 60
-#define SECFP_NXTHDR_IP 4
-#define SECFP_NXTHDR_IPV6 41
 /* Header length validation information */
 #define SECFP_IPV6_HDR_LEN	40
 #define SECFP_IPV6_TCLASS_MASK    0x0FF00000
@@ -54,10 +46,10 @@
 #define SECFP_DF_SET	2
 
 /* Protocol related values */
-#define SECFP_PROTO_ESP		50
-#define SECFP_PROTO_AH		51
-#define SECFP_PROTO_IP		4
-#define SECFP_PROTO_IPV6	41
+#define SECFP_PROTO_ESP		IPPROTO_ESP /*50*/
+#define SECFP_PROTO_AH		IPPROTO_AH /*50*/
+#define SECFP_PROTO_IP		IPPROTO_IPIP /*4*/
+#define SECFP_PROTO_IPV6	IPPROTO_IPV6/*41*/
 #define SECFP_IPPROTO_ICMP	IPPROTO_ICMP /*1*/
 
 /* Header length validation information */
@@ -692,9 +684,6 @@ typedef struct secfp_ivInfo_s {
 } secfp_ivInfo_t;
 
 #ifndef CONFIG_ASF_SEC4x
-/* to satisfy the compiler */
-struct talitos_desc;
-
 extern void secfp_outComplete(struct device *dev,
 				struct talitos_desc *desc,
 				void *context, int error);

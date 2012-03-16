@@ -30,8 +30,6 @@ struct caam_ctx {
 	dma_addr_t shared_desc_phys;
 	u32 class1_alg_type;
 	u32 class2_alg_type;
-	u32 class1_alg;
-	u32 class2_alg;
 	u32 alg_op;
 	u8 *key;
 	dma_addr_t key_phys;
