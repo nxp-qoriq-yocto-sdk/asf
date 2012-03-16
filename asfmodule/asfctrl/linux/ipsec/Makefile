@@ -36,7 +36,7 @@ EXTRA_CFLAGS += -DASF_IPV6_FP_SUPPORT
 endif
 
 KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfipsec/driver/Module.symvers
-KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfctrl/linux/ffp/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(TOPDIR)/asfctrl/linux/ffp/Module.symvers
 export KBUILD_EXTRA_SYMBOLS
 
 EXTRA_CFLAGS += -DCONFIG_ASF=1 -DCONFIG_AS_FASTPATH=1 -I$(KERNEL_PATH)/net/bridge

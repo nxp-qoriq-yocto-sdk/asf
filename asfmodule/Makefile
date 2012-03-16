@@ -22,7 +22,7 @@ build:
 ifeq ($(CONFIG_ASF_TERMINATION), y)
 	make -w -C asfterm -f Makefile
 endif
-ifeq ($(CONFIG_ASF_IPSEC), y)
+ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile
 endif
 	make -w -C asfctrl -f Makefile
@@ -34,6 +34,8 @@ clean:
 	make -w -C asfffp -f Makefile clean
 	make -w -C asffwd -f Makefile clean
 	make -w -C asfterm -f Makefile clean
+ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile clean
+endif
 	make -w -C asfctrl -f Makefile clean
 

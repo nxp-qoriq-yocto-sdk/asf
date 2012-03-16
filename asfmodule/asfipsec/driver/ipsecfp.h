@@ -683,6 +683,8 @@ typedef struct secfp_ivInfo_s {
 	unsigned int ulUpdateIndex;
 } secfp_ivInfo_t;
 
+#define MAX_IPSEC_RECYCLE_DESC		128
+
 #ifndef CONFIG_ASF_SEC4x
 extern void secfp_outComplete(struct device *dev,
 				struct talitos_desc *desc,
@@ -707,8 +709,6 @@ extern int secfp_talitos_submit(struct device *dev, struct talitos_desc *desc,
 extern int secfp_rng_read_data(unsigned int *ptr);
 extern struct device *talitos_getdevice(void);
 #else
-
-#define MAX_IPSEC_RECYCLE_DESC		128
 
 /* This is due to different prototype of the SEC return function*/
 extern void secfp_outComplete(struct device *dev,

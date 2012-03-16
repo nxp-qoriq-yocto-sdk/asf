@@ -91,6 +91,7 @@ static unsigned int SPDOutSALinkNodePoolId_g = 0xFFFFFFFF;
 #define SHARED_GWV6_OFFSET(arg) (12 + offsetof(struct ipv6hdr, arg))
 #endif
 
+extern struct device *pdev;
 
 /************* Beginning of API Function and inner functions used by API******
  * All APIs to normal path return SECFP_SUCCESS upon SUCCESS and

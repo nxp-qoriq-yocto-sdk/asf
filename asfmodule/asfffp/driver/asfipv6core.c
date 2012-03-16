@@ -367,6 +367,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 	skb->len = pkt_len + sizeof(struct ipv6hdr);
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (unlikely(nexthdr == NEXTHDR_FRAGMENT)) {
 		struct frag_hdr *fhdr;
 		fhdr =  (struct frag_hdr *)skb_transport_header(skb);
@@ -397,7 +398,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 			skb_set_transport_header(skb, sizeof(struct frag_hdr));
 		}
 	}
-
+#endif
 #ifdef ASF_IPSEC_FP_SUPPORT
 	if (nexthdr == NEXTHDR_ESP) {
 		/* Give packet to ASF IPSec */

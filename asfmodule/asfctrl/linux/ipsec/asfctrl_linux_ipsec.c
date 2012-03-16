@@ -58,6 +58,22 @@ MODULE_AUTHOR("Freescale Semiconductor, Inc");
  */
 MODULE_DESCRIPTION(ASFCTRL_LINUX_IPSEC_DESC);
 
+module_param(bRedSideFragment, bool, 0444);
+MODULE_PARM_DESC(bRedSideFragment, "Bool - Whether ASF-IPsec "\
+	"RED Side Fragmentation is Enabled");
+
+module_param(bAntiReplayCheck, bool, 0444);
+MODULE_PARM_DESC(bAntiReplayCheck, "Bool - Whether ASF-IPsec "\
+	"Anti Replay Check is Enabled");
+
+module_param(bVolumeBasedExpiry, bool, 0444);
+MODULE_PARM_DESC(bVolumeBasedExpiry, "Bool - Whether ASF-IPsec "\
+	"volume-based SA Expiry is Enabled");
+
+module_param(bPacketBasedExpiry, bool, 0444);
+MODULE_PARM_DESC(bPacektBasedExpiry, "Bool - Whether ASF-IPsec "\
+	"Packet-based SA Expiry is Enabled");
+
 #define ASFCTRL_IPSEC_SEND_TO_LINUX
 
 /* Global Variables */
@@ -435,7 +451,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 			fl.u.flowi4_oif = 0;
 			fl.u.flowi4_flags = FLOWI_FLAG_ANYSRC;
 
-			rt = ip_route_output_key(&init_net, &fl.u.ipv4) {
+			rt = ip_route_output_key(&init_net, &fl.u.ip4);
 			if (!rt) {
 		#endif
 				ASFCTRL_DBG("\n Route not found for dst %x\n",\
@@ -789,22 +805,6 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 	ASFCTRL_DBG("IPSEC : In =%d, Out =%d", *ipsec_in, *ipsec_out);
 	return err;
 }
-
-module_param(bRedSideFragment, bool, 0444);
-MODULE_PARM_DESC(bRedSideFragment, "Bool - Whether ASF-IPsec "\
-	"RED Side Fragmentation is Enabled");
-
-module_param(bAntiReplayCheck, bool, 0444);
-MODULE_PARM_DESC(bAntiReplayCheck, "Bool - Whether ASF-IPsec "\
-	"Anti Replay Check is Enabled");
-
-module_param(bVolumeBasedExpiry, bool, 0444);
-MODULE_PARM_DESC(bVolumeBasedExpiry, "Bool - Whether ASF-IPsec "\
-	"volume-based SA Expiry is Enabled");
-
-module_param(bPacketBasedExpiry, bool, 0444);
-MODULE_PARM_DESC(bPacektBasedExpiry, "Bool - Whether ASF-IPsec "\
-	"Packet-based SA Expiry is Enabled");
 
 static int __init asfctrl_linux_ipsec_init(void)
 {

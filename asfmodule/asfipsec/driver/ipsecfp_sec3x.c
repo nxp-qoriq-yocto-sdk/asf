@@ -60,6 +60,10 @@ void print_desc(struct talitos_desc *desc)
 
 int secfp_createInSATalitosDesc(inSA_t *pSA)
 {
+	int iphdrlen;
+	iphdrlen = pSA->SAParams.tunnelInfo.bIPv4OrIPv6 ? SECFP_IPV6_HDR_LEN :
+				SECFP_IPV4_HDR_LEN;
+
 	pSA->desc_hdr_template |= DESC_HDR_DIR_INBOUND;
 	if ((pSA->SAParams.bUseExtendedSequenceNumber) ||
 		((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
@@ -85,7 +89,8 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 				else
 					pSA->desc_hdr_template |= DESC_HDR_TYPE_AESU_CTR_NONSNOOP;
 
-				pSA->validIpPktLen = (SECFP_ESP_HDR_LEN + iphdrlen) +
+				pSA->validIpPktLen = (SECFP_ESP_HDR_LEN +
+							iphdrlen) +
 							pSA->SAParams.ulIvSize + SECFP_ICV_LEN;
 			} else {
 				pSA->option[0] = SECFP_CIPHER;
@@ -97,7 +102,8 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 					pSA->desc_hdr_template |= DESC_HDR_TYPE_AESU_CTR_NONSNOOP;
 
 				pSA->option[1] = SECFP_NONE;
-				pSA->validIpPktLen = (SECFP_ESP_HDR_LEN + iphdrlen) +
+				pSA->validIpPktLen = (SECFP_ESP_HDR_LEN +
+							iphdrlen) +
 							pSA->SAParams.ulIvSize;
 			}
 		} else {
@@ -112,13 +118,15 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 				pSA->hdr_Auth_template_0 |= DESC_HDR_MODE0_MDEU_CICV;
 
 			pSA->option[1] = SECFP_NONE;
-			pSA->validIpPktLen = SECFP_ESP_HDR_LEN + iphdrlen + SECFP_ICV_LEN;
+			pSA->validIpPktLen = SECFP_ESP_HDR_LEN +
+						iphdrlen +
+						SECFP_ICV_LEN;
 		}
 	} else {
 		pSA->option[1] = SECFP_NONE;
 		if (pSA->SAParams.bEncrypt && pSA->SAParams.bAuth) {
 			/* In the case of ESP_NULL, IV Size will be 0 */
-			pSA->validIpPktLen = (SECFP_ESP_HDR_LEN + iphdrlen) +
+			pSA->validIpPktLen = (SECFP_ESP_HDR_LEN	+ iphdrlen) +
 						pSA->SAParams.ulIvSize + SECFP_ICV_LEN;
 
 			if (((pSA->desc_hdr_template &
@@ -149,7 +157,8 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 			pSA->hdr_Auth_template_0 |= DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU|
 							DESC_HDR_MODE0_MDEU_CICV |
 							DESC_HDR_DIR_INBOUND;
-			pSA->validIpPktLen = SECFP_ESP_HDR_LEN + iphdrlen + SECFP_ICV_LEN;
+			pSA->validIpPktLen = SECFP_ESP_HDR_LEN +
+					iphdrlen + SECFP_ICV_LEN;
 		}
 	}
 	if (pSA->SAParams.bAuth)
