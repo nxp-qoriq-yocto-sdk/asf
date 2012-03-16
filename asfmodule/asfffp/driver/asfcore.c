@@ -2997,15 +2997,18 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 		}
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-		asf_debug_l2("creating l2blob timer (flow1)\n");
-		flow1->pL2blobTmr = asfTimerStart(ASF_FFP_BLOB_TMR_ID, 0,
-							asf_l2blob_refresh_interval,
-							flow1->ulVsgId,
-							flow1->id.ulArg1,
-							flow1->id.ulArg2, hash1, bIPv6_flow1);
-		if (!flow1->pL2blobTmr)
-			goto down2;
-
+		if (!flow1->bIPsecOut) {
+			asf_debug_l2("creating l2blob timer (flow1)\n");
+			flow1->pL2blobTmr = asfTimerStart(
+						ASF_FFP_BLOB_TMR_ID, 0,
+						asf_l2blob_refresh_interval,
+						flow1->ulVsgId,
+						flow1->id.ulArg1,
+						flow1->id.ulArg2,
+						hash1, bIPv6_flow1);
+			if (!flow1->pL2blobTmr)
+				goto down2;
+		}
 		asf_debug_l2("creating inac timer (flow1)\n");
 		flow1->pInacRefreshTmr = asfTimerStart(ASF_FFP_INAC_REFRESH_TMR_ID, 0,
 							     flow1->ulInacTime/asf_inac_divisor,
@@ -3015,15 +3018,18 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 		if (!flow1->pInacRefreshTmr)
 			goto down2;
 
-		asf_debug_l2("creating l2blob timer (flow2)\n");
-		flow2->pL2blobTmr = asfTimerStart(ASF_FFP_BLOB_TMR_ID, 0,
-							asf_l2blob_refresh_interval,
-							flow2->ulVsgId,
-							flow2->id.ulArg1,
-							flow2->id.ulArg2, hash2, bIPv6_flow2);
-		if (!flow2->pL2blobTmr)
-			goto down2;
-
+		if (!flow2->bIPsecOut) {
+			asf_debug_l2("creating l2blob timer (flow2)\n");
+			flow2->pL2blobTmr = asfTimerStart(
+					ASF_FFP_BLOB_TMR_ID, 0,
+					asf_l2blob_refresh_interval,
+					flow2->ulVsgId,
+					flow2->id.ulArg1,
+					flow2->id.ulArg2,
+					hash2, bIPv6_flow2);
+			if (!flow2->pL2blobTmr)
+				goto down2;
+		}
 		asf_debug_l2("creating inac timer (flow2)\n");
 		flow2->pInacRefreshTmr = asfTimerStart(ASF_FFP_INAC_REFRESH_TMR_ID, 0,
 							     flow2->ulInacTime/asf_inac_divisor,
@@ -3320,7 +3326,7 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 					flow->pInacRefreshTmr = NULL;
 				}
 			} else {
-				if (!flow->pL2blobTmr) {
+				if (!flow->pL2blobTmr && !flow->bIPsecOut) {
 					flow->pL2blobTmr = asfTimerStart(ASF_FFP_BLOB_TMR_ID, 0,
 							asf_l2blob_refresh_interval,
 							flow->ulVsgId,
@@ -3369,7 +3375,32 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 			return ASFFFP_RESPONSE_SUCCESS;
 		} else if (p->bIPsecConfigIdentityUpdate) {
 			if (p->u.ipsec.bOut) {
-				memcpy(&flow->ipsecInfo.outContainerInfo, &p->u.ipsec.ipsecInfo.outContainerInfo, sizeof(flow->ipsecInfo.outContainerInfo));
+				asf_debug("IPSEC status old=%d,"
+					"new = %d timer=%x",
+					flow->bIPsecOut,
+					p->u.ipsec.bIPsecOut,
+					flow->pL2blobTmr);
+				memcpy(&flow->ipsecInfo.outContainerInfo,
+					&p->u.ipsec.ipsecInfo.outContainerInfo,
+					sizeof(flow->ipsecInfo.outContainerInfo));
+				if (flow->bIPsecOut && !p->u.ipsec.bIPsecOut &&
+					!flow->pL2blobTmr) {
+					flow->pL2blobTmr = asfTimerStart(
+							ASF_FFP_BLOB_TMR_ID, 0,
+							asf_l2blob_refresh_interval,
+							flow->ulVsgId,
+							flow->id.ulArg1,
+							flow->id.ulArg2, hash, bIPv6);
+					if (!flow->pL2blobTmr)
+						return ASFFFP_RESPONSE_FAILURE;
+				} else if (!flow->bIPsecOut &&
+					p->u.ipsec.bIPsecOut &&
+					flow->pL2blobTmr) {
+
+					asfTimerStop(ASF_FFP_BLOB_TMR_ID, 0,
+						flow->pL2blobTmr);
+					flow->pL2blobTmr = NULL;
+				}
 				flow->bIPsecOut = p->u.ipsec.bIPsecOut;
 			}
 			if (p->u.ipsec.bIn) {
