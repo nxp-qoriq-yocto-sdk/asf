@@ -350,8 +350,6 @@ typedef struct SPDOutParams_s {
 #define SECFP_MAX_CIPHER_KEY_SIZE 64
 
 typedef struct SAParams_s {
-	unsigned int bAuth:1,
-	bEncrypt:1;
 	unsigned int ulSPI;
 	struct {
 		bool bIPv4OrIPv6; /* 0= IPv4, 1= IPv6 */
@@ -366,7 +364,9 @@ typedef struct SAParams_s {
 			} iphv6;
 		} addr;
 	} tunnelInfo;
-	unsigned int	bRedSideFragment:1,
+	unsigned short	bAuth:1,
+	bEncrypt:1,
+	bRedSideFragment:1,
 	bVerifyInPktWithSASelectors:1,
 	bDoPeerGWIPAddressChangeAdaptation:1,
 	bDoUDPEncapsulationForNATTraversal:1,
@@ -377,22 +377,22 @@ typedef struct SAParams_s {
 	bEncapsulationMode:1,
 	bCopyDscp:1,
 	handleDf:2;
-
-	unsigned char	ucProtocol;
+	unsigned short ulCId;
+	unsigned char ucProtocol;
+	unsigned char ucDscp;
 	unsigned char ucAuthAlgo;
 	unsigned char ucCipherAlgo;
-	unsigned int AuthKeyLen;
-	unsigned short int ulIvSize;
-	unsigned int EncKeyLen;
-	unsigned short int ulBlockSize;
+	unsigned char AuthKeyLen; /* in Bytes*/
+	unsigned char EncKeyLen; /*in Bytes */
+	unsigned char ulBlockSize;
+	unsigned char ulIvSize;
 	unsigned char ucAuthKey[SECFP_MAX_AUTH_KEY_SIZE];
 	unsigned char ucEncKey[SECFP_MAX_CIPHER_KEY_SIZE];
-	unsigned	int AntiReplayWin;
-	unsigned char ucDscp;
+	unsigned int AntiReplayWin;
 	unsigned char ucNounceIVCounter[16];
 	/* Nonce:4 bytes, followed by 8 bytes IV + 4 bytes counter */
 	ASF_IPSec_Nat_Info_t IPsecNatInfo;
-	unsigned int ulCId;
+
 	unsigned long softPacketLimit;
 	unsigned long hardPacketLimit;
 	unsigned long softKbyteLimit;
@@ -412,10 +412,8 @@ typedef struct inSA_s {
 	unsigned int ulSPDInMagicNum;
 	unsigned int ulSPDSelSetIndex;
 	unsigned int ulSPDSelSetIndexMagicNum;
-	unsigned int ulSecHdrLen;
 	unsigned int ulLastSeqNum;
 	unsigned int *pWinBitMap;
-	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
 #ifdef CONFIG_ASF_SEC4x
 	struct caam_ctx ctx;
 #else
@@ -452,8 +450,10 @@ typedef struct inSA_s {
 	unsigned int ulOutSPI;
 	unsigned int ulHOSeqNum;
 	unsigned int ulHashVal;
-	unsigned char usNatHdrSize;
 	unsigned short ucIfaceId;
+	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
+	unsigned char usNatHdrSize;
+	unsigned char ulSecHdrLen;
 	unsigned char bVerifySASel:1,
 		bVerifySPDSel:1,
 		bSendPktToNormalPath:1,
@@ -591,8 +591,7 @@ typedef struct outSA_s {
 	struct rcu_head rcu;
 	SAParams_t SAParams;
 	SPDOutParams_t SPDParams;
-	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
-		/* Hardware option AES_CBC or BOTH or only encryption etc. */
+	/* Hardware option AES_CBC or BOTH or only encryption etc. */
 #ifdef CONFIG_ASF_SEC4x
 	struct caam_ctx ctx;
 #else
@@ -619,32 +618,33 @@ typedef struct outSA_s {
 				unsigned int *, unsigned int, unsigned int);
 	atomic_t ulLoSeqNum;
 	atomic_t ulHiSeqNum;
-	unsigned int ulIvSizeInWords;
-	unsigned int ulSecHdrLen;
-	unsigned int ulSecOverHead;
-	unsigned int ulSecLenIncrease;
+	unsigned char l2blob[ASF_MAX_L2BLOB_LEN];
+	unsigned char bIVDataPresent:1,
+		bl2blob:1,
+		bSoftExpiry:1,
+		bVLAN:1,
+		bPPPoE:1,
+		bHeap:1;
+	unsigned char usNatHdrSize;
+	unsigned char ulL2BlobLen;
+	unsigned char ulIvSizeInWords;
+	unsigned char ulSecHdrLen;
+	unsigned char ulSecOverHead;
+	unsigned char ulSecLenIncrease;
+	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
+	unsigned short ulTunnelId;
+	unsigned short tx_vlan_id; /*valid if bVLAN is 1*/
+	unsigned int ulCompleteOverHead;
 	unsigned int ulPathMTU;
 	unsigned long ulPkts[NR_CPUS];
 	unsigned long ulBytes[NR_CPUS];
 	AsfSPDPolicyPPStats_t	PolicyPPStats[NR_CPUS];
 	AsfSPDPolPPStats_t	PPStats;
-	unsigned int macAddr[6];
-	unsigned int ulTunnelId;
 	struct net_device *odev;
 	OutSelList_t *pSelList;
-	unsigned short usNatHdrSize;
-	unsigned short bSoftExpiry:1,
-		bIVDataPresent:1,
-		bl2blob:1,
-		bHeap:1;
-	unsigned short bVLAN:1, bPPPoE:1;
-	unsigned char	l2blob[ASF_MAX_L2BLOB_LEN];
-	unsigned short	ulL2BlobLen;
-	unsigned short	tx_vlan_id; /*valid if bVLAN is 1*/
-	asfTmr_t			*pL2blobTmr;
-	ASFFFPL2blobConfig_t	l2blobConfig;
-	unsigned int ulCompleteOverHead;
 
+	asfTmr_t	*pL2blobTmr;
+	ASFFFPL2blobConfig_t	l2blobConfig;
 } outSA_t;
 
 

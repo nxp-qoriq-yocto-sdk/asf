@@ -206,11 +206,11 @@ typedef struct ffp_flow_s {
 	unsigned short	  bTcpOutOfSeqCheck:1; /* TCP state processing to be on or not */
 	unsigned short	  bTcpTimeStampCheck:1; /* tcp time stamp option to be checked or not ? */
 	unsigned short	  bDeleted:1; /* tcp time stamp option to be checked or not ? */
+	unsigned short	bHeap:1;
+	unsigned short	  pmtu;
 
 	ASFFFPConfigIdentity_t  configIdentity;
 	ASFFFPIpsecInfo_t       ipsecInfo;
-	unsigned char	   bHeap;
-	unsigned short	  pmtu;
 	struct net_device       *odev;
 	unsigned char	   l2blob[ASF_MAX_L2BLOB_LEN];
 	unsigned short	  l2blob_len;

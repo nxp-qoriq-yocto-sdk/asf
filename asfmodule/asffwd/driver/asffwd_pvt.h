@@ -71,7 +71,7 @@ typedef struct fwd_cache_s {
 	/* bDeleted ---  indicate cache entry marked to be deleted */
 	/* bVLAN, bPPPoE ---  indicate VLAN & PPPoE typr entry */
 	unsigned short		bVLAN:1, bPPPoE:1, bDeleted:1;
-	unsigned char		bHeap;
+	unsigned short		bHeap:1;
 	unsigned short		pmtu;
 	struct net_device       *odev;
 	unsigned char		l2blob[ASF_MAX_L2BLOB_LEN];

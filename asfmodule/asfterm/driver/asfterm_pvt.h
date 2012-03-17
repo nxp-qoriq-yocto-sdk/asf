@@ -77,18 +77,19 @@ typedef struct term_cache_s {
 
 	void			*bkt; /* Bucket to which its belong */
 
-	/* bDeleted ---  indicate cache entry marked to be deleted */
-	/* bVLAN, bPPPoE ---  indicate VLAN & PPPoE typr entry */
-	ASF_uint32_t		bVLAN:1, bPPPoE:1, bDeleted:1,
-				bIPsecIn:1, bIPsecOut:1, bLocalTerm:1;
 	ASFFFPConfigIdentity_t	configIdentity;
 	ASFFFPIpsecInfo_t	ipsecInfo;
-	unsigned char		bHeap;
-	unsigned short		pmtu;
+	/* bDeleted ---  indicate cache entry marked to be deleted */
+	/* bVLAN, bPPPoE ---  indicate VLAN & PPPoE typr entry */
+	ASF_uint16_t		bVLAN:1, bPPPoE:1, bDeleted:1,
+				bIPsecIn:1, bIPsecOut:1, bLocalTerm:1,
+				bHeap:1;
+	ASF_uint16_t		pmtu;
+	ASF_uint16_t		tx_vlan_id; /*valid if bVLAN is 1*/
+	ASF_uint16_t		l2blob_len;
+	ASF_uint8_t		l2blob[ASF_MAX_L2BLOB_LEN];
 	struct net_device	*odev;
-	unsigned char		l2blob[ASF_MAX_L2BLOB_LEN];
-	unsigned short		l2blob_len;
-	unsigned short		tx_vlan_id; /*valid if bVLAN is 1*/
+
 	ASFTERMCacheEntryStats_t stats;
 #ifdef ASF_TERM_XTRA_STATS
 	ASFFFPXtraFlowStats_t	xstats;
