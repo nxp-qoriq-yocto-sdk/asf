@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfctrl_linux.c
@@ -438,7 +438,7 @@ ASF_int32_t asfctrl_delete_dev_map(struct net_device *dev)
 }
 EXPORT_SYMBOL(asfctrl_delete_dev_map);
 
-#if (DEBUG_GLOBAL_LEVEL >= LOGS)
+#if (ASFCTRL_DEBUG_LEVEL >= LOGS)
 char *print_netevent(int event)
 {
 	switch (event) {

@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2011-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfctrl_linux_term.c
@@ -421,7 +421,7 @@ ASF_void_t asfctrl_term_fnRuntime(
 	switch (cmd) {
 	case ASF_TERM_CREATE_CACHE_ENTRY:
 	{
-#if (DEBUG_GLOBAL_LEVEL >= INFO)
+#if (ASFCTRL_DEBUG_LEVEL >= INFO)
 		ASFTERMCreateCacheEntryResp_t *pInfo =
 			(ASFTERMCreateCacheEntryResp_t *)pResp;
 #endif
@@ -433,7 +433,7 @@ ASF_void_t asfctrl_term_fnRuntime(
 
 	case ASF_TERM_DELETE_CACHE_ENTRY:
 	{
-#if (DEBUG_GLOBAL_LEVEL >= INFO)
+#if (ASFCTRL_DEBUG_LEVEL >= INFO)
 		ASFTERMDeleteCacheEntryResp_t *pInfo =
 			(ASFTERMDeleteCacheEntryResp_t *)pResp;
 #endif

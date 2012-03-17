@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright 2010-2012, Freescale Semiconductor, Inc. All rights reserved.
  ***************************************************************************/
 /*
  * File:	asfctrl.h
@@ -227,22 +227,22 @@ extern void asfctrl_linux_register_ffp(void);
 #define LOGS		6 /**< Program flow messages. */
 
 #ifdef ASFCTRL_DEBUG
-	#define DEBUG_GLOBAL_LEVEL 	TRACE
+	#define ASFCTRL_DEBUG_LEVEL	TRACE
 #else
-	#define DEBUG_GLOBAL_LEVEL 	ERROR
+	#define ASFCTRL_DEBUG_LEVEL	ERROR
 #endif
 
 #define ASFCTRL_FATAL(fmt, arg...) \
 	printk(KERN_ERR"\n %s-%d:FATAL:" fmt, __func__, __LINE__, ##arg)
 
-#if (DEBUG_GLOBAL_LEVEL >= ERROR)
+#if (ASFCTRL_DEBUG_LEVEL >= ERROR)
 	#define ASFCTRL_ERR(fmt, arg...) \
 	printk(KERN_ERR"\n %s-%d:ERROR:" fmt, __func__, __LINE__, ##arg)
 #else
 	#define ASFCTRL_ERR(fmt, arg...)
 #endif
 
-#if (DEBUG_GLOBAL_LEVEL >= WARNING)
+#if (ASFCTRL_DEBUG_LEVEL >= WARNING)
 	#define ASFCTRL_WARN(fmt, arg...) \
 	printk(KERN_WARNING"\n %s-%d:WARNING:" fmt, \
 	__func__, __LINE__, ##arg)
@@ -250,14 +250,14 @@ extern void asfctrl_linux_register_ffp(void);
 	#define ASFCTRL_WARN(fmt, arg...)
 #endif
 
-#if (DEBUG_GLOBAL_LEVEL >= INFO)
+#if (ASFCTRL_DEBUG_LEVEL >= INFO)
 	#define ASFCTRL_INFO(fmt, arg...) \
 	printk(KERN_INFO"\n %s-%d:INFO:" fmt, __func__, __LINE__, ##arg)
 #else
 	#define ASFCTRL_INFO(fmt, arg...)
 #endif
 
-#if (DEBUG_GLOBAL_LEVEL >= TRACE)
+#if (ASFCTRL_DEBUG_LEVEL >= TRACE)
 	#define ASFCTRL_TRACE(fmt, arg...) \
 	printk(KERN_INFO"\n%s-%d:DBG:"fmt, \
 		__func__, __LINE__, ##arg)
@@ -277,7 +277,7 @@ extern void asfctrl_linux_register_ffp(void);
 	#define ASFCTRL_FUNC_TRACE
 #endif
 
-#if (DEBUG_GLOBAL_LEVEL >= LOGS)
+#if (ASFCTRL_DEBUG_LEVEL >= LOGS)
 	#define ASFCTRL_DBG(fmt, arg...) \
 	printk(KERN_INFO"\n%s-%d:DBGL2:"fmt, \
 	__func__, __LINE__, ##arg)

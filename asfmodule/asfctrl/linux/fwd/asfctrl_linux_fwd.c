@@ -151,7 +151,7 @@ ASF_void_t asfctrl_fwd_fnRuntime(
 	switch (cmd) {
 	case ASF_FWD_CREATE_CACHE_ENTRY:
 	{
-#if (DEBUG_GLOBAL_LEVEL >= INFO)
+#if (ASFCTRL_DEBUG_LEVEL >= INFO)
 		ASFFWDCreateCacheEntryResp_t *pInfo =
 			(ASFFWDCreateCacheEntryResp_t *)pResp;
 #endif
@@ -163,7 +163,7 @@ ASF_void_t asfctrl_fwd_fnRuntime(
 
 	case ASF_FWD_DELETE_CACHE_ENTRY:
 	{
-#if (DEBUG_GLOBAL_LEVEL >= INFO)
+#if (ASFCTRL_DEBUG_LEVEL >= INFO)
 		ASFFWDDeleteCacheEntryResp_t *pInfo =
 			(ASFFWDDeleteCacheEntryResp_t *)pResp;
 #endif
