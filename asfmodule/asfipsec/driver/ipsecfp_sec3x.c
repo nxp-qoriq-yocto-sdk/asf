@@ -505,6 +505,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		break;
 
 	}
+	desc->hdr |= DESC_HDR_DONE_NOTIFY;
 }
 
 void secfp_dump_sg(secfp_sgEntry_t *pSgEntry)
@@ -915,6 +916,8 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		ICV check, this option needs to be recorded */
 	if (ulIndex == 0)
 		skb->cb[SECFP_3X_SA_OPTION_INDEX] = pSA->option[ulIndex];
+
+	desc->hdr |= DESC_HDR_DONE_NOTIFY;
 
 	return;
 }
@@ -1405,6 +1408,7 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 		break;
 
 	}
+	desc->hdr |= DESC_HDR_DONE_NOTIFY;
 }
 
 void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
@@ -1749,6 +1753,7 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 	if (ulIndex == 0)
 		skb->cb[SECFP_3X_SA_OPTION_INDEX] = pSA->option[ulIndex];
 
+	desc->hdr |= DESC_HDR_DONE_NOTIFY;
 
 	return;
 }

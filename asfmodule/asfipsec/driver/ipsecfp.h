@@ -22,7 +22,9 @@
 #include <linux/ipv6.h>
 
 #ifdef CONFIG_ASF_SEC3x
+#include "linux/hw_random.h"
 #include <talitos.h>
+#include "tal_inner.h"
 #endif
 
 #ifdef CONFIG_ASF_SEC4x
@@ -404,7 +406,6 @@ typedef struct inSA_s {
 	struct rcu_head rcu;
 	unsigned int magicNum;
 	SAParams_t SAParams;
-	int chan;
 	SPDInParams_t SPDParams;
 	unsigned int ulVSGId;
 	unsigned int ulSPDInContainerIndex;
@@ -418,6 +419,7 @@ typedef struct inSA_s {
 #ifdef CONFIG_ASF_SEC4x
 	struct caam_ctx ctx;
 #else
+	int chan;
 	__be32 desc_hdr_template;
 	__be32	hdr_Auth_template_0; /* when proto is AH and
 					only Auth needs to be performed*/
@@ -589,12 +591,12 @@ typedef struct outSA_s {
 	struct rcu_head rcu;
 	SAParams_t SAParams;
 	SPDOutParams_t SPDParams;
-	int chan;
 	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
 		/* Hardware option AES_CBC or BOTH or only encryption etc. */
 #ifdef CONFIG_ASF_SEC4x
 	struct caam_ctx ctx;
 #else
+	int chan;
 	__be32 desc_hdr_template;
 	__be32	hdr_Auth_template_0; /* when proto is AH and
 					only Auth needs to be performed*/
@@ -672,17 +674,6 @@ typedef struct secfp_sgEntry_s {
 #define SECFP_IN_CI_MAGIC_NUM	5
 #define SECFP_IN_SPI_INDEX	6
 #define SECFP_UNUSED_INDEX	7
-
-
-typedef struct secfp_ivInfo_s {
-	dma_addr_t paddr;
-	unsigned long *vaddr;
-	unsigned long int ulIVIndex;
-	bool bUpdatePending;
-	unsigned int ulNumAvail;
-	unsigned int ulUpdateIndex;
-} secfp_ivInfo_t;
-
 #define MAX_IPSEC_RECYCLE_DESC		128
 
 #ifndef CONFIG_ASF_SEC4x
@@ -702,7 +693,8 @@ extern void secfp_dma_unmap_sglist(struct sk_buff *skb);
 extern int secfp_createInSATalitosDesc(inSA_t *pSA);
 extern int secfp_createOutSATalitosDesc(outSA_t *pSA);
 
-extern int secfp_talitos_submit(struct device *dev, struct talitos_desc *desc,
+extern int talitos_submit(struct device *dev, int ch,
+			struct talitos_desc *desc,
 		void (*callback)(struct device *dev, struct talitos_desc *desc,
 		void *context, int err), void *context);
 

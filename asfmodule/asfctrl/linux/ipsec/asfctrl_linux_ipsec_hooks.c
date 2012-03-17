@@ -1407,7 +1407,7 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 	return 0;
 }
 
-static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
+static int fsl_send_notify(struct xfrm_state *x, const struct km_event *c)
 {
 	ASFCTRL_FUNC_TRACE;
 
@@ -1454,7 +1454,7 @@ static int fsl_send_notify(struct xfrm_state *x, struct km_event *c)
 }
 
 static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
-				struct km_event *c)
+				const struct km_event *c)
 {
 	ASFCTRL_FUNC_ENTRY;
 	ASFCTRL_INFO("EVENT = %d xp=%x", c->event, (unsigned int) xp);
@@ -1528,17 +1528,17 @@ static int fsl_send_new_mapping(struct xfrm_state *x, xfrm_address_t *ipaddr,
 }
 
 #ifdef CONFIG_NET_KEY_MIGRATE
-static int fsl_send_migrate(struct xfrm_selector *sel, u8 dir, u8 type,
-			struct xfrm_migrate *m, int num_bundles,
-			struct xfrm_kmaddress *k)
+static int fsl_send_migrate(const struct xfrm_selector *sel, u8 dir, u8 type,
+			const struct xfrm_migrate *m, int num_bundles,
+			const struct xfrm_kmaddress *k)
 {
 	ASFCTRL_INFO("With CONFIG_NET_KEY_MIGRATE");
 	return -EINVAL;
 }
 #else
-static int fsl_send_migrate(struct xfrm_selector *sel, u8 dir, u8 type,
-		struct xfrm_migrate *m, int num_bundles,
-		struct xfrm_kmaddress *k)
+static int fsl_send_migrate(const struct xfrm_selector *sel, u8 dir, u8 type,
+		const struct xfrm_migrate *m, int num_bundles,
+		const struct xfrm_kmaddress *k)
 {
 	ASFCTRL_FUNC_TRACE;
 	ASFCTRL_INFO("With NO CONFIG_NET_KEY_MIGRATE");
