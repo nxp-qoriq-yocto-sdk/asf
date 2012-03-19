@@ -140,7 +140,7 @@ struct asf_reasmCb_s {
 		ASF_IPv6Addr_t	ipv6dip;
 #endif
 	};
-	unsigned short int id;
+	unsigned int id;
 	unsigned char proto;
 	unsigned int ifIndex;
 	unsigned int ulVSGId;
