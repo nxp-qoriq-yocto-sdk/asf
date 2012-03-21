@@ -85,7 +85,7 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	fl.flowi4_flags = FLOWI_FLAG_ANYSRC;
 
 	rt = ip_route_output_key(&init_net, &fl);
-	if (!rt) {
+	if (IS_ERR(rt)) {
 		ASFCTRL_INFO("Route not found for dst %x\n", uldestIp);
 		return T_FAILURE;
 	}

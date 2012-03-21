@@ -1851,6 +1851,7 @@ gen_indications:
 				if (!flow->bDeleted && ffpCbFns.pFnFlowRefreshL2Blob) {
 					ASFFFPFlowL2BlobRefreshCbInfo_t  ind;
 
+					memset(&ind, 0, sizeof(ind));
 					ind.flowTuple.ulSrcIp = flow->ulSrcIp;
 					ind.flowTuple.ulDestIp = flow->ulDestIp;
 					ind.flowTuple.usSrcPort = (flow->ulPorts >> 16);
@@ -3527,6 +3528,7 @@ unsigned int asfFfpBlobTmrCb(unsigned int ulVSGId,
 			if (!flow->bIPsecOut && ffpCbFns.pFnFlowRefreshL2Blob) {
 				ASFFFPFlowL2BlobRefreshCbInfo_t ind;
 
+				memset(&ind, 0, sizeof(ind));
 #ifdef ASF_IPV6_FP_SUPPORT
 				if (bIPv6 == true) {
 					ipv6_addr_copy((struct in6_addr *)&ind.flowTuple.ipv6SrcIp, (struct in6_addr *)&flow->ipv6SrcIp);
