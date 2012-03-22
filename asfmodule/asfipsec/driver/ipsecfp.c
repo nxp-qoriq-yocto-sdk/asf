@@ -1836,9 +1836,6 @@ void secfp_outComplete(struct device *dev, void *pdesc,
 
 	if (!skb->cb[SECFP_OUTB_FRAG_REQD]) {
 		skb->pkt_type = PACKET_FASTROUTE;
-#ifndef CONFIG_DPA
-		skb->asf = 1;
-#endif
 		skb_set_queue_mapping(skb, 0);
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
 			/*TODO: DPAA driver always consumes skb */
@@ -1902,9 +1899,6 @@ void secfp_outComplete(struct device *dev, void *pdesc,
 					pOutSkb->next = NULL;
 
 					pOutSkb->pkt_type = PACKET_FASTROUTE;
-#ifndef CONFIG_DPA
-					pOutSkb->asf = 1;
-#endif
 					pOutSkb->data -= pSA->ulL2BlobLen;
 					pOutSkb->len += pSA->ulL2BlobLen;
 

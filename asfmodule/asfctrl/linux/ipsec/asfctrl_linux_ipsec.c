@@ -143,9 +143,6 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 	iph = ip_hdr(skb);
 
 #ifdef ASFCTRL_IPSEC_SEND_TO_LINUX
-#ifndef CONFIG_DPA
-	skb->asf = 0;
-#endif
 	/* Send the packet up for normal path IPsec processing
 		(after the NAT) has to be special function */
 #ifdef ASF_IPV6_FP_SUPPORT
