@@ -1978,13 +1978,10 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 
 				iph->tot_len = htons(skb->len);
 				iph->frag_off = htons(IP_MF);
-				if (!bDoChecksum) {
-					skb->ip_summed = CHECKSUM_PARTIAL;
-				} else {
-					ip_send_check(iph);
-					skb->ip_summed = CHECKSUM_UNNECESSARY;
 
-				}
+				ip_send_check(iph);
+				skb->ip_summed = CHECKSUM_UNNECESSARY;
+
 				skb_set_transport_header(skb, ihl);
 				skb_reset_network_header(skb);
 
@@ -2009,12 +2006,10 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 						if (frag->next != NULL)
 							iph->frag_off |= htons(IP_MF);
 
-						if (!bDoChecksum)
-							frag->ip_summed = CHECKSUM_PARTIAL;
-						else {
-							ip_send_check(iph);
-							frag->ip_summed = CHECKSUM_UNNECESSARY;
-						}
+						ip_send_check(iph);
+						frag->ip_summed =
+							CHECKSUM_UNNECESSARY;
+
 						offset += frag->len - ihl;
 					}
 				}
@@ -2131,14 +2126,9 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 					if (bytesLeft == 0)
 						iph->frag_off &= htons(~IP_MF);
 
-					if (!bDoChecksum) {
-						skb2->ip_summed =
-							CHECKSUM_PARTIAL;
-					} else {
-						ip_send_check(iph);
-						skb2->ip_summed =
-							CHECKSUM_UNNECESSARY;
-					}
+					ip_send_check(iph);
+					skb2->ip_summed =
+						CHECKSUM_UNNECESSARY;
 
 					offset += len;
 					ptr += len;
@@ -2181,12 +2171,8 @@ inline int asfIpv4Fragment(struct sk_buff *skb,
 
 			asf_ip_options_fragment(skb2);
 
-			if (!bDoChecksum)
-				skb2->ip_summed = CHECKSUM_PARTIAL;
-			else {
-				ip_send_check(ip_hdr(skb2));
-				skb2->ip_summed = CHECKSUM_UNNECESSARY;
-			}
+			ip_send_check(ip_hdr(skb2));
+			skb2->ip_summed = CHECKSUM_UNNECESSARY;
 
 
 			*pOutSkb = skb2;
