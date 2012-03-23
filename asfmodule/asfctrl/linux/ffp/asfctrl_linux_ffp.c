@@ -463,13 +463,14 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		udph->source = pInfo->tuple.usSrcPort;
 		udph->dest = usdport;
 	}
+#ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv6 == true) {
 		result = ip6t_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
 				net->ipv6.ip6table_filter);
-	} else {
+	} else
+#endif
 		result = ipt_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
 				net->ipv4.iptable_filter);
-	}
 	ASFCTRLKernelSkbFree(skb);
 
 	switch (result) {
