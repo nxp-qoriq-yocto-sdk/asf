@@ -60,10 +60,11 @@ void print_desc(struct talitos_desc *desc)
 
 int secfp_createInSATalitosDesc(inSA_t *pSA)
 {
-	int iphdrlen;
+	int iphdrlen = SECFP_IPV4_HDR_LEN;
+#ifdef ASF_IPV6_FP_SUPPORT
 	iphdrlen = pSA->SAParams.tunnelInfo.bIPv4OrIPv6 ? SECFP_IPV6_HDR_LEN :
-				SECFP_IPV4_HDR_LEN;
-
+		SECFP_IPV4_HDR_LEN;
+#endif
 	pSA->desc_hdr_template |= DESC_HDR_DIR_INBOUND;
 	if ((pSA->SAParams.bUseExtendedSequenceNumber) ||
 		((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
