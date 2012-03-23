@@ -52,7 +52,7 @@ extern struct device *pdev;
 #define DESC_AEAD_GIVENCRYPT_TEXT_LEN 27
 
 
-static void secfp_splitKeyDone(struct device *dev, void *desc, u32 error,
+static void secfp_splitKeyDone(struct device *dev, u32 *desc, u32 error,
 				void *context)
 {
 #ifdef ASF_IPSEC_DEBUG
@@ -144,9 +144,9 @@ static unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 			DUMP_PREFIX_ADDRESS, 16, 4, desc, desc_bytes(desc), 1);
 #endif
 
-	ret = secfp_caam_submit(ctx->jrdev, desc, secfp_splitKeyDone, NULL);
+	ret = caam_jr_enqueue(ctx->jrdev, desc, secfp_splitKeyDone, NULL);
 	if (ret) {
-		ASFIPSEC_DEBUG("secfp_caam_submit failed ");
+		ASFIPSEC_DEBUG("caam_jr_enqueue failed ");
 		kfree(desc);
 	}
 
@@ -243,7 +243,6 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		inSA_t *pSA, bool keys_fit_inline)
 {
 	u32 *jump_cmd;
-	struct ipsec_decap_pdb *pdb;
 
 	init_sh_desc(sh_desc, HDR_SAVECTX | HDR_SHARE_SERIAL);
 
@@ -251,7 +250,7 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		CLASS_BOTH | JUMP_TEST_ALL | JUMP_COND_SHRD | JUMP_COND_SELF);
 
 	/* process keys, starting with class 2/authentication */
-	append_key(sh_desc, ctx->key_phys, ctx->split_key_len,
+	append_key(sh_desc, ctx->key_dma, ctx->split_key_len,
 			CLASS_2 | KEY_DEST_MDHA_SPLIT | KEY_ENC);
 
 	/* Now the class 1/cipher key */
@@ -260,17 +259,17 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 				ctx->split_key_pad_len, ctx->enckeylen,
 				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 	else
-		append_key(sh_desc, ctx->key_phys + ctx->split_key_pad_len,
+		append_key(sh_desc, ctx->key_dma + ctx->split_key_pad_len,
 			ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 
 
 	/* update jump cmd now that we are at the jump target */
 	set_jump_tgt_here(sh_desc, jump_cmd);
 
-	ctx->shared_desc_phys = dma_map_single(ctx->jrdev, ctx->sh_desc,
-					desc_bytes(ctx->sh_desc),
+	ctx->sh_desc_dec_dma = dma_map_single(ctx->jrdev, ctx->sh_desc_dec,
+					desc_bytes(ctx->sh_desc_dec),
 					DMA_BIDIRECTIONAL);
-	if (dma_mapping_error(ctx->jrdev, ctx->shared_desc_phys)) {
+	if (dma_mapping_error(ctx->jrdev, ctx->sh_desc_dec_dma)) {
 		ASFIPSEC_DPERR("unable to map shared descriptor");
 		return -ENOMEM;
 	}
@@ -296,7 +295,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		CLASS_BOTH | JUMP_TEST_ALL | JUMP_COND_SHRD | JUMP_COND_SELF);
 
 	/* process keys, starting with class 2/authentication */
-	append_key(sh_desc, ctx->key_phys, ctx->split_key_len,
+	append_key(sh_desc, ctx->key_dma, ctx->split_key_len,
 			CLASS_2 | KEY_DEST_MDHA_SPLIT | KEY_ENC);
 
 	/* Now the class 1/cipher key */
@@ -305,7 +304,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 				ctx->split_key_pad_len, ctx->enckeylen,
 				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 	else
-		append_key(sh_desc, ctx->key_phys + ctx->split_key_pad_len,
+		append_key(sh_desc, ctx->key_dma + ctx->split_key_pad_len,
 			ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 
 	/* update jump cmd now that we are at the jump target */
@@ -314,10 +313,10 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	ASFIPSEC_DEBUG("Enc Algorithm is %d Auth Algorithm is %d",
 		pSA->SAParams.ucCipherAlgo, pSA->SAParams.ucAuthAlgo);
 
-	ctx->shared_desc_phys = dma_map_single(ctx->jrdev, ctx->sh_desc,
-					desc_bytes(ctx->sh_desc),
+	ctx->sh_desc_enc_dma = dma_map_single(ctx->jrdev, ctx->sh_desc_enc,
+					desc_bytes(ctx->sh_desc_enc),
 					DMA_TO_DEVICE);
-	if (dma_mapping_error(ctx->jrdev, ctx->shared_desc_phys)) {
+	if (dma_mapping_error(ctx->jrdev, ctx->sh_desc_enc_dma)) {
 		ASFIPSEC_DPERR("unable to map shared descriptor");
 		return -ENOMEM;
 	}
@@ -333,11 +332,8 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 {
-	struct device *jrdev = ctx->jrdev;
-	u32 *sh_desc;
 	int ret = 0;
 	bool keys_fit_inline = 0;
-	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 	/*
 	* largest Job Descriptor and its Shared Descriptor
 	* must both fit into the 64-word Descriptor h/w Buffer
@@ -347,31 +343,15 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 	ctx->enckeylen + CAAM_PTR_SZ <= CAAM_DESC_BYTES_MAX)
 		keys_fit_inline = 1;
 
-	/* build shared descriptor for this session */
-	ctx->sh_desc_mem = kzalloc(CAAM_CMD_SZ * DESC_AEAD_SHARED_TEXT_LEN +
-			L1_CACHE_BYTES - 1 + (keys_fit_inline ?
-			CAAM_PTR_SZ + ctx->enckeylen : CAAM_PTR_SZ * 2),
-			GFP_DMA | flags);
-	if (!ctx->sh_desc_mem) {
-		ASFIPSEC_DPERR("Could not allocate shared descriptor");
-		return -ENOMEM;
-	}
-
-	sh_desc = (u32 *)(((int)ctx->sh_desc_mem
-			+ (L1_CACHE_BYTES - 1)) & ~(L1_CACHE_BYTES - 1));
-
-	ctx->sh_desc = sh_desc;
-
 	/* Shared Descriptor Creation */
 	if (dir == SECFP_OUT)
-		ret = secfp_prepareEncapShareDesc(ctx, sh_desc,
+		ret = secfp_prepareEncapShareDesc(ctx, ctx->sh_desc_enc,
 					(outSA_t *)pSA, keys_fit_inline);
 	else
-		ret = secfp_prepareDecapShareDesc(ctx, sh_desc,
+		ret = secfp_prepareDecapShareDesc(ctx, ctx->sh_desc_dec,
 					(inSA_t *)pSA, keys_fit_inline);
 	if (ret) {
 		ASFIPSEC_DPERR("error in secfp_prepare ShareDesc dir=%d", dir);
-		kfree(ctx->sh_desc_mem);
 		return ret;
 	}
 
@@ -385,22 +365,12 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 	if (pSA) {
 		struct caam_drv_private *priv = dev_get_drvdata(pdev);
 		int tgt_jr = atomic_inc_return(&priv->tfm_count);
-		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 		/*
 		* distribute tfms across job rings to ensure in-order
 		* crypto request processing per tfm
 		*/
-		pSA->ctx.jrdev = priv->algapi_jr[(tgt_jr / 2) %
-					priv->num_jrs_for_algapi];
-		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
-					pSA->SAParams.EncKeyLen,
-					GFP_DMA | flags);
-
-		if (!pSA->ctx.key) {
-			ASFIPSEC_DEBUG("Could not"\
-				"allocate CAAM key output memory\n");
-			return -ENOMEM;
-		}
+		pSA->ctx.jrdev = priv->jrdev[(tgt_jr / 2) %
+					priv->total_jobrs];
 
 		pSA->ctx.enckeylen = pSA->SAParams.EncKeyLen;
 		ret = secfp_genCaamSplitKey(&pSA->ctx,
@@ -415,11 +385,11 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len,
 			&pSA->SAParams.ucEncKey, pSA->SAParams.EncKeyLen);
 
-		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
+		pSA->ctx.key_dma = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
 						pSA->ctx.split_key_pad_len +
 						pSA->SAParams.EncKeyLen,
 						DMA_TO_DEVICE);
-		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
+		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_dma)) {
 			ASFIPSEC_DEBUG(" Unable to map key"\
 						"i/o memory\n");
 			kfree(pSA->ctx.key);
@@ -430,7 +400,7 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 		ret = secfp_buildProtocolDesc(&pSA->ctx, pSA, SECFP_OUT);
 		if (ret) {
 			ASFIPSEC_DEBUG("Failed\n");
-			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
+			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_dma,
 				pSA->ctx.split_key_pad_len +
 					pSA->SAParams.EncKeyLen, DMA_TO_DEVICE);
 			kfree(pSA->ctx.key);
@@ -450,23 +420,12 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 	if (pSA) {
 		struct caam_drv_private *priv = dev_get_drvdata(pdev);
 		int tgt_jr = atomic_inc_return(&priv->tfm_count);
-		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 		/*
 		* distribute tfms across job rings to ensure in-order
 		* crypto request processing per tfm
 		*/
-		pSA->ctx.jrdev = priv->algapi_jr[(tgt_jr / 2) %
-						priv->num_jrs_for_algapi];
-
-		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
-					pSA->SAParams.EncKeyLen,
-					GFP_DMA | flags);
-
-		if (!pSA->ctx.key) {
-			ASFIPSEC_DEBUG("Could not allocate"\
-					"Caam key output memory\n");
-			return -ENOMEM;
-		}
+		pSA->ctx.jrdev = priv->jrdev[(tgt_jr / 2) %
+						priv->total_jobrs];
 
 		pSA->ctx.enckeylen = pSA->SAParams.EncKeyLen;
 		ret = secfp_genCaamSplitKey(&pSA->ctx,
@@ -482,11 +441,11 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len,
 			&pSA->SAParams.ucEncKey, pSA->SAParams.EncKeyLen);
 
-		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
+		pSA->ctx.key_dma = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
 						pSA->ctx.split_key_pad_len +
 						pSA->SAParams.EncKeyLen,
 							DMA_TO_DEVICE);
-		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
+		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_dma)) {
 			ASFIPSEC_DEBUG("Unable to map key"\
 					"i/o memory\n");
 			kfree(pSA->ctx.key);
@@ -497,7 +456,7 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 		if (ret) {
 			ASFIPSEC_DEBUG("Failed\n");
 			kfree(pSA->ctx.key);
-			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
+			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_dma,
 			pSA->ctx.split_key_pad_len +
 			pSA->SAParams.EncKeyLen, DMA_TO_DEVICE);
 
@@ -510,7 +469,7 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 }
 
 
-static void secfp_prepareCaamJobDescriptor(struct ipsec_esp_edesc *edesc,
+static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 					struct caam_ctx *ctx,
 					dma_addr_t data_in, int data_in_len,
 					dma_addr_t data_out, int data_out_len)
@@ -527,8 +486,8 @@ static void secfp_prepareCaamJobDescriptor(struct ipsec_esp_edesc *edesc,
 	desc = edesc->hw_desc;
 
 	/* insert shared descriptor pointer */
-	init_job_desc_shared(desc, ctx->shared_desc_phys,
-			desc_len(ctx->sh_desc), HDR_SHARE_DEFER);
+	init_job_desc_shared(desc, ctx->sh_desc_enc_dma,
+			desc_len(ctx->sh_desc_enc), HDR_SHARE_DEFER);
 
 	/*
 	* LOAD IMM Info FIFO
@@ -657,16 +616,16 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 	} else {
 		skb_frag_t *frag = 0;
 		outSA_t *pSA = (outSA_t *) (pData);
-		struct ipsec_esp_edesc *edesc =
-				(struct ipsec_esp_edesc *)descriptor;
+		struct aead_edesc *edesc =
+				(struct aead_edesc *)descriptor;
 		unsigned short usPadLen = 0;
-		struct link_tbl_entry *link_tbl_entry;
+		struct sec4_sg_entry *link_tbl_entry;
 		dma_addr_t ptr, ptr1, ptr2 = (dma_addr_t) NULL;
 		int i, total_frags, dma_len, len_to_caam = 0;
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
 		total_frags = skb_shinfo(skb)->nr_frags;
-		dma_len = sizeof(struct link_tbl_entry) * (total_frags + 1);
+		dma_len = sizeof(struct sec4_sg_entry) * (total_frags + 1);
 		ptr1 = dma_map_single(pSA->ctx.jrdev, skb->data,
 				skb_headlen(skb), DMA_BIDIRECTIONAL);
 
@@ -710,9 +669,9 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		/* Go ahead and Submit to SEC */
 		ptr = dma_map_single(pSA->ctx.jrdev, link_tbl_entry,
 					dma_len, DMA_BIDIRECTIONAL);
-		edesc->link_tbl_dma = ptr;
-		edesc->link_tbl_bytes = dma_len;
-		edesc->link_tbl = link_tbl_entry;
+		edesc->sec4_sg_dma = ptr;
+		edesc->sec4_sg_bytes = dma_len;
+		edesc->sec4_sg = link_tbl_entry;
 
 		{
 		u32 *desc = edesc->hw_desc, options;
@@ -721,8 +680,8 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		desc = edesc->hw_desc;
 
 		/* insert shared descriptor pointer */
-		init_job_desc_shared(desc, pSA->ctx.shared_desc_phys,
-			desc_len(pSA->ctx.sh_desc), HDR_SHARE_DEFER);
+		init_job_desc_shared(desc, pSA->ctx.sh_desc_enc_dma,
+			desc_len(pSA->ctx.sh_desc_enc), HDR_SHARE_DEFER);
 
 		/*
 		* LOAD IMM Info FIFO
@@ -813,7 +772,7 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 	secfp_prepareOutDescriptor(skb, pData, descriptor, ulOptionIndex);
 }
 
-static void secfp_prepareInCaamJobDescriptor(struct ipsec_esp_edesc *edesc,
+static void secfp_prepareInCaamJobDescriptor(struct aead_edesc *edesc,
 					struct caam_ctx *ctx,
 					dma_addr_t data_in, int data_in_len,
 					dma_addr_t data_out, int data_out_len)
@@ -830,8 +789,8 @@ static void secfp_prepareInCaamJobDescriptor(struct ipsec_esp_edesc *edesc,
 	desc = edesc->hw_desc;
 
 	/* insert shared descriptor pointer */
-	init_job_desc_shared(desc, ctx->shared_desc_phys,
-			desc_len(ctx->sh_desc), HDR_SHARE_DEFER);
+	init_job_desc_shared(desc, ctx->sh_desc_dec_dma,
+			desc_len(ctx->sh_desc_dec), HDR_SHARE_DEFER);
 
 	append_load(desc, data_in + SECFP_ESP_HDR_LEN, ivsize,
 		LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT);
@@ -927,16 +886,16 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 {
 	/* Check for the NR_Frags */
 	if (unlikely(skb_shinfo(skb)->nr_frags)) {
-		struct ipsec_esp_edesc *edesc = descriptor;
+		struct aead_edesc *edesc = descriptor;
 		inSA_t *pSA = (inSA_t *)pData;
-		static struct link_tbl_entry *link_tbl_entry;
+		static struct sec4_sg_entry *link_tbl_entry;
 		dma_addr_t ptr, ptr2;
 		unsigned int *ptr1;
 		int i, total_frags, dma_len, len_to_caam = 0;
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
 		total_frags = skb_shinfo(skb)->nr_frags;
-		dma_len = sizeof(struct link_tbl_entry) * (total_frags + 1);
+		dma_len = sizeof(struct sec4_sg_entry) * (total_frags + 1);
 		ptr1 = (unsigned int *) &(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
 		*ptr1 = (unsigned int) link_tbl_entry;
 		ptr2 = dma_map_single(pSA->ctx.jrdev, skb->data,
@@ -975,9 +934,9 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		/* Go ahead and Submit to SEC */
 		ptr = dma_map_single(pSA->ctx.jrdev, link_tbl_entry,
 					dma_len, DMA_BIDIRECTIONAL);
-		edesc->link_tbl_dma = ptr;
-		edesc->link_tbl_bytes = dma_len;
-		edesc->link_tbl = link_tbl_entry;
+		edesc->sec4_sg_dma = ptr;
+		edesc->sec4_sg_bytes = dma_len;
+		edesc->sec4_sg = link_tbl_entry;
 
 		{
 		u32 *desc, options;
@@ -987,8 +946,8 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		desc = edesc->hw_desc;
 
 		/* insert shared descriptor pointer */
-		init_job_desc_shared(desc, pSA->ctx.shared_desc_phys,
-			desc_len(pSA->ctx.sh_desc), HDR_SHARE_DEFER);
+		init_job_desc_shared(desc, pSA->ctx.sh_desc_dec_dma,
+			desc_len(pSA->ctx.sh_desc_dec), HDR_SHARE_DEFER);
 
 		append_load(desc, ptr2 + SECFP_ESP_HDR_LEN, ivsize,
 			LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT);

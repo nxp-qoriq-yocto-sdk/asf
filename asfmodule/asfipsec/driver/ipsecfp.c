@@ -144,7 +144,7 @@ static inline void secfp_desc_free(void *desc)
 	}
 	return;
 }
-
+#ifdef CONFIG_ASF_SEC3x
 /* Initialization routines/De-Initialization routines */
 /* IV table initialization */
 unsigned int secfp_IVinit(void)
@@ -203,6 +203,8 @@ void secfp_IVDeInit(void)
 		asfFreePerCpu(secfp_IVData);
 	}
 }
+#endif
+
 #define SECFP_DESC_FREE secfp_desc_free
 
 
@@ -234,20 +236,23 @@ void secfp_deInit(void)
 
 		kmem_cache_destroy(desc_cache);
 	}
+#ifdef CONFIG_ASF_SEC3x
 	secfp_IVDeInit();
-
+#endif
 	if (pIPSecPPGlobalStats_g)
 		asfFreePerCpu(pIPSecPPGlobalStats_g);
 }
 
 int secfp_init(void)
 {
+#ifdef CONFIG_ASF_SEC3x
 	/* Global IV Table setup */
 	if (secfp_IVinit()) {
 		secfp_deInit();
 		ASFIPSEC_ERR("IV Initialization failed ");
 		return SECFP_FAILURE;
 	}
+#endif
 	if (secfp_data_init()) {
 		secfp_deInit();
 		ASFIPSEC_ERR("secfp_data_init failed");
@@ -266,8 +271,8 @@ int secfp_init(void)
 			__alignof__(struct talitos_desc),
 			SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA, NULL);
 #else
-			sizeof(struct ipsec_esp_edesc) + CAAM_DESC_BYTES_MAX,
-			__alignof__(struct ipsec_esp_edesc),
+			sizeof(struct aead_edesc) + CAAM_DESC_BYTES_MAX,
+			__alignof__(struct aead_edesc),
 			SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA, NULL);
 #endif
 	if (desc_cache == NULL) {
@@ -302,16 +307,15 @@ int secfp_init(void)
 	it reads from the internal IV Array maintained. Upon encryption, some blob is copied
 	into this array for use if any
 	*/
+#ifdef CONFIG_ASF_SEC3x
 unsigned int ulRndMisses[NR_CPUS];
 static inline void secfp_GetIVData(unsigned int *pData, unsigned int ulNumWords)
 {
 	int ii;
 	int coreId = smp_processor_id();
 	struct secfp_ivInfo_s *ptr = per_cpu_ptr(secfp_IVData, coreId);
-#ifndef CONFIG_ASF_SEC4x
 	if (secfp_rng_read_data((unsigned int *) ptr))
 		return;
-#endif
 	for (ii = 0; ii < ulNumWords; ii++) {
 		*pData = ptr->vaddr[ptr->ulIVIndex];
 		ptr->ulIVIndex =
@@ -327,7 +331,7 @@ static inline void secfp_GetIVData(unsigned int *pData, unsigned int ulNumWords)
 	}
 	return;
 }
-#ifndef CONFIG_ASF_SEC4x
+
 int vqentr_talitos_rng_data_read(unsigned int len, unsigned int *data)
 {
 	secfp_GetIVData(data, len/4);
@@ -335,31 +339,6 @@ int vqentr_talitos_rng_data_read(unsigned int len, unsigned int *data)
 }
 EXPORT_SYMBOL(vqentr_talitos_rng_data_read);
 #endif
-/* Function called at the end of Outbound processing. Some part of
-	the encrypted blob is retained to be reused as IV data
- */
-static inline void secfp_updateIVData(unsigned int *pData)
-{
-	struct secfp_ivInfo_s *ptr;
-
-	ptr = per_cpu_ptr(secfp_IVData, smp_processor_id());
-	if (ptr->ulNumAvail <= SECFP_NUM_IV_ENTRIES) {
-		ptr->vaddr[ptr->ulUpdateIndex] = *pData;
-		ptr->ulIVIndex =
-			(ptr->ulUpdateIndex + 1) & (SECFP_NUM_IV_ENTRIES - 1);
-		ptr->vaddr[ptr->ulUpdateIndex] = *(pData + 1);
-		ptr->ulIVIndex =
-			(ptr->ulUpdateIndex + 1) & (SECFP_NUM_IV_ENTRIES - 1);
-		ptr->vaddr[ptr->ulUpdateIndex] = *pData;
-		ptr->ulIVIndex =
-			(ptr->ulUpdateIndex + 1) & (SECFP_NUM_IV_ENTRIES - 1);
-		ptr->vaddr[ptr->ulUpdateIndex] = *(pData + 1);
-		ptr->ulIVIndex =
-			(ptr->ulUpdateIndex + 1) & (SECFP_NUM_IV_ENTRIES - 1);
-		ptr->ulNumAvail += 4;
-	}
-	return;
-}
 /*
  * This populates the ID field to be supplied as the IP identifier field
  * of the Outer IP header
@@ -874,8 +853,10 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 
 	/* Finished handling the SEC Header */
 	/* Now prepare the IV Data */
+#ifdef CONFIG_ASF_SEC3x
 	if (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL)
 		secfp_GetIVData((unsigned int *) &pHeadSkb->data[SECFP_ESP_HDR_LEN], pSA->ulIvSizeInWords);
+#endif
 
 	if (skb_shinfo(pHeadSkb)->nr_frags) {
 		ASFIPSEC_DEBUG("frag->size:%d pHeadSkb->data_len:%d\n",
@@ -1049,7 +1030,7 @@ inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 			(*pSA->prepareOutPktFnPtr)(skb, pSA,
 				pContainer, &pOuterIpHdr);
 		else
-			pOuterIpHdr = ipv6h;
+			pOuterIpHdr = (unsigned int *) ipv6h;
 
 		ASFIPSEC_DBGL2("Out Process; pOuterIPHdr set to 0x%x",
 			(int)pOuterIpHdr);
@@ -1119,7 +1100,8 @@ inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		if (talitos_submit(pdev, pSA->chan, desc,
 			secfp_outComplete, (void *)skb) == -EAGAIN) {
 #else
-		if (secfp_caam_submit(pSA->ctx.jrdev, desc,
+		if (caam_jr_enqueue(pSA->ctx.jrdev,
+			((struct aead_edesc *)desc)->hw_desc,
 			secfp_outComplete, (void *)skb)) {
 #endif
 #ifdef ASFIPSEC_LOG_MSG
@@ -1521,7 +1503,7 @@ inline int secfp_try_fastPathOutv4(
 			(*pSA->prepareOutPktFnPtr)(skb, pSA,
 				pContainer, &pOuterIpHdr);
 		else
-			pOuterIpHdr = ip_hdr(skb);
+			pOuterIpHdr = (unsigned int *) ip_hdr(skb);
 
 		ASFIPSEC_DBGL2("Out Process; pOuterIPHdr set to 0x%x",
 			(int)pOuterIpHdr);
@@ -1591,7 +1573,8 @@ inline int secfp_try_fastPathOutv4(
 		if (talitos_submit(pdev, pSA->chan, desc,
 			secfp_outComplete, (void *)skb) == -EAGAIN) {
 #else
-		if (secfp_caam_submit(pSA->ctx.jrdev, desc,
+		if (caam_jr_enqueue(pSA->ctx.jrdev,
+			((struct aead_edesc *)desc)->hw_desc,
 			secfp_outComplete, (void *)skb)) {
 #endif
 #ifdef ASFIPSEC_LOG_MSG
@@ -1755,7 +1738,7 @@ static inline void secfp_unmap_descs(struct sk_buff *skb)
 void secfp_outComplete(struct device *dev, struct talitos_desc *desc,
 		void *context, int error)
 #else
-void secfp_outComplete(struct device *dev, void *pdesc,
+void secfp_outComplete(struct device *dev, u32 *pdesc,
 		u32 error, void *context)
 #endif
 {
@@ -1765,9 +1748,9 @@ void secfp_outComplete(struct device *dev, void *pdesc,
 	struct iphdr *iph;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 #if defined(CONFIG_ASF_SEC4x)
-	struct ipsec_esp_edesc *desc;
-	desc = (struct ipsec_esp_edesc *)((char *)pdesc -
-			offsetof(struct ipsec_esp_edesc, hw_desc));
+	struct aead_edesc *desc;
+	desc = (struct aead_edesc *)((char *)pdesc -
+			offsetof(struct aead_edesc, hw_desc));
 #endif
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
@@ -2552,7 +2535,7 @@ void secfp_inCompleteWithFrags(struct device *dev,
 				struct talitos_desc *desc,
 				void *context, int err)
 #else
-void secfp_inCompleteWithFrags(struct device *dev, void *pdesc,
+void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 				u32 err, void *context)
 #endif
 {
@@ -2572,9 +2555,9 @@ void secfp_inCompleteWithFrags(struct device *dev, void *pdesc,
 	unsigned int ulCommonInterfaceId, ulBeforeTrimLen;
 	int transport_hdr_len;
 #if defined(CONFIG_ASF_SEC4x)
-	struct ipsec_esp_edesc *desc;
-	desc = (struct ipsec_esp_edesc *)((char *)pdesc -
-		offsetof(struct ipsec_esp_edesc, hw_desc));
+	struct aead_edesc *desc;
+	desc = (struct aead_edesc *)((char *)pdesc -
+		offsetof(struct aead_edesc, hw_desc));
 #endif
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
@@ -2827,13 +2810,13 @@ static void secfp_free_frags(void *desc, struct sk_buff *skb)
 #ifndef CONFIG_ASF_SEC4x
 	SECFP_DESC_FREE(desc);
 #else
-	struct ipsec_esp_edesc *edesc = (struct ipsec_esp_edesc *)
-				((char *)desc -	offsetof(struct ipsec_esp_edesc,
+	struct aead_edesc *edesc = (struct aead_edesc *)
+				((char *)desc -	offsetof(struct aead_edesc,
 							hw_desc));
-	struct link_tbl_entry *link_ptr, *link_ptr_base;
-	dma_unmap_single(pdev, edesc->link_tbl_dma, edesc->link_tbl_bytes,
+	struct sec4_sg_entry *link_ptr, *link_ptr_base;
+	dma_unmap_single(pdev, edesc->sec4_sg_dma, edesc->sec4_sg_bytes,
 						DMA_BIDIRECTIONAL);
-	link_ptr = (struct link_tbl_entry *)
+	link_ptr = (struct sec4_sg_entry *)
 		*((unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]));
 	link_ptr_base = link_ptr;
 	if (link_ptr) {
@@ -2859,7 +2842,7 @@ static void secfp_free_frags(void *desc, struct sk_buff *skb)
 void secfp_inComplete(struct device *dev, struct talitos_desc *desc,
 		void *context, int err)
 #else
-void secfp_inComplete(struct device *dev, void *pdesc,
+void secfp_inComplete(struct device *dev, u32 *pdesc,
 		u32 err, void *context)
 #endif
 {
@@ -2876,9 +2859,9 @@ void secfp_inComplete(struct device *dev, void *pdesc,
 	ASFBuffer_t Buffer;
 	unsigned int ulCommonInterfaceId, ulBeforeTrimLen;
 #if defined(CONFIG_ASF_SEC4x)
-	struct ipsec_esp_edesc *desc;
-	desc = (struct ipsec_esp_edesc *)((char *)pdesc -
-			offsetof(struct ipsec_esp_edesc, hw_desc));
+	struct aead_edesc *desc;
+	desc = (struct aead_edesc *)((char *)pdesc -
+			offsetof(struct aead_edesc, hw_desc));
 #endif
 	ASFIPSEC_FENTRY;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -3405,7 +3388,6 @@ inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr;
 	unsigned char *pNewICVLocBytePtr;
 #endif
-	signed int iRetVal;
 	ASF_boolean_t bHard = ASF_FALSE;
 	ASF_boolean_t bExpiry = ASF_FALSE;
 	ASF_IPAddr_t saDestAddr;
@@ -3832,7 +3814,8 @@ sa_expired:
 			secfp_inCompleteWithFrags : secfp_inComplete,
 			(void *)pHeadSkb) == -EAGAIN) {
 #else
-		if (secfp_caam_submit(pSA->ctx.jrdev, desc,
+		if (caam_jr_enqueue(pSA->ctx.jrdev,
+			((struct aead_edesc *)desc)->hw_desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
 			secfp_inCompleteWithFrags : secfp_inComplete,
 			(void *)pHeadSkb)) {
@@ -4577,7 +4560,8 @@ sa_expired:
 			secfp_inCompleteWithFrags : secfp_inComplete,
 			(void *)pHeadSkb) == -EAGAIN) {
 #else
-		if (secfp_caam_submit(pSA->ctx.jrdev, desc,
+		if (caam_jr_enqueue(pSA->ctx.jrdev,
+			((struct aead_edesc *)desc)->hw_desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
 			secfp_inCompleteWithFrags : secfp_inComplete,
 			(void *)pHeadSkb)) {

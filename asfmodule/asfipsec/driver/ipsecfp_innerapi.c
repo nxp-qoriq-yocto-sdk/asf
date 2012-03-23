@@ -761,10 +761,6 @@ static void secfp_freeOutSA(struct rcu_head *pData)
 	if (pSA->pSelList)
 		secfp_cleanupSelList(pSA->pSelList);
 
-#ifdef CONFIG_ASF_SEC4x
-	kfree(pSA->ctx.key);
-	kfree(pSA->ctx.sh_desc_mem);
-#endif
 	asfReleaseNode(OutSAPoolId_g, pSA, pSA->bHeap);
 }
 
@@ -1112,10 +1108,6 @@ static void secfp_freeInSA(struct rcu_head *rcu_data)
 	/*h/w cb will check this flag */
 	kfree(pSA->pWinBitMap);
 
-#ifdef CONFIG_ASF_SEC4x
-	kfree(pSA->ctx.key);
-	kfree(pSA->ctx.sh_desc_mem);
-#endif
 	asfReleaseNode(InSAPoolId_g, pSA, pSA->bHeap);
 }
 
@@ -2562,7 +2554,6 @@ unsigned int secfp_createOutSA(
 		}
 	}
 	pSA->ulTunnelId = ulTunnelId;
-	pSA->chan = ulLastOutSAChan_g;
 	ulLastOutSAChan_g = (ulLastOutSAChan_g == 0) ? 1 : 0;
 	memcpy(&(pSA->SPDParams), &(pContainer->SPDParams),
 				sizeof(SPDOutParams_t));
@@ -3065,7 +3056,6 @@ unsigned int secfp_CreateInSA(
 
 	pSA = secfp_allocInSA(pSAParams->AntiReplayWin);
 	if (pSA) {
-		pSA->chan = ulLastInSAChan_g;
 		ulLastInSAChan_g = (ulLastInSAChan_g == 0) ? 1 : 0;
 
 		pSA->ulSPDOutContainerIndex = ulSPDOutContainerIndex;

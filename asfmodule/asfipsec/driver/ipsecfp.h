@@ -704,11 +704,11 @@ extern struct device *talitos_getdevice(void);
 
 /* This is due to different prototype of the SEC return function*/
 extern void secfp_outComplete(struct device *dev,
-		void *pdesc, u32 error, void *context);
+		u32 *pdesc, u32 error, void *context);
 extern void secfp_inComplete(struct device *dev,
-		void *pdesc, u32 err, void *context);
+		u32 *pdesc, u32 err, void *context);
 extern void secfp_inCompleteWithFrags(struct device *dev,
-		void *pdesc, u32 err, void *context);
+		u32 *pdesc, u32 err, void *context);
 
 int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir);
 
