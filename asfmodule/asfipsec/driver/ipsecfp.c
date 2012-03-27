@@ -413,7 +413,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	tot_len = iph->tot_len;
 	ipHdrLen = SECFP_IPV4_HDR_LEN;
 	etherproto = ETH_P_IP;
-	skb->ip_summed = CHECKSUM_PARTIAL;
+	skb->ip_summed = CHECKSUM_UNNECESSARY;
 
 	if (pSA->SAParams.bDoUDPEncapsulationForNATTraversal) {
 
@@ -435,6 +435,9 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		iph->tot_len += pSA->usNatHdrSize;
 		tot_len += pSA->usNatHdrSize;
 	}
+
+	/* Calculate checksum for L3 */
+	iph->check = ip_fast_csum((unsigned char *)iph, iph->ihl);
 
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
@@ -460,6 +463,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		/*TODO TOS related processing*/
 	}
 #endif
+
 	/* Update SA Statistics */
 	pSA->ulPkts[smp_processor_id()]++;
 	pSA->ulBytes[smp_processor_id()] += tot_len - pSA->ulSecHdrLen;
