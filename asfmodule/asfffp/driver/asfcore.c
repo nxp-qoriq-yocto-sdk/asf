@@ -143,9 +143,7 @@ MODULE_PARM_DESC(asf_reasm_num_cbs,
 				"Maximum number of IPv6 Reassembly context blocks per VSG");
 #endif
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #define ASF_DO_INC_CHECKSUM
-#endif
 
 ptrIArry_tbl_t ffp_ptrary;
 ffp_bucket_t *ffp_flow_table;
