@@ -50,6 +50,23 @@
 #define XFRM_ACTION(act) (act ? "BLOCK" : "ALLOW")
 #define XFRM_MODE(mode) (mode ? "TUNNEL" : "TRANSPORT")
 
+#define ASF_SPIN_LOCK(bLockFlag, spinLock) do { \
+		bLockFlag = in_softirq(); \
+		if (bLockFlag) { \
+			spin_lock(spinLock); \
+		} else { \
+			spin_lock_bh(spinLock); \
+		} \
+	} while (0)
+
+#define ASF_SPIN_UNLOCK(bLockFlag, spinLock) do { \
+		if (bLockFlag) { \
+			spin_unlock(spinLock); \
+		} else { \
+			spin_unlock_bh(spinLock); \
+		} \
+	} while (0)
+
 struct sa_node {
 	__be16 status;
 	__be16 ref_count;
@@ -109,10 +126,11 @@ static int current_index[MAX_POLICY_CONT_ID];
 
 void init_container_indexes(bool init)
 {
+	bool bLockFlag;
 	if (init)
 		spin_lock_init(&cont_lock);
 	else
-		spin_lock(&cont_lock);
+		ASF_SPIN_LOCK(bLockFlag, &cont_lock);
 
 	memset(containers_ids[ASF_OUT_CONTANER_ID], 0,
 		sizeof(ASF_uint32_t) * ASFCTRL_MAX_SPD_CONTAINERS);
@@ -124,15 +142,16 @@ void init_container_indexes(bool init)
 	current_index[ASF_IN_CONTANER_ID] = 1;
 
 	if (!init)
-		spin_unlock(&cont_lock);
+		ASF_SPIN_UNLOCK(bLockFlag, &cont_lock);
 
 }
 
 static inline int alloc_container_index(struct xfrm_policy *xp, int cont_dir)
 {
 	int i = 0, cur_id;
+	bool bLockFlag;
 
-	spin_lock(&cont_lock);
+	ASF_SPIN_LOCK(bLockFlag, &cont_lock);
 	cur_id = current_index[cont_dir];
 	if (containers_ids[cont_dir][cur_id - 1] == 0) {
 		containers_ids[cont_dir][cur_id - 1] = xp->index;
@@ -158,14 +177,15 @@ static inline int alloc_container_index(struct xfrm_policy *xp, int cont_dir)
 	}
 	i = 0;
 ret_id:
-	spin_unlock(&cont_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &cont_lock);
 	return i;
 }
 
 int free_container_index(struct xfrm_policy *xp, int cont_dir)
 {
 	int index = xp->asf_cookie;
-	spin_lock(&cont_lock);
+	bool bLockFlag;
+	ASF_SPIN_LOCK(bLockFlag, &cont_lock);
 	if (index > 0 && index <= asfctrl_max_policy_cont) {
 		containers_ids[cont_dir][index - 1] = 0;
 		xp->asf_cookie = 0;
@@ -180,14 +200,15 @@ int free_container_index(struct xfrm_policy *xp, int cont_dir)
 	}
 	index = 0;
 ret_id:
-	spin_unlock(&cont_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &cont_lock);
 	return index;
 }
 
 static inline int verify_container_index(struct xfrm_policy *xp, int cont_dir)
 {
 	int index = xp->asf_cookie;
-	spin_lock(&cont_lock);
+	bool bLockFlag;
+	ASF_SPIN_LOCK(bLockFlag, &cont_lock);
 	if (index > 0 && index <= asfctrl_max_policy_cont) {
 		if (containers_ids[cont_dir][index - 1] == xp->index)
 			goto ret_id;
@@ -201,16 +222,17 @@ static inline int verify_container_index(struct xfrm_policy *xp, int cont_dir)
 	}
 	index = 0;
 ret_id:
-	spin_unlock(&cont_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &cont_lock);
 	return index;
 }
 
 void init_sa_indexes(bool init)
 {
+	bool bLockFlag;
 	if (init)
 		spin_lock_init(&sa_table_lock);
 	else
-		spin_lock(&sa_table_lock);
+		ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 
 	/* cleaning up the SA Table*/
 	memset(sa_table, 0, sizeof(struct sa_node)*2*SECFP_MAX_SAS);
@@ -219,7 +241,7 @@ void init_sa_indexes(bool init)
 	current_sa_count[OUT_SA] = 0;
 
 	if (!init)
-		spin_unlock(&sa_table_lock);
+		ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 }
 
 static inline int match_sa_index_no_lock(struct xfrm_state *xfrm, int dir)
@@ -242,7 +264,8 @@ static inline int match_sa_index_no_lock(struct xfrm_state *xfrm, int dir)
 static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 {
 	int cur_id;
-	spin_lock(&sa_table_lock);
+	bool bLockFlag;
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 
 	if (!match_sa_index_no_lock(xfrm, dir)) {
 		ASFCTRL_INFO("SA already allocated");
@@ -256,14 +279,14 @@ static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 		if (sa_table[dir][cur_id].status == 0) {
 			sa_table[dir][cur_id].status = 1;
 			current_sa_count[dir]++;
-			spin_unlock(&sa_table_lock);
+			ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 			return cur_id;
 		}
 	}
 	ASFCTRL_WARN("\nMaximum SAs are offloaded");
 
 ret_unlock:
-	spin_unlock(&sa_table_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 	return -EINVAL;
 }
 
@@ -271,10 +294,11 @@ static inline int free_sa_index(struct xfrm_state *xfrm, int dir)
 {
 	int err = -EINVAL;
 	int cookie = xfrm->asf_sa_cookie;
+	bool bLockFlag;
 	ASFCTRL_TRACE("SA-TABLE: saddr 0x%x daddr 0x%x spi 0x%x",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi);
 
-	spin_lock(&sa_table_lock);
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 	if (cookie > 0 &&  cookie <= asfctrl_max_sas) {
 		if (sa_table[dir][cookie - 1].status) {
 			sa_table[dir][cookie - 1].status = 0;
@@ -285,7 +309,7 @@ static inline int free_sa_index(struct xfrm_state *xfrm, int dir)
 	} else {
 		ASFCTRL_WARN("\nxfrm ASF Cookie is corrupted\n");
 	}
-	spin_unlock(&sa_table_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	return err;
 }
@@ -537,6 +561,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	bool bIPv4OrIPv6 = 0;
 	bool bSelIPv4OrIPv6 = 0;
 #endif
+	bool bLockFlag;
 	ASFIPSecRuntimeAddOutSAArgs_t outSA;
 	ASF_IPSecSASelector_t   outSASel;
 	ASF_IPSecSelectorSet_t srcSel, dstSel;
@@ -741,7 +766,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	xfrm->asf_sa_direction = OUT_SA;
 	xfrm->asf_sa_cookie = sa_id + 1;
-	spin_lock(&sa_table_lock);
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv4OrIPv6) {
 		memcpy(sa_table[OUT_SA][sa_id].saddr.ipv6addr,
@@ -763,7 +788,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	sa_table[OUT_SA][sa_id].container_id = outSA.ulSPDContainerIndex;
 	sa_table[OUT_SA][sa_id].ref_count++;
 	sa_table[OUT_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
-	spin_unlock(&sa_table_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x OUT-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
@@ -783,6 +808,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	bool bIPv4OrIPv6 = 0;
 	bool bSelIPv4OrIPv6 = 0;
 #endif
+	bool bLockFlag;
 	ASFIPSecRuntimeAddInSAArgs_t inSA;
 	ASF_IPSecSASelector_t   inSASel;
 	ASF_IPSecSelectorSet_t srcSel, dstSel;
@@ -992,7 +1018,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	xfrm->asf_sa_direction = IN_SA;
 	xfrm->asf_sa_cookie = sa_id + 1;
-	spin_lock(&sa_table_lock);
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv4OrIPv6) {
 		memcpy(sa_table[IN_SA][sa_id].saddr.ipv6addr,
@@ -1016,7 +1042,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	sa_table[IN_SA][sa_id].ref_count++;
 /*	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
 	sa_table[IN_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
-	spin_unlock(&sa_table_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x IN-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
 		inSA.ulInSPDContainerIndex);
@@ -1062,6 +1088,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 {
 	int cont_id, dir;
 	int handle;
+	bool bLockFlag;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -1071,15 +1098,15 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 	}
 	dir = xfrm->asf_sa_direction;
 
-	spin_lock(&sa_table_lock);
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 
 	if (match_sa_index_no_lock(xfrm, dir) < 0) {
 		ASFCTRL_WARN("Not an offloaded SA -1");
-		spin_unlock(&sa_table_lock);
+		ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 		return -EINVAL;
 	}
 	cont_id = sa_table[dir][xfrm->asf_sa_cookie - 1].container_id;
-	spin_unlock(&sa_table_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	if (dir == OUT_SA) {
 		ASFIPSecRuntimeDelOutSAArgs_t delSA;
@@ -1294,17 +1321,18 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 	ASFBuffer_t Buffer;
 	ASF_IPAddr_t daddr;
 	int sa_id, cont_id;
+	bool bLockFlag;
 	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
 	ASFCTRL_FUNC_ENTRY;
 
 	ASFCTRL_WARN("Packet received spi =0x%x", xfrm->id.spi);
 
-	spin_lock(&sa_table_lock);
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 	if (match_sa_index_no_lock(xfrm, OUT_SA) < 0) {
 		ASFCTRL_INFO("SA offloaded with Junk cookie");
 		xfrm->asf_sa_cookie = 0;
-		spin_unlock(&sa_table_lock);
+		ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 		return -EINVAL;
 	}
 
@@ -1323,7 +1351,7 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 #endif
 	cont_id = sa_table[OUT_SA][sa_id].container_id;
 
-	spin_unlock(&sa_table_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	skb_dst_drop(skb);
 
@@ -1361,6 +1389,7 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 {
 	ASFBuffer_t Buffer;
 	ASF_int32_t cii;
+	bool bLockFlag;
 	struct net_device *dev = skb->dev;
 #ifdef ASF_IPV6_FP_SUPPORT
 	struct iphdr *iph = ip_hdr(skb);
@@ -1369,14 +1398,14 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 
 	ASFCTRL_WARN("Packet received spi =0x%x", xfrm->id.spi);
 
-	spin_lock(&sa_table_lock);
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 	if (match_sa_index_no_lock(xfrm, IN_SA) < 0) {
 		ASFCTRL_INFO("SA offloaded with Junk cookie");
 		xfrm->asf_sa_cookie = 0;
-		spin_unlock(&sa_table_lock);
+		ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 		return -EINVAL;
 	}
-	spin_unlock(&sa_table_lock);
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	cii = asfctrl_dev_get_cii(dev);
 
