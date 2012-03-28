@@ -5042,7 +5042,8 @@ static int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		if (ip_route_output_key(&init_net, &pRt, &fl)) {
 	#else
 		fl.u.ip4.daddr = iph->daddr;
-		if (ip_route_output_key(&init_net, &fl.u.ip4)) {
+		pRt = ip_route_output_key(&init_net, &fl.u.ip4);
+		if (IS_ERR(pRt)) {
 	#endif
 
 			ASFKernelSkbFree(pSkb);
