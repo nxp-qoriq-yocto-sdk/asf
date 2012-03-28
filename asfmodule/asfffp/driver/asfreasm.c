@@ -93,6 +93,10 @@ unsigned long asf_ipv6_reasm_hash_list_size = ASF_REASM_MAX_HASH_LIST_SIZE;
 #define ASF_MAX_SKB_FRAGS 16
 #endif
 
+#ifdef CONFIG_DPA
+#define ASF_EXTRA_TAIL_ROOM 32
+#endif
+
 /* Values taken from iGateway code */
 extern int asf_reasm_timeout;
 extern int asf_reasm_maxfrags;
@@ -2078,8 +2082,10 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				if (len < bytesLeft)
 					len &= ~7;
 #ifdef CONFIG_DPA
-				skb2 = alloc_skb(len+ihl+ulDevXmitHdrLen+
-					dev->needed_headroom, GFP_ATOMIC);
+				/* add 64B more for IPSec padding use */
+				skb2 = alloc_skb(len+ihl+ulDevXmitHdrLen+ \
+				    dev->needed_headroom+ASF_EXTRA_TAIL_ROOM, \
+				    GFP_ATOMIC);
 #else
 				skb2 = gfar_new_skb(ndev);
 #endif
@@ -2145,8 +2151,10 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				}
 			}
 #ifdef CONFIG_DPA
-			skb2 = alloc_skb(tot_len+ihl+ulDevXmitHdrLen+
-					dev->needed_headroom, GFP_ATOMIC);
+			/* add 64B more for IPSec padding use */
+			skb2 = alloc_skb(tot_len+ihl+ulDevXmitHdrLen+ \
+				dev->needed_headroom+ASF_EXTRA_TAIL_ROOM, \
+				GFP_ATOMIC);
 #else
 			skb2 = gfar_new_skb(ndev);
 #endif
