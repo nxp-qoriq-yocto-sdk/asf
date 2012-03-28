@@ -1,0 +1,5 @@
+200.200.200.20 freescale_asf
+200.200.200.30 freescale_asf
+200.200.200.10 freescale_asf
+2001:db8:200::10 freescale_asf
+2001:db8:200::20 freescale_asf

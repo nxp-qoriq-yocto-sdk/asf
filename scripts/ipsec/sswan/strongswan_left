@@ -1,0 +1,5 @@
+#strongswan on left board
+set -v
+cp -rf ipsec.conf.left /etc/ipsec.conf
+cp -rf ipsec.secrets /etc/ipsec.secrets
+cp -rf strongswan.conf /etc/
