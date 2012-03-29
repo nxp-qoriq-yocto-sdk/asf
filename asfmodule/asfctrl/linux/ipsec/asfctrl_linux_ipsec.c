@@ -82,7 +82,7 @@ uint32_t asfctrl_vsg_ipsec_cont_magic_id;
 uint32_t asfctrl_max_sas = SECFP_MAX_SAS;
 uint32_t asfctrl_max_policy_cont = ASFCTRL_MAX_SPD_CONTAINERS;
 bool bRedSideFragment = ASF_TRUE;
-bool bAntiReplayCheck = ASF_FALSE;
+bool bAntiReplayCheck = ASF_TRUE;
 bool bVolumeBasedExpiry = ASF_FALSE;
 bool bPacketBasedExpiry = ASF_FALSE;
 
@@ -765,8 +765,12 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 	}
 #endif
 
+	ASFCTRL_DBG("xfrm policy - net = %x pol_out=%x, pol_in=%x",
+			net, pol_out, pol_in);
 	if (pol_out) {
 		err = is_policy_offloadable(pol_out);
+		if (err)
+			goto ret_err;
 		outInfo = &(ipsecInInfo->outContainerInfo);
 		*ipsec_out = ASF_TRUE;
 		outInfo->ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
@@ -782,8 +786,9 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 				outInfo->ulSPDContainerId);
 	}
 	if (pol_in) {
-		if (!err)
-			err = is_policy_offloadable(pol_in);
+		err = is_policy_offloadable(pol_in);
+		if (err)
+			goto ret_err;
 		inInfo = &(ipsecInInfo->inContainerInfo);
 		*ipsec_in = ASF_TRUE;
 		inInfo->ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
@@ -800,6 +805,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 
 	}
 	ASFCTRL_DBG("IPSEC : In =%d, Out =%d", *ipsec_in, *ipsec_out);
+ret_err:
 	return err;
 }
 
