@@ -890,21 +890,6 @@ static inline void secfp_updateInContainerSPIList(SPDInContainer_t *pContainer,
 	spin_unlock(&pContainer->spinlock);
 }
 
-/* Finds the SPI node in the container; Used for SPI verification as well
-	as for SA deletion */
-inline SPDInSPIValLinkNode_t *secfp_findInSPINode(SPDInContainer_t *pContainer,
-							unsigned int ulSPIVal)
-{
-	SPDInSPIValLinkNode_t *pNode;
-
-	for (pNode = pContainer->pSPIValList;
-		pNode != NULL; pNode = pNode->pNext) {
-			if (pNode->ulSPIVal == ulSPIVal)
-				break;
-	}
-	return pNode;
-}
-
 /* This deletes the SPI Link node from the SPD In container */
 static inline void secfp_deleteInContainerSPIList(SPDInContainer_t *pContainer,
 						SPDInSPIValLinkNode_t *pNode)
@@ -1060,7 +1045,7 @@ SPDInSelTblIndexLinkNode_t *secfp_updateInSelSet(
 
 /* Alloc & Append the SPI index value within the SPD In container;
 	Called when In SA is populated */
-unsigned int secfp_allocAndAppendSPIVal(SPDInContainer_t *pContainer,
+static unsigned int secfp_allocAndAppendSPIVal(SPDInContainer_t *pContainer,
 					inSA_t *pSA)
 {
 	SPDInSPIValLinkNode_t *pSPILinkNode = secfp_allocSPILinkNode();

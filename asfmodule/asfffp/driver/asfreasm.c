@@ -1935,7 +1935,7 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
   **pOutSkb - chain of skb ip fragments
 */
 
-inline int asfIpv4Fragment(struct sk_buff *skb,
+int asfIpv4Fragment(struct sk_buff *skb,
 			   unsigned int ulMTU, unsigned int ulDevXmitHdrLen,
 			   unsigned int bDoChecksum,
 			   struct net_device *dev,

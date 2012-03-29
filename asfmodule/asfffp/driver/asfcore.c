@@ -198,13 +198,13 @@ static int ffp_cmd_delete_flows(ASF_uint32_t  ulVsgId,
 static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId,
 			ASFFFPUpdateFlowParams_t *p);
 
-inline ASFFFPVsgStats_t *get_asf_vsg_stats()
+ASFFFPVsgStats_t *get_asf_vsg_stats()
 {
 	return asf_vsg_stats;
 }
 EXPORT_SYMBOL(get_asf_vsg_stats);
 
-inline ASFFFPGlobalStats_t *get_asf_gstats() /* per cpu global stats */
+ASFFFPGlobalStats_t *get_asf_gstats() /* per cpu global stats */
 {
 	return asf_gstats;
 }
@@ -3880,7 +3880,7 @@ void asfDestroyNetDevEntries(void)
 		}
 	}
 }
-inline void asf_clean_vsg(ASF_uint32_t ulVSGId, ASF_Modes_t mode)
+static inline void asf_clean_vsg(ASF_uint32_t ulVSGId, ASF_Modes_t mode)
 {
 	if (mode & fwMode)
 		asf_ffp_cleanup_all_flows();

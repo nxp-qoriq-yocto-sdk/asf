@@ -447,7 +447,7 @@ void asfterm_display_skb_list(struct sk_buff *skb, char *msg)
 #endif
 
 
-inline void asfFragmentAndSendPkt(term_cache_t	*Cache,
+static inline void asfFragmentAndSendPkt(term_cache_t	*Cache,
 				struct sk_buff	*skb,
 				struct iphdr	*iph,
 				ASFTERMCacheEntryStats_t *term_stats,

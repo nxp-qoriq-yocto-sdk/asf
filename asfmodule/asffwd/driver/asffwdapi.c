@@ -333,7 +333,7 @@ static inline void asfFwdSendLog(fwd_cache_t *Cache,
 	asfFwdSendLogEx(Cache, ulMsgId, (ASF_uchar8_t *)"", ulHashVal);
 }
 
-inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
+static inline void asfFragmentAndSendPkt(fwd_cache_t	*Cache,
 				struct sk_buff	*skb,
 				struct iphdr	*iph,
 				ASFFWDCacheEntryStats_t *cache_stats,

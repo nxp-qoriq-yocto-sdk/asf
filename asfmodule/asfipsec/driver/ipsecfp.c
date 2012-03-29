@@ -897,7 +897,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
  */
 #define SECFP_MAX_BYTES_TO_LINEARIZE 128
 #ifdef ASF_IPV6_FP_SUPPORT
-inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
+static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 				struct sk_buff *skb1,
 				ASFFFPIpsecInfo_t *pSecInfo)
 {
@@ -1255,7 +1255,7 @@ no_sa:
  * Return values: 1 means packet is absorbed by SEC. 0 means packet is available
  * for caller.
  */
-inline int secfp_try_fastPathOutv4(
+static inline int secfp_try_fastPathOutv4(
 		unsigned int ulVSGId,
 		struct sk_buff *skb1, ASFFFPIpsecInfo_t *pSecInfo)
 {
@@ -1703,7 +1703,7 @@ no_sa:
 	return 1;
 }
 
-int secfp_try_fastPathOut(unsigned int ulVSGId,
+inline int secfp_try_fastPathOut(unsigned int ulVSGId,
 		struct sk_buff *skb,
 		ASFFFPIpsecInfo_t *pSecInfo) {
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -3359,7 +3359,7 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
  * Currently stub
  */
 #ifdef ASF_IPV6_FP_SUPPORT
-inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
+static inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 			ASF_boolean_t bCheckLen, unsigned int ulVSGId,
 			ASF_uint32_t ulCommonInterfaceId)
 {
@@ -4077,7 +4077,7 @@ int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
  * Sufficient information is passed through the skb->cb fields
  * to handle post SEC In processing.
  */
-inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
+static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			ASF_boolean_t bCheckLen, unsigned int ulVSGId,
 			ASF_uint32_t ulCommonInterfaceId)
 {

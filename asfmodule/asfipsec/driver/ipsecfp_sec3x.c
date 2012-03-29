@@ -571,7 +571,7 @@ void secfp_dma_unmap_sglist(struct sk_buff *skb)
  * to be updated, so that check is not done again when the 2nd
  * iteration completes
  */
-inline unsigned int secfp_inHandleICVCheck3x(void *dsc, struct sk_buff *skb)
+unsigned int secfp_inHandleICVCheck3x(void *dsc, struct sk_buff *skb)
 {
 	int ii;
 	struct talitos_desc *desc = (struct talitos_desc *)dsc;

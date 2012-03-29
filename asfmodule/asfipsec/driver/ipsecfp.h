@@ -820,9 +820,21 @@ unsigned int secfp_CreateInSA(
 				unsigned int ulOutSPI,
 				unsigned int ulMtu);
 
-extern inline SPDInSPIValLinkNode_t *secfp_findInSPINode(
+/* Finds the SPI node in the container; Used for SPI verification as well
+	as for SA deletion */
+static inline SPDInSPIValLinkNode_t *secfp_findInSPINode(
 		SPDInContainer_t *pContainer,
-		unsigned int ulSPIVal);
+		unsigned int ulSPIVal)
+{
+	SPDInSPIValLinkNode_t *pNode;
+
+	for (pNode = pContainer->pSPIValList;
+		pNode != NULL; pNode = pNode->pNext) {
+			if (pNode->ulSPIVal == ulSPIVal)
+				break;
+	}
+	return pNode;
+}
 
 extern SPDOutSALinkNode_t *secfp_findOutSALinkNode(
 		SPDOutContainer_t *pContainer,
