@@ -755,12 +755,12 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 	*ipsec_out = ASF_FALSE;
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (bIsIpv6) {
-		pol_out = xfrm_policy_check_flow(net, &fl, AF_INET6, FLOW_DIR_OUT);
-		pol_in = xfrm_policy_check_flow(net, &fl, AF_INET6, FLOW_DIR_IN);
+		pol_out = __xfrm_policy_lookup(net, &fl, AF_INET6, FLOW_DIR_OUT);
+		pol_in = __xfrm_policy_lookup(net, &fl, AF_INET6, FLOW_DIR_IN);
 	} else {
 #endif
-	pol_out = xfrm_policy_check_flow(net, &fl, AF_INET, FLOW_DIR_OUT);
-	pol_in = xfrm_policy_check_flow(net, &fl, AF_INET, FLOW_DIR_IN);
+	pol_out = __xfrm_policy_lookup(net, &fl, AF_INET, FLOW_DIR_OUT);
+	pol_in = __xfrm_policy_lookup(net, &fl, AF_INET, FLOW_DIR_IN);
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
 #endif
