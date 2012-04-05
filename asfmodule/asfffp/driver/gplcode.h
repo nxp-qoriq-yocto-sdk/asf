@@ -27,6 +27,24 @@
 #define asfFreePerCpu(ptr)	free_percpu(ptr)
 #define asfPerCpuPtr(ptr, cpu)	per_cpu_ptr(ptr, cpu)
 
+#ifdef CONFIG_DPA
+#define devfp_register_hook(rx_hook, tx_hook) {				\
+	struct dpaa_eth_hooks_s hooks = {};				\
+	hooks.rx_default = (dpaa_eth_ingress_hook_t)rx_hook;		\
+	hooks.tx =  (dpaa_eth_egress_hook_t)tx_hook;			\
+	fsl_dpaa_eth_set_hooks(&hooks);					\
+}
+
+#define AS_FP_PROCEED	DPAA_ETH_CONTINUE
+#define AS_FP_STOLEN	DPAA_ETH_STOLEN
+
+#else
+#define devfp_register_hook(rx_hook, tx_hook) {	\
+	devfp_register_rx_hook(rx_hook);	\
+	devfp_register_tx_hook(tx_hook);	\
+}
+#endif
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM) || defined(CONFIG_DPA)
 #define asfDevHardXmit(dev, skb)	(dev->netdev_ops->ndo_start_xmit(skb, dev))
 #else

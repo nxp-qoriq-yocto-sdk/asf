@@ -175,8 +175,6 @@ static int asf_ffp_init_flow_table(void);
 static void asf_ffp_destroy_flow_table(void);
 void asf_ffp_cleanup_all_flows(void);
 
-static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *dev);
-
 #define ASF_FFP_BLOB_TIME_INTERVAL 1    /* inter bucket gap */
 #define ASF_FFP_BLOB_TIMER_BUCKT 512    /* Max L2blob timer value */
 #define ASF_FFP_INAC_TIME_INTERVAL 1    /* inter bucket gap */
@@ -769,8 +767,12 @@ void asf_display_skb_list(struct sk_buff *skb, char *msg)
 #define asf_display_one_frag(skb) do {} while (0)
 #endif
 
-
-static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
+#ifdef CONFIG_DPA
+int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev,
+							unsigned int  fqid)
+#else
+int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
+#endif
 {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	ASFFFPGlobalStats_t	*gstats;
@@ -1151,6 +1153,7 @@ drop_pkt:
 	ASF_RCU_READ_UNLOCK(bLockFlag);
 	return AS_FP_STOLEN;
 }
+EXPORT_SYMBOL(asf_ffp_devfp_rx);
 
 ASF_void_t ASFFFPProcessAndSendPkt(
 				ASF_uint32_t    ulVsgId,
@@ -4037,16 +4040,6 @@ ASF_uint32_t ASFGetAPIVersion(ASF_uint8_t Ver[])
 }
 EXPORT_SYMBOL(ASFGetAPIVersion);
 
-void asf_register_devfp(void)
-{
-	devfp_register_rx_hook(&asf_ffp_devfp_rx);
-}
-
-void asf_unregister_devfp(void)
-{
-	devfp_register_rx_hook(NULL);
-}
-
 static int __init asf_init(void)
 {
 	int err;
@@ -4136,9 +4129,6 @@ static int __init asf_init(void)
 		return err;
 	}
 #endif
-
-	asf_debug("Registering hooks to DevFP\n");
-	err = devfp_register_rx_hook(&asf_ffp_devfp_rx);
 	return err;
 }
 
@@ -4151,7 +4141,6 @@ static void __exit asf_exit(void)
 	unregister_chrdev(ASF_HLD_MAJORNUMBER, ASF_HLD_DEVICE_NAME);
 #endif
 	asf_debug("Unregister DevFP RX Hooks!\n");
-	devfp_register_rx_hook(NULL);
 
 	asfTimerDisableKernelTimers();
 	asf_enable = 0;
@@ -4206,7 +4195,6 @@ static void __exit asf_exit(void)
 #endif
 
 	asf_debug("Unregister DevFP TX Hooks at Last!\n");
-	devfp_register_tx_hook(NULL);
 }
 module_init(asf_init);
 module_exit(asf_exit);

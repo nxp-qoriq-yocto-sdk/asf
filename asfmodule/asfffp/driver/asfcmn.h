@@ -319,6 +319,13 @@ extern ASFNetDevEntry_t *ASFNetDev(struct net_device *dev);
 extern ASFFFPVsgStats_t *get_asf_vsg_stats(void);
 extern ASFFFPGlobalStats_t *get_asf_gstats(void);
 
+#ifdef CONFIG_DPA
+int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev,
+							unsigned int fqid);
+#else
+int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev);
+#endif
+
 extern struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 			       struct sk_buff *skb , bool *bFirstFragRcvd,
 			       unsigned int *pReasmCb1, unsigned int *pReasmCb2,

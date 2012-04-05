@@ -44,6 +44,8 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 33))
 #include <8021q/vlan.h>
 #endif
+#include "../../../asfffp/driver/gplcode.h"
+#include "../../../asfffp/driver/asfcmn.h"
 #include "../../../asfffp/driver/asf.h"
 #include "asfctrl.h"
 #include <net/ipv6.h>
@@ -767,8 +769,7 @@ static int __init asfctrl_init(void)
 	ASFFFPRegisterCallbackFns(&asfctrl_Cbs);
 
 	register_netdevice_notifier(&asfctrl_dev_notifier);
-	devfp_register_tx_hook(asfctrl_dev_fp_tx_hook);
-
+	devfp_register_hook(asf_ffp_devfp_rx, asfctrl_dev_fp_tx_hook);
 	route_hook_fn_register(&asfctrl_l3_route_add,
 				&asfctrl_l3_route_flush);
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -805,8 +806,7 @@ static void __exit asfctrl_exit(void)
 #ifdef ASF_IPV6_FP_SUPPORT
 	ipv6_route_hook_fn_unregister();
 #endif
-	devfp_register_tx_hook(NULL);
-
+	devfp_register_hook(NULL, NULL);
 	unregister_netdevice_notifier(&asfctrl_dev_notifier);
 
 	for (ii = 0; ii < ASFCTRL_MAX_IFACES; ii++) {

@@ -61,8 +61,6 @@
 static int ffp_debug_show_index;
 static int ffp_debug_show_count = 50;
 
-extern void asf_register_devfp(void);
-extern void asf_unregister_devfp(void);
 extern void asf_ffp_cleanup_all_flows(void);
 
 
@@ -152,39 +150,6 @@ static int proc_asf_proc_exec_cmd(ctl_table *ctl, int write,
 	return ret;
 }
 
-static int proc_asf_enable(ctl_table *ctl, int write,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
-			   struct file *filp,
-#endif
-			   void __user *buffer,
-			   size_t *lenp, loff_t *ppos)
-{
-	int old_state = asf_enable, ret;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
-	ret = proc_dointvec(ctl, write, filp, buffer, lenp, ppos);
-#else
-	ret = proc_dointvec(ctl, write, buffer, lenp, ppos);
-#endif
-
-	/* reset the value to 0 or 1 */
-	if (asf_enable != 0)
-		asf_enable = 1;
-
-	if (asf_enable != old_state) {
-		if (asf_enable) {
-			printk("ASF State changed from Disable to Enable\n");
-			asf_register_devfp();
-		} else {
-			asf_unregister_devfp();
-			printk("ASF State changed from Enable to Disable (cleanup flows)\n");
-			asf_ffp_cleanup_all_flows();
-		}
-	}
-
-	return ret;
-}
-
 static struct ctl_table asf_proc_table[] = {
 	{
 		.procname       = "command",
@@ -192,13 +157,6 @@ static struct ctl_table asf_proc_table[] = {
 		.maxlen	 = sizeof(asf_proc_cmdbuf),
 		.mode	   = 0644,
 		.proc_handler   = proc_asf_proc_exec_cmd,
-	} ,
-	{
-		.procname       = "enable",
-		.data	   = &asf_enable,
-		.maxlen	 = sizeof(int),
-		.mode	   = 0644,
-		.proc_handler   = proc_asf_enable,
 	} ,
 	{
 		.procname       = "ffp_max_flows",
