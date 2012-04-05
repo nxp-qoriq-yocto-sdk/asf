@@ -24,7 +24,6 @@
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
-#include <gianfar.h>
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/route.h>

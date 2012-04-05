@@ -17,7 +17,6 @@
 */
 /****************************************************************************/
 #include <linux/version.h>
-#include <gianfar.h>
 #include <linux/device.h>
 #include <linux/crypto.h>
 #include <linux/skbuff.h>

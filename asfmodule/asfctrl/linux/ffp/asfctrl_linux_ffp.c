@@ -25,7 +25,6 @@
 #include <net/dst.h>
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
-#include <gianfar.h>
 #ifdef ASFCTRL_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif

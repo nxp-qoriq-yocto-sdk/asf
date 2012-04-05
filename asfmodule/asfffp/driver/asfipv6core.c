@@ -19,9 +19,6 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
-
-#include <gianfar.h>
-
 #include <linux/io.h>
 #include <net/xfrm.h>
 #ifdef ASF_TERM_FP_SUPPORT
