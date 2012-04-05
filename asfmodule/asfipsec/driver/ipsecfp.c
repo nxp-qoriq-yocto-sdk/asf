@@ -248,7 +248,7 @@ void secfp_IVDeInit(void)
 		for_each_possible_cpu(ii) {
 			ptr = per_cpu_ptr(secfp_IVData, ii);
 #ifndef SECFP_USE_L2SRAM
-			SECFP_UNMAP_SINGLE_DESC(pdev, (void *) ptr->paddr,
+			SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t) ptr->paddr,
 				sizeof(unsigned int)*SECFP_NUM_IV_ENTRIES);
 			kfree(ptr->vaddr);
 #endif
@@ -1768,7 +1768,7 @@ static inline void secfp_unmap_descs(struct sk_buff *skb)
 
 	for (pTempSkb = skb_shinfo(skb)->frag_list; pTempSkb != NULL;
 		pTempSkb = pTempSkb->next) {
-		SECFP_UNMAP_SINGLE_DESC(pdev, (void *)*((unsigned int *)
+		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)*((unsigned int *)
 				&(pTempSkb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 				pTempSkb->end - pTempSkb->head);
 	}
@@ -1819,7 +1819,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		return;
 	}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
-	SECFP_UNMAP_SINGLE_DESC(pdev, (void *)(*(unsigned int *)
+	SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)(*(unsigned int *)
 			&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 			skb->end - skb->head);
 
@@ -2974,7 +2974,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 			return;
 		}
 #endif
-		SECFP_UNMAP_SINGLE_DESC(pdev, (void *) *((unsigned int *)
+		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t) *((unsigned int *)
 				&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 				skb->end - skb->head);
 		skb->data_len = 0;
@@ -3010,7 +3010,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 			skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
 			return;
 		} else {
-			SECFP_UNMAP_SINGLE_DESC(pdev, (void *)
+			SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)
 				*((unsigned int *) &(skb->cb
 				[SECFP_SKB_DATA_DMA_INDEX])),
 				skb->end - skb->head);
@@ -3027,7 +3027,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 	else
 		SECFP_DESC_FREE(desc);
 
-	SECFP_UNMAP_SINGLE_DESC(pdev, (void *) *((unsigned int *)
+	SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t) *((unsigned int *)
 			&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 		skb->end - skb->head);
 	if (skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {

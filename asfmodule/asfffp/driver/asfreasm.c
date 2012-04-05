@@ -1332,7 +1332,7 @@ static inline unsigned int asfReasmPutInfo(
  * pkt arriving for reassembly completion, one of them will succeed.
  * i.e. they will be sequenced
  */
-#define ASF_REASM_INT_MAX  4294967295
+#define ASF_REASM_INT_MAX  0xffffffff
 unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 			   unsigned int ulIndex, unsigned int ulMagicNum, unsigned int pCbArg4)
 {
@@ -1447,8 +1447,8 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 #ifdef ASF_IPV6_FP_SUPPORT
 	struct ipv6hdr	*ip6h = (struct ipv6hdr  *)skb_network_header(skb);
 	struct frag_hdr *fhdr = (struct frag_hdr *)skb_transport_header(skb);
-#endif
 	bool bIPv6 = ASFCB(skb)->Defrag.bIPv6;
+#endif
 
 
 	/* Calculate the hash value */
@@ -1494,7 +1494,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 		return NULL;
 	}
 
-	asf_reasm_debug("asfDefrag: bIPv6=%u ulOffset=%d, flags=%x, ulSegLen=%d, ihl=%u\r\n", bIPv6, ulOffset, flags, ulSegLen, ihl);
+	asf_reasm_debug("asfDefrag: ulOffset=%d, flags=%x, ulSegLen=%d, ihl=%u\r\n", ulOffset, flags, ulSegLen, ihl);
 
 	/* Find the Reassembly context block,
 	   If not found, this function goes ahead and creates the

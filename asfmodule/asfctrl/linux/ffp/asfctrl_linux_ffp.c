@@ -71,7 +71,6 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	struct sk_buff *skb;
 	asf_linux_L2blobPktData_t *pData;
 	struct iphdr *iph;
-	struct net_device *dev;
 	struct flowi4 fl = {};
 	struct rtable *rt;
 	static unsigned short IPv4_IDs[NR_CPUS];

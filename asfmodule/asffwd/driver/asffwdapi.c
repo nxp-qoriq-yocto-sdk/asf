@@ -635,11 +635,12 @@ exit:
 	gstats->ulPktsToFNP++;
 #endif
 	return;
-
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 drop_pkt:
 	asf_print("drop_pkt LABEL\n");
 	dev_kfree_skb_any(skb);
 	return;
+#endif
 }
 EXPORT_SYMBOL(ASFFWDProcessPkt);
 
@@ -817,7 +818,7 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 				fwd_cache_t **pFlow,
 				unsigned long *pHashVal)
 {
-	fwd_cache_t	*CacheEntry, *temp;
+	fwd_cache_t	*CacheEntry;
 	unsigned long	hash;
 	fwd_bucket_t	*bkt;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -836,8 +837,10 @@ static int fwd_cmd_create_entry(ASF_uint32_t  ulVsgId,
 
 	spin_lock_bh(&fwd_entry_count_lock);
 	if (fwd_cur_entry_count >= fwd_max_entry) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+		fwd_cache_t	*temp;
 		unsigned int	vsg = ulVsgId;
-
+#endif
 		spin_unlock_bh(&fwd_entry_count_lock);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		/* On demand Force cleaning of existing Cache entry*/
@@ -1159,7 +1162,7 @@ int ASFFWDQueryCacheEntryStats(ASF_uint32_t ulVsgId,
 EXPORT_SYMBOL(ASFFWDQueryCacheEntryStats);
 
 unsigned int asfFwdBlobTmrCb(unsigned int ulVsgId, unsigned int ulCacheEntryPtr,
-				unsigned int ulArg2, unsigned int ulHashVal)
+				unsigned int ulArg2, unsigned int ulHashVal, unsigned int   ipv6)
 {
 	fwd_cache_t *CacheEntry;
 
@@ -1196,7 +1199,7 @@ unsigned int asfFwdBlobTmrCb(unsigned int ulVsgId, unsigned int ulCacheEntryPtr,
 
 
 unsigned int asfFwdExpiryTmrCb(unsigned int ulVsgId,
-	unsigned int ulHash, unsigned int ularg2, unsigned int ularg3)
+	unsigned int ulHash, unsigned int ularg2, unsigned int ularg3, unsigned int ipv6)
 {
 	fwd_cache_t *CacheEntry;
 	int	processor_id = smp_processor_id();

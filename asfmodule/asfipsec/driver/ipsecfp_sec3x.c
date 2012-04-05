@@ -77,8 +77,8 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 				pSA->hdr_Auth_template_0 |=
 					DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
 					DESC_HDR_DIR_INBOUND;
-				if (pSA->hdr_Auth_template_0 &
-					DESC_HDR_MODE0_AES_XCBC_MAC
+				if ((pSA->hdr_Auth_template_0 &
+					DESC_HDR_MODE0_AES_XCBC_MAC)
 					== DESC_HDR_MODE0_AES_XCBC_MAC) {
 				/*pSA->hdr_Auth_template_0 |=
 					DESC_HDR_MODE0_AES_XCBC_CICV;*/
@@ -547,7 +547,7 @@ void secfp_dma_unmap_sglist(struct sk_buff *skb)
 	if (pSgSkb) {
 		pSgEntry = (secfp_sgEntry_t *) &(pSgSkb->cb
 				[SECFP_SKB_DATA_DMA_INDEX + 4]);
-		SECFP_UNMAP_SINGLE_DESC(pdev, (void *) *(unsigned int *)
+		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t) *(unsigned int *)
 			&(skb->cb[SECFP_SKB_SG_DMA_INDEX]), 32);
 		while (1) {
 			if (pSgEntry->flags == DESC_PTR_LNKTBL_RETURN) {
@@ -556,7 +556,7 @@ void secfp_dma_unmap_sglist(struct sk_buff *skb)
 			}
 			if (pSgEntry->flags == DESC_PTR_LNKTBL_NEXT) {
 				SECFP_UNMAP_SINGLE_DESC(pdev,
-						(void *) pSgEntry->ptr,	32);
+						(dma_addr_t) pSgEntry->ptr, 32);
 				pSgSkb = pSgSkb->next;
 				pSgEntry = (secfp_sgEntry_t *) &(pSgSkb->cb
 						[SECFP_SKB_DATA_DMA_INDEX+4]);
@@ -912,7 +912,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		break;
 	default:
 		ASFIPSEC_DEBUG("SECFP: Not supported");
-		SECFP_UNMAP_SINGLE_DESC(pdev, (void *)addr, (skb->len + 12 +
+		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)addr, (skb->len + 12 +
 			SECFP_APPEND_BUF_LEN_FIELD +
 			SECFP_NOUNCE_IV_LEN));
 		break;
@@ -1747,7 +1747,7 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 	break;
 	default:
 		ASFIPSEC_WARN("SECFP: Not supported");
-		SECFP_UNMAP_SINGLE_DESC(pdev, (void *) addr,
+		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t) addr,
 				(skb->len + 12 +
 				SECFP_APPEND_BUF_LEN_FIELD +
 				SECFP_NOUNCE_IV_LEN));

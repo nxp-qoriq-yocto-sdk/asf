@@ -1190,8 +1190,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	unsigned long		ulZoneId;
 	struct sk_buff		*skb;
 	ASFNetDevEntry_t	*anDev;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	unsigned int		tunnel_hdr_len = 0;
-
+#endif
 	ACCESS_XGSTATS();
 
 	skb = (struct sk_buff *) Buffer.nativeBuffer;
@@ -1748,7 +1749,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				struct ipv6hdr *ipv6h = (struct ipv6hdr *)skb_network_header(skb);
 				ipv6h -= 1;
 				ipv6h->payload_len = iph->tot_len;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				tunnel_hdr_len = sizeof(struct ipv6hdr);
+#endif
 			}
 #endif
 
@@ -1842,7 +1845,7 @@ gen_indications:
 					asf_debug("dropping packet as"\
 						"bDrop is set\n");
 					goto drop_pkt;
-				deafult:
+				default:
 					break;
 				}
 			}

@@ -67,7 +67,7 @@ static const struct algo_info algo_types[2][IPSEC_PROC_MAX_ALGO] = {
 	}
 };
 
-char *algo_getname(int type, int algo)
+const char *algo_getname(int type, int algo)
 {
 	int i;
 	for (i = 0; i < IPSEC_PROC_MAX_ALGO; i++) {

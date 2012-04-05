@@ -385,7 +385,7 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 		relIds[0] = parent_cii;
 		info.ucDevIdentifierInPkt = (ASF_uint8_t *)&usPPPoESessId;
 		info.ulDevIdentiferInPktLen = 2;
-		info.ucDevIdentifierType == ASF_IFACE_DEV_IDENTIFIER;
+		info.ucDevIdentifierType = ASF_IFACE_DEV_IDENTIFIER;
 		info.ulRelatedIDs = (ASF_uint32_t *)relIds;
 		info.ulNumRelatedIDs = 1;
 		ASFCTRL_DBG("PPPOE %s (parent %s) SESS_ID 0x%x mtu %d\n",

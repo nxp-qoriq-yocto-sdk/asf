@@ -912,7 +912,7 @@ gen_indications:
 			asf_debug("dropping packet as"\
 					"bDrop is set\n");
 			goto drop_pkt;
-		deafult:
+		default:
 			break;
 		}
 	}

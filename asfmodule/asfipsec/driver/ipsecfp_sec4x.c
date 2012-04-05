@@ -620,7 +620,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 				(struct aead_edesc *)descriptor;
 		unsigned short usPadLen = 0;
 		struct sec4_sg_entry *link_tbl_entry;
-		dma_addr_t ptr, ptr1, ptr2 = (dma_addr_t) NULL;
+		dma_addr_t ptr, ptr1, ptr2 = 0;
 		int i, total_frags, dma_len, len_to_caam = 0;
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
