@@ -38,9 +38,9 @@
 #define ASF_FWD_FLUSH_TIMER_EXPIRE	jiffies
 
 #define ASF_FWD_BLOB_TIME_INTERVAL 1	/* inter bucket gap */
-#define ASF_FWD_BLOB_TIMER_BUCKT 500  /* Max L2blob timer value */
+#define ASF_FWD_BLOB_TIMER_BUCKT 512  /* Max L2blob timer value */
 #define ASF_FWD_EXPIRY_TIME_INTERVAL 1	/* inter bucket gap */
-#define ASF_FWD_EXPIRY_TIMER_BUCKT 500	/* Max flow expiry timer value */
+#define ASF_FWD_EXPIRY_TIMER_BUCKT 512	/* Max flow expiry timer value */
 #define	ASF_FWD_NUM_RQ_ENTRIES	(256)
 #define ASF_FWD_AUTOMODE_FLOW_INACTIME	(300)
 #define ASF_FWD_MIN_PER_CORE_EXP_TIMER	4

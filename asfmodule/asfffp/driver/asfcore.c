@@ -178,7 +178,7 @@ void asf_ffp_cleanup_all_flows(void);
 static int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *dev);
 
 #define ASF_FFP_BLOB_TIME_INTERVAL 1    /* inter bucket gap */
-#define ASF_FFP_BLOB_TIMER_BUCKT 500    /* Max L2blob timer value */
+#define ASF_FFP_BLOB_TIMER_BUCKT 512    /* Max L2blob timer value */
 #define ASF_FFP_INAC_TIME_INTERVAL 1    /* inter bucket gap */
 #define ASF_FFP_INAC_TIMER_BUCKT 2048    /* Max inactity timer value  */
 #define ASF_FFP_NUM_RQ_ENTRIES  (256)
