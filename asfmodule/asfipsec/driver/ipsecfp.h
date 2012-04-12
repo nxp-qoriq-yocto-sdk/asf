@@ -24,7 +24,6 @@
 #ifdef CONFIG_ASF_SEC3x
 #include "linux/hw_random.h"
 #include <talitos.h>
-#include "tal_inner.h"
 #endif
 
 #ifdef CONFIG_ASF_SEC4x
@@ -231,21 +230,10 @@
 	(a).eptr = cpu_to_be32(upper_32_bits((c)));\
 	(a).j_extent = d;
 
-extern dma_addr_t talitos_dma_map_single(void *data,
-			unsigned int len, int dir);
-extern dma_addr_t talitos_dma_unmap_single(void *data,
-			unsigned int len, int dir);
-#define SECFP_DMA_MAP_SINGLE(data, len, dir) \
-				talitos_dma_map_single(data, len, dir)
-#define SECFP_DMA_UNMAP_SINGLE(data, len, dir) \
-				talitos_dma_unmap_single(data, len, dir)
-
-#define SECFP_UNMAP_SINGLE_DESC(data, len) \
-	talitos_dma_unmap_single(data, len, DMA_TO_DEVICE)
+#define SECFP_UNMAP_SINGLE_DESC(dev, data, len) \
+	dma_unmap_single(dev, data, len, DMA_TO_DEVICE)
 #else
-#define SECFP_DMA_MAP_SINGLE(data, len, dir) (0)
-#define SECFP_DMA_UNMAP_SINGLE(data, len, dir) {}
-#define SECFP_UNMAP_SINGLE_DESC(data, len) {}
+#define SECFP_UNMAP_SINGLE_DESC(dev, data, len) {}
 #endif
 
 
@@ -698,7 +686,7 @@ extern int talitos_submit(struct device *dev, int ch,
 		void (*callback)(struct device *dev, struct talitos_desc *desc,
 		void *context, int err), void *context);
 
-extern int secfp_rng_read_data(unsigned int *ptr);
+extern int secfp_rng_read_data(struct device *dev, unsigned int *ptr);
 extern struct device *talitos_getdevice(void);
 #else
 

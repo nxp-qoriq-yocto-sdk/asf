@@ -87,7 +87,7 @@ AsfIPSec4GlobalPPStats_t IPSec4GblPPStats_g;
 
 struct device *pdev;
 /* Data structure to hold IV data */
-struct secfp_ivInfo_s *secfp_IVData;
+struct secfp_iv_info_s *secfp_IVData;
 unsigned int *pulVSGMagicNumber;
 unsigned int *pulVSGL2blobMagicNumber;
 unsigned int ulTimeStamp_g;
@@ -149,9 +149,9 @@ static inline void secfp_desc_free(void *desc)
 unsigned int secfp_IVinit(void)
 {
 	int ii;
-	struct secfp_ivInfo_s *ptr;
+	struct secfp_iv_info_s *ptr;
 
-	secfp_IVData = asfAllocPerCpu(sizeof(struct secfp_ivInfo_s));
+	secfp_IVData = asfAllocPerCpu(sizeof(struct secfp_iv_info_s));
 	if (secfp_IVData) {
 		for_each_possible_cpu(ii) {
 			ptr = per_cpu_ptr(secfp_IVData, ii);
@@ -168,7 +168,7 @@ unsigned int secfp_IVinit(void)
 #else
 			ptr->vaddr = kzalloc(sizeof(unsigned int) *
 					SECFP_NUM_IV_ENTRIES, GFP_KERNEL);
-			ptr->paddr = SECFP_DMA_MAP_SINGLE(ptr->vaddr,
+			ptr->paddr = dma_map_single(pdev, ptr->vaddr,
 					sizeof(unsigned int) *
 					SECFP_NUM_IV_ENTRIES,
 					DMA_TO_DEVICE);
@@ -188,13 +188,13 @@ unsigned int secfp_IVinit(void)
 
 void secfp_IVDeInit(void)
 {
-	struct secfp_ivInfo_s *ptr;
+	struct secfp_iv_info_s *ptr;
 	int ii;
 	if (secfp_IVData) {
 		for_each_possible_cpu(ii) {
 			ptr = per_cpu_ptr(secfp_IVData, ii);
 #ifndef SECFP_USE_L2SRAM
-			SECFP_UNMAP_SINGLE_DESC((void *) ptr->paddr,
+			SECFP_UNMAP_SINGLE_DESC(pdev, (void *) ptr->paddr,
 				sizeof(unsigned int)*SECFP_NUM_IV_ENTRIES);
 			kfree(ptr->vaddr);
 #endif
@@ -258,12 +258,6 @@ int secfp_init(void)
 		return SECFP_FAILURE;
 	}
 
-#ifndef CONFIG_ASF_SEC4x
-	pdev = talitos_getdevice();
-#else
-	pdev = asf_caam_device();
-#endif
-
 	desc_cache = kmem_cache_create("desc_cache",
 #ifndef CONFIG_ASF_SEC4x
 			sizeof(struct talitos_desc),
@@ -312,16 +306,16 @@ static inline void secfp_GetIVData(unsigned int *pData, unsigned int ulNumWords)
 {
 	int ii;
 	int coreId = smp_processor_id();
-	struct secfp_ivInfo_s *ptr = per_cpu_ptr(secfp_IVData, coreId);
-	if (secfp_rng_read_data((unsigned int *) ptr))
+	struct secfp_iv_info_s *ptr = per_cpu_ptr(secfp_IVData, coreId);
+	if (secfp_rng_read_data(pdev, (unsigned int *) ptr))
 		return;
 	for (ii = 0; ii < ulNumWords; ii++) {
-		*pData = ptr->vaddr[ptr->ulIVIndex];
-		ptr->ulIVIndex =
-			(ptr->ulIVIndex + 1) & (SECFP_NUM_IV_ENTRIES - 1);
+		*pData = ptr->vaddr[ptr->ul_iv_index];
+		ptr->ul_iv_index =
+			(ptr->ul_iv_index + 1) & (SECFP_NUM_IV_ENTRIES - 1);
 	}
-	if (ulNumWords <= ptr->ulNumAvail) {
-		ptr->ulNumAvail -= ulNumWords;
+	if (ulNumWords <= ptr->ul_num_avail) {
+		ptr->ul_num_avail -= ulNumWords;
 	} else {
 		ulRndMisses[coreId]++;
 		if ((ulRndMisses[coreId] % 0xffffffff) == 0)
@@ -1720,7 +1714,7 @@ static inline void secfp_unmap_descs(struct sk_buff *skb)
 
 	for (pTempSkb = skb_shinfo(skb)->frag_list; pTempSkb != NULL;
 		pTempSkb = pTempSkb->next) {
-		SECFP_UNMAP_SINGLE_DESC((void *)*((unsigned int *)
+		SECFP_UNMAP_SINGLE_DESC(pdev, (void *)*((unsigned int *)
 				&(pTempSkb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 				pTempSkb->end - pTempSkb->head);
 	}
@@ -1771,7 +1765,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		return;
 	}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
-	SECFP_UNMAP_SINGLE_DESC((void *)(*(unsigned int *)
+	SECFP_UNMAP_SINGLE_DESC(pdev, (void *)(*(unsigned int *)
 			&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 			skb->end - skb->head);
 
@@ -2612,7 +2606,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 		} else
 #endif
 		{
-			SECFP_UNMAP_SINGLE_DESC((void *)*((unsigned int *)
+			SECFP_UNMAP_SINGLE_DESC(pdev, (void *)*((unsigned int *)
 					&(skb1->cb[SECFP_SKB_DATA_DMA_INDEX])),
 					skb1->end - skb1->head);
 			skb1->prev = NULL;
@@ -2657,7 +2651,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 				return;
 			} /*else */
 
-			SECFP_UNMAP_SINGLE_DESC(
+			SECFP_UNMAP_SINGLE_DESC(pdev,
 				(void *)*((unsigned int *)&(skb1->cb[SECFP_SKB_DATA_DMA_INDEX])),
 				skb1->end - skb1->head);
 			skb1->prev = NULL;
@@ -2717,7 +2711,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 		}
 		/* We have no requirement for the hint field anymore, let us clean up */
 		pHeadSkb->prev = NULL;
-		SECFP_UNMAP_SINGLE_DESC((void *)*((unsigned int *)
+		SECFP_UNMAP_SINGLE_DESC(pdev, (void *)*((unsigned int *)
 				&(pHeadSkb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 				pHeadSkb->end - pHeadSkb->head);
 		secfp_unmap_descs(pHeadSkb);
@@ -2926,7 +2920,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 			return;
 		}
 #endif
-		SECFP_UNMAP_SINGLE_DESC((void *) *((unsigned int *)
+		SECFP_UNMAP_SINGLE_DESC(pdev, (void *) *((unsigned int *)
 				&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 				skb->end - skb->head);
 		skb->data_len = 0;
@@ -2962,7 +2956,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 			skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
 			return;
 		} else {
-			SECFP_UNMAP_SINGLE_DESC((void *)
+			SECFP_UNMAP_SINGLE_DESC(pdev, (void *)
 				*((unsigned int *) &(skb->cb
 				[SECFP_SKB_DATA_DMA_INDEX])),
 				skb->end - skb->head);
@@ -2979,7 +2973,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 	else
 		SECFP_DESC_FREE(desc);
 
-	SECFP_UNMAP_SINGLE_DESC((void *) *((unsigned int *)
+	SECFP_UNMAP_SINGLE_DESC(pdev, (void *) *((unsigned int *)
 			&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 		skb->end - skb->head);
 	if (skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {

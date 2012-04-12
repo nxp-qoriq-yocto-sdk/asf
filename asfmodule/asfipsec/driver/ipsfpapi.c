@@ -20,6 +20,7 @@
 #include <linux/if_arp.h>
 #include <linux/ip.h>
 #include <linux/of.h>
+#include <linux/of_platform.h>
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
@@ -47,6 +48,7 @@ ASF_boolean_t  bNotifyPreference_g = ASF_FALSE;
 ASFIPSecGlobalErrorCounters_t  GlobalErrors;
 ASFIPSecCbFn_t ASFIPSecCbFn;
 
+extern struct device *pdev;
 /* Macro to validate VSGId*/
 #define SECFP_IS_VSG_ID_INVALID(ulVSGId) \
 	if (ulVSGId >= ulMaxVSGs_g)
@@ -2014,6 +2016,7 @@ static int __init ASFIPSec_Init(void)
 	int  err = -EINVAL;
 	ASFCap_t	asf_cap;
 	struct device_node *dev_node;
+	struct platform_device *plat_dev;
 
 	ASFIPSEC_DEBUG("Entry");
 
@@ -2032,6 +2035,10 @@ static int __init ASFIPSec_Init(void)
 		return -ENODEV;
 	}
 #endif
+	plat_dev = of_find_device_by_node(dev_node);
+	pdev = &plat_dev->dev;
+	of_node_put(dev_node);
+
 	/* Get ASF Capabilities and store them for future use. */
 	ASFGetCapabilities(&asf_cap);
 

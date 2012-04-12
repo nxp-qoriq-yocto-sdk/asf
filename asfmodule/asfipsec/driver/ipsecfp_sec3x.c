@@ -40,6 +40,7 @@
 #include "ipseccmn.h"
 #include "../../asfffp/driver/asfreasm.h"
 
+extern struct device *pdev;
 
 #ifdef ASFIPSEC_DEBUG_FRAME
 void print_desc(struct talitos_desc *desc)
@@ -163,12 +164,12 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 		}
 	}
 	if (pSA->SAParams.bAuth)
-		pSA->AuthKeyDmaAddr = SECFP_DMA_MAP_SINGLE(
+		pSA->AuthKeyDmaAddr = dma_map_single(pdev,
 					&pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen,
 					DMA_TO_DEVICE);
 	if (pSA->SAParams.bEncrypt)
-		pSA->EncKeyDmaAddr = SECFP_DMA_MAP_SINGLE(
+		pSA->EncKeyDmaAddr = dma_map_single(pdev,
 					&pSA->SAParams.ucEncKey,
 					pSA->SAParams.EncKeyLen,
 					DMA_TO_DEVICE);
@@ -238,13 +239,13 @@ int secfp_createOutSATalitosDesc(outSA_t *pSA)
 	}
 	if (pSA->SAParams.bAuth)
 		pSA->AuthKeyDmaAddr =
-			SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucAuthKey,
+			dma_map_single(pdev, &pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen,
 					DMA_TO_DEVICE);
 
 	if (pSA->SAParams.bEncrypt)
 		pSA->EncKeyDmaAddr =
-			SECFP_DMA_MAP_SINGLE(&pSA->SAParams.ucEncKey,
+			dma_map_single(pdev, &pSA->SAParams.ucEncKey,
 					pSA->SAParams.EncKeyLen,
 					DMA_TO_DEVICE);
 
@@ -267,7 +268,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 
 	if (!ulOptionIndex) {		/* 1st iteration */
 		ASFIPSEC_DBGL2("prepareOutDescriptor: Doing DMA mapping");
-		ptr = SECFP_DMA_MAP_SINGLE(skb->data, (skb->len+12 +
+		ptr = dma_map_single(pdev, skb->data, (skb->len+12 +
 			SECFP_APPEND_BUF_LEN_FIELD+SECFP_NOUNCE_IV_LEN),
 			DMA_TO_DEVICE);
 		ptr1 = (unsigned int *) &(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
@@ -542,7 +543,7 @@ void secfp_dma_unmap_sglist(struct sk_buff *skb)
 	if (pSgSkb) {
 		pSgEntry = (secfp_sgEntry_t *) &(pSgSkb->cb
 				[SECFP_SKB_DATA_DMA_INDEX + 4]);
-		SECFP_UNMAP_SINGLE_DESC((void *) *(unsigned int *)
+		SECFP_UNMAP_SINGLE_DESC(pdev, (void *) *(unsigned int *)
 			&(skb->cb[SECFP_SKB_SG_DMA_INDEX]), 32);
 		while (1) {
 			if (pSgEntry->flags == DESC_PTR_LNKTBL_RETURN) {
@@ -550,8 +551,8 @@ void secfp_dma_unmap_sglist(struct sk_buff *skb)
 				break;
 			}
 			if (pSgEntry->flags == DESC_PTR_LNKTBL_NEXT) {
-				SECFP_UNMAP_SINGLE_DESC((void *) pSgEntry->ptr,
-						32);
+				SECFP_UNMAP_SINGLE_DESC(pdev,
+						(void *) pSgEntry->ptr,	32);
 				pSgSkb = pSgSkb->next;
 				pSgEntry = (secfp_sgEntry_t *) &(pSgSkb->cb
 						[SECFP_SKB_DATA_DMA_INDEX+4]);
@@ -683,7 +684,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 	struct talitos_desc *desc = (struct talitos_desc *)descriptor;
 
 	if (!ulIndex) {	/* first iteration */
-		addr = SECFP_DMA_MAP_SINGLE(skb->data,
+		addr = dma_map_single(pdev, skb->data,
 				(skb->len + 12 +
 				SECFP_APPEND_BUF_LEN_FIELD +
 				SECFP_NOUNCE_IV_LEN), DMA_TO_DEVICE);
@@ -907,7 +908,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		break;
 	default:
 		ASFIPSEC_DEBUG("SECFP: Not supported");
-		SECFP_UNMAP_SINGLE_DESC((void *)addr, (skb->len + 12 +
+		SECFP_UNMAP_SINGLE_DESC(pdev, (void *)addr, (skb->len + 12 +
 			SECFP_APPEND_BUF_LEN_FIELD +
 			SECFP_NOUNCE_IV_LEN));
 		break;
@@ -950,7 +951,7 @@ dma_addr_t secfp_prepareGatherList(
 
 	pFirstSgEntry = pSgEntry;
 	*(unsigned int *) &(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) =
-			SECFP_DMA_MAP_SINGLE(skb->data + ulOffsetHeadLen,
+			dma_map_single(pdev, skb->data + ulOffsetHeadLen,
 				(skb->end - skb->data), DMA_TO_DEVICE);
 
 	SECFP_SG_MAP(pSgEntry, (skb->len - ulOffsetHeadLen), 0, 0,
@@ -966,7 +967,7 @@ dma_addr_t secfp_prepareGatherList(
 		pTempSkb = pTempSkb->next, ulNumIteration++) {
 
 		*(unsigned int *) &(pTempSkb->cb[SECFP_SKB_DATA_DMA_INDEX]) =
-				SECFP_DMA_MAP_SINGLE(pTempSkb->data,
+				dma_map_single(pdev, pTempSkb->data,
 					pTempSkb->end - pTempSkb->data,
 					DMA_TO_DEVICE);
 
@@ -988,7 +989,7 @@ dma_addr_t secfp_prepareGatherList(
 					&(pSgSkb->cb[SECFP_SKB_DATA_DMA_INDEX + 4]);
 				*(unsigned int *) &(pSgSkb->cb
 					[SECFP_SKB_SG_DMA_INDEX]) =
-					SECFP_DMA_MAP_SINGLE(pNextSgEntry,
+					dma_map_single(pdev, pNextSgEntry,
 							32, DMA_TO_DEVICE);
 				SECFP_SG_MAP(pSgEntry, 0, DESC_PTR_LNKTBL_NEXT,
 					0, *(unsigned int *)
@@ -1009,7 +1010,7 @@ dma_addr_t secfp_prepareGatherList(
 	}
 	secfp_dump_sg_in_skb(skb_shinfo(skb)->frag_list);
 	*(unsigned int *) &(skb->cb[SECFP_SKB_SG_DMA_INDEX]) =
-			SECFP_DMA_MAP_SINGLE(pFirstSgEntry, 32, DMA_TO_DEVICE);
+			dma_map_single(pdev, pFirstSgEntry, 32, DMA_TO_DEVICE);
 	ASFIPSEC_PRINT("pFirstSgEntry = 0x%x, *(unsigned int *)"
 			" &(skb->cb[SECFP_SKB_SG_DMA_INDEX]) = 0x%x",
 		(unsigned int) pFirstSgEntry,
@@ -1029,7 +1030,7 @@ dma_addr_t secfp_prepareScatterList(struct sk_buff *skb,
 	secfp_sgEntry_t *pFirstSgEntry = pSgEntry;
 
 	*(unsigned int *) &(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) =
-		SECFP_DMA_MAP_SINGLE((skb->data + ulOffsetFromHead),
+		dma_map_single(pdev, (skb->data + ulOffsetFromHead),
 			(skb->end - skb->data), DMA_TO_DEVICE);
 	SECFP_SG_MAP(pSgEntry, (skb->len - ulOffsetFromHead
 		- (skb->prev->len + ulExtraTailLen)), 0, 0,
@@ -1038,7 +1039,7 @@ dma_addr_t secfp_prepareScatterList(struct sk_buff *skb,
 
 	pSgEntry++;
 	*(unsigned int *) &(skb->prev->cb[SECFP_SKB_DATA_DMA_INDEX]) =
-		SECFP_DMA_MAP_SINGLE(skb->prev->data,
+		dma_map_single(pdev, skb->prev->data,
 			(skb->prev->end - skb->prev->data), DMA_TO_DEVICE);
 	SECFP_SG_MAP(pSgEntry, (skb->prev->len + ulExtraTailLen),
 		DESC_PTR_LNKTBL_RETURN, 0,
@@ -1048,7 +1049,7 @@ dma_addr_t secfp_prepareScatterList(struct sk_buff *skb,
 	secfp_dump_sg_in_skb(skb->prev);
 
 	return *(unsigned int *) &(skb->cb[SECFP_SKB_SG_DMA_INDEX]) =
-			SECFP_DMA_MAP_SINGLE(pFirstSgEntry, 32, DMA_TO_DEVICE);
+			dma_map_single(pdev, pFirstSgEntry, 32, DMA_TO_DEVICE);
 }
 
 void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
@@ -1068,7 +1069,7 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 		ASFIPSEC_DEBUG("Doing DMA mapping");
 		if (!skb_shinfo(skb)->frag_list) {
 			ptr = *(unsigned int *) &(skb->cb[SECFP_SKB_DATA_DMA_INDEX])
-				= SECFP_DMA_MAP_SINGLE(skb->data, skb->tail -
+				= dma_map_single(pdev, skb->data, skb->tail -
 						skb->head, DMA_TO_DEVICE);
 		}
 	} else {
@@ -1434,11 +1435,11 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 	if (!ulIndex) {	/* first iteration */
 		if (!skb_shinfo(skb)->frag_list) {
 			addr = *(unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])
-				= SECFP_DMA_MAP_SINGLE(skb->data,
+				= dma_map_single(pdev, skb->data,
 					skb->tail - skb->head,
 					DMA_TO_DEVICE);
 		} else {
-			addr = SECFP_DMA_MAP_SINGLE(skb->data,
+			addr = dma_map_single(pdev, skb->data,
 					skb->tail - skb->head,
 					DMA_TO_DEVICE);
 			ptr1 = (unsigned int *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
@@ -1742,7 +1743,7 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 	break;
 	default:
 		ASFIPSEC_WARN("SECFP: Not supported");
-		SECFP_UNMAP_SINGLE_DESC((void *) addr,
+		SECFP_UNMAP_SINGLE_DESC(pdev, (void *) addr,
 				(skb->len + 12 +
 				SECFP_APPEND_BUF_LEN_FIELD +
 				SECFP_NOUNCE_IV_LEN));
