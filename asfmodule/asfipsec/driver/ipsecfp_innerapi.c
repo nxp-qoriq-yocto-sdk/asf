@@ -1575,7 +1575,7 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 			case SECFP_HMAC_AES_XCBC_MAC:
 				pSA->hdr_Auth_template_0 |=
 				DESC_HDR_SEL0_AESU |
-				DESC_HDR_MODE0_AES_XCBS_MAC;
+				DESC_HDR_MODE0_AES_XCBC_MAC;
 				break;
 			default:
 				ASFIPSEC_DEBUG("Invalid ucAuthAlgo");
@@ -1780,7 +1780,7 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 		case SECFP_HMAC_AES_XCBC_MAC:
 			pSA->hdr_Auth_template_0 |=
 				DESC_HDR_SEL0_AESU |
-				DESC_HDR_MODE0_AES_XCBS_MAC;
+				DESC_HDR_MODE0_AES_XCBC_MAC;
 				break;
 		default:
 			ASFIPSEC_DEBUG("Invalid ucAuthAlgo");

@@ -86,8 +86,20 @@ AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats_g;
 AsfIPSec4GlobalPPStats_t IPSec4GblPPStats_g;
 
 struct device *pdev;
+#ifdef CONFIG_ASF_SEC3x
+struct secfp_iv_info_s {
+	dma_addr_t paddr;
+	unsigned long *vaddr;
+	unsigned long ul_iv_index;
+	bool b_update_pending;
+	unsigned int ul_num_avail;
+	unsigned int ul_update_index;
+};
+
 /* Data structure to hold IV data */
 struct secfp_iv_info_s *secfp_IVData;
+
+#endif
 unsigned int *pulVSGMagicNumber;
 unsigned int *pulVSGL2blobMagicNumber;
 unsigned int ulTimeStamp_g;
@@ -144,6 +156,48 @@ static inline void secfp_desc_free(void *desc)
 	return;
 }
 #ifdef CONFIG_ASF_SEC3x
+
+/* nr_entries = number of 32 bit entries */
+#define SECFP_IV_DATA_LO_THRESH 2
+#define SECFP_NUM_IV_DATA_GET_AT_ONE_TRY 1
+#define SECFP_NUM_IV_ENTRIES 8
+
+int secfp_rng_read_data(struct device *dev, struct secfp_iv_info_s *ptr)
+{
+	struct talitos_private *priv = dev_get_drvdata(dev);
+	u32 i, ofl;
+
+	if (ptr && ptr->ul_num_avail < SECFP_IV_DATA_LO_THRESH) {
+		while (!atomic_add_unless(&priv->ul_rng_in_use, 1, 1))
+			cpu_relax();
+
+		ofl = in_be32(priv->reg + TALITOS_RNGUSR_LO) &
+				TALITOS_RNGUSR_LO_OFL;
+		ofl = ((ofl - 1) * 2) < SECFP_NUM_IV_DATA_GET_AT_ONE_TRY ?
+				((ofl - 1) * 2) :
+					SECFP_NUM_IV_DATA_GET_AT_ONE_TRY;
+
+		if (ofl) {
+			for (i = 0; i < ofl; i += 2) {
+				ptr->vaddr[ptr->ul_update_index] =
+					in_be32(priv->reg + TALITOS_RNGU_FIFO);
+				ptr->ul_update_index =
+					(ptr->ul_update_index + 1)
+					& (SECFP_NUM_IV_ENTRIES - 1);
+				ptr->vaddr[ptr->ul_update_index] = in_be32(
+					priv->reg + TALITOS_RNGU_FIFO_LO);
+				ptr->ul_update_index =
+					(ptr->ul_update_index + 1) &
+					(SECFP_NUM_IV_ENTRIES - 1);
+			}
+			ptr->ul_num_avail += ofl * 2;
+		}
+	}
+	atomic_set(&priv->ul_rng_in_use, 0);
+
+	return 0;
+}
+
 /* Initialization routines/De-Initialization routines */
 /* IV table initialization */
 unsigned int secfp_IVinit(void)
@@ -307,7 +361,7 @@ static inline void secfp_GetIVData(unsigned int *pData, unsigned int ulNumWords)
 	int ii;
 	int coreId = smp_processor_id();
 	struct secfp_iv_info_s *ptr = per_cpu_ptr(secfp_IVData, coreId);
-	if (secfp_rng_read_data(pdev, (unsigned int *) ptr))
+	if (secfp_rng_read_data(pdev, ptr))
 		return;
 	for (ii = 0; ii < ulNumWords; ii++) {
 		*pData = ptr->vaddr[ptr->ul_iv_index];

@@ -685,9 +685,6 @@ extern int talitos_submit(struct device *dev, int ch,
 			struct talitos_desc *desc,
 		void (*callback)(struct device *dev, struct talitos_desc *desc,
 		void *context, int err), void *context);
-
-extern int secfp_rng_read_data(struct device *dev, unsigned int *ptr);
-extern struct device *talitos_getdevice(void);
 #else
 
 /* This is due to different prototype of the SEC return function*/

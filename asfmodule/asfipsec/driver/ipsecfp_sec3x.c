@@ -68,8 +68,8 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 #endif
 	pSA->desc_hdr_template |= DESC_HDR_DIR_INBOUND;
 	if ((pSA->SAParams.bUseExtendedSequenceNumber) ||
-		((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
-		== DESC_HDR_MODE0_AES_XCBS_MAC)) {
+		((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBC_MAC)
+		== DESC_HDR_MODE0_AES_XCBC_MAC)) {
 		if (pSA->SAParams.bEncrypt) {
 			if (pSA->SAParams.bAuth) {
 				pSA->option[0] = SECFP_AUTH;
@@ -77,9 +77,11 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 				pSA->hdr_Auth_template_0 |=
 					DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
 					DESC_HDR_DIR_INBOUND;
-				if (((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
-					== DESC_HDR_MODE0_AES_XCBS_MAC)) {
-				/*pSA->hdr_Auth_template_0 |= DESC_HDR_MODE0_AES_XCBS_CICV;*/
+				if (pSA->hdr_Auth_template_0 &
+					DESC_HDR_MODE0_AES_XCBC_MAC
+					== DESC_HDR_MODE0_AES_XCBC_MAC) {
+				/*pSA->hdr_Auth_template_0 |=
+					DESC_HDR_MODE0_AES_XCBC_CICV;*/
 				} else
 					pSA->hdr_Auth_template_0 |= DESC_HDR_MODE0_MDEU_CICV;
 
@@ -113,9 +115,11 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 			/* Need to check this */
 			pSA->hdr_Auth_template_0 |= DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
 							DESC_HDR_DIR_INBOUND;
-			if (((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
-				== DESC_HDR_MODE0_AES_XCBS_MAC)) {
-				/*pSA->hdr_Auth_template_0 |= DESC_HDR_MODE0_AES_XCBS_CICV; */
+			if (((pSA->hdr_Auth_template_0 &
+					DESC_HDR_MODE0_AES_XCBC_MAC)
+					== DESC_HDR_MODE0_AES_XCBC_MAC)) {
+				/*pSA->hdr_Auth_template_0 |=
+					DESC_HDR_MODE0_AES_XCBC_CICV; */
 			} else
 				pSA->hdr_Auth_template_0 |= DESC_HDR_MODE0_MDEU_CICV;
 
@@ -179,8 +183,8 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 int secfp_createOutSATalitosDesc(outSA_t *pSA)
 {
 	if ((pSA->SAParams.bUseExtendedSequenceNumber) ||
-		((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
-		== DESC_HDR_MODE0_AES_XCBS_MAC)) {
+		((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBC_MAC)
+		== DESC_HDR_MODE0_AES_XCBC_MAC)) {
 		if (pSA->SAParams.bEncrypt) {
 			pSA->option[0] = SECFP_CIPHER;
 			pSA->bIVDataPresent = ASF_TRUE;
@@ -302,8 +306,8 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 				skb->len, ptr, 0);
 		}
 		SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0);
-		if (!((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
-			== DESC_HDR_MODE0_AES_XCBS_MAC)) {
+		if (!((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBC_MAC)
+			== DESC_HDR_MODE0_AES_XCBC_MAC)) {
 			iDword = 5;
 			iDword1 = 6;
 		} else {
@@ -1105,8 +1109,8 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 			ulAppendLen = 0;
 		}
 
-		if (!((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBS_MAC)
-			== DESC_HDR_MODE0_AES_XCBS_MAC)) {
+		if (!((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBC_MAC)
+			== DESC_HDR_MODE0_AES_XCBC_MAC)) {
 			iDword = 5;
 			iDword1 = 6;
 		} else {
