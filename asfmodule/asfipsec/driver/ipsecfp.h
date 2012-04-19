@@ -406,6 +406,7 @@ typedef struct inSA_s {
 	struct caam_ctx ctx;
 #else
 	int chan;
+	int last_chan[2];
 	__be32 desc_hdr_template;
 	__be32	hdr_Auth_template_0; /* when proto is AH and
 					only Auth needs to be performed*/
@@ -584,6 +585,7 @@ typedef struct outSA_s {
 	struct caam_ctx ctx;
 #else
 	int chan;
+	int last_chan[2];
 	__be32 desc_hdr_template;
 	__be32	hdr_Auth_template_0; /* when proto is AH and
 					only Auth needs to be performed*/

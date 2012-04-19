@@ -2674,11 +2674,6 @@ unsigned int secfp_createOutSA(
 
 #else /*CONFIG_ASF_SEC3x*/
 	secfp_createOutSATalitosDesc(pSA);
-	{
-		struct talitos_private *priv = dev_get_drvdata(pdev);
-		pSA->chan = atomic_read(&priv->last_chan) &
-						(priv->num_channels - 1);
-	}
 #endif
 	ulIndex = ptrIArray_add(&secFP_OutSATable, pSA);
 	if (ulIndex < secFP_OutSATable.nr_entries) {
@@ -3107,11 +3102,6 @@ unsigned int secfp_CreateInSA(
 		}
 #else
 		secfp_createInSATalitosDesc(pSA);
-	{
-		struct talitos_private *priv = dev_get_drvdata(pdev);
-		pSA->chan = atomic_read(&priv->last_chan) &
-						(priv->num_channels - 1);
-	}
 #endif
 		/* Need to create and append Selector Set */
 		pNode = secfp_updateInSelSet(pContainer, pSrcSel,

@@ -99,6 +99,7 @@ struct secfp_iv_info_s {
 /* Data structure to hold IV data */
 struct secfp_iv_info_s *secfp_IVData;
 
+extern u8 dual_intr;
 #endif
 unsigned int *pulVSGMagicNumber;
 unsigned int *pulVSGL2blobMagicNumber;
@@ -156,6 +157,46 @@ static inline void secfp_desc_free(void *desc)
 	return;
 }
 #ifdef CONFIG_ASF_SEC3x
+
+static inline void update_chan_out(outSA_t *pSA)
+{
+#ifdef CONFIG_SMP
+	if (dual_intr) {
+		if (smp_processor_id()) {
+			pSA->chan = 2 * pSA->last_chan[1] + 1;
+			pSA->last_chan[1] ^= 1;
+		} else {
+			pSA->chan = 2 * pSA->last_chan[0];
+			pSA->last_chan[0] ^= 1;
+		}
+	} else
+#endif
+	{
+		pSA->chan = pSA->last_chan[0];
+		pSA->last_chan[0] += 1;
+		pSA->last_chan[0] &= 0x3;
+	}
+}
+
+static inline void update_chan_in(inSA_t *pSA)
+{
+#ifdef CONFIG_SMP
+	if (dual_intr) {
+		if (smp_processor_id()) {
+			pSA->chan = 2 * pSA->last_chan[1] + 1;
+			pSA->last_chan[1] ^= 1;
+		} else {
+			pSA->chan = 2 * pSA->last_chan[0];
+			pSA->last_chan[0] ^= 1;
+		}
+	} else
+#endif
+	{
+		pSA->chan = pSA->last_chan[0];
+		pSA->last_chan[0] += 1;
+		pSA->last_chan[0] &= 0x3;
+	}
+}
 
 /* nr_entries = number of 32 bit entries */
 #define SECFP_IV_DATA_LO_THRESH 2
@@ -1148,6 +1189,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		ASFIPSEC_DEBUG("OUT-submit to SEC");
 		pIPSecPPGlobalStats->ulTotOutRecvPktsSecApply++;
 #ifndef CONFIG_ASF_SEC4x
+		update_chan_out(pSA);
 		if (talitos_submit(pdev, pSA->chan, desc,
 			secfp_outComplete, (void *)skb) == -EAGAIN) {
 #else
@@ -1178,6 +1220,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifndef CONFIG_ASF_SEC4x
+		skb->cb[SECFP_REF_INDEX]--;
 		if (pSA->option[1] != SECFP_NONE) {
 			ASFIPSEC_DEBUG("2nd Iteration");
 			/* 2nd iteration required ICV */
@@ -1231,7 +1274,6 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 				return 0;
 			}
 		}
-		skb->cb[SECFP_REF_INDEX]--;
 		if (skb->cb[SECFP_REF_INDEX] == 0) {
 			/* Some error happened in the c/b. Free the skb */
 			ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
@@ -1621,6 +1663,7 @@ static inline int secfp_try_fastPathOutv4(
 		ASFIPSEC_DEBUG("OUT-submit to SEC");
 		pIPSecPPGlobalStats->ulTotOutRecvPktsSecApply++;
 #ifndef CONFIG_ASF_SEC4x
+		update_chan_out(pSA);
 		if (talitos_submit(pdev, pSA->chan, desc,
 			secfp_outComplete, (void *)skb) == -EAGAIN) {
 #else
@@ -1651,6 +1694,7 @@ static inline int secfp_try_fastPathOutv4(
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifndef CONFIG_ASF_SEC4x
+		skb->cb[SECFP_REF_INDEX]--;
 		if (pSA->option[1] != SECFP_NONE) {
 			ASFIPSEC_DEBUG("2nd Iteration");
 			/* 2nd iteration required ICV */
@@ -1704,7 +1748,6 @@ static inline int secfp_try_fastPathOutv4(
 				return 0;
 			}
 		}
-		skb->cb[SECFP_REF_INDEX]--;
 		if (skb->cb[SECFP_REF_INDEX] == 0) {
 			/* Some error happened in the c/b. Free the skb */
 			ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
@@ -3860,6 +3903,7 @@ sa_expired:
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
+		update_chan_in(pSA);
 		if (talitos_submit(pdev, pSA->chan, desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
 			secfp_inCompleteWithFrags : secfp_inComplete,
@@ -4606,6 +4650,7 @@ sa_expired:
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
+		update_chan_in(pSA);
 		if (talitos_submit(pdev, pSA->chan, desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
 			secfp_inCompleteWithFrags : secfp_inComplete,

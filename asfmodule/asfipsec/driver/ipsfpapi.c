@@ -48,6 +48,9 @@ ASF_boolean_t  bNotifyPreference_g = ASF_FALSE;
 ASFIPSecGlobalErrorCounters_t  GlobalErrors;
 ASFIPSecCbFn_t ASFIPSecCbFn;
 
+#ifdef CONFIG_ASF_SEC3x
+u8 dual_intr;
+#endif
 extern struct device *pdev;
 /* Macro to validate VSGId*/
 #define SECFP_IS_VSG_ID_INVALID(ulVSGId) \
@@ -2039,6 +2042,12 @@ static int __init ASFIPSec_Init(void)
 	pdev = &plat_dev->dev;
 	of_node_put(dev_node);
 
+#ifdef CONFIG_ASF_SEC3x
+	{
+		struct talitos_private *priv = dev_get_drvdata(pdev);
+		dual_intr = priv->irq[1] ? 1 : 0;
+	}
+#endif
 	/* Get ASF Capabilities and store them for future use. */
 	ASFGetCapabilities(&asf_cap);
 
