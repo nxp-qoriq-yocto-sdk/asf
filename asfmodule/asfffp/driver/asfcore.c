@@ -1047,6 +1047,8 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	skb->protocol = usEthType;
 	/*skb->pkt_type = ?? */
 	skb->data += x_hh_len;
+	if (anDev->ndev)
+		skb->dev = anDev->ndev;
 	skb->len = iph->tot_len;
 	skb_set_transport_header(skb, iph->ihl*4);
 
@@ -2337,6 +2339,7 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 			dev->pParentDev = parent_dev;
 			dev->pPPPoENext = parent_dev->pPPPoENext;
 			parent_dev->pPPPoENext = dev;
+			dev->ndev = (void *) info->ulRelatedIDs[1];
 
 			asf_ifaces[dev->ulCommonInterfaceId] = dev;
 

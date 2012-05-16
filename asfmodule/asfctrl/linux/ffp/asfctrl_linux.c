@@ -364,7 +364,7 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 		ASF_uint16_t usPPPoESessId;
 		ASF_int32_t parent_cii;
 		struct net_device  *pdev;
-		ASF_uint32_t       relIds[1];
+		ASF_uint32_t       relIds[2];
 
 		pdev = ppp_get_parent_dev(dev, &usPPPoESessId);
 		if (!pdev) {
@@ -383,6 +383,7 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 		}
 
 		relIds[0] = parent_cii;
+		relIds[1] = (ASF_uint32_t) dev;
 		info.ucDevIdentifierInPkt = (ASF_uint8_t *)&usPPPoESessId;
 		info.ulDevIdentiferInPktLen = 2;
 		info.ucDevIdentifierType = ASF_IFACE_DEV_IDENTIFIER;
