@@ -304,6 +304,16 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 {
 	ASF_int32_t cii;
 	ASFInterfaceInfo_t  info;
+#if defined CONFIG_VLAN_8021Q || defined CONFIG_PPPOE
+	ASF_uint32_t relIds[2];
+#endif
+#ifdef CONFIG_VLAN_8021Q
+	ASF_uint16_t usVlanId;
+#endif
+#ifdef CONFIG_PPPOE
+	ASF_uint16_t usPPPoESessId;
+#endif
+
 
 	ASFCTRL_FUNC_ENTRY;
 	cii = asfctrl_dev_get_cii(dev);
@@ -333,8 +343,6 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 #ifdef CONFIG_VLAN_8021Q
 		if (dev->priv_flags & IFF_802_1Q_VLAN) {
 			struct net_device  *pdev;
-			ASF_uint16_t           usVlanId;
-			ASF_uint32_t       relIds[1];
 
 			pdev = __vlan_get_real_dev(dev, &usVlanId);
 			if (!pdev)
@@ -361,10 +369,8 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 #endif
 #ifdef CONFIG_PPPOE
 	} else if (dev->type == ARPHRD_PPP) {
-		ASF_uint16_t usPPPoESessId;
 		ASF_int32_t parent_cii;
 		struct net_device  *pdev;
-		ASF_uint32_t       relIds[2];
 
 		pdev = ppp_get_parent_dev(dev, &usPPPoESessId);
 		if (!pdev) {
