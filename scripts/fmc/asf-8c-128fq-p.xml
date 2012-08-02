@@ -218,8 +218,28 @@
 	</key>
 	</distribution>
 
+	<distribution name="ipv4eth10">
+        <queue count="128" base="0x3a00"/>
+        <key>
+		    <fieldref name="ipv4.src"/>
+		    <fieldref name="ipv4.dst"/>
+		    <fieldref name="ipv4.tos"/>
+	</key>
+	</distribution>
+
 	<distribution name="ipv4frag_dist_9">
 		<queue count="128" base="0x7c00" />
+		<key>
+			<fieldref name="ipv4.dst" />
+			<fieldref name="ipv4.src" />
+		</key>
+		<protocols>
+			<protocolref name="ipv4frag"/>
+		</protocols>
+	</distribution>
+
+	<distribution name="ipv4frag_dist_10">
+		<queue count="128" base="0x3a00" />
 		<key>
 			<fieldref name="ipv4.dst" />
 			<fieldref name="ipv4.src" />
@@ -331,6 +351,16 @@
 	</key>
 	</distribution>
 
+	<distribution name="tcpeth10">
+        <queue count="128" base="0x3a00"/>
+        <key>
+		    <fieldref name="ipv4.src"/>
+		    <fieldref name="ipv4.dst"/>
+		    <fieldref name="tcp.sport"/>
+		    <fieldref name="tcp.dport"/>
+	</key>
+	</distribution>
+
 	<distribution name="espeth0">
         <queue count="128" base="0x3800"/>
         <key>
@@ -416,6 +446,15 @@
 
 	<distribution name="espeth9">
         <queue count="128" base="0x7c00"/>
+        <key>
+		    <fieldref name="ipv4.src"/>
+		    <fieldref name="ipv4.dst"/>
+		    <fieldref name="ipsec_esp.spi"/>
+	</key>
+	</distribution>
+
+	<distribution name="espeth10">
+        <queue count="128" base="0x3a00"/>
         <key>
 		    <fieldref name="ipv4.src"/>
 		    <fieldref name="ipv4.dst"/>
@@ -524,6 +563,16 @@
 	</key>
 	</distribution>
 
+	<distribution name="udpeth10">
+        <queue count="128" base="0x3a00"/>
+        <key>
+		    <fieldref name="ipv4.src"/>
+		    <fieldref name="ipv4.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
 	<distribution name="default_dist_0">
 		<queue count="1" base="0x3800"/>
 	</distribution>
@@ -562,6 +611,10 @@
 
 	<distribution name="default_dist_9">
 		<queue count="1" base="0x7c00"/>
+	</distribution>
+
+	<distribution name="default_dist_10">
+		<queue count="1" base="0x3a00"/>
 	</distribution>
 
 	<policy name="asf_fman_frag_policy_0">
@@ -674,4 +727,14 @@
         </dist_order>
 	</policy>
 
+	<policy name="asf_fman_frag_policy_10">
+        <dist_order>
+            <distributionref name="ipv4frag_dist_10"/>
+            <distributionref name="udpeth10"/>
+            <distributionref name="tcpeth10"/>
+            <distributionref name="espeth10"/>
+            <distributionref name="ipv4eth10"/>
+            <distributionref name="default_dist_10"/>
+        </dist_order>
+	</policy>
 </netpcd>
