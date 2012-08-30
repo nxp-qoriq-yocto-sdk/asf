@@ -1182,6 +1182,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 			ASFIPSEC_DPERR("Packet Action is Drop");
 			skb->data_len = 0;
 			ASFSkbFree(skb);
+			SECFP_DESC_FREE(desc);
 			rcu_read_unlock();
 			return 0;
 		}
@@ -1656,6 +1657,7 @@ static inline int secfp_try_fastPathOutv4(
 			ASFIPSEC_DPERR("Packet Action is Drop");
 			skb->data_len = 0;
 			ASFSkbFree(skb);
+			SECFP_DESC_FREE(desc);
 			rcu_read_unlock();
 			return 0;
 		}
