@@ -64,7 +64,7 @@ static int ffp_debug_show_count = 50;
 extern void asf_ffp_cleanup_all_flows(void);
 
 
-char asf_proc_cmdbuf[1024] = "";
+
 
 extern ffp_bucket_t *ffp_flow_table;
 extern ASFFFPGlobalStats_t *asf_gstats;
@@ -77,10 +77,12 @@ extern int asf_enable;
 extern int asf_l2blob_refresh_npkts;
 extern int asf_l2blob_refresh_interval;
 
-
-void asf_exec_cmd_clear_stats(void)
+static int asf_exec_cmd_clear_stats(char *page, char **start,
+					 off_t off, int count,
+					 int *eof, void *data)
 {
-	int vsg, cpu;
+	int vsg, cpu, i;
+	ffp_flow_t *head, *flow;
 
 	printk("Clearing Global%s Stats\n",
 #ifdef ASF_FFP_XTRA_STATS
@@ -115,49 +117,25 @@ void asf_exec_cmd_clear_stats(void)
 		}
 	}
 
-}
-
-
-void asf_exec_cmd(void)
-{
-	char *cmd = asf_proc_cmdbuf;
-
-	printk("ASF_EXEC_CMD: '%s'\n", asf_proc_cmdbuf);
-	/* fixed string commands for now .. enhance it to parse words */
-	if (!strcasecmp(cmd, "clear stats")) {
-		asf_exec_cmd_clear_stats();
+	printk(KERN_INFO "Clearing Flow Stats\n");
+	for (i = 0; i < ffp_hash_buckets; i++) {
+		head = (ffp_flow_t *)  &ffp_flow_table[i];
+		for (flow = head->pNext; flow != head; flow = flow->pNext) {
+			if (flow == flow->pNext)
+				break;
+			flow->stats.ulInPkts = 0;
+			flow->stats.ulInBytes = 0;
+			flow->stats.ulOutPkts = 0;
+			flow->stats.ulOutBytes = 0;
+		}
 	}
+	return 0;
 }
 
-static int proc_asf_proc_exec_cmd(ctl_table *ctl, int write,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
-				  struct file *filp,
-#endif
-				  void __user *buffer,
-				  size_t *lenp, loff_t *ppos)
-{
-	int ret;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
-	ret = proc_dostring(ctl, write, filp, buffer, lenp, ppos);
-#else
-	ret = proc_dostring(ctl, write, buffer, lenp, ppos);
-#endif
 
-	if (write) {
-		asf_exec_cmd();
-		memset(asf_proc_cmdbuf, 0, sizeof(asf_proc_cmdbuf));
-	}
-	return ret;
-}
+
 
 static struct ctl_table asf_proc_table[] = {
-	{
-		.procname       = "command",
-		.data	   = asf_proc_cmdbuf,
-		.maxlen	 = sizeof(asf_proc_cmdbuf),
-		.mode	   = 0644,
-		.proc_handler   = proc_asf_proc_exec_cmd,
-	} ,
 	{
 		.procname       = "ffp_max_flows",
 		.data	   = &ffp_max_flows,
@@ -231,6 +209,7 @@ EXPORT_SYMBOL(asf_dir);
 #define ASF_PROC_XTRA_FLOW_STATS_NAME	"xflow_stats"
 #endif
 #define ASF_PROC_VSG_STATS_NAME		"vsg_stats"
+#define ASF_PROC_RESET_STATS_NAME	"reset_stats"
 #define ASF_PROC_IFACE_MAPS		"ifaces"
 #define ASF_PROC_FLOW_STATS_NAME	"flow_stats"
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -572,7 +551,8 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 		return 0;
 	}
 
-	printk(KERN_INFO"HIDX {ID}\tDST\tV/Z/P\tSIP:SPORT\tDIP:DPORT\tSNIP:SNPORT\tDNIP:DNPORT\tPKTS\n");
+	printk(KERN_INFO"HIDX {ID}\tDST\tV/Z/P\tSIP:SPORT\tDIP:DPORT\t"
+		"SNIP:SNPORT\tDNIP:DNPORT\tPKTS IN-OUT\n");
 	p = buf;
 	*p = '\0';
 	for (i = 0; i < ffp_hash_buckets; i++) {
@@ -866,6 +846,16 @@ int asf_register_proc(void)
 #endif
 
 	proc_file = create_proc_read_entry(
+					  ASF_PROC_RESET_STATS_NAME,
+					  0444, asf_dir,
+					  asf_exec_cmd_clear_stats,
+					  NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
+	if (proc_file)
+		proc_file->owner = THIS_MODULE;
+#endif
+
+	proc_file = create_proc_read_entry(
 					  ASF_PROC_IFACE_MAPS,
 					  0444, asf_dir,
 					  display_asf_proc_iface_maps,
@@ -935,6 +925,7 @@ int asf_unregister_proc(void)
 #ifdef ASF_FFP_XTRA_STATS
 	remove_proc_entry(ASF_PROC_XTRA_FLOW_STATS_NAME, asf_dir);
 #endif
+	remove_proc_entry(ASF_PROC_RESET_STATS_NAME, asf_dir);
 	remove_proc_entry(ASF_PROC_IFACE_MAPS, asf_dir);
 	remove_proc_entry(ASF_PROC_FLOW_STATS_NAME, asf_dir);
 #ifdef ASF_IPV6_FP_SUPPORT
