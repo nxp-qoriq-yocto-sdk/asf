@@ -125,6 +125,12 @@ ffp_flow_t *asf_ffp_ipv6_flow_lookup_in_bkt_ex(ASFFFPFlowTuple_t *tuple,
 				unsigned long ulZoneId,
 				ffp_flow_t *pHead);
 
+#ifdef CONFIG_DPA
+ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
+			ASFNetDevEntry_t *anDev,
+			ASFBuffer_t abuf);
+#endif
+
 ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 				ASF_uint32_t    ulVsgId,
 				ASF_uint32_t    ulCommonInterfaceId,

@@ -274,6 +274,20 @@ static inline ASFNetDevEntry_t *ASFGetPPPoEDev(ASFNetDevEntry_t *pParentDev,
 	return NULL;
 }
 
+/* This function implementation is driven
+   from function "inet_proto_csum_replace4()".
+ */
+#ifdef CONFIG_DPA
+static inline void asf_proto_csum_replace4(__sum16 *sum,
+					__be32 from,
+					__be32 to)
+{
+	__be32 diff[] = { ~from, to };
+
+	*sum = csum_fold(csum_partial(diff, sizeof(diff),
+				~csum_unfold(*sum)));
+}
+#endif
 
 /* Always use interface index as CII for ethernet interfaces */
 #define asf_cii_set_cache(dev, cii) do {} while (0)
@@ -320,8 +334,14 @@ extern ASFFFPVsgStats_t *get_asf_vsg_stats(void);
 extern ASFFFPGlobalStats_t *get_asf_gstats(void);
 
 #ifdef CONFIG_DPA
-int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev,
+/*int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev,
+							unsigned int fqid);*/
+int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 							unsigned int fqid);
+static ASF_void_t ASFFFPProcessAndSendFD(ASFNetDevEntry_t *anDev,
+							ASFBuffer_t abuf);
+ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf);
+extern ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf, ASFNetDevEntry_t *pNdev);
 #else
 int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev);
 #endif

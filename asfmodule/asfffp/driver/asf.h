@@ -10,9 +10,13 @@
 /****************************************************************************/
 #ifndef __ASFAPI_H
 #define __ASFAPI_H
-
 #include "asfhash.h"
 #include <linux/in6.h>
+#ifdef CONFIG_DPA
+#include "crc64.h"
+#include <fm_ext.h>
+#include "dpa/dpaa_eth.h"
+#endif
 
 #define ASF_MINIMUM 1
 #define ASF_LINUX 2
@@ -346,12 +350,57 @@ typedef struct ASFTcpCtrlParams_s {
 ASF_uint32_t ASFSetTcpCtrlParams(ASF_uint32_t ulVSGId,
 			ASFTcpCtrlParams_t *pInfo);
 
+#ifdef CONFIG_DPA
+struct annotations_t {
+	struct sk_buff *skbh;
+	/*const */struct qm_fd *fd;	/**< Pointer to frame descriptor*/
+	uint32_t flag;		/**< All flags like ip_summed will reside here */
+	uint32_t reserved[17];	/**<May be used in future */
+	t_FmPrsResult parse_result;	/**<Parsed result*/
+	uint64_t timestamp;		/**< TimeStamp */
+	union {
+		uint64_t hash_result;		/**< Hash Result */
+		struct {
+			uint32_t hiHash;
+			uint32_t loHash;
+		} hr_hilo;
+	};
+} __attribute__((packed));
+
+#endif
+
+
 typedef union ASFBuffer_u {
 	struct {
 		ASF_void_t     *buffer;
 		ASF_uint32_t ulBufLen;
 	} linearBuffer;
+#ifdef CONFIG_DPA
+	struct {
+		struct ethhdr		*ethh;
+		struct annotations_t	*pAnnot;
+		struct iphdr		*iph;
+	/* what this ptr means:
+	if ASF_DO_INC_CHECKSUM is defined, then it just a placeholder for
+	transp hdr cksum ptr
+	if not defined, then in addition to being a placeholder
+	if this ptr is NULL, then pkt did not change or S/W updated cksum;
+	so there is no need to enable hw cksum
+	if this ptr is not NULL, then pkt changed;
+	S/W expects hw to update cksum */
+		unsigned short		*pCsum;
+		struct net_device	*ndev;
+	/* if this field is NULL then, skb is not yet setup and the data buffer
+	has not been deducted from percpu_priv->dpa_bp_count; if not NULL,
+	then skb is already formed and the count decremented  */
+		ASF_void_t		*nativeBuffer;
+		void			*flow;
+		ASF_uint8_t		frag_list;
+		ASF_boolean_t		bbuffInDomain;
+	};
+#else
 	ASF_void_t     *nativeBuffer;
+#endif
 } ASFBuffer_t;
 typedef ASF_void_t (*genericFreeFn_t)(ASF_void_t   *freeArg);
 
