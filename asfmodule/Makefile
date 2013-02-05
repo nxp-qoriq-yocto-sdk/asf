@@ -16,12 +16,7 @@ export TOPDIR
 all: build
 
 build:
-	make -w -C asfcmn -f Makefile
 	make -w -C asfffp -f Makefile
-	make -w -C asffwd -f Makefile
-ifeq ($(CONFIG_ASF_TERMINATION), y)
-	make -w -C asfterm -f Makefile
-endif
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile
 endif
@@ -30,10 +25,7 @@ endif
 #--------------------------------------------------------------
 .PHONY: clean
 clean:
-	make -w -C asfcmn -f Makefile clean
 	make -w -C asfffp -f Makefile clean
-	make -w -C asffwd -f Makefile clean
-	make -w -C asfterm -f Makefile clean
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile clean
 endif
