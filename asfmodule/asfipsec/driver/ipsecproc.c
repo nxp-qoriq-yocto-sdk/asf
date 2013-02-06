@@ -167,6 +167,8 @@ static int display_secfp_proc_global_stats(char *page, char **start,
 		GSTATS_SUM(TotInProcSecPkts);
 		GSTATS_SUM(TotOutRecvPktsSecApply);
 		GSTATS_SUM(TotOutPktsSecAppled);
+		printk(KERN_INFO"\n cpu =%d Encrypted Pkts = %u Normal Pkts = %u",
+			cpu, gstats->ulTotInRecvPkts, gstats->ulTotOutRecvPkts);
 	}
 
 	printk(KERN_INFO"\n    InRcv %lu\tInProc %lu\tOutRcv %lu OutProc %lu\n",
@@ -516,8 +518,13 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 				inParams.ulTunnelId = ulTunnelId;
 				inParams.ulSPDContainerIndex = pCINode->ulIndex;
 				inParams.ulSPI = pOutSA->SAParams.ulSPI;
-				inParams.gwAddr.ipv4addr =
-					pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+				inParams.gwAddr.bIPv4OrIPv6 = pOutSA->SAParams.tunnelInfo.bIPv4OrIPv6;
+				if (pOutSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+					memcpy(inParams.gwAddr.ipv6addr, pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
+				else
+					inParams.gwAddr.ipv4addr =
+						pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+
 				inParams.ucProtocol =
 						pOutSA->SAParams.ucProtocol;
 				inParams.bDir = SECFP_OUT;
@@ -613,8 +620,13 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 				inParams.ulTunnelId = ulTunnelId;
 				inParams.ulSPDContainerIndex = pCINode->ulIndex;
 				inParams.ulSPI = pInSA->SAParams.ulSPI;
-				inParams.gwAddr.ipv4addr =
-					pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+				inParams.gwAddr.bIPv4OrIPv6 = pInSA->SAParams.tunnelInfo.bIPv4OrIPv6;
+				if (pInSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+					memcpy(inParams.gwAddr.ipv6addr, pInSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
+				else
+					inParams.gwAddr.ipv4addr =
+						pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+
 				inParams.ucProtocol =
 					pInSA->SAParams.ucProtocol;
 				inParams.bDir = SECFP_IN;
