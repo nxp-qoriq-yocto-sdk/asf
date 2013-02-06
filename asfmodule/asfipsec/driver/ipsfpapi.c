@@ -27,6 +27,7 @@
 #include <linux/version.h>
 #include "../../asfffp/driver/asf.h"
 #include "../../asfffp/driver/asfparry.h"
+#include "../../asfffp/driver/asfmpool.h"
 #include "../../asfffp/driver/asftmr.h"
 #include "../../asfffp/driver/asfcmn.h"
 #include "../../asfffp/driver/gplcode.h"
@@ -698,6 +699,8 @@ ASF_uint32_t ASFIPSecRegisterCallbacks(ASFIPSecCbFn_t *pFnPtr)
 static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 				       SAParams_t    *pSAParams)
 {
+	ASF_uint32_t encDecKeyLenBits;
+
 	if (pASFSAParams->authKey) {
 		pSAParams->bAuth = ASF_TRUE;
 		switch (pASFSAParams->authAlgo) {
@@ -719,15 +722,23 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 		case ASF_IPSEC_AALG_SHA512HMAC:
 			pSAParams->ucAuthAlgo = SECFP_HMAC_SHA512;
 			break;
+		case ASF_IPSEC_AALG_NONE:
+			pSAParams->ucAuthAlgo = SECFP_HMAC_NULL;
+			pSAParams->bAuth = ASF_FALSE;
+			break;
 		default:
+			ASFIPSEC_WARN("unsupported auth algo %d\n",
+				pASFSAParams->authAlgo);
 			return SECFP_FAILURE;
 			break;
 		}
 		pSAParams->AuthKeyLen = pASFSAParams->authKeyLenBits/8;
+		pSAParams->uICVSize = pASFSAParams->icvSizeinBits/8;
 		memcpy(pSAParams->ucAuthKey, pASFSAParams->authKey,
 				pSAParams->AuthKeyLen);
 	} else {
 		pSAParams->ucAuthAlgo = SECFP_HMAC_NULL;
+		pSAParams->uICVSize = 0;
 		pSAParams->bAuth = ASF_FALSE;
 	}
 
@@ -749,21 +760,94 @@ static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 			pSAParams->ulBlockSize = AES_CBC_BLOCK_SIZE;
 			pSAParams->ulIvSize = AES_CBC_IV_LEN;
 			break;
-		default:
+		case ASF_IPSEC_EALG_AES_CTR:
 			pSAParams->ucCipherAlgo = SECFP_AESCTR;
 			pSAParams->ulBlockSize = AES_CTR_BLOCK_SIZE;
 			pSAParams->ulIvSize = AES_CTR_IV_LEN;
-			memcpy(pSAParams->ucNounceIVCounter,
-				pASFSAParams->aesCtrCounterBlock, 16);
+			/*
+			*Nonce:4 bytes, followed by 8 bytes IV + 4 bytes counter
+			*Nounce value is following enckey,
+			*intial value setting to 0x01, compatiable with linux
+			*/
+			pASFSAParams->encDecKeyLenBits -= AES_CTR_SALT_LEN * 8;
+			encDecKeyLenBits = pASFSAParams->encDecKeyLenBits;
+			memset(&pSAParams->ucNounceIVCounter, 0,
+				sizeof(pSAParams->ucNounceIVCounter));
+			memcpy(&pSAParams->ucNounceIVCounter,
+				&pASFSAParams->encDecKey[encDecKeyLenBits/8],
+				AES_CTR_SALT_LEN);
+			break;
+		case ASF_IPSEC_EALG_AES_CCM_ICV8:
+			pSAParams->ucCipherAlgo = SECFP_AES_CCM_ICV8;
+			goto aes_ccm_copy;
+		case ASF_IPSEC_EALG_AES_CCM_ICV12:
+			pSAParams->ucCipherAlgo = SECFP_AES_CCM_ICV12;
+			goto aes_ccm_copy;
+		case ASF_IPSEC_EALG_AES_CCM_ICV16:
+			pSAParams->ucCipherAlgo = SECFP_AES_CCM_ICV16;
+aes_ccm_copy:
+			pSAParams->ulBlockSize = AES_CCM_BLOCK_SIZE;
+			pSAParams->ulIvSize = AES_CCM_IV_LEN;
+			pSAParams->uICVSize = pASFSAParams->icvSizeinBits/8;
+			/* CCM salt length: 3 bytes, from end of enckey */
+			pASFSAParams->encDecKeyLenBits -= AES_CCM_SALT_LEN * 8;
+			encDecKeyLenBits = pASFSAParams->encDecKeyLenBits;
+			memset(&pSAParams->ucNounceIVCounter, 0,
+				sizeof(pSAParams->ucNounceIVCounter));
+			memcpy(&pSAParams->ucNounceIVCounter,
+				&pASFSAParams->encDecKey[encDecKeyLenBits/8],
+				AES_CCM_SALT_LEN);
+			break;
+		case ASF_IPSEC_EALG_AES_GCM_ICV8:
+			pSAParams->ucCipherAlgo = SECFP_AES_GCM_ICV8;
+			goto aes_gcm_copy;
+		case ASF_IPSEC_EALG_AES_GCM_ICV12:
+			pSAParams->ucCipherAlgo = SECFP_AES_GCM_ICV12;
+			goto aes_gcm_copy;
+		case ASF_IPSEC_EALG_AES_GCM_ICV16:
+			pSAParams->ucCipherAlgo = SECFP_AES_GCM_ICV16;
+aes_gcm_copy:
+			pSAParams->ulBlockSize = AES_GCM_BLOCK_SIZE;
+			pSAParams->ulIvSize = AES_GCM_IV_LEN;
+			pSAParams->uICVSize = pASFSAParams->icvSizeinBits/8;
+			/* GCM salt length: 4 bytes, from end of enckey */
+			pASFSAParams->encDecKeyLenBits -= AES_GCM_SALT_LEN * 8;
+			encDecKeyLenBits = pASFSAParams->encDecKeyLenBits;
+			memset(&pSAParams->ucNounceIVCounter, 0,
+				sizeof(pSAParams->ucNounceIVCounter));
+			memcpy(&pSAParams->ucNounceIVCounter,
+				&pASFSAParams->encDecKey[encDecKeyLenBits/8],
+				AES_GCM_SALT_LEN);
+			break;
+		case ASF_IPSEC_EALG_NULL_AES_GMAC:
+			pSAParams->ucCipherAlgo = SECFP_NULL_AES_GMAC;
+			pSAParams->ulBlockSize = AES_GMAC_BLOCK_SIZE;
+			pSAParams->ulIvSize = AES_GMAC_IV_LEN;
+			pSAParams->uICVSize = pASFSAParams->icvSizeinBits/8;
+			/* GMAC salt length: 4 bytes, from end of enckey */
+			pASFSAParams->encDecKeyLenBits -= AES_GMAC_SALT_LEN * 8;
+			encDecKeyLenBits = pASFSAParams->encDecKeyLenBits;
+			memset(&pSAParams->ucNounceIVCounter, 0,
+				sizeof(pSAParams->ucNounceIVCounter));
+			memcpy(&pSAParams->ucNounceIVCounter,
+				&pASFSAParams->encDecKey[encDecKeyLenBits/8],
+				AES_GMAC_SALT_LEN);
+			break;
+		default:
+			ASFIPSEC_WARN("unsupported encr algo %d",
+				pASFSAParams->encAlgo);
+			return SECFP_FAILURE;
 		}
 		pSAParams->EncKeyLen = pASFSAParams->encDecKeyLenBits/8;
 		memcpy(pSAParams->ucEncKey, pASFSAParams->encDecKey,
 					pSAParams->EncKeyLen);
 	} else {
+		ASFIPSEC_WARN("no encr/auth algo; choosing ESP_NULL\n");
 		pSAParams->ucCipherAlgo = SECFP_ESP_NULL;
 		pSAParams->bEncrypt = ASF_FALSE;
 		pSAParams->ulBlockSize = 0;
 		pSAParams->ulIvSize = 0;
+		pSAParams->uICVSize = 0;
 	}
 
 	pSAParams->bRedSideFragment = pASFSAParams->bRedSideFragment;

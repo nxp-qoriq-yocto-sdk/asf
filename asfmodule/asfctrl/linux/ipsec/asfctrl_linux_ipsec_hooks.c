@@ -87,6 +87,10 @@ algo_types[MAX_ALGO_TYPE][MAX_AUTH_ENC_ALGO] = {
 		{"cbc(aes)", ASF_IPSEC_EALG_AES},
 		{"cbc(des3_ede)", ASF_IPSEC_EALG_3DESCBC},
 		{"cbc(des)", ASF_IPSEC_EALG_DESCBC},
+		{"rfc3686(ctr(aes))", ASF_IPSEC_EALG_AES_CTR},
+		{"rfc4309(ccm(aes))", ASF_IPSEC_EALG_AES_CCM_ICV8},
+		{"rfc4106(gcm(aes))", ASF_IPSEC_EALG_AES_GCM_ICV8},
+		{"rfc4543(gcm(aes))", ASF_IPSEC_EALG_NULL_AES_GMAC},
 		{NULL, -1}
 	},
 	{
@@ -95,6 +99,8 @@ algo_types[MAX_ALGO_TYPE][MAX_AUTH_ENC_ALGO] = {
 		{"hmac(sha384)", ASF_IPSEC_AALG_SHA384HMAC},
 		{"hmac(sha512)", ASF_IPSEC_AALG_SHA512HMAC},
 		{"hmac(md5)", ASF_IPSEC_AALG_MD5HMAC},
+		{"xcbc(aes)", ASF_IPSEC_AALG_AESXCBC},
+		{"digest_null", ASF_IPSEC_AALG_NONE},
 		{NULL, -1}
 	}
 };
@@ -566,6 +572,8 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASF_IPSecSASelector_t   outSASel;
 	ASF_IPSecSelectorSet_t srcSel, dstSel;
 	ASF_IPSecSA_t SAParams;
+	struct xfrm_algo_aead *aead = xfrm->aead;
+	struct esp_data *esp = xfrm->data;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -681,6 +689,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.authAlgo = ret;
 		SAParams.authKeyLenBits = xfrm->aalg->alg_key_len;
 		SAParams.authKey = xfrm->aalg->alg_key;
+		SAParams.icvSizeinBits = xfrm->aalg->alg_trunc_len;
 	}
 
 	if (xfrm->ealg) {
@@ -692,6 +701,52 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.encAlgo = ret;
 		SAParams.encDecKeyLenBits = xfrm->ealg->alg_key_len;
 		SAParams.encDecKey = xfrm->ealg->alg_key;
+	}
+
+	/* CCM/GCM/GMAC mode case, aalg and ealg will be NULL
+	 * from linux stack, xfrm support three algorithm modes, aalg/ealg/aead
+	 */
+	if (aead && esp) {
+		ret = asfctrl_alg_getbyname(aead->alg_name, ENCRYPTION);
+		if (ret == -EINVAL) {
+			ASFCTRL_WARN("Encryption algorithm not supported");
+			return ret;
+		}
+		/* check aead mode */
+		if (ASF_IPSEC_EALG_AES_CCM_ICV8 == ret) {
+			switch (aead->alg_icv_len) {
+			case 64:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV8;
+				break;
+			case 96:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV12;
+				break;
+			case 128:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV16;
+				break;
+			default:
+				ASFCTRL_WARN("CCM ICV length not supported");
+			}
+		} else if (ASF_IPSEC_EALG_AES_GCM_ICV8 == ret) {
+			switch (aead->alg_icv_len) {
+			case 64:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV8;
+				break;
+			case 96:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV12;
+				break;
+			case 128:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV16;
+				break;
+			default:
+				ASFCTRL_WARN("GCM ICV length not supported");
+			}
+		} else {
+			SAParams.encAlgo = ASF_IPSEC_EALG_NULL_AES_GMAC;
+		}
+		SAParams.icvSizeinBits = aead->alg_icv_len;
+		SAParams.encDecKeyLenBits = aead->alg_key_len;
+		SAParams.encDecKey = aead->alg_key;
 	}
 
 	SAParams.spi = xfrm->id.spi;
@@ -813,6 +868,8 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASF_IPSecSASelector_t   inSASel;
 	ASF_IPSecSelectorSet_t srcSel, dstSel;
 	ASF_IPSecSA_t SAParams;
+	struct xfrm_algo_aead *aead = xfrm->aead;
+	struct esp_data *esp = xfrm->data;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -935,6 +992,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.authAlgo = ret;
 		SAParams.authKeyLenBits = xfrm->aalg->alg_key_len;
 		SAParams.authKey = xfrm->aalg->alg_key;
+		SAParams.icvSizeinBits = xfrm->aalg->alg_trunc_len;
 	}
 	if (xfrm->ealg) {
 		ret = asfctrl_alg_getbyname(xfrm->ealg->alg_name, ENCRYPTION);
@@ -945,6 +1003,52 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.encAlgo = ret;
 		SAParams.encDecKeyLenBits = xfrm->ealg->alg_key_len;
 		SAParams.encDecKey = xfrm->ealg->alg_key;
+	}
+
+	/* CCM/GCM/GMAC mode case, aalg and ealg will be NULL
+	  * from linux stack, xfrm support three algorithm modes, aalg/ealg/aead
+	  */
+	if (aead && esp) {
+		ret = asfctrl_alg_getbyname(aead->alg_name, ENCRYPTION);
+		if (ret == -EINVAL) {
+			ASFCTRL_WARN("Encryption algorithm not supported");
+			return ret;
+		}
+		/* check aead mode */
+		if (ASF_IPSEC_EALG_AES_CCM_ICV8 == ret) {
+			switch (aead->alg_icv_len) {
+			case 64:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV8;
+				break;
+			case 96:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV12;
+				break;
+			case 128:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV16;
+				break;
+			default:
+				ASFCTRL_WARN("CCM ICV length not supported");
+			}
+		} else if (ASF_IPSEC_EALG_AES_GCM_ICV8 == ret) {
+			switch (aead->alg_icv_len) {
+			case 64:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV8;
+				break;
+			case 96:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV12;
+				break;
+			case 128:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV16;
+				break;
+			default:
+				ASFCTRL_WARN("GCM ICV length not supported");
+			}
+		} else {
+			SAParams.encAlgo = ASF_IPSEC_EALG_NULL_AES_GMAC;
+		}
+		SAParams.icvSizeinBits = aead->alg_icv_len;
+		SAParams.encDecKeyLenBits = aead->alg_key_len;
+		SAParams.encDecKey = aead->alg_key;
 	}
 
 	SAParams.spi = xfrm->id.spi;

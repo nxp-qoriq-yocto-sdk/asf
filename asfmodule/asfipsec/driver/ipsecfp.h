@@ -58,7 +58,6 @@
 #define SECFP_IPV4_HDR_LEN	20
 #define SECFP_AH_MAX_HDR_LEN	16
 #define SECFP_ESP_TRAILER_LEN	2
-#define SECFP_ICV_LEN		12
 
 /* Options to set up descriptors */
 #define SECFP_AUTH		1
@@ -89,15 +88,38 @@
 #define SECFP_AES_GCM_ICV8	18
 #define SECFP_AES_GCM_ICV12	19
 #define SECFP_AES_GCM_ICV16	20
+#define SECFP_NULL_AES_GMAC	23
 
 #define DES_CBC_BLOCK_SIZE	8
 #define TDES_CBC_BLOCK_SIZE	8
 #define AES_CBC_BLOCK_SIZE	16
 #define AES_CTR_BLOCK_SIZE	8
+#define AES_CCM_BLOCK_SIZE	16
+#define AES_GCM_BLOCK_SIZE	16
+#define AES_GMAC_BLOCK_SIZE	16
+
 #define DES_IV_LEN		8
 #define TDES_IV_LEN		8
-#define AES_CBC_IV_LEN		16
-#define AES_CTR_IV_LEN		8
+#define AES_CBC_IV_LEN	16
+#define AES_CTR_IV_LEN	8
+#define AES_CCM_IV_LEN	8
+#define AES_GCM_IV_LEN	8
+#define AES_GMAC_IV_LEN	8
+
+#define AES_CTR_SALT_LEN	4
+#define AES_CCM_SALT_LEN	3
+#define AES_GCM_SALT_LEN	4
+#define AES_GMAC_SALT_LEN	4
+
+#define AES_CTR_INIT_COUNTER	0x00000001
+#define AES_CCM_INIT_COUNTER	0x0
+
+#define AES_CCM_ICV8_IV_FLAG	0x5B
+#define AES_CCM_ICV12_IV_FLAG	0x6B
+#define AES_CCM_ICV16_IV_FLAG	0x7B
+
+#define AES_CCM_CTR_FLAG	0x03
+
 
 /* Sequence number related */
 #define SECFP_APPEND_BUF_LEN_FIELD	4
@@ -119,6 +141,7 @@
 #define SECFP_SKB_SG_DMA_INDEX 		0
 #define SECFP_SKB_DATA_DMA_INDEX 	4
 #define SECFP_ACTION_INDEX		8
+#define SECFP_ICV_LENGTH		11
 #define SECFP_REF_INDEX 		45
 #define SECFP_UDP_SOURCE_PORT		46
 
@@ -148,7 +171,7 @@
 #define SECFP_IV_DATA_INDEX		28
 #define SECFP_OUTB_PATH_MTU		32
 #define SECFP_OUTB_L2_OVERHEAD		36
-
+#define SECFP_OUTB_L2_WITH_PPPOE	40
 
 #define SECFP_NUM_IV_DATA_GET_AT_ONE_TRY	1
 
@@ -374,6 +397,7 @@ typedef struct SAParams_s {
 	unsigned char EncKeyLen; /*in Bytes */
 	unsigned char ulBlockSize;
 	unsigned char ulIvSize;
+	unsigned char uICVSize;
 	unsigned char ucAuthKey[SECFP_MAX_AUTH_KEY_SIZE];
 	unsigned char ucEncKey[SECFP_MAX_CIPHER_KEY_SIZE];
 	unsigned int AntiReplayWin;
@@ -625,7 +649,7 @@ typedef struct outSA_s {
 	unsigned short ulTunnelId;
 	unsigned short tx_vlan_id; /*valid if bVLAN is 1*/
 	unsigned int ulCompleteOverHead;
-	unsigned int ulPathMTU;
+	unsigned int ulInnerPathMTU;
 	unsigned long ulPkts[NR_CPUS];
 	unsigned long ulBytes[NR_CPUS];
 	AsfSPDPolicyPPStats_t	PolicyPPStats[NR_CPUS];

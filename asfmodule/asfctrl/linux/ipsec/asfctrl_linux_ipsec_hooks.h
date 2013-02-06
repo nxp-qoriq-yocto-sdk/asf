@@ -41,7 +41,7 @@ enum alg_type {
 #define MAX_POLICY_CONT_ID 	2
 
 #define ASFCTRL_DEF_PMTU 1500
-#define MAX_AUTH_ENC_ALGO	6
+#define MAX_AUTH_ENC_ALGO	8
 #define MAX_ALGO_TYPE		2
 
 #define XFRM_DIR(dir) ((dir == 0) ? "IN" : ((dir == 1) ? "OUT" : "FWD"))

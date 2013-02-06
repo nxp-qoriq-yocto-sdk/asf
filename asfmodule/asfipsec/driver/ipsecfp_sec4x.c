@@ -164,7 +164,7 @@ static inline u32 alg_to_caamdesc(u8 cipheralg, u8 authalg)
 	*/
 	switch (cipheralg) {
 	case SECFP_DES:
-		descwd |= OP_PCL_IPSEC_DES;
+		descwd |= OP_PCL_IPSEC_DES_IV64;
 		break;
 
 	case SECFP_3DES:
@@ -202,6 +202,13 @@ static inline u32 alg_to_caamdesc(u8 cipheralg, u8 authalg)
 	case SECFP_AES_GCM_ICV16:
 		descwd |= OP_PCL_IPSEC_AES_GCM16;
 		break;
+	case SECFP_NULL_AES_GMAC:
+		/*
+		* hard code for PROTOCOL operation, should
+		* add #define in linux
+		*/
+		descwd |= 0x1500;
+		break;
 	}
 
 	/*
@@ -219,6 +226,10 @@ static inline u32 alg_to_caamdesc(u8 cipheralg, u8 authalg)
 
 	case SECFP_HMAC_AES_XCBC_MAC:
 		descwd |= OP_PCL_IPSEC_AES_XCBC_MAC_96;
+		break;
+
+	case SECFP_HMAC_NULL:
+		descwd |= OP_PCL_IPSEC_HMAC_NULL;
 		break;
 
 	case SECFP_HMAC_SHA1_160:
@@ -245,6 +256,54 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	u32 *jump_cmd;
 
 	init_sh_desc(sh_desc, HDR_SAVECTX | HDR_SHARE_SERIAL);
+
+	switch (pSA->SAParams.ucCipherAlgo) {
+	case SECFP_AESCTR:
+		memcpy((u8 *)(&pdb->ctr.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_CTR_SALT_LEN);
+		/* typically initial count value is 0x00000001 */
+		pdb->ctr.ctr_initial = AES_CTR_INIT_COUNTER;
+		break;
+
+	case SECFP_AES_CCM_ICV8:
+		memcpy((u8 *)(&pdb->ccm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_CCM_SALT_LEN);
+		/* CCM salt length is 3 bytes, left shift 8 bits */
+		pdb->ccm.salt >>= 8;
+		pdb->ccm.iv_flags = AES_CCM_ICV8_IV_FLAG;
+		pdb->ccm.ctr_flags = AES_CCM_CTR_FLAG;
+		pdb->ccm.ctr_initial = AES_CCM_INIT_COUNTER;
+		break;
+
+	case SECFP_AES_CCM_ICV12:
+		memcpy((u8 *)(&pdb->ccm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_CCM_SALT_LEN);
+		pdb->ccm.salt >>= 8;
+		pdb->ccm.iv_flags = AES_CCM_ICV12_IV_FLAG;
+		pdb->ccm.ctr_flags = AES_CCM_CTR_FLAG;
+		pdb->ccm.ctr_initial = AES_CCM_INIT_COUNTER;
+		break;
+
+	case SECFP_AES_CCM_ICV16:
+		memcpy((u8 *)(&pdb->ccm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_CCM_SALT_LEN);
+		pdb->ccm.salt >>= 8;
+		pdb->ccm.iv_flags = AES_CCM_ICV16_IV_FLAG;
+		pdb->ccm.ctr_flags = AES_CCM_CTR_FLAG;
+		pdb->ccm.ctr_initial = AES_CCM_INIT_COUNTER;
+		break;
+
+	case SECFP_AES_GCM_ICV8:
+	case SECFP_AES_GCM_ICV12:
+	case SECFP_AES_GCM_ICV16:
+		memcpy((u8 *)(&pdb->gcm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_GCM_SALT_LEN);
+		break;
+	case SECFP_NULL_AES_GMAC:
+		memcpy((u8 *)(&pdb->gcm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_GMAC_SALT_LEN);
+		break;
+	}
 
 	jump_cmd = append_jump(sh_desc,
 		CLASS_BOTH | JUMP_TEST_ALL | JUMP_COND_SHRD | JUMP_COND_SELF);
@@ -291,22 +350,86 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	init_sh_desc(sh_desc, HDR_SAVECTX | HDR_SHARE_SERIAL);
 
 
+	switch (pSA->SAParams.ucCipherAlgo) {
+	case SECFP_AESCTR:
+		memcpy((u8 *)(&pdb->ctr.ctr_nonce),
+			&pSA->SAParams.ucNounceIVCounter, AES_CTR_SALT_LEN);
+		/* typically initial count value is 0x00000001 */
+		pdb->ctr.ctr_initial = AES_CTR_INIT_COUNTER;
+		break;
+
+	case SECFP_AES_CCM_ICV8:
+		memcpy((u8 *)(&pdb->ccm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_CCM_SALT_LEN);
+		/* CCM salt length is 3 bytes, left shift 8 bits */
+		pdb->ccm.salt >>= 8;
+		pdb->ccm.b0_flags = AES_CCM_ICV8_IV_FLAG;
+		pdb->ccm.ctr_flags = AES_CCM_CTR_FLAG;
+		pdb->ccm.ctr_initial = AES_CCM_INIT_COUNTER;
+		break;
+
+	case SECFP_AES_CCM_ICV12:
+		memcpy((u8 *)(&pdb->ccm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_CCM_SALT_LEN);
+		pdb->ccm.salt >>= 8;
+		pdb->ccm.b0_flags = AES_CCM_ICV12_IV_FLAG;
+		pdb->ccm.ctr_flags = AES_CCM_CTR_FLAG;
+		pdb->ccm.ctr_initial = AES_CCM_INIT_COUNTER;
+		break;
+
+	case SECFP_AES_CCM_ICV16:
+		memcpy((u8 *)(&pdb->ccm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_CCM_SALT_LEN);
+		pdb->ccm.salt >>= 8;
+		pdb->ccm.b0_flags = AES_CCM_ICV16_IV_FLAG;
+		pdb->ccm.ctr_flags = AES_CCM_CTR_FLAG;
+		pdb->ccm.ctr_initial = AES_CCM_INIT_COUNTER;
+		break;
+
+	case SECFP_AES_GCM_ICV8:
+	case SECFP_AES_GCM_ICV12:
+	case SECFP_AES_GCM_ICV16:
+		memcpy((u8 *)(&pdb->gcm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_GCM_SALT_LEN);
+		break;
+	case SECFP_NULL_AES_GMAC:
+		memcpy((u8 *)(&pdb->gcm.salt),
+			&pSA->SAParams.ucNounceIVCounter, AES_GMAC_SALT_LEN);
+		break;
+	}
+	ASFIPSEC_DEBUG("Created the PDB");
 	jump_cmd = append_jump(sh_desc,
 		CLASS_BOTH | JUMP_TEST_ALL | JUMP_COND_SHRD | JUMP_COND_SELF);
 
-	/* process keys, starting with class 2/authentication */
-	append_key(sh_desc, ctx->key_dma, ctx->split_key_len,
+	if (pSA->SAParams.bAuth) {
+		/* process keys, starting with class 2/authentication */
+		if (SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo) {
+			/* if cipher-alg is null, xcbc key loads in class 1 key register */
+			if (likely(SECFP_ESP_NULL != pSA->SAParams.ucCipherAlgo))
+				append_key(sh_desc, ctx->key_phys,
+					ctx->split_key_len,
+					CLASS_2 | KEY_DEST_CLASS_REG);
+			else
+				append_key(sh_desc, ctx->key_phys,
+				ctx->split_key_len,
+				CLASS_1 | KEY_DEST_CLASS_REG);
+		} else
+			append_key(sh_desc, ctx->key_phys, ctx->split_key_len,
 			CLASS_2 | KEY_DEST_MDHA_SPLIT | KEY_ENC);
+	}
 
-	/* Now the class 1/cipher key */
-	if (keys_fit_inline)
-		append_key_as_imm(sh_desc, (void *)ctx->key +
+
+	if (pSA->SAParams.bEncrypt && likely(ctx->enckeylen)) {
+		/* Now the class 1/cipher key */
+		if (keys_fit_inline)
+			append_key_as_imm(sh_desc, (void *)ctx->key +
 				ctx->split_key_pad_len, ctx->enckeylen,
 				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
-	else
-		append_key(sh_desc, ctx->key_dma + ctx->split_key_pad_len,
-			ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
-
+		else
+			append_key(sh_desc, ctx->key_phys +
+				ctx->split_key_pad_len,
+				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
+	}
 	/* update jump cmd now that we are at the jump target */
 	set_jump_tgt_here(sh_desc, jump_cmd);
 
@@ -365,42 +488,64 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 	if (pSA) {
 		struct caam_drv_private *priv = dev_get_drvdata(pdev);
 		int tgt_jr = atomic_inc_return(&priv->tfm_count);
+		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 		/*
 		* distribute tfms across job rings to ensure in-order
 		* crypto request processing per tfm
 		*/
 		pSA->ctx.jrdev = priv->jrdev[(tgt_jr / 2) %
 					priv->total_jobrs];
+		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
+					pSA->SAParams.EncKeyLen,
+					GFP_DMA | flags);
+
+		if (!pSA->ctx.key) {
+			ASFIPSEC_DEBUG("Could not"\
+				"allocate CAAM key output memory\n");
+			return -ENOMEM;
+		}
 
 		pSA->ctx.enckeylen = pSA->SAParams.EncKeyLen;
-		ret = secfp_genCaamSplitKey(&pSA->ctx,
+		if (pSA->SAParams.bAuth) {
+			if (SECFP_HMAC_AES_XCBC_MAC ==
+				pSA->SAParams.ucAuthAlgo) {
+				memcpy(pSA->ctx.key, &pSA->SAParams.ucAuthKey,
+					pSA->SAParams.AuthKeyLen);
+				pSA->ctx.split_key_pad_len =
+					pSA->SAParams.AuthKeyLen;
+				pSA->ctx.split_key_len =
+					pSA->SAParams.AuthKeyLen;
+			} else {
+				ret = secfp_genCaamSplitKey(&pSA->ctx,
 					(u8 *)&pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen);
-		if (ret) {
-			ASFIPSEC_DEBUG("Failed\n");
-			kfree(pSA->ctx.key);
-			return ret;
+				if (ret) {
+					ASFIPSEC_DEBUG("Failed\n");
+					kfree(pSA->ctx.key);
+					return ret;
+				}
+			}
 		}
 
 		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len,
 			&pSA->SAParams.ucEncKey, pSA->SAParams.EncKeyLen);
 
-		pSA->ctx.key_dma = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
+		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
 						pSA->ctx.split_key_pad_len +
 						pSA->SAParams.EncKeyLen,
 						DMA_TO_DEVICE);
-		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_dma)) {
+		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
 			ASFIPSEC_DEBUG(" Unable to map key"\
 						"i/o memory\n");
 			kfree(pSA->ctx.key);
 			return -ENOMEM;
 		}
 
-		pSA->ctx.authsize = SECFP_ICV_LEN;
+		pSA->ctx.authsize = pSA->SAParams.uICVSize;
 		ret = secfp_buildProtocolDesc(&pSA->ctx, pSA, SECFP_OUT);
 		if (ret) {
 			ASFIPSEC_DEBUG("Failed\n");
-			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_dma,
+			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
 				pSA->ctx.split_key_pad_len +
 					pSA->SAParams.EncKeyLen, DMA_TO_DEVICE);
 			kfree(pSA->ctx.key);
@@ -420,6 +565,7 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 	if (pSA) {
 		struct caam_drv_private *priv = dev_get_drvdata(pdev);
 		int tgt_jr = atomic_inc_return(&priv->tfm_count);
+		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 		/*
 		* distribute tfms across job rings to ensure in-order
 		* crypto request processing per tfm
@@ -427,36 +573,60 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 		pSA->ctx.jrdev = priv->jrdev[(tgt_jr / 2) %
 						priv->total_jobrs];
 
-		pSA->ctx.enckeylen = pSA->SAParams.EncKeyLen;
-		ret = secfp_genCaamSplitKey(&pSA->ctx,
-					(u8 *)&pSA->SAParams.ucAuthKey,
-					pSA->SAParams.AuthKeyLen);
-		if (ret) {
-			ASFIPSEC_DEBUG("Failed\n");
-			kfree(pSA->ctx.key);
+		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
+					pSA->SAParams.EncKeyLen,
+					GFP_DMA | flags);
 
-			return ret;
+		if (!pSA->ctx.key) {
+			ASFIPSEC_DEBUG("Could not allocate"\
+					"Caam key output memory\n");
+			return -ENOMEM;
+		}
+
+		pSA->ctx.enckeylen = pSA->SAParams.EncKeyLen;
+		if (pSA->SAParams.bAuth) {
+			if (SECFP_HMAC_AES_XCBC_MAC ==
+				pSA->SAParams.ucAuthAlgo) {
+				ASFIPSEC_DEBUG("for AES_XCBC_MAC, no need for"\
+					"splitkey generated\n");
+				memcpy(pSA->ctx.key, &pSA->SAParams.ucAuthKey,
+					pSA->SAParams.AuthKeyLen);
+				pSA->ctx.split_key_pad_len =
+					pSA->SAParams.AuthKeyLen;
+				pSA->ctx.split_key_len =
+					pSA->SAParams.AuthKeyLen;
+			} else {
+				ret = secfp_genCaamSplitKey(&pSA->ctx,
+						(u8 *)&pSA->SAParams.ucAuthKey,
+						pSA->SAParams.AuthKeyLen);
+				if (ret) {
+					ASFIPSEC_DEBUG("Failed\n");
+					kfree(pSA->ctx.key);
+
+					return ret;
+				}
+			}
 		}
 
 		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len,
 			&pSA->SAParams.ucEncKey, pSA->SAParams.EncKeyLen);
 
-		pSA->ctx.key_dma = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
+		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
 						pSA->ctx.split_key_pad_len +
 						pSA->SAParams.EncKeyLen,
 							DMA_TO_DEVICE);
-		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_dma)) {
+		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
 			ASFIPSEC_DEBUG("Unable to map key"\
 					"i/o memory\n");
 			kfree(pSA->ctx.key);
 			return -ENOMEM;
 		}
-		pSA->ctx.authsize = SECFP_ICV_LEN;
+		pSA->ctx.authsize = pSA->SAParams.uICVSize;
 		ret = secfp_buildProtocolDesc(&pSA->ctx, pSA, SECFP_IN);
 		if (ret) {
 			ASFIPSEC_DEBUG("Failed\n");
 			kfree(pSA->ctx.key);
-			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_dma,
+			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
 			pSA->ctx.split_key_pad_len +
 			pSA->SAParams.EncKeyLen, DMA_TO_DEVICE);
 
@@ -486,8 +656,8 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 	desc = edesc->hw_desc;
 
 	/* insert shared descriptor pointer */
-	init_job_desc_shared(desc, ctx->sh_desc_enc_dma,
-			desc_len(ctx->sh_desc_enc), HDR_SHARE_DEFER);
+	init_job_desc_shared(desc, ctx->shared_desc_phys,
+			desc_len(ctx->sh_desc), HDR_SHARE_DEFER);
 
 	/*
 	* LOAD IMM Info FIFO
@@ -551,27 +721,27 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 		get appended at the same place as in case of NON ESN data.
 		*/
 		append_seq_fifo_load(desc, data_in_len - (pSA->ulSecHdrLen +
-			SECFP_ICV_LEN), FIFOLD_CLASS_BOTH
+			pSA->SAParams.uICVSize), FIFOLD_CLASS_BOTH
 			| FIFOLD_TYPE_LAST1 | FIFOLD_TYPE_MSG1OUT2);
 
 		options = FIFOLD_CLASS_CLASS2 | FIFOLD_TYPE_LAST2
 				| FIFOLD_TYPE_MSG;
 		append_fifo_load(desc, data_in + (data_in_len -
-				SECFP_ICV_LEN),
+				pSA->SAParams.uICVSize),
 				SECFP_HO_SEQNUM_LEN, options);
 		options = 0;
 		append_seq_out_ptr(desc, data_out + pSA->ulSecHdrLen,
 				data_in_len - pSA->ulSecHdrLen, options);
 		append_seq_fifo_store(desc, data_in_len - (pSA->ulSecHdrLen +
-				SECFP_ICV_LEN), FIFOST_TYPE_MESSAGE_DATA);
+				pSA->SAParams.uICVSize), FIFOST_TYPE_MESSAGE_DATA);
 	} else {
 		append_seq_fifo_load(desc, data_in_len - (pSA->ulSecHdrLen +
-			SECFP_ICV_LEN), FIFOLD_CLASS_BOTH |
+			pSA->SAParams.uICVSize), FIFOLD_CLASS_BOTH |
 			FIFOLD_TYPE_LASTBOTH | FIFOLD_TYPE_MSG1OUT2);
 		append_seq_out_ptr(desc, data_out + pSA->ulSecHdrLen,
 				data_in_len - pSA->ulSecHdrLen, options);
 		append_seq_fifo_store(desc, data_in_len - (pSA->ulSecHdrLen +
-				SECFP_ICV_LEN), FIFOST_TYPE_MESSAGE_DATA);
+				pSA->SAParams.uICVSize), FIFOST_TYPE_MESSAGE_DATA);
 	}
 	/* ICV */
 	append_seq_store(desc, authsize, LDST_CLASS_2_CCB |
@@ -611,8 +781,8 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		ASFIPSEC_HEXDUMP(skb->data + pSA->ulSecHdrLen, 60);
 
 		secfp_prepareCaamJobDescriptor(descriptor, &pSA->ctx,
-					ptr, skb->len + SECFP_ICV_LEN,
-					ptr, skb->len + SECFP_ICV_LEN);
+			ptr, skb->len + pSA->SAParams.uICVSize,
+			ptr, skb->len + pSA->SAParams.uICVSize, 0);
 	} else {
 		skb_frag_t *frag = 0;
 		outSA_t *pSA = (outSA_t *) (pData);
@@ -627,7 +797,8 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		total_frags = skb_shinfo(skb)->nr_frags;
 		dma_len = sizeof(struct sec4_sg_entry) * (total_frags + 1);
 		ptr1 = dma_map_single(pSA->ctx.jrdev, skb->data,
-				skb_headlen(skb), DMA_BIDIRECTIONAL);
+			skb_headlen(skb) + pSA->ulCompleteOverHead,
+			DMA_BIDIRECTIONAL);
 
 		link_tbl_entry = kzalloc(dma_len, GFP_DMA | flags);
 		link_tbl_entry->ptr = ptr1 + pSA->ulSecHdrLen;
@@ -646,7 +817,8 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 				ptr2 = dma_map_single(pSA->ctx.jrdev,
 					(void *)page_address(frag->page)
 					+ frag->page_offset, frag->size
-					+ SECFP_ICV_LEN, DMA_BIDIRECTIONAL);
+					+ pSA->SAParams.uICVSize,
+					DMA_BIDIRECTIONAL);
 
 				(link_tbl_entry + i + 1)->ptr = ptr2;
 				(link_tbl_entry + i + 1)->len = frag->size;
@@ -680,8 +852,8 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		desc = edesc->hw_desc;
 
 		/* insert shared descriptor pointer */
-		init_job_desc_shared(desc, pSA->ctx.sh_desc_enc_dma,
-			desc_len(pSA->ctx.sh_desc_enc), HDR_SHARE_DEFER);
+		init_job_desc_shared(desc, pSA->ctx.shared_desc_phys,
+			desc_len(pSA->ctx.sh_desc), HDR_SHARE_DEFER);
 
 		/*
 		* LOAD IMM Info FIFO
@@ -739,7 +911,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		options = 0;
 		options |= LDST_SGF;
 
-		append_seq_in_ptr(desc, ptr, len_to_caam + SECFP_ICV_LEN,
+		append_seq_in_ptr(desc, ptr, len_to_caam + pSA->SAParams.uICVSize,
 					options);
 
 		append_seq_fifo_load(desc, len_to_caam,
@@ -747,7 +919,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 				FIFOLD_TYPE_LASTBOTH |
 				FIFOLD_TYPE_MSG1OUT2);
 
-		append_seq_out_ptr(desc, ptr, len_to_caam + SECFP_ICV_LEN,
+		append_seq_out_ptr(desc, ptr, len_to_caam + pSA->SAParams.uICVSize,
 							options);
 		append_seq_fifo_store(desc, len_to_caam,
 					FIFOST_TYPE_MESSAGE_DATA);
@@ -789,8 +961,8 @@ static void secfp_prepareInCaamJobDescriptor(struct aead_edesc *edesc,
 	desc = edesc->hw_desc;
 
 	/* insert shared descriptor pointer */
-	init_job_desc_shared(desc, ctx->sh_desc_dec_dma,
-			desc_len(ctx->sh_desc_dec), HDR_SHARE_DEFER);
+	init_job_desc_shared(desc, ctx->shared_desc_phys,
+			desc_len(ctx->sh_desc), HDR_SHARE_DEFER);
 
 	append_load(desc, data_in + SECFP_ESP_HDR_LEN, ivsize,
 		LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT);
@@ -835,32 +1007,32 @@ static void secfp_prepareInCaamJobDescriptor(struct aead_edesc *edesc,
 			data_in_len + SECFP_HO_SEQNUM_LEN -
 			(SECFP_ESP_HDR_LEN + ivsize), options);
 		append_seq_fifo_load(desc, data_in_len - (SECFP_ESP_HDR_LEN +
-			ivsize + SECFP_ICV_LEN) + SECFP_HO_SEQNUM_LEN,
+			ivsize + pSA->SAParams.uICVSize) + SECFP_HO_SEQNUM_LEN,
 			FIFOLD_CLASS_CLASS2 | FIFOLD_TYPE_LAST2 |
 			FIFOLD_TYPE_MSG);
 
 		append_fifo_load(desc, data_in + (SECFP_ESP_HDR_LEN + ivsize),
 			data_in_len - (SECFP_ESP_HDR_LEN +
-			ivsize + SECFP_ICV_LEN), FIFOLD_CLASS_CLASS1 |
+			ivsize + pSA->SAParams.uICVSize), FIFOLD_CLASS_CLASS1 |
 			FIFOLD_TYPE_LAST1 | FIFOLD_TYPE_MSG);
 
 		append_seq_out_ptr(desc, data_out + (SECFP_ESP_HDR_LEN +
 			ivsize), data_in_len - (SECFP_ESP_HDR_LEN + ivsize),
 			options);
 		append_seq_fifo_store(desc, data_in_len - (SECFP_ESP_HDR_LEN +
-			ivsize + SECFP_ICV_LEN), FIFOST_TYPE_MESSAGE_DATA);
+			ivsize + pSA->SAParams.uICVSize), FIFOST_TYPE_MESSAGE_DATA);
 	} else {
 		append_seq_in_ptr(desc, data_in + (SECFP_ESP_HDR_LEN + ivsize),
 			data_in_len - (SECFP_ESP_HDR_LEN + ivsize), options);
 		append_seq_fifo_load(desc, data_in_len - (SECFP_ESP_HDR_LEN +
-				ivsize + SECFP_ICV_LEN), FIFOLD_CLASS_BOTH |
+				ivsize + pSA->SAParams.uICVSize), FIFOLD_CLASS_BOTH |
 			FIFOLD_TYPE_LASTBOTH | FIFOLD_TYPE_MSG);
 
 		append_seq_out_ptr(desc, data_out + (SECFP_ESP_HDR_LEN +
 			ivsize), data_in_len - (SECFP_ESP_HDR_LEN + ivsize),
 			options);
 		append_seq_fifo_store(desc, data_in_len - (SECFP_ESP_HDR_LEN +
-			ivsize + SECFP_ICV_LEN), FIFOST_TYPE_MESSAGE_DATA);
+			ivsize + pSA->SAParams.uICVSize), FIFOST_TYPE_MESSAGE_DATA);
 	}
 
 	append_seq_fifo_load(desc, authsize, FIFOLD_CLASS_CLASS2 |
@@ -946,8 +1118,8 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		desc = edesc->hw_desc;
 
 		/* insert shared descriptor pointer */
-		init_job_desc_shared(desc, pSA->ctx.sh_desc_dec_dma,
-			desc_len(pSA->ctx.sh_desc_dec), HDR_SHARE_DEFER);
+		init_job_desc_shared(desc, pSA->ctx.shared_desc_phys,
+			desc_len(pSA->ctx.sh_desc), HDR_SHARE_DEFER);
 
 		append_load(desc, ptr2 + SECFP_ESP_HDR_LEN, ivsize,
 			LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT);

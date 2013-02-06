@@ -566,12 +566,12 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		skb_frag_t *frag;
 		total_frags = skb_shinfo(skb)->nr_frags;
 		frag = &(skb_shinfo(skb)->frags[total_frags - 1]);
-		frag->size += SECFP_ICV_LEN;
-		skb->data_len += SECFP_ICV_LEN;
+		frag->size += pSA->SAParams.uICVSize;
+		skb->data_len += pSA->SAParams.uICVSize;
 	}
 	skb->data = skb->data - ipHdrLen - pSA->usNatHdrSize;
 	if (pSA->SAParams.bAuth)
-		skb->tail += SECFP_ICV_LEN;
+		skb->tail += pSA->SAParams.uICVSize;
 	skb->len += pSA->usNatHdrSize;
 	ASFIPSEC_PRINT("Finish packet: ulSecLenIncrease = %d, IP_HDR_LEN=%d "\
 		"Updated skb->data = 0x%x",
@@ -947,7 +947,8 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	/* Now prepare the IV Data */
 #ifdef CONFIG_ASF_SEC3x
 	if (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL)
-		secfp_GetIVData((unsigned int *) &pHeadSkb->data[SECFP_ESP_HDR_LEN], pSA->ulIvSizeInWords);
+		secfp_GetIVData((unsigned int *) &pHeadSkb->data[SECFP_ESP_HDR_LEN],
+			pSA->SAParams.ulIvSize/4);
 #endif
 
 	if (skb_shinfo(pHeadSkb)->nr_frags) {
@@ -965,8 +966,6 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 		/* Update skb->len */
 		pHeadSkb->len += pSA->ulSecHdrLen /*ulSecHdrLen includes IV */ ;
 		pTailSkb->len += usPadLen + SECFP_ESP_TRAILER_LEN;
-		pHeadSkb->data_len = orig_pktlen + pSA->ulSecHdrLen +
-					usPadLen + SECFP_ESP_TRAILER_LEN;
 	}
 	ASFIPSEC_DBGL2("pHeadSkb->data_len = %d",
 		(int)pHeadSkb->data_len);
@@ -1108,7 +1107,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	{
 		pNextSkb = skb->next;
 		skb->next = NULL;
-		if (skb->len > (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen))) {
+		if (skb->len > pSA->ulInnerPathMTU) {
 			ASFIPSEC_DEBUG("Packet size is > Path MTU and fragment bit set in SA or packet");
 			/* Need to send to normal path */
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
@@ -1127,6 +1126,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		ASFIPSEC_DBGL2("Out Process; pOuterIPHdr set to 0x%x",
 			(int)pOuterIpHdr);
 		/* Put sufficient data in the skb for post SEC processing */
+		skb->cb[SECFP_ICV_LENGTH] = pSA->SAParams.uICVSize;
 		*(unsigned int *) &(skb->cb[SECFP_SPD_CI_INDEX]) =
 				pSecInfo->outContainerInfo.ulSPDContainerId;
 		*(unsigned int *) &(skb->cb[SECFP_VSG_ID_INDEX]) = ulVSGId;
@@ -1405,12 +1405,12 @@ static inline int secfp_try_fastPathOutv4(
 	} else
 		usPadLen = 0;
 
-	if ((iph->tot_len > (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen)))
+	if (unlikely((iph->tot_len > pSA->ulInnerPathMTU)
 			|| (skb_shinfo(skb1)->frag_list)
-			|| (skb_shinfo(skb1)->nr_frags)) {
+			|| (skb_shinfo(skb1)->nr_frags))) {
 		ASFIPSEC_DEBUG("Total Leng is > ulPathMTU or has a frag list:"
 			"tot_len = %d, ulPathMTU = %d, frag_list = %d nr_frags = %d",
-			iph->tot_len, pSA->ulPathMTU,
+			iph->tot_len, pSA->ulInnerPathMTU,
 			skb_shinfo(skb1)->frag_list,
 			skb_shinfo(skb1)->nr_frags);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -1435,15 +1435,15 @@ static inline int secfp_try_fastPathOutv4(
 			ASFIPSec4SendIcmpErrMsg(skb1->data,
 				ASF_ICMP_DEST_UNREACH,
 				ASF_ICMP_CODE_FRAG_NEEDED,
-				pSA->ulPathMTU, ulVSGId);
+				pSA->ulInnerPathMTU, ulVSGId);
 			rcu_read_unlock();
 			return 1;
 		}
 		if (pSA->SAParams.bRedSideFragment) {
 			ASFIPSEC_DEBUG("Red side fragmentation is enabled");
 			if (unlikely(asfIpv4Fragment(skb1,
-				pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen),
-				pSA->ulL2BlobLen + (pSA->ulSecOverHead + usPadLen),
+				pSA->ulInnerPathMTU,
+				 pSA->ulL2BlobLen,
 				ASF_TRUE, skb1->dev, &skb))) {
 				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA,
@@ -1477,7 +1477,7 @@ static inline int secfp_try_fastPathOutv4(
 		}
 #else
 /* IF SEC_SG is ON */
-		if (unlikely((iph->tot_len) < (pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen)))) {
+		if (unlikely((iph->tot_len) < (pSA->ulInnerPathMTU))) {
 			ASFIPSEC_DEBUG("TotalLength is"\
 				" less than path MTU, but frag_list "\
 				"present: Calling skb_copy_bits ");
@@ -1512,15 +1512,15 @@ static inline int secfp_try_fastPathOutv4(
 				asfFillLogInfoOut(&AsfLogInfo, pSA);
 				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT21]);
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
-				ASFIPSec4SendIcmpErrMsg(skb1->data, ASF_ICMP_DEST_UNREACH, ASF_ICMP_CODE_FRAG_NEEDED, pSA->ulPathMTU, ulVSGId);
+				ASFIPSec4SendIcmpErrMsg(skb1->data, ASF_ICMP_DEST_UNREACH, ASF_ICMP_CODE_FRAG_NEEDED, pSA->ulInnerPathMTU, ulVSGId);
 				rcu_read_unlock();
 				return 1;
 			}
 			if (pSA->SAParams.bRedSideFragment) {
 				ASFIPSEC_DEBUG("Red side fragmentation is enabled");
 					if (unlikely(asfIpv4Fragment(skb1,
-						pSA->ulPathMTU - (pSA->ulSecOverHead + usPadLen),
-						pSA->ulL2BlobLen + (pSA->ulSecOverHead + usPadLen),
+						pSA->ulInnerPathMTU,
+						pSA->ulL2BlobLen,
 						ASF_TRUE, skb1->dev, &skb))) {
 					ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
@@ -1535,8 +1535,8 @@ static inline int secfp_try_fastPathOutv4(
 				if (!(skb_shinfo(skb1)->frag_list || skb_shinfo(skb1)->nr_frags)) {
 					ASFIPSEC_DEBUG("Trying to see if we can fit in two fragment");
 					/* In the 2 fragment case, total packet size would include additional ip header length */
-					/* Assumption: rest are accounted in ulPathMTU */
-					if ((iph->tot_len + pSA->ulSecOverHead) <= (pSA->ulPathMTU * 2) &&
+					/* Assumption: rest are accounted in ulInnerPathMTU */
+					if (iph->tot_len <= (pSA->ulInnerPathMTU * 2) &&
 					(pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL)) { /* Can fit in 2 fragments */
 						ASFIPSEC_DEBUG("IP packet fits into 2 fragments");
 						ASFIPSEC_DEBUG("Current packet does not have a fragments, but will be fragmented subsequently ");
@@ -1554,7 +1554,7 @@ static inline int secfp_try_fastPathOutv4(
 						if (skb1->prev) {
 							ASFIPSEC_DEBUG("Allocated skb->prev");
 							skb_reserve(skb1->prev, ETH_HLEN + SECFP_IPV4_HDR_LEN);
-							skb1->prev->len = (iph->tot_len + (pSA->ulSecOverHead + usPadLen) - pSA->ulPathMTU);
+							skb1->prev->len = (iph->tot_len - pSA->ulInnerPathMTU);
 							skb1->prev->tail = skb1->prev->data + skb1->prev->len;
 						}
 					} else { /* Will not fit in 2 fragments */
@@ -1602,6 +1602,7 @@ static inline int secfp_try_fastPathOutv4(
 		ASFIPSEC_DBGL2("Out Process; pOuterIPHdr set to 0x%x",
 			(int)pOuterIpHdr);
 		/* Put sufficient data in the skb for post SEC processing */
+		skb->cb[SECFP_ICV_LENGTH] = pSA->SAParams.uICVSize;
 		*(unsigned int *) &(skb->cb[SECFP_SPD_CI_INDEX]) =
 				pSecInfo->outContainerInfo.ulSPDContainerId;
 		*(unsigned int *) &(skb->cb[SECFP_VSG_ID_INDEX]) = ulVSGId;
@@ -2210,12 +2211,12 @@ static inline unsigned int secfp_inHandleICVCheck(void *dsc, struct sk_buff *skb
 		skb_frag_t *frag;
 		total_frag = skb_shinfo(skb)->nr_frags;
 		frag = &skb_shinfo(skb)->frags[total_frag - 1];
-		frag->size -= SECFP_ICV_LEN;
-		skb->data_len -= SECFP_ICV_LEN;
-		skb->len -= SECFP_ICV_LEN;
+		frag->size -= skb->cb[SECFP_ICV_LENGTH];
+		skb->data_len -= skb->cb[SECFP_ICV_LENGTH];
+		skb->len -= skb->cb[SECFP_ICV_LENGTH];
 		ASFIPSEC_PRINT("\nskb->data_len %d", skb->data_len);
 	} else
-		skb->len -= SECFP_ICV_LEN;
+		skb->len -= skb->cb[SECFP_ICV_LENGTH];
 
 #else
 	return secfp_inHandleICVCheck3x(dsc, skb);
@@ -2556,7 +2557,7 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 										}
 									}
 									if (pOutSA)
-										pOutSA->ulPathMTU = ulPathMTU;
+										pOutSA->ulInnerPathMTU = ulPathMTU;
 								}
 							}
 						}
@@ -3642,10 +3643,10 @@ So all these special boundary cases need to be handled for nr_frags*/
 		if (pSA->SAParams.bAuth) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
-			if (unlikely(pTailSkb->len < SECFP_ICV_LEN)) {
+			if (unlikely(pTailSkb->len < pSA->SAParams.uICVSize)) {
 				/* pTailPrevSkb gets initialized in the case of fragments; This case comes
 				into picture only when we have fragments */
-				ulICVInPrevFrag = SECFP_ICV_LEN - pTailSkb->len;
+				ulICVInPrevFrag = pSA->SAParams.uICVSize - pTailSkb->len;
 				pCurICVLocBytePtrInPrevFrag = pTailPrevSkb->tail - ulICVInPrevFrag;
 				pCurICVLocBytePtr = pTailSkb->data;
 
@@ -3734,8 +3735,8 @@ So all these special boundary cases need to be handled for nr_frags*/
 					}
 					if (pSA->SAParams.bUseExtendedSequenceNumber) {
 						int kk;
-						pCurICVLoc = (unsigned int *)(pTailSkb->tail - SECFP_ICV_LEN);
-						pNewICVLoc = (unsigned int *)(pTailSkb->tail - SECFP_ICV_LEN + sizeof(unsigned int));
+						pCurICVLoc = (unsigned int *)(pTailSkb->tail - pSA->SAParams.uICVSize);
+						pNewICVLoc = (unsigned int *)(pTailSkb->tail - pSA->SAParams.uICVSize + sizeof(unsigned int));
 						for (kk = 2; kk >= 0; kk--)
 							*(pNewICVLoc + kk) = *(pCurICVLoc + kk);
 						secfp_appendESN(pSA, ulSeqNum, &ulLowerBoundSeqNum, (unsigned int *)pCurICVLoc);
@@ -3756,6 +3757,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 			pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1;
 
 		/* Copying information that is required post SEC operation */
+		pHeadSkb->cb[SECFP_ICV_LENGTH] = pSA->SAParams.uICVSize;
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]) = ulVSGId;
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]) = pSA->SAParams.ulSPI;
 		/* Pass the skb data pointer */
@@ -4395,10 +4397,11 @@ So all these special boundary cases need to be handled for nr_frags*/
 		if (pSA->SAParams.bAuth) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef SECFP_SG_SUPPORT
-			if (unlikely(pTailSkb->len < SECFP_ICV_LEN)) {
+			unsigned int *pCurICVLoc = 0;
+			if (unlikely(pTailSkb->len < pSA->SAParams.uICVSize)) {
 				/* pTailPrevSkb gets initialized in the case of fragments; This case comes
 				into picture only when we have fragments */
-				ulICVInPrevFrag = SECFP_ICV_LEN - pTailSkb->len;
+				ulICVInPrevFrag = pSA->SAParams.uICVSize - pTailSkb->len;
 				pCurICVLocBytePtrInPrevFrag = pTailPrevSkb->tail - ulICVInPrevFrag;
 				pCurICVLocBytePtr = pTailSkb->data;
 
@@ -4488,8 +4491,8 @@ So all these special boundary cases need to be handled for nr_frags*/
 					}
 					if (pSA->SAParams.bUseExtendedSequenceNumber) {
 						int kk;
-						pCurICVLoc = (unsigned int *)(pTailSkb->tail - SECFP_ICV_LEN);
-						pNewICVLoc = (unsigned int *)(pTailSkb->tail - SECFP_ICV_LEN + sizeof(unsigned int));
+						pCurICVLoc = (unsigned int *)(pTailSkb->tail - pSA->SAParams.uICVSize);
+						pNewICVLoc = (unsigned int *)(pTailSkb->tail - pSA->SAParams.uICVSize + sizeof(unsigned int));
 						for (kk = 2; kk >= 0; kk--)
 							*(pNewICVLoc + kk) = *(pCurICVLoc + kk);
 						secfp_appendESN(pSA, ulSeqNum, &ulLowerBoundSeqNum, (unsigned int *)pCurICVLoc);
@@ -4510,6 +4513,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 			pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1;
 
 		/* Copying information that is required post SEC operation */
+		pHeadSkb->cb[SECFP_ICV_LENGTH] = pSA->SAParams.uICVSize;
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]) = ulVSGId;
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]) = pSA->SAParams.ulSPI;
 		/* Pass the skb data pointer */
@@ -5059,7 +5063,7 @@ static inline void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA)
 	}
 	pAsfLogInfo->u.IPSecInfo.ucProtocol = pSA->SAParams.ucProtocol;
 	pAsfLogInfo->u.IPSecInfo.ulSeqNumber = 0xffff;
-	pAsfLogInfo->u.IPSecInfo.ulPathMTU = pSA->ulPathMTU;
+	pAsfLogInfo->u.IPSecInfo.ulPathMTU = pSA->ulInnerPathMTU;
 	pAsfLogInfo->u.IPSecInfo.ulSPI = pSA->SAParams.ulSPI;
 	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6 == 0) {
 		pAsfLogInfo->u.IPSecInfo.Address.IP_Version = 4;

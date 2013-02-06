@@ -1732,6 +1732,21 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 							OP_ALG_ALGSEL_AES |
 							OP_ALG_AAI_CTR_XCBCMAC;
 			break;
+		case SECFP_AES_CCM_ICV8:
+		case SECFP_AES_CCM_ICV12:
+		case SECFP_AES_CCM_ICV16:
+			pSA->ctx.class1_alg_type = OP_TYPE_CLASS1_ALG |
+							OP_ALG_ALGSEL_AES |
+							OP_ALG_AAI_CCM;
+			break;
+		case SECFP_AES_GCM_ICV8:
+		case SECFP_AES_GCM_ICV12:
+		case SECFP_AES_GCM_ICV16:
+		case SECFP_NULL_AES_GMAC:
+			pSA->ctx.class1_alg_type = OP_TYPE_CLASS1_ALG |
+							OP_ALG_ALGSEL_AES |
+							OP_ALG_AAI_GCM;
+			break;
 		case SECFP_ESP_NULL:
 			ASFIPSEC_DEBUG("NULL Encryption set");
 			break;
@@ -1909,7 +1924,8 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 					ALIGN(pSA->ctx.split_key_len, 16);
 			break;
 		default:
-			ASFIPSEC_DEBUG("Invalid ucAuthAlgo");
+			ASFIPSEC_WARN("unsupported ucAuthAlgo %d\n",
+				pSAParams->ucAuthAlgo);
 			return -1;
 		}
 
@@ -1936,11 +1952,27 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 						OP_ALG_ALGSEL_AES |
 						OP_ALG_AAI_CTR_XCBCMAC;
 			break;
+		case SECFP_AES_CCM_ICV8:
+		case SECFP_AES_CCM_ICV12:
+		case SECFP_AES_CCM_ICV16:
+			pSA->ctx.class1_alg_type = OP_TYPE_CLASS1_ALG |
+							OP_ALG_ALGSEL_AES |
+							OP_ALG_AAI_CCM;
+			break;
+		case SECFP_AES_GCM_ICV8:
+		case SECFP_AES_GCM_ICV12:
+		case SECFP_AES_GCM_ICV16:
+		case SECFP_NULL_AES_GMAC:
+			pSA->ctx.class1_alg_type = OP_TYPE_CLASS1_ALG |
+							OP_ALG_ALGSEL_AES |
+							OP_ALG_AAI_GCM;
+			break;
 		case SECFP_ESP_NULL:
 			ASFIPSEC_DEBUG("NULL Encryption set");
 			break;
 		default:
-			ASFIPSEC_WARN("Invalid ucEncryptAlgo");
+			ASFIPSEC_WARN("unsupported ucEncryptAlgo %d\n",
+				pSAParams->ucCipherAlgo);
 			return -1;
 		}
 	}
@@ -2590,7 +2622,7 @@ unsigned int secfp_createOutSA(
 		pSA->ulSecOverHead = SECFP_IPV4_HDR_LEN
 			+ SECFP_ESP_HDR_LEN + SECFP_ESP_TRAILER_LEN
 			+ pSA->SAParams.ulIvSize;
-		pSA->ulPathMTU = ulMtu;
+
 		pSA->ulSecLenIncrease = SECFP_IPV4_HDR_LEN;
 	} else { /* Handle IPv6 case */
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -2633,9 +2665,10 @@ unsigned int secfp_createOutSA(
 	with the Networking Stack seq number */
 	atomic_set(&pSA->ulLoSeqNum, 2);
 
-	if (pSA->SAParams.bAuth) {
-		pSA->ulSecOverHead += SECFP_ICV_LEN;
-		pSA->ulSecLenIncrease += SECFP_ICV_LEN;
+	/* update ICV size to output length */
+	if (SAParams->uICVSize) {
+		pSA->ulSecOverHead += SAParams->uICVSize;
+		pSA->ulSecLenIncrease += SAParams->uICVSize;
 	}
 
 	pSA->ulCompleteOverHead = pSA->ulSecOverHead;
@@ -2643,6 +2676,9 @@ unsigned int secfp_createOutSA(
 
 	ASFIPSEC_DEBUG(" Overhead = %d", pSA->ulCompleteOverHead);
 	/* revisit - usAuthKeyLen or usAuthKeySize */
+	pSA->ulInnerPathMTU = ulMtu - pSA->ulSecOverHead;
+	pSA->ulInnerPathMTU -= (pSA->ulInnerPathMTU)
+				& (pSA->SAParams.ulBlockSize - 1);
 
 #ifdef CONFIG_ASF_SEC4x
 	pSA->option[1] = SECFP_NONE;
@@ -2826,7 +2862,10 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 			}
 			break;
 		case ASFIPSEC_UPDATE_MTU:
-			pOutSA->ulPathMTU = pModSA->u.ulMtu;
+			pOutSA->ulInnerPathMTU =
+				pModSA->u.ulMtu - pOutSA->ulSecOverHead;
+			pOutSA->ulInnerPathMTU -= (pOutSA->ulInnerPathMTU)
+				& (pOutSA->SAParams.ulBlockSize - 1);
 			break;
 		case ASFIPSEC_UPDATE_L2BLOB:
 			memcpy(pOutSA->l2blob, pModSA->u.l2blob.l2blob,
@@ -3064,12 +3103,12 @@ unsigned int secfp_CreateInSA(
 		/* Icv length is included as we are going to use it to store
 		* the recalculated Icv
 		*/
-		pSA->ulReqTailRoom = SECFP_APPEND_BUF_LEN_FIELD + SECFP_ICV_LEN;
+		pSA->ulReqTailRoom = SECFP_APPEND_BUF_LEN_FIELD + pSA->SAParams.uICVSize;
 		if (pSA->SAParams.bUseExtendedSequenceNumber)
 			pSA->ulReqTailRoom += SECFP_HO_SEQNUM_LEN;
 		/*
 		if (pSA->bAH)
-		pSA->ulReqTailRoom += SECFP_ICV_LEN;
+		pSA->ulReqTailRoom += pSA->SAParams.uICVSize;
 		*/
 		pSA->ulSecHdrLen = SECFP_ESP_HDR_LEN + pSA->SAParams.ulIvSize;
 		/*
