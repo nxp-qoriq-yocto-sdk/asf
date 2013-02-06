@@ -1,14 +1,17 @@
 #/**************************************************************************
-# * Copyright 2010-2011, Freescale Semiconductor, Inc. All rights reserved.
+# * Copyright 2010-2013, Freescale Semiconductor, Inc. All rights reserved.
 # ***************************************************************************/
 #/*
 # * File:	Makefile
 # *
 # */
 
-include $(KERNEL_PATH)/.config
 TOPDIR := $(shell pwd)
 export TOPDIR
+
+include $(KERNEL_PATH)/.config
+include asfconfig.mk
+
 #------------------------------------------------------------------------------
 #  Include Definitions
 #------------------------------------------------------------------------------
