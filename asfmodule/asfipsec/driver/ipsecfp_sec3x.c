@@ -95,7 +95,7 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 
 				pSA->validIpPktLen = (SECFP_ESP_HDR_LEN +
 							iphdrlen) +
-							pSA->SAParams.ulIvSize + SECFP_ICV_LEN;
+							pSA->SAParams.ulIvSize + pSA->SAParams.uICVSize;
 			} else {
 				pSA->option[0] = SECFP_CIPHER;
 				if (!((pSA->desc_hdr_template &
@@ -126,14 +126,14 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 			pSA->option[1] = SECFP_NONE;
 			pSA->validIpPktLen = SECFP_ESP_HDR_LEN +
 						iphdrlen +
-						SECFP_ICV_LEN;
+						pSA->SAParams.uICVSize;
 		}
 	} else {
 		pSA->option[1] = SECFP_NONE;
 		if (pSA->SAParams.bEncrypt && pSA->SAParams.bAuth) {
 			/* In the case of ESP_NULL, IV Size will be 0 */
 			pSA->validIpPktLen = (SECFP_ESP_HDR_LEN	+ iphdrlen) +
-						pSA->SAParams.ulIvSize + SECFP_ICV_LEN;
+						pSA->SAParams.ulIvSize + pSA->SAParams.uICVSize;
 
 			if (((pSA->desc_hdr_template &
 				(DESC_HDR_MODE0_AES_CTR | DESC_HDR_SEL0_AESU))
@@ -164,7 +164,7 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 							DESC_HDR_MODE0_MDEU_CICV |
 							DESC_HDR_DIR_INBOUND;
 			pSA->validIpPktLen = SECFP_ESP_HDR_LEN +
-					iphdrlen + SECFP_ICV_LEN;
+					iphdrlen + pSA->SAParams.uICVSize;
 		}
 	}
 	if (pSA->SAParams.bAuth)
@@ -315,7 +315,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 			iDword1 = 5;
 		}
 		SECFP_SET_DESC_PTR(desc->ptr[iDword],
-				SECFP_ICV_LEN,
+				pSA->SAParams.uICVSize,
 				ptr+skb->len , 0);
 
 		SECFP_SET_DESC_PTR(desc->ptr[iDword1],
@@ -590,7 +590,7 @@ unsigned int secfp_inHandleICVCheck3x(void *dsc, struct sk_buff *skb)
 			ASFIPSEC_WARN("hw cmp: ICV Verification failed");
 			return 1;
 		} else {
-			skb->len -= SECFP_ICV_LEN;
+			skb->len -= skb->cb[SECFP_ICV_LENGTH];
 		}
 	} else if (skb->cb[SECFP_3X_SA_OPTION_INDEX] == SECFP_AUTH) {
 	/* In the two submission case, only first time around,
@@ -613,7 +613,7 @@ unsigned int secfp_inHandleICVCheck3x(void *dsc, struct sk_buff *skb)
 					desc->hdr_lo);
 				return 1;
 			} else {
-				skb->len -= SECFP_ICV_LEN;
+				skb->len -= skb->cb[SECFP_ICV_LENGTH];
 				return 0;
 			}
 		} else {
@@ -648,7 +648,7 @@ unsigned int secfp_inHandleICVCheck3x(void *dsc, struct sk_buff *skb)
 				ASFIPSEC_WARN("Byte comparison ICV failed");
 				return 1;
 			}
-			skb->len -= SECFP_ICV_LEN;
+			skb->len -= skb->cb[SECFP_ICV_LENGTH];
 			return 0;
 		}
 	} else if (skb->cb[SECFP_3X_SA_OPTION_INDEX] == SECFP_AESCTR_BOTH) {
@@ -665,7 +665,7 @@ unsigned int secfp_inHandleICVCheck3x(void *dsc, struct sk_buff *skb)
 			ASFIPSEC_WARN("ICV Comparison failed");
 			return 1;
 		}
-		skb->len -= SECFP_ICV_LEN;
+		skb->len -= skb->cb[SECFP_ICV_LENGTH];
 	}
 	return 0;
 }
@@ -708,8 +708,8 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 	{
 		desc->hdr = pSA->hdr_Auth_template_0;
 
-		ASFIPSEC_DEBUG("skb->len = %d, addr = 0x%x, SECFP_ICV_LEN =%d",
-			skb->len, addr, SECFP_ICV_LEN);
+		ASFIPSEC_DEBUG("skb->len = %d, addr = 0x%x, pSA->SAParams.uICVSize =%d",
+			skb->len, addr, pSA->SAParams.uICVSize);
 
 		SECFP_SET_DESC_PTR(desc->ptr[0], 0, 0, 0)
 		SECFP_SET_DESC_PTR(desc->ptr[1], 0, 0, 0)
@@ -727,12 +727,12 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		/* Setting up ICV Check :
 			Only when AES_XCBC_MAC is not programmed */
 		if (pSA->SAParams.ucAuthAlgo != SECFP_HMAC_AES_XCBC_MAC) {
-			SECFP_SET_DESC_PTR(desc->ptr[4], SECFP_ICV_LEN,
-				addr + len - SECFP_ICV_LEN, 0)
+			SECFP_SET_DESC_PTR(desc->ptr[4], pSA->SAParams.uICVSize,
+				addr + len - pSA->SAParams.uICVSize, 0)
 			SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
 		} else {
 			SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0)
-			SECFP_SET_DESC_PTR(desc->ptr[6], SECFP_ICV_LEN,
+			SECFP_SET_DESC_PTR(desc->ptr[6], pSA->SAParams.uICVSize,
 				addr + len, 0);
 #ifdef ASF_IPSEC_DEBUG
 		{
@@ -1124,18 +1124,18 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 				skb->data_len + ulAppendLen, ptr,
 				DESC_PTR_LNKTBL_JUMP);
 			SECFP_SET_DESC_PTR(desc->ptr[iDword],
-				SECFP_ICV_LEN,
+				pSA->SAParams.uICVSize,
 				*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX]) +
-					pTailSkb->len - SECFP_ICV_LEN,
+					pTailSkb->len - pSA->SAParams.uICVSize,
 				0);
 		} else {
 			SECFP_SET_DESC_PTR(desc->ptr[3],
 					skb->len + ulAppendLen, ptr, 0);
 			if (skb->prev) {
 				SECFP_SET_DESC_PTR(desc->ptr[iDword],
-					SECFP_ICV_LEN,
+					pSA->SAParams.uICVSize,
 					*(unsigned int *) &(skb->prev->cb[SECFP_SKB_DATA_DMA_INDEX]) +
-						skb->prev->len - SECFP_ICV_LEN,
+						skb->prev->len - pSA->SAParams.uICVSize,
 					0);
 			} else {
 				ASFIPSEC_DEBUG("Not prev and Not frag lst"
@@ -1345,7 +1345,7 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 			SECFP_SET_DESC_PTR(desc->ptr[6],
 				12,
 				(*(unsigned int *) &(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])
-					+ pTailSkb->len - SECFP_ICV_LEN),
+					+ pTailSkb->len - pSA->SAParams.uICVSize),
 				0);
 
 		} else {
@@ -1366,7 +1366,7 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 				SECFP_SET_DESC_PTR(desc->ptr[6],
 					12,
 					(*(unsigned int *) &(skb->prev->cb[SECFP_SKB_DATA_DMA_INDEX])
-						+ skb->prev->len - SECFP_ICV_LEN),
+						+ skb->prev->len - pSA->SAParams.uICVSize),
 					0);
 			} else {
 				ASFIPSEC_WARN("Not frag list and skb->prev");
@@ -1464,8 +1464,8 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 		desc->hdr = pSA->hdr_Auth_template_0;
 
 		ASFIPSEC_DEBUG("skb->len = %d, addr = "\
-			"0x%x, SECFP_ICV_LEN =%d",
-			skb->len, addr, SECFP_ICV_LEN);
+			"0x%x, pSA->SAParams.uICVSize =%d",
+			skb->len, addr, pSA->SAParams.uICVSize);
 		SECFP_SET_DESC_PTR(desc->ptr[0], 0, 0, 0)
 		SECFP_SET_DESC_PTR(desc->ptr[1], 0, 0, 0)
 		SECFP_SET_DESC_PTR(desc->ptr[2],
@@ -1487,18 +1487,18 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 		/* Setting up ICV Check : Only when AES_XCBC_MAC is not programmed */
 		if (pSA->SAParams.ucAuthAlgo != SECFP_HMAC_AES_XCBC_MAC) {
 			SECFP_SET_DESC_PTR(desc->ptr[4],
-				SECFP_ICV_LEN,
+				pSA->SAParams.uICVSize,
 				(*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])
-					+ len - SECFP_ICV_LEN), 0)
+					+ len - pSA->SAParams.uICVSize), 0)
 
 			SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
 		} else {
 			SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0)
 
 			SECFP_SET_DESC_PTR(desc->ptr[6],
-				SECFP_ICV_LEN,
+				pSA->SAParams.uICVSize,
 				(*(unsigned int *)&(pTailSkb->cb[SECFP_SKB_DATA_DMA_INDEX])
-				+ len - SECFP_ICV_LEN), 0)
+				+ len - pSA->SAParams.uICVSize), 0)
 
 #ifdef ASF_IPSEC_DEBUG
 			{
