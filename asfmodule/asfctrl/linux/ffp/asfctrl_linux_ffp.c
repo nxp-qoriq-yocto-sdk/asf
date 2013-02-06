@@ -528,31 +528,38 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			}
 			fl_out.fl4_tos = 0;
 		#else
-			fl_out.u.ip4.fl4_sport = ct_tuple_reply->dst.u.tcp.port;
-			fl_out.u.ip4.fl4_dport = ct_tuple_reply->src.u.tcp.port;
-			fl_out.flowi_proto = ct_tuple_orig->dst.protonum;
+			fl_out.u.ip4.fl4_sport = pInfo->tuple.usSrcPort;
+			fl_out.u.ip4.fl4_dport = pInfo->tuple.usDestPort;
+			fl_out.flowi_proto = pInfo->tuple.ucProtocol;
 			if (bIPv6 == true) {
-				ipv6_addr_copy(&fl_out.u.ip6.daddr,
-					&(ct_tuple_reply->src.u3.in6));
 				ipv6_addr_copy(&fl_out.u.ip6.saddr,
-					&(ct_tuple_reply->dst.u3.in6));
+				(struct in6_addr *)&(pInfo->tuple.ipv6SrcIp));
+				ipv6_addr_copy(&fl_out.u.ip6.daddr,
+				(struct in6_addr *)&(pInfo->tuple.ipv6DestIp));
 			} else {
-				fl_out.u.ip4.daddr = ct_tuple_reply->src.u3.ip;
-				fl_out.u.ip4.saddr = ct_tuple_reply->dst.u3.ip;
+				fl_out.u.ip4.daddr = pInfo->tuple.ulDestIp;
+				fl_out.u.ip4.saddr = pInfo->tuple.ulSrcIp;
 			}
 			fl_out.flowi_tos = 0;
 		#endif
-
 			result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
 				&ipsecInInfo, net, fl_out, bIPv6);
 			if (result) {
 				ASFCTRL_INFO("IPSEC Not Offloadable for flow");
 				goto delete_flow;
 			}
+			if (bIPv6 == true) {
+				ipv6_addr_copy((struct in6_addr *)&cmd.tuple.ipv6SrcIp,
+				 (struct in6_addr *)&(pInfo->tuple.ipv6SrcIp));
+				ipv6_addr_copy((struct in6_addr *)&cmd.tuple.ipv6DestIp,
+				(struct in6_addr *)&(pInfo->tuple.ipv6DestIp));
+			} else {
+				cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
+				cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
+			}
+			cmd.tuple.bIPv4OrIPv6 = bIPv6 == true ? 1 : 0;
 			cmd.u.ipsec.ipsecInfo = ipsecInInfo;
 			cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
-			cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
-			cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
 			cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
 			cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
 

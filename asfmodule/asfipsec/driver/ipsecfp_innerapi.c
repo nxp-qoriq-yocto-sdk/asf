@@ -2654,7 +2654,6 @@ unsigned int secfp_createOutSA(
 		pSA->ulSecOverHead = SECFP_IPV6_HDR_LEN
 			+ SECFP_ESP_HDR_LEN + SECFP_ESP_TRAILER_LEN
 			+ pSA->SAParams.ulIvSize;
-		pSA->ulPathMTU = ulMtu;
 		pSA->ulSecLenIncrease = SECFP_IPV6_HDR_LEN;
 #endif
 	}

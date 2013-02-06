@@ -1356,7 +1356,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			(flow && flow->bIPsecIn) ? &flow->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
 			asf_warn("IPSEC InVerify Failed\n");
-			return;
+			if (flow)
+				FlowValidate = ASF_FLOWVALIDATE_NORAMAL;
+			goto gen_indications;
 		}
 	}
 #endif

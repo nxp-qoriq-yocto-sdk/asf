@@ -286,8 +286,17 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 			pdb->options |= PDBOPTS_ESP_ARS64;
 	}
 
+#ifdef ASF_IPV6_FP_SUPPORT
+	/* NH, NH Offse, IP options */
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		pdb->hmo_ip_hdr_len = SECFP_IPV6_HDR_LEN;
+		pdb->options |= PDBOPTS_ESP_IPV6;
+	} else
+#endif
+	{
 		pdb->hmo_ip_hdr_len = SECFP_IPV4_HDR_LEN;
 		pdb->options |= PDBOPTS_ESP_VERIFY_CSUM;
+	}
 #ifndef ASF_IPV6_FP_SUPPORT
 	pdb->hmo_ip_hdr_len |= PDBHMO_ESP_DECAP_DEC_TTL;
 #endif
@@ -436,16 +445,44 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	struct ipsec_encap_pdb *pdb;
 	u16 iphdrlen;
 	struct iphdr *iph = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	struct ipv6hdr *iphv6 = 0;
+	/*Deducing the IP version of SA selectors
+	Assuming All SA selectors are of SAME IP versions*/
+	SASel_t *pSel = NULL;
+	bool bSelIPv4OrIPv6 = 0;
+	if (pSA->pSelList)
+		pSel = &pSA->pSelList->srcSel;
+	if (pSel && pSel->ucNumSelectors) {
+		if (pSel->selNodes[0].IP_Version == 6)
+			bSelIPv4OrIPv6 = 1;
+	}
+
+	/* todo take care of ip optionsa and ext header */
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		iphdrlen = SECFP_IPV6_HDR_LEN;
+		init_sh_desc_pdb(sh_desc, (HDR_SHARE_SERIAL |
+			CMD_SHARED_DESC_HDR | HDR_ONE),
+			sizeof(*pdb) + iphdrlen);
+	} else
+#endif
+	{
 		iphdrlen = SECFP_IPV4_HDR_LEN;
 		init_sh_desc_pdb(sh_desc, (HDR_SHARE_SERIAL |
 			CMD_SHARED_DESC_HDR | HDR_ONE),
 			sizeof(*pdb) + (iphdrlen) + pSA->usNatHdrSize);
+	}
 
 	/* Copy PDB options */
 	/* fill in pdb */
 	pdb = sh_desc_pdb(sh_desc);
 
 	/* NH, NH Offse, IP options */
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bSelIPv4OrIPv6)
+		pdb->ip_nh = SECFP_PROTO_IPV6;
+	else
+#endif
 		pdb->ip_nh = SECFP_PROTO_IP;
 
 	pdb->ip_nh_offset = 0;
@@ -469,6 +506,24 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	pdb->seq_num = atomic_read(&pSA->ulLoSeqNum);
 	pdb->ip_hdr_len = iphdrlen + pSA->usNatHdrSize;
 
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		pdb->options |= PDBOPTS_ESP_IPV6;
+		iphv6 = (struct ipv6hdr *) pdb->ip_hdr;
+		iphv6->version = 6;
+		iphv6->priority = 0;
+		memset(iphv6->flow_lbl, 0, 3);
+		iphv6->payload_len = 0;
+
+		iphv6->nexthdr = SECFP_PROTO_ESP;
+		iphv6->hop_limit = SECFP_IP_TTL;
+		memcpy(iphv6->saddr.s6_addr32,
+			pSA->SAParams.tunnelInfo.addr.iphv6.saddr, 16);
+		memcpy(iphv6->daddr.s6_addr32,
+			pSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
+	} else {
+		if (!bSelIPv4OrIPv6)
+#endif
 			if (pSA->SAParams.bCopyDscp)
 				pdb->options |= PDBOPTS_ESP_DIFFSERV;
 		/* encap-update ip header checksum */
@@ -522,6 +577,9 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 			iph->tot_len += pSA->usNatHdrSize;
 		}
 		ip_send_check(iph);
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 
 	switch (pSA->SAParams.ucCipherAlgo) {
 	case SECFP_AESCTR:
@@ -1002,10 +1060,22 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 	unsigned short usPadLen = 0;
 	struct iphdr *iph = ip_hdr(skb);
 
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (iph->version == 6) {
+		struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
+		usPadLen = (ipv6h->payload_len + SECFP_IPV6_HDR_LEN
+				+ SECFP_ESP_TRAILER_LEN)
+			& (pSA->SAParams.ulBlockSize - 1);
+		usPadLen = (usPadLen == 0) ? 0 :
+			pSA->SAParams.ulBlockSize - usPadLen;
+	} else
+#endif
+	{
 		usPadLen = (iph->tot_len + SECFP_ESP_TRAILER_LEN)
 			& (pSA->SAParams.ulBlockSize - 1);
 		usPadLen = (usPadLen == 0) ? 0 :
 			pSA->SAParams.ulBlockSize - usPadLen;
+	}
 
 	ASFIPSEC_DEBUG("ulSecOverHead %d skb->len %d, data_len=%d pad_len =%d",
 		pSA->ulSecOverHead, skb->len, skb->data_len, usPadLen);
@@ -1516,6 +1586,11 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 	} else {
 		dma_addr_t ptr;
 		int hdr_len;
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+			hdr_len = SECFP_IPV6_HDR_LEN;
+		else
+#endif
 			hdr_len = SECFP_IPV4_HDR_LEN;
 
 		ptr = dma_map_single(pSA->ctx.jrdev, skb->data,

@@ -1218,7 +1218,9 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	ASF_boolean_t	bRevalidate = ASF_FALSE;
 	unsigned char ipv6TClass = 0;
+#ifndef ASF_SECFP_PROTO_OFFLOAD
 	unsigned short usPadLen = 0;
+#endif
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
 #elif !defined(ASF_QMAN_IPSEC)
@@ -1334,6 +1336,8 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 			ASFIPSEC_DEBUG("Packet size is > Path MTU and fragment bit set in SA or packet");
 			/* Need to send to normal path */
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
+			icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0,
+				pSA->ulInnerPathMTU);
 			ASFSkbFree(skb);
 			rcu_read_unlock();
 			return 0;
@@ -1591,6 +1595,9 @@ static inline int secfp_try_fastPathOutv4(
 #elif !defined(ASF_QMAN_IPSEC)
 	void *desc;
 #endif
+#ifndef ASF_SECFP_PROTO_OFFLOAD
+	unsigned short usPadLen = 0;
+#endif
 #ifdef SECFP_SG_SUPPORT
 	char bScatterGatherList = SECFP_NO_SCATTER_GATHER;
 	unsigned char secout_sg_flag;
@@ -1599,7 +1606,6 @@ static inline int secfp_try_fastPathOutv4(
 	ASFLogInfo_t AsfLogInfo;
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
-	unsigned short usPadLen = 0;
 	rcu_read_lock();
 
 	ASFIPSEC_FENTRY;
@@ -2184,6 +2190,12 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 			skb->cb[SECFP_OUTB_L2_WITH_PPPOE]);
 
 		if (unlikely(skb->cb[SECFP_OUTB_L2_WITH_PPPOE])) {
+#ifdef ASF_IPV6_FP_SUPPORT
+			if (iph->version == 6) {
+				ipv6h = (struct ipv6hdr *) iph;
+				tot_len = ipv6h->payload_len + SECFP_IPV6_HDR_LEN;
+			} else
+#endif
 				tot_len = iph->tot_len;
 			/* PPPoE packet:
 			Set Payload length in PPPoE header */
@@ -2665,22 +2677,8 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	unsigned int  fragCnt = 0;
 	inSA_t *pSA;
-	struct iphdr *iph, *inneriph;
+	struct iphdr *inneriph;
 	struct sk_buff *pHeadSkb;
-#ifdef ASF_SECFP_PROTO_OFFLOAD
-	unsigned short int *ptrhdrOffset;
-	unsigned short sport, dport;
-	unsigned short inneriphdrlen;
-	unsigned int ulPathMTU, ii;
-	unsigned char protocol;
-	SPDOutSALinkNode_t *pOutSALinkNode;
-	SPDOutContainer_t *pOutContainer;
-	outSA_t *pOutSA = NULL;
-	char	*pIcmpHdr;
-	ASF_IPAddr_t daddr, saddr;
-	ASF_IPAddr_t tunnelsaddr;
-	bool isFragmented = 0;
-#endif
 	pHeadSkb = *pSkb;
 
 	ASFIPSEC_DEBUG("inComplete: Doing SA related processing");
@@ -3362,6 +3360,13 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 	}
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	/* dealing with inner ip header */
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (inneriph->version == 6) {
+		struct ipv6hdr *ipv6h2 = (struct ipv6hdr *) inneriph;
+		skb->len = ipv6h2->payload_len + SECFP_IPV6_HDR_LEN;
+		ipv6h2->hop_limit--;
+	} else
+#endif
 	{
 		skb->len = inneriph->tot_len;
 		ip_decrease_ttl(inneriph);
@@ -3869,7 +3874,7 @@ static inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 		pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);
 		pIPSecPolicyPPStats->NumInBoundInPkts++;
 
-		if (pSA->bSendPktToNormalPath) {
+		if (unlikely(pSA->bSendPktToNormalPath)) {
 			/* This can happen if SPDs have been modified and there is
 					a requirement for revalidation
 				*/
@@ -4192,6 +4197,11 @@ So all these special boundary cases need to be handled for nr_frags*/
 			secfp_checkSeqNum(pSA, ulSeqNum,
 				ulLowerBoundSeqNum, pHeadSkb);
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+#else
+		/* updating the length and data pointer of packet according
+		   to the packet after decryption */
+		pHeadSkb->data += SECFP_IPV6_HDR_LEN + pSA->ulSecHdrLen;
+		pHeadSkb->len -= (SECFP_IPV6_HDR_LEN + pSA->ulSecHdrLen);
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -4629,8 +4639,8 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	rcu_read_lock();
 	SECFP_EXTRACT_PKTINFO(skb1, iph, (iph->ihl*4), ulSPI, ulSeqNum)
 	pSA = secfp_findInv4SA(ulVSGId, iph->protocol, ulSPI, iph->daddr, &ulHashVal);
-	if (pSA) {
-
+	if (likely(pSA)) {
+		/* SA Found */
 		ASFIPSEC_DEBUG(" pSA Found coreId=%d", smp_processor_id());
 		pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 		pIPSecPPGlobalStats->ulTotInRecvPkts++;
@@ -4638,7 +4648,7 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);
 		pIPSecPolicyPPStats->NumInBoundInPkts++;
 
-		if (pSA->bSendPktToNormalPath) {
+		if (unlikely(pSA->bSendPktToNormalPath)) {
 			/* This can happen if SPDs have been modified and there is
 					a requirement for revalidation
 				*/
@@ -5261,20 +5271,23 @@ static int secfp_CheckInPkt(unsigned int ulVSGId,
 callverify:
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 	ASFIPSEC_DEBUG("Calling Inbound SPD verification function");
-	if (ASFIPSecCbFn.pFnVerifySPD) {
-		/* Homogenous buffer */
-		Buffer.nativeBuffer = skb;
-
-		ASFIPSecCbFn.pFnVerifySPD(*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
-				pIPSecOpque->ulInSPDContainerId,
-				pIPSecOpque->ulInSPDMagicNumber,
-				*(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]),
-				pIPSecOpque->ucProtocol,
-				pIPSecOpque->DestAddr,
-				Buffer,
-				secfp_SkbFree,
-				skb, bRevalidate, ulCommonInterfaceId);
+	if (!ASFIPSecCbFn.pFnVerifySPD) {
+		ASFIPSEC_DEBUG("IPsec not registered\n");
+		ASFSkbFree(skb);
+		return 1;
 	}
+	/* Homogenous buffer */
+	Buffer.nativeBuffer = skb;
+	ASFIPSecCbFn.pFnVerifySPD(*(unsigned int *)
+			&(skb->cb[SECFP_VSG_ID_INDEX]),
+			pIPSecOpque->ulInSPDContainerId,
+			pIPSecOpque->ulInSPDMagicNumber,
+			*(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]),
+			pIPSecOpque->ucProtocol,
+			pIPSecOpque->DestAddr,
+			Buffer,
+			secfp_SkbFree,
+			skb, bRevalidate, ulCommonInterfaceId);
 	return 1;
 }
 
@@ -5477,7 +5490,7 @@ static int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 	pSkb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
 
 	if (pSkb) {
-		pSkb->data += 60;
+		pSkb->data += 128; /* Reserve space to avoid reallocation */
 		pSkb->data += ASF_IPLEN + ASF_ICMPLEN;
 		iplen = ((*(unsigned char *)(pOrgData) & 0xf) << 2);
 		memcpy(pSkb->data, pOrgData, iplen + 8);

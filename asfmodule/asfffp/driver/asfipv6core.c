@@ -449,7 +449,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 			(flow && flow->bIPsecIn) ? &flow->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
 			asf_warn("IPSEC InVerify Failed\n");
-			return ASF_DONE;
+			if (flow)
+				FlowValidate = ASF_FLOWVALIDATE_NORAMAL;
+			goto gen_indications;
 		}
 	}
 #endif
@@ -748,7 +750,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		if (pFFPIPSecOut) {
 			if (pFFPIPSecOut(ulVsgId,
 				skb, &flow->ipsecInfo) == 0) {
-				return ASF_DONE;
+				goto gen_indications;
 			} else
 				return ASF_RTS;
 		}
