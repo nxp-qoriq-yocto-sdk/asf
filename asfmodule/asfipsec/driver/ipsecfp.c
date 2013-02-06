@@ -1248,6 +1248,16 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	ASFIPSEC_FENTRY;
 	pSA = secfp_findOutSA(ulVSGId, pSecInfo, skb1, ipv6TClass,
 			&pContainer, &bRevalidate);
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifndef SECFP_SG_SUPPORT
+	if (skb_shinfo(skb1)->frag_list) {
+		struct sk_buff *pSkb;
+		asfIpv6MakeFragment(skb, &pSkb);
+		skb = pSkb;
+		ipv6h = ipv6_hdr(skb);
+	}
+#endif
+#endif
 	if (unlikely(pSA == NULL)) {
 		ASFIPSEC_DEBUG("SA Not Found");
 		goto no_sa;
@@ -1272,24 +1282,12 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifndef SECFP_SG_SUPPORT
-	if ((skb_shinfo(skb1)->frag_list)
-			|| (skb_shinfo(skb1)->nr_frags)) {
-		ASFIPSEC_DEBUG("Fragmentation activated");
-
-			if (asfReasmLinearize(&skb1,
-				ipv6h->payload_len + SECFP_IPV6_HDR_LEN,
-				VPN_TOT_OVHD, VPN_HDROOM)) {
-				ASFIPSEC_DPERR("asflLinearize failed");
-				ASFSkbFree(skb1);
-				rcu_read_unlock();
-				return 0;
-			}
-			ASFIPSEC_DEBUG("skb->len = %d", skb->len);
-			ASFIPSEC_DEBUG("skb1->len = %d", skb1->len);
-			skb_reset_network_header(skb1);
-			ipv6h = ipv6_hdr(skb1);
-			skb = skb1;
-		}
+	if (skb_shinfo(skb1)->nr_frags) {
+		ASFIPSEC_DPERR("Fragments with nr_frags not handled");
+		ASFSkbFree(skb1);
+		rcu_read_unlock();
+		return 0;
+	}
 #else
 /* IF SEC_SG is ON */
 	if ((skb_shinfo(skb1)->frag_list)
@@ -1312,12 +1310,6 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 			skb = skb1;
 		}
 #endif /* SECFP_SG_SUPPORT */
-	if (skb_shinfo(skb1)->frag_list) {
-		struct sk_buff *pSkb;
-		asfIpv6MakeFragment(skb, &pSkb);
-		skb = pSkb;
-
-	}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 #ifdef SECFP_SG_SUPPORT
 	secout_sg_flag = SECFP_OUT|bScatterGatherList;
@@ -1338,9 +1330,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
 			icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0,
 				pSA->ulInnerPathMTU);
-			ASFSkbFree(skb);
-			rcu_read_unlock();
-			return 0;
+			goto drop_skb_list;
 		}
 		ASFIPSEC_DEBUG("outv6: skb = 0x%x skb1 = 0x%x, nextSkb = 0x%x",
 			(unsigned int) skb, (unsigned int) skb1, (unsigned int) pNextSkb);
@@ -1383,9 +1373,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		if (!desc) {
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
 			ASFIPSEC_DPERR("desc allocation failure");
-			ASFSkbFree(skb);
-			rcu_read_unlock();
-			return 0;
+			goto drop_skb_list;
 		}
 #ifdef SECFP_SG_SUPPORT
 		if ((secout_sg_flag & SECFP_SCATTER_GATHER)
@@ -1410,10 +1398,10 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		if (skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {
 			ASFIPSEC_DPERR("Packet Action is Drop");
 			skb->data_len = 0;
-			ASFSkbFree(skb);
+#ifndef ASF_QMAN_IPSEC
 			SECFP_DESC_FREE(desc);
-			rcu_read_unlock();
-			return 0;
+#endif
+			goto drop_skb_list;
 		}
 
 		ASFIPSEC_DEBUG("OUT-submit to SEC");
@@ -1446,10 +1434,8 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
 
 			skb->data_len = 0;
-			ASFSkbFree(skb);
 			SECFP_DESC_FREE(desc);
-			rcu_read_unlock();
-			return 0;
+			goto drop_skb_list;
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifndef CONFIG_ASF_SEC4x
@@ -1469,7 +1455,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 
 					/* So, we can release it */
 					skb->data_len = 0;
-					ASFSkbFree(skb);
+					goto drop_skb_list;
 				}
 				/* Increment statistics */
 				rcu_read_unlock();
@@ -1499,7 +1485,8 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 
 					/* So, we can release it */
 					skb->data_len = 0;
-					ASFSkbFree(skb);
+					SECFP_DESC_FREE(desc);
+					goto drop_skb_list;
 				}
 				SECFP_DESC_FREE(desc);
 				/* Increment statistics */
@@ -1511,9 +1498,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 			/* Some error happened in the c/b. Free the skb */
 			ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
 			skb->data_len = 0;
-			ASFSkbFree(skb);
-			rcu_read_unlock();
-			return 0;
+			goto drop_skb_list;
 		}
 #endif /*CONFIG_ASF_SEC3x */
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
@@ -1522,36 +1507,44 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	return 0;
 
 no_sa:
-	ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
-	if (ASFIPSecCbFn.pFnNoOutSA) {
-		ASF_uchar8_t bSPDContainerPresent;
-		ASFBuffer_t Buffer;
-		/* Homogenous buffer */
-		rcu_read_unlock();
-		/* TBD - No need for this check, once the frag_list
-		of asf is same as linux frag_list*/
-		if (skb_shinfo(skb1)->frag_list) {
-			if (asfReasmLinearize(&skb1,
-				ipv6h->payload_len + SECFP_IPV6_HDR_LEN,
-				VPN_TOT_OVHD, VPN_HDROOM)) {
-				ASFIPSEC_DEBUG("asflLinearize failed");
-				ASFSkbFree(skb1);
-				return 0;
-			}
-			skb_reset_network_header(skb1);
-		}
-		Buffer.nativeBuffer = skb1;
-		if (pContainer)
-			bSPDContainerPresent = 1;
-		else
-			bSPDContainerPresent = 0;
-		ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer,
-				secfp_SkbFree, skb1, bSPDContainerPresent,
-				bRevalidate);
-		return 0;
-	}
 	rcu_read_unlock();
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	for (; skb != NULL; skb = pNextSkb)
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
+	{
+		pNextSkb = skb->next;
+		skb->next = NULL;
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
+				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
+		if (ASFIPSecCbFn.pFnNoOutSA) {
+			ASF_uchar8_t bSPDContainerPresent;
+			ASFBuffer_t Buffer;
+			Buffer.nativeBuffer = skb;
+			if (pContainer)
+				bSPDContainerPresent = 1;
+			else
+				bSPDContainerPresent = 0;
+			ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer,
+					secfp_SkbFree, skb1,
+					bSPDContainerPresent,
+					bRevalidate);
+			if (pNextSkb == NULL)
+				return 0;
+		}
+	}
 	return 1;
+
+drop_skb_list:
+	ASFSkbFree(skb);
+	while (pNextSkb) {
+		skb = pNextSkb;
+		pNextSkb = skb->next;
+		skb->next = NULL;
+		ASFSkbFree(skb);
+	}
+
+	rcu_read_unlock();
+	return 0;
 }
 
 #endif /*IPV6*/
@@ -1693,34 +1686,52 @@ static inline int secfp_try_fastPathOutv4(
 			}
 		} else {
 			if (skb_shinfo(skb1)->frag_list ||
-				skb_shinfo(skb1)->nr_frags) {
-				if (asfReasmLinearize(&skb1,
-					iph->tot_len,
-					VPN_TOT_OVHD, VPN_HDROOM)) {
-					ASFIPSEC_WARN("asflLinearize failed");
-					ASFSkbFree(skb1);
-					rcu_read_unlock();
-					return 0;
+					skb_shinfo(skb1)->nr_frags) {
+				if (!pSA->ipHdrInfo.bIpVersion) {
+					if (asfReasmLinearize(&skb1,
+						iph->tot_len,
+						VPN_TOT_OVHD, VPN_HDROOM)) {
+						ASFIPSEC_WARN("asflLinearize failed");
+						ASFSkbFree(skb1);
+						rcu_read_unlock();
+						return 0;
+					}
+					ASFIPSEC_DEBUG("skb->len = %d", skb->len);
+					ASFIPSEC_DEBUG("skb1->len = %d", skb1->len);
+					skb_reset_network_header(skb1);
+					iph = ip_hdr(skb1);
+					skb = skb1;
+				} else {
+					if (unlikely(asfIpv4Fragment(skb1,
+								1500,
+								0,
+								ASF_TRUE,
+								skb1->dev,
+								&skb))) {
+						ASF_IPSEC_PPS_ATOMIC_INC(
+						IPSec4GblPPStats_g.IPSec4GblPPStat
+						[ASF_IPSEC_PP_GBL_CNT22]);
+						ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA,
+						ASF_IPSEC_PP_POL_CNT22);
+						rcu_read_unlock();
+						return 0;
+					}
 				}
-
-				ASFIPSEC_DEBUG("skb->len = %d", skb->len);
-				ASFIPSEC_DEBUG("skb1->len = %d", skb1->len);
-				skb_reset_network_header(skb1);
-				iph = ip_hdr(skb1);
-				skb = skb1;
 			}
 
 			ASFIPSEC_PRINT("Need to fragment the packet"
 					"POST SEC and send it out ");
-			/* Need to fragment the packet */
-			skb->cb[SECFP_OUTB_FRAG_REQD] = 1;
+			if ((iph->tot_len > pSA->ulInnerPathMTU) &&
+				!pSA->ipHdrInfo.bIpVersion) {
+				/* Need to fragment the packet */
+				skb->cb[SECFP_OUTB_FRAG_REQD] = 1;
+			}
 		}
 #else
 /* IF SEC_SG is ON */
-		if (unlikely((iph->tot_len) < (pSA->ulInnerPathMTU))) {
+		if (unlikely((iph->tot_len) < pSA->ulInnerPathMTU)) {
 			ASFIPSEC_DEBUG("TotalLength is"\
-				" less than path MTU, but frag_list "\
-				"present: Calling skb_copy_bits ");
+				" less than path MTU, but frag_list present ");
 
 			/* Example : Ingress device MTU is much lesser to Egress device MTU */
 			/* So we entered here because of frag_list */
@@ -1728,15 +1739,22 @@ static inline int secfp_try_fastPathOutv4(
 
 			/* convert the buffer to SG List for SEC input*/
 			/* TBD -the output can be out of place in single buffer */
-			if (skb_shinfo(skb1)->frag_list)
-				if (asfSkbFraglistToNRFrags(skb1)) {
-					ASFIPSEC_WARN(
-					"asfSkbFraglistToNRFrags failed");
+
+			if (skb_shinfo(skb1)->frag_list) {
+				if (unlikely(asfIpv4Fragment(skb1,
+					pSA->ulInnerPathMTU,
+#ifndef ASF_SECFP_PROTO_OFFLOAD
+					(pSA->ulSecHdrLen + pSA->usNatHdrSize) +
+#endif
+					pSA->ulL2BlobLen,
+					ASF_TRUE, skb1->dev, &skb))) {
+					ASFIPSEC_WARN("asfIpv4Fragment failed");
 					ASFSkbFree(skb1);
 					rcu_read_unlock();
 					return 0;
 				}
-			bScatterGatherList = SECFP_SCATTER_GATHER;
+			} else
+				bScatterGatherList = SECFP_SCATTER_GATHER;
 			skb = skb1;
 		} else {
 			ASFIPSEC_DEBUG("skb has a fragment list or "\
@@ -1752,13 +1770,23 @@ static inline int secfp_try_fastPathOutv4(
 				asfFillLogInfoOut(&AsfLogInfo, pSA);
 				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT21]);
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
-				ASFIPSec4SendIcmpErrMsg(skb1->data, ASF_ICMP_DEST_UNREACH, ASF_ICMP_CODE_FRAG_NEEDED, pSA->ulInnerPathMTU, ulVSGId);
+				if (pSecInfo->natInfo.bSrcNAT) {
+#ifdef ASF_DO_INC_CHECKSUM
+					csum_replace4(&iph->check, iph->saddr,
+						pSecInfo->natInfo.OrgSrcIp);
+#endif
+					iph->saddr = pSecInfo->natInfo.OrgSrcIp;
+				}
+				ASFIPSec4SendIcmpErrMsg(skb1->data,
+					ASF_ICMP_DEST_UNREACH,
+					ASF_ICMP_CODE_FRAG_NEEDED,
+					pSA->ulInnerPathMTU, ulVSGId);
 				rcu_read_unlock();
 				return 1;
 			}
 			if (pSA->SAParams.bRedSideFragment) {
 				ASFIPSEC_DEBUG("Red side fragmentation is enabled");
-					if (unlikely(asfIpv4Fragment(skb1,
+				if (unlikely(asfIpv4Fragment(skb1,
 						pSA->ulInnerPathMTU,
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 						(pSA->ulSecHdrLen + pSA->usNatHdrSize) +
@@ -1769,7 +1797,7 @@ static inline int secfp_try_fastPathOutv4(
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT22);
 					rcu_read_unlock();
 					return 1;
-					}
+				}
 			} else {
 				ASFIPSEC_DEBUG("bScatterGather Enabling");
 				/*Check for most common two fragment case */
@@ -1801,7 +1829,12 @@ static inline int secfp_try_fastPathOutv4(
 							skb1->prev->len = (iph->tot_len - pSA->ulInnerPathMTU);
 							skb1->prev->tail = skb1->prev->data + skb1->prev->len;
 						}
-					} else { /* Will not fit in 2 fragments */
+					} else
+#endif
+				/* TBD check for tail reserve for ipsec
+				 - if not possible allocate a data buffer
+				  in the end and create a nr_frags*/
+					{ /* Will not fit in 2 fragments */
 						ASFIPSEC_DEBUG("Single packet case: Will not fit into 2 fragments");
 						bScatterGatherList = SECFP_NO_SCATTER_GATHER;
 					} /* Will not fit in 2 fragments or algorithm is ESP_NULL */
@@ -1876,9 +1909,7 @@ static inline int secfp_try_fastPathOutv4(
 		if (!desc) {
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
 			ASFIPSEC_WARN("desc allocation failure");
-			ASFSkbFree(skb);
-			rcu_read_unlock();
-			return 0;
+			goto drop_skb_list;
 		}
 #ifdef SECFP_SG_SUPPORT
 		if ((secout_sg_flag & SECFP_SCATTER_GATHER)
@@ -1903,10 +1934,7 @@ static inline int secfp_try_fastPathOutv4(
 		if (skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {
 			ASFIPSEC_DPERR("Packet Action is Drop");
 			skb->data_len = 0;
-			ASFSkbFree(skb);
-			SECFP_DESC_FREE(desc);
-			rcu_read_unlock();
-			return 0;
+			goto drop_skb_list;
 		}
 
 		ASFIPSEC_DEBUG("OUT-submit to SEC");
@@ -1939,10 +1967,8 @@ static inline int secfp_try_fastPathOutv4(
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT13);
 
 			skb->data_len = 0;
-			ASFSkbFree(skb);
 			SECFP_DESC_FREE(desc);
-			rcu_read_unlock();
-			return 0;
+			goto drop_skb_list;
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifdef CONFIG_ASF_SEC3x
@@ -1962,7 +1988,7 @@ static inline int secfp_try_fastPathOutv4(
 
 					/* So, we can release it */
 					skb->data_len = 0;
-					ASFSkbFree(skb);
+					goto drop_skb_list;
 				}
 				/* Increment statistics */
 				rcu_read_unlock();
@@ -1992,9 +2018,9 @@ static inline int secfp_try_fastPathOutv4(
 
 					/* So, we can release it */
 					skb->data_len = 0;
-					ASFSkbFree(skb);
+					SECFP_DESC_FREE(desc);
+					goto drop_skb_list;
 				}
-				SECFP_DESC_FREE(desc);
 				/* Increment statistics */
 				rcu_read_unlock();
 				return 0;
@@ -2004,9 +2030,7 @@ static inline int secfp_try_fastPathOutv4(
 			/* Some error happened in the c/b. Free the skb */
 			ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
 			skb->data_len = 0;
-			ASFSkbFree(skb);
-			rcu_read_unlock();
-			return 0;
+			goto drop_skb_list;
 		}
 #endif /*CONFIG_ASF_SEC3x */
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
@@ -2043,6 +2067,18 @@ no_sa:
 	}
 	rcu_read_unlock();
 	return 1;
+
+drop_skb_list:
+	ASFSkbFree(skb);
+	while (pNextSkb) {
+		skb = pNextSkb;
+		pNextSkb = skb->next;
+		skb->next = NULL;
+		ASFSkbFree(skb);
+	}
+
+	rcu_read_unlock();
+	return 0;
 }
 
 inline int secfp_try_fastPathOut(unsigned int ulVSGId,
@@ -2142,7 +2178,9 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 
 	if (skb_shinfo(skb)->nr_frags == 0)
 		skb->data_len = 0; /* No req for this field anymore */
-
+#ifndef ASF_SECFP_PROTO_OFFLOAD
+	ASFIPSEC_DEBUG("skb->prev =%x skb->len =%d",
+			skb->prev, skb->len);
 	if (skb->prev) {
 		/* Put the prev pointer in the frag list and release frag list
 			some dirty work
@@ -2151,7 +2189,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		skb->len -= skb->prev->len;
 		skb->prev = NULL;
 	}
-
+#endif
 	iph = (struct iphdr *) skb->data;
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	if ((iph->version == 4) && (iph->protocol == IPPROTO_UDP)) {
@@ -2559,12 +2597,24 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 			unsigned char *pNextProto,
 			ASF_IPAddr_t *daddr)
 {
-	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
 	inSA_t *pSA = NULL;
 	int total_frag = 0;
 	skb_frag_t *frag = NULL;
 	unsigned char *charp = NULL;
 #ifdef ASF_SECFP_PROTO_OFFLOAD
+	struct iphdr *iph = (struct iphdr *)*(unsigned int *)
+				&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
+#ifndef ASF_QMAN_IPSEC
+	struct iphdr *inneriph = (struct iphdr *)(pTailSkb->data);
+	unsigned int ulStripLen;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (inneriph->version == 6) {
+		struct ipv6hdr *ipv6h = (struct ipv6hdr *) inneriph;
+		ulStripLen = pTailSkb->len - (ipv6h->payload_len + SECFP_IPV6_HDR_LEN);
+	} else
+#endif
+		ulStripLen = pTailSkb->len - inneriph->tot_len;
+#endif
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 6) {
 		struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
@@ -2588,7 +2638,32 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 		total_frag = skb_shinfo(pTailSkb)->nr_frags;
 		frag = &skb_shinfo(pTailSkb)->frags[total_frag - 1];
 		charp = (void *)page_address(frag->page) + frag->page_offset;
+#ifndef ASF_SECFP_PROTO_OFFLOAD
 		*pNextProto = charp[frag->size - 1];
+#else
+		if (frag->size >= pHeadSkb->cb[SECFP_ICV_LENGTH] + 1) {
+			*pNextProto = charp[frag->size - pHeadSkb->cb[SECFP_ICV_LENGTH] - 1];
+		} else {
+			unsigned int last_frag_size = frag->size;
+			if (total_frag == 1) {
+#ifdef ASF_IPV6_FP_SUPPORT
+			if (iph->version == 6) {
+				struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
+				*pNextProto = *((u8 *)iph + ipv6h->payload_len
+					+ SECFP_IPV6_HDR_LEN - pHeadSkb->cb[SECFP_ICV_LENGTH] - 1);
+			} else
+#endif
+				*pNextProto = *((u8 *)iph + iph->tot_len
+						- pHeadSkb->cb[SECFP_ICV_LENGTH] - 1);
+			} else {
+				frag = &skb_shinfo(pTailSkb)->frags[total_frag - 2];
+				charp = (void *)page_address(frag->page)
+					+ frag->page_offset;
+				*pNextProto = charp[frag->size + last_frag_size
+					- pHeadSkb->cb[SECFP_ICV_LENGTH] - 1];
+			}
+		}
+#endif
 		ASFIPSEC_PRINT("\n PROTO IS %d", *(unsigned int *)pNextProto);
 	} else {
 #ifndef ASF_SECFP_PROTO_OFFLOAD
@@ -2665,6 +2740,12 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 		pTailSkb->len -= ulPadLen;
 		*pTotLen -= ulPadLen;
 	}
+#endif
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+#ifndef ASF_QMAN_IPSEC
+		pTailSkb->len -= ulStripLen;
+		*pTotLen -= ulStripLen;
+#endif
 #endif
 	return 0;
 }
@@ -2745,7 +2826,6 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 		if (asfReasmLinearize(&pHeadSkb, inneriph->tot_len,
 				VPN_TOT_OVHD, VPN_HDROOM)) {
 			ASFIPSEC_WARN(" skb->linearize failed ");
-			ASFSkbFree(pHeadSkb);
 			rcu_read_unlock();
 			return 1;
 		}
@@ -2756,7 +2836,6 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 		if (unlikely(pHeadSkb->len < ((inneriph->ihl*4) + SECFP_ESP_HDR_LEN))) {
 			ASFIPSEC_WARN("ESP header length is invalid"
 				"len = %d ", pHeadSkb->len);
-			ASFSkbFree(pHeadSkb);
 			rcu_read_unlock();
 			return 1;
 		}
@@ -3290,6 +3369,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 			offsetof(struct aead_edesc, hw_desc));
 #endif
 	ASFIPSEC_FENTRY;
+
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 6) {
 		struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
@@ -4178,7 +4258,6 @@ So all these special boundary cases need to be handled for nr_frags*/
 		else
 #endif /* SECFP_SG_SUPPORT*/
 			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
-#endif /*ASF_QMAN_IPSEC*/
 
 		/* Post submission, we can move the data pointer beyond the ESP header */
 		/* Trim the length accordingly */
@@ -4203,6 +4282,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 		pHeadSkb->data += SECFP_IPV6_HDR_LEN + pSA->ulSecHdrLen;
 		pHeadSkb->len -= (SECFP_IPV6_HDR_LEN + pSA->ulSecHdrLen);
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
+#endif /*ASF_QMAN_IPSEC*/
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (ASFIPSecCbFn.pFnSAExpired) {
@@ -4498,7 +4578,7 @@ int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
 		if (asfReasmLinearize(&skb,
 			ip_hdr(skb)->tot_len, VPN_TOT_OVHD, VPN_HDROOM)) {
 			ASFIPSEC_WARN("skb->linearize failed ");
-			dev_kfree_skb_any(skb);
+			ASFSkbFree(skb);
 			*skbuff = NULL;
 			return ASF_IPSEC_CONSUMED;
 		}
@@ -4559,6 +4639,9 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	unsigned char aSkipHeader[32], ucSkipLen = 0;
 	unsigned char secin_sg_flag;
+#ifndef ASF_QMAN_IPSEC
+	unsigned int ulSecLen = 0;
+#endif
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
 #elif !defined(ASF_QMAN_IPSEC)
@@ -4763,11 +4846,14 @@ So all these special boundary cases need to be handled for nr_frags*/
 		}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		ulLowerBoundSeqNum = 0;
-		if (pSA->SAParams.bAuth) {
+#ifndef ASF_QMAN_IPSEC
+		if (likely(pSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
+#endif
+			if (pSA->SAParams.bAuth) {
 #ifndef ASF_SECFP_PROTO_OFFLOAD /* anti-replay check done in HW */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-#ifdef SECFP_SG_SUPPORT
 			unsigned int *pCurICVLoc = 0;
+#ifdef SECFP_SG_SUPPORT
 			if (unlikely(pTailSkb->len < pSA->SAParams.uICVSize)) {
 				/* pTailPrevSkb gets initialized in the case of fragments; This case comes
 				into picture only when we have fragments */
@@ -4879,6 +4965,21 @@ So all these special boundary cases need to be handled for nr_frags*/
 			pTailSkb->tail = pTailSkb->data + skb_headlen(pTailSkb);
 			*(unsigned int *)pTailSkb->tail = 0;
 		}
+		/* byte offset to move past the tunnel header for ESP*/
+#ifndef ASF_QMAN_IPSEC
+#ifndef ASF_SECFP_PROTO_OFFLOAD
+			ulSecLen = pSA->ulSecHdrLen;
+#else
+			ulSecLen = pSA->ulSecHdrLen + SECFP_IPV4_HDR_LEN;
+#endif
+		} else {
+
+			/* check anything needed for AH  --guess none*/
+			/* do not remove the tunnel header */
+			ulSecLen = 0;
+
+		}
+#endif
 
 		if (pSA->SAParams.bVerifyInPktWithSASelectors)
 			pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1;
@@ -4954,7 +5055,6 @@ So all these special boundary cases need to be handled for nr_frags*/
 #else
 			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 #endif
-#endif /*ASF_QMAN_IPSEC*/
 
 		/* Post submission, we can move the data pointer beyond the ESP header */
 		/* Trim the length accordingly */
@@ -4973,7 +5073,13 @@ So all these special boundary cases need to be handled for nr_frags*/
 			secfp_checkSeqNum(pSA, ulSeqNum,
 				ulLowerBoundSeqNum, pHeadSkb);
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+#else
+		/* updating the length and data pointer of packet according
+		   to the packet after decryption */
+		pHeadSkb->data += ulSecLen;
+		pHeadSkb->len -= ulSecLen;
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
+#endif /*ASF_QMAN_IPSEC*/
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (ASFIPSecCbFn.pFnSAExpired) {
