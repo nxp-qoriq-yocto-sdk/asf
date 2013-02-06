@@ -528,6 +528,11 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 				printk(KERN_INFO"L2BlobLen = %d, Magic = %d\n",
 					pOutSA->ulL2BlobLen,
 				pOutSA->l2blobConfig.ulL2blobMagicNumber);
+#ifdef ASF_QMAN_IPSEC
+				printk(KERN_INFO"SecFQ=%d, RecvFQ=%d\n",
+					pOutSA->ctx.SecFq->qman_fq.fqid,
+					pOutSA->ctx.RecvFq->qman_fq.fqid);
+#endif
 			}
 		}
 		printk(KERN_INFO"\n");
@@ -616,6 +621,11 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 				ASFIPSecSAQueryStats(&inParams, &outParams);
 				printk(KERN_INFO"Stats:ulBytes=%lu,ulPkts= %lu",
 					outParams.ulBytes, outParams.ulPkts);
+#ifdef ASF_QMAN_IPSEC
+				printk(KERN_INFO"SecFQ=%d, RecvFQ=%d\n",
+					pInSA->ctx.SecFq->qman_fq.fqid,
+					pInSA->ctx.RecvFq->qman_fq.fqid);
+#endif
 			}
 		}
 		printk(KERN_INFO"\n");

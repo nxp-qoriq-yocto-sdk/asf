@@ -895,6 +895,17 @@ extern void secfp_prepareOutPacket(
 		SPDOutContainer_t *pContainer,
 		unsigned int **pOuterIpHdr);
 
+#ifdef ASF_QMAN_IPSEC
+#define DEBUG_ASF_QMAN_IPSEC
+
+extern int secfp_qman_init(void);
+extern void secfp_qman_deinit(void);
+extern int secfp_qman_in_submit(inSA_t *pSA, void *context);
+extern int secfp_qman_out_submit(outSA_t *pSA, void *context);
+
+extern void secfp_qman_release_fq(struct caam_ctx *ctx, int dir);
+
+#else
 extern	void secfp_prepareOutDescriptor(
 		struct sk_buff *skb,
 		void *pSA, void *, unsigned int);
@@ -911,4 +922,5 @@ extern void secfp_prepareOutDescriptorWithFrags(
 		struct sk_buff *skb,
 		void *pData, void *, unsigned int);
 
+#endif
 #endif

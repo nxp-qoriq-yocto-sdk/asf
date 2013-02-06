@@ -54,7 +54,9 @@ endif
 #EXTRA_CFLAGS += -DASF_IPSEC_DEBUG
 #EXTRA_CFLAGS += -DASFIPSEC_DEBUG_FRAME
 #EXTRA_CFLAGS += -DASF_FFP_XTRA_STATS=1
-
+ifeq ($(CONFIG_DPA), y)
+EXTRA_CFLAGS += -DASF_QMAN_IPSEC
+endif
 obj-m += asfipsec.o
 
 asfipsec-y := \
@@ -65,6 +67,8 @@ asfipsec-y := \
 
 asfipsec-$(CONFIG_ASF_SEC3x) += ipsecfp_sec3x.o
 asfipsec-$(CONFIG_ASF_SEC4x) += ipsecfp_sec4x.o
+asfipsec-$(CONFIG_DPA) += ipsecfp_qman.o
+
 all:
 	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) modules
 

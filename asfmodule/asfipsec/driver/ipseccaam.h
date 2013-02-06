@@ -20,6 +20,10 @@
 #include <desc_constr.h>
 #include <linux/debugfs.h>
 #include <intern.h>
+#ifdef ASF_QMAN_IPSEC
+#include "linux/fsl_qman.h"
+#include "linux/fsl_bman.h"
+#endif
 
 #define AES_MAX_KEY_SIZE       32
 #define SHA512_DIGEST_SIZE     64
@@ -45,6 +49,73 @@
 					CAAM_MAX_KEY_SIZE)
 #define DESC_MAX_USED_LEN		(DESC_MAX_USED_BYTES / CAAM_CMD_SZ)
 
+#ifdef ASF_QMAN_IPSEC
+struct secfp_fq_link_node_s {
+	struct qman_fq qman_fq;
+	unsigned int fq_uses;
+	struct secfp_fq_link_node_s *pPrev;
+	struct secfp_fq_link_node_s *pNext;
+};
+
+typedef struct scatter_gather_entry_s {
+	u32 reserved_zero:28;
+	u32 addr_hi:4; /**< Memory Address of the start of the buffer - hi*/
+	u32 addr_lo; /**< Memory Address - lo*/
+	u32 extension:1;
+	u32 final:1;
+	u32 length:30; /**< Length of the data in the frame */
+	u8 reserved_zero2;
+	u8 bpid; /**< Buffer Pool Id */
+	u16 reserved_offset:3;
+	u16 offset:13;
+} scatter_gather_entry_t;
+
+struct ses_pkt_info {
+	scatter_gather_entry_t cb_SG[2];
+	struct sk_buff	*cb_skb;
+	struct device	*cb_pDev;
+	u8 dir;
+	u8 dynamic;
+};
+
+struct preheader_t {
+	union {
+		uint32_t word;
+		struct {
+			uint16_t rsvd63_48;
+			unsigned int rsvd47_39:9;
+			unsigned int idlen:7;
+		} field;
+	} __packed hi;
+
+	union {
+		uint32_t word;
+		struct {
+			unsigned int rsvd31_30:2;
+			unsigned int fsgt:1;
+			unsigned int lng:1;
+			unsigned int offset:2;
+			unsigned int abs:1;
+			unsigned int add_buf:1;
+			uint8_t pool_id;
+			uint16_t pool_buffer_size;
+		} field;
+	} __packed lo;
+} __packed;
+
+typedef enum {
+	ASF_QMAN_MIN_SEC_FQ = 1,
+	ASF_QMAN_OUT_SEC_FQ = 1,
+	ASF_QMAN_OUT_RECV_FQ = 2,
+	ASF_QMAN_IN_SEC_FQ = 3,
+	ASF_QMAN_IN_RECV_FQ = 4,
+	ASF_QMAN_OUT_FRAG_RECV_FQ = 5,
+	ASF_QMAN_MAX_SEC_FQ = ASF_QMAN_OUT_FRAG_RECV_FQ
+} asf_qman_sec_fq_t;
+
+#endif /* #ASF_QMAN_IPSEC */
+
+
 /*
  * per-session context
  */
@@ -65,6 +136,10 @@ struct caam_ctx {
 	u32 split_key_len;
 	u32 split_key_pad_len;
 	u32 authsize;
+#ifdef ASF_QMAN_IPSEC
+	struct secfp_fq_link_node_s *SecFq;
+	struct secfp_fq_link_node_s *RecvFq;
+#endif
 };
 
 struct aead_edesc {

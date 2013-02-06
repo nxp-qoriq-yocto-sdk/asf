@@ -753,6 +753,9 @@ static inline outSA_t *secfp_allocOutSA(void)
 static void secfp_freeOutSA(struct rcu_head *pData)
 {
 	outSA_t *pSA = (outSA_t *) pData;
+#ifdef ASF_QMAN_IPSEC
+	secfp_qman_release_fq(&pSA->ctx, SECFP_OUT);
+#endif
 	/* We cannot free the skb now, as it is submitted to h/w */
 	/*h/w cb will check this flag */
 	if (pSA->pL2blobTmr)
@@ -1093,6 +1096,9 @@ static void secfp_freeInSA(struct rcu_head *rcu_data)
 	/*h/w cb will check this flag */
 	kfree(pSA->pWinBitMap);
 
+#ifdef ASF_QMAN_IPSEC
+	secfp_qman_release_fq(&pSA->ctx, SECFP_IN);
+#endif
 	asfReleaseNode(InSAPoolId_g, pSA, pSA->bHeap);
 }
 

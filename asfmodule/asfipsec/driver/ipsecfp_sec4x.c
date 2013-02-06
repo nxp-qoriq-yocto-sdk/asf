@@ -453,6 +453,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	return 0;
 }
 
+#ifndef ASF_QMAN_IPSEC
 int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 {
 	int ret = 0;
@@ -480,6 +481,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 
 	return 0;
 }
+#endif
 
 int secfp_createOutSACaamCtx(outSA_t *pSA)
 {
@@ -638,6 +640,7 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 	return ret;
 }
 
+#ifndef ASF_QMAN_IPSEC
 
 static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 					struct caam_ctx *ctx,
@@ -1214,5 +1217,6 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 	}
 
 }
+#endif /*QMAN*/
 
 #endif /*defined(CONFIG_ASF_SEC4x)*/
