@@ -4073,6 +4073,18 @@ static int __init asf_init(void)
 			ASF_MAX_VSGS);
 		return -1;
 	}
+	/*Checks are intoduced to prevent the asf initialization
+	with negative parameter*/
+	if (ffp_max_flows < 0) {
+		asf_err("invalid number of flows (%d).ASF is not initialized.\n",
+			ffp_max_flows);
+		return -1;
+	}
+	if (ffp_hash_buckets < 0) {
+		asf_err("invalid bucket size(%d).ASF is not initialized.\n",
+			ffp_hash_buckets);
+		return -1;
+	}
 
 	asfTimerInit(ASF_NUM_OF_TIMERS, 1);
 	asf_debug("Initializing mpool module\n");
