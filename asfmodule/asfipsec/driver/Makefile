@@ -57,6 +57,9 @@ endif
 ifeq ($(CONFIG_DPA), y)
 EXTRA_CFLAGS += -DASF_QMAN_IPSEC
 endif
+ifeq ($(CONFIG_ASF_SEC4x), y)
+EXTRA_CFLAGS += -DASF_SECFP_PROTO_OFFLOAD
+endif
 obj-m += asfipsec.o
 
 asfipsec-y := \

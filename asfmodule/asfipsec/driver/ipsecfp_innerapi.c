@@ -764,6 +764,10 @@ static void secfp_freeOutSA(struct rcu_head *pData)
 	if (pSA->pSelList)
 		secfp_cleanupSelList(pSA->pSelList);
 
+#ifdef CONFIG_ASF_SEC4x
+	kfree(pSA->ctx.key);
+	kfree(pSA->ctx.sh_desc_mem);
+#endif
 	asfReleaseNode(OutSAPoolId_g, pSA, pSA->bHeap);
 }
 
@@ -1098,6 +1102,10 @@ static void secfp_freeInSA(struct rcu_head *rcu_data)
 
 #ifdef ASF_QMAN_IPSEC
 	secfp_qman_release_fq(&pSA->ctx, SECFP_IN);
+#endif
+#ifdef CONFIG_ASF_SEC4x
+	kfree(pSA->ctx.key);
+	kfree(pSA->ctx.sh_desc_mem);
 #endif
 	asfReleaseNode(InSAPoolId_g, pSA, pSA->bHeap);
 }
@@ -2650,8 +2658,18 @@ unsigned int secfp_createOutSA(
 		pSA->ulSecLenIncrease = SECFP_IPV6_HDR_LEN;
 #endif
 	}
+
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+	pSA->prepareOutPktFnPtr = NULL;
+	pSA->finishOutPktFnPtr = secfp_finishOffloadOutPacket;
+	pSA->ulLoSeqNum = 2;
+#else
 	pSA->prepareOutPktFnPtr = secfp_prepareOutPacket;
 	pSA->finishOutPktFnPtr = secfp_finishOutPacket;
+	/* starting the seq number from 2 to avoid the conflict
+	with the Networking Stack seq number */
+	atomic_set(&pSA->ulLoSeqNum, 2);
+#endif
 	/*
 	* Get the NAT-T header packet
 	*/
@@ -2667,9 +2685,6 @@ unsigned int secfp_createOutSA(
 	pSA->ulIvSizeInWords = pSA->SAParams.ulIvSize/4;
 	pSA->ulSecHdrLen = SECFP_ESP_HDR_LEN + pSA->SAParams.ulIvSize;
 	pSA->bSoftExpiry = 0;
-	/* starting the seq number from 2 to avoid the conflict
-	with the Networking Stack seq number */
-	atomic_set(&pSA->ulLoSeqNum, 2);
 
 	/* update ICV size to output length */
 	if (SAParams->uICVSize) {
@@ -2848,11 +2863,19 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 			if (pOutSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
 				memcpy(pOutSA->SAParams.tunnelInfo.addr.iphv6.saddr,
 					pModSA->u.addrInfo.IPAddr.ipv6addr, 16);
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+				memcpy((void *)(*(pOutSA->ctx.sh_desc + SHARED_GWV6_OFFSET(saddr.s6_addr32))),
+					pModSA->u.addrInfo.IPAddr.ipv6addr, 16);
+#endif
 			} else
 #endif
 			{
 			pOutSA->SAParams.tunnelInfo.addr.iphv4.saddr
 				= pModSA->u.addrInfo.IPAddr.ipv4addr;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+			*(pOutSA->ctx.sh_desc + SHARED_GWV4_OFFSET(saddr))
+				= pOutSA->SAParams.tunnelInfo.addr.iphv4.saddr;
+#endif
 			}
 			break;
 		case ASFIPSEC_UPDATE_PEER_GW:
@@ -2860,11 +2883,19 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 			if (pOutSA->SAParams.tunnelInfo.bIPv4OrIPv6 == 0) {
 				memcpy(pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr,
 					pModSA->u.addrInfo.IPAddr.ipv6addr, 16);
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+				memcpy((void *)(*(pOutSA->ctx.sh_desc + SHARED_GWV6_OFFSET(daddr.s6_addr32))),
+					pModSA->u.addrInfo.IPAddr.ipv6addr, 16);
+#endif
 			} else
 #endif
 			{
 			pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr
 				= pModSA->u.addrInfo.IPAddr.ipv4addr;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+			*(pOutSA->ctx.sh_desc + SHARED_GWV4_OFFSET(daddr))
+				= pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+#endif
 			}
 			break;
 		case ASFIPSEC_UPDATE_MTU:
@@ -3245,22 +3276,38 @@ unsigned int secfp_ModifyInSA(unsigned long int ulVSGId,
 			if (pInSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
 				memcpy(pInSA->SAParams.tunnelInfo.addr.iphv6.daddr,
 					pModSA->IPAddr.ipv6addr, 16);
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+				memcpy((void *)(*(pInSA->ctx.sh_desc + SHARED_GWV6_OFFSET(daddr.s6_addr32))),
+					pModSA->IPAddr.ipv6addr, 16);
+#endif
 			} else
 #endif
 			{
 			pInSA->SAParams.tunnelInfo.addr.iphv4.daddr
 				= pModSA->IPAddr.ipv4addr;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+			*(pInSA->ctx.sh_desc + SHARED_GWV4_OFFSET(daddr))
+				= pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+#endif
 			}
 		} else { /*ASFIPSEC_UPDATE_PEER_GW */
 #ifdef ASF_IPV6_FP_SUPPORT
 			if (pInSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
 				memcpy(pInSA->SAParams.tunnelInfo.addr.iphv6.saddr,
 					pModSA->IPAddr.ipv6addr, 16);
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+				memcpy((void *)(*(pInSA->ctx.sh_desc + SHARED_GWV6_OFFSET(saddr.s6_addr32))),
+					pModSA->IPAddr.ipv6addr, 16);
+#endif
 			} else
 #endif
 			{
 				pInSA->SAParams.tunnelInfo.addr.iphv4.saddr
 					= pModSA->IPAddr.ipv4addr;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+			*(pInSA->ctx.sh_desc + SHARED_GWV4_OFFSET(saddr))
+				= pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+#endif
 			}
 		}
 	} else {

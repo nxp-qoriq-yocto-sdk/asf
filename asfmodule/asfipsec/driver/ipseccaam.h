@@ -121,17 +121,14 @@ typedef enum {
  */
 struct caam_ctx {
 	struct device *jrdev;
-	u32 sh_desc_enc[DESC_MAX_USED_LEN];
-	u32 sh_desc_dec[DESC_MAX_USED_LEN];
-	u32 sh_desc_givenc[DESC_MAX_USED_LEN];
-	dma_addr_t sh_desc_enc_dma;
-	dma_addr_t sh_desc_dec_dma;
-	dma_addr_t sh_desc_givenc_dma;
+	u32 *sh_desc;
+	u32 *sh_desc_mem;
+	dma_addr_t shared_desc_phys;
 	u32 class1_alg_type;
 	u32 class2_alg_type;
 	u32 alg_op;
-	u8 key[CAAM_MAX_KEY_SIZE];
-	dma_addr_t key_dma;
+	u8 *key;
+	dma_addr_t key_phys;
 	u32 enckeylen;
 	u32 split_key_len;
 	u32 split_key_pad_len;
@@ -140,6 +137,14 @@ struct caam_ctx {
 	struct secfp_fq_link_node_s *SecFq;
 	struct secfp_fq_link_node_s *RecvFq;
 #endif
+};
+
+struct link_tbl_entry {
+	u64 ptr;
+	u32 len;
+	u8 reserved;
+	u8 buf_pool_id;
+	u16 offset;
 };
 
 struct aead_edesc {

@@ -41,6 +41,7 @@
 				>> SECFP_IPV6_TCLASS_SHIFT); \
 }
 #endif
+#define ASF_IPSEC_SEC_SA_SHDESC_SIZE (64 * sizeof(u32))
 /* DF related bits */
 #define SECFP_DF_COPY	0
 #define SECFP_DF_CLEAR	1
@@ -630,8 +631,13 @@ typedef struct outSA_s {
 	void (*finishOutPktFnPtr)(struct sk_buff *,
 				struct outSA_s *, SPDOutContainer_t *,
 				unsigned int *, unsigned int, unsigned int);
+#ifndef ASF_SECFP_PROTO_OFFLOAD
 	atomic_t ulLoSeqNum;
 	atomic_t ulHiSeqNum;
+#else
+	unsigned int ulLoSeqNum;
+	unsigned int ulHiSeqNum;
+#endif
 	unsigned char l2blob[ASF_MAX_L2BLOB_LEN];
 	unsigned char bIVDataPresent:1,
 		bl2blob:1,
@@ -884,6 +890,14 @@ extern bool secfp_verifySASels(inSA_t *pSA,
 		ASF_IPAddr_t saddr,
 		ASF_IPAddr_t daddr);
 
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+extern void secfp_finishOffloadOutPacket(
+		struct sk_buff *skb, outSA_t *pSA,
+		SPDOutContainer_t *pContainer,
+		unsigned int *pIpHdr,
+		unsigned int ulVSGId,
+		unsigned int ulSPDContainerIndex);
+#else
 extern void secfp_finishOutPacket(
 		struct sk_buff *skb, outSA_t *pSA,
 		SPDOutContainer_t *pContainer,
@@ -894,6 +908,7 @@ extern void secfp_prepareOutPacket(
 		struct sk_buff *skb1, outSA_t *pSA,
 		SPDOutContainer_t *pContainer,
 		unsigned int **pOuterIpHdr);
+#endif /*ASF_SECFP_PROTO_OFFLOAD*/
 
 #ifdef ASF_QMAN_IPSEC
 #define DEBUG_ASF_QMAN_IPSEC
@@ -914,6 +929,7 @@ extern	void secfp_prepareInDescriptor(
 		struct sk_buff *skb,
 		void *pSA, void *, unsigned int);
 
+#ifndef CONFIG_ASF_SEC4x
 extern void secfp_prepareInDescriptorWithFrags(
 		struct sk_buff *skb,
 		void *pData, void *, unsigned int);
@@ -921,6 +937,8 @@ extern void secfp_prepareInDescriptorWithFrags(
 extern void secfp_prepareOutDescriptorWithFrags(
 		struct sk_buff *skb,
 		void *pData, void *, unsigned int);
-
+#else
+#define secfp_prepareOutDescriptorWithFrags secfp_prepareOutDescriptor
+#endif
 #endif
 #endif
