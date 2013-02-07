@@ -1799,6 +1799,7 @@ gen_indications:
 					ASFFFPFlowSpecialPacketsInfo_t  ind;
 					ffp_flow_t		      *oth_flow;
 
+					ind.tuple.bIPv4OrIPv6 = 0;
 					ind.tuple.ulSrcIp = flow->ulSrcIp;
 					ind.tuple.ulDestIp = flow->ulDestIp;
 					ind.tuple.usSrcPort = (flow->ulPorts >> 16);
@@ -1826,6 +1827,7 @@ gen_indications:
 				if (!flow->bDeleted && ffpCbFns.pFnFlowValidate) {
 					ASFFFPFlowValidateCbInfo_t  ind;
 
+					ind.tuple.bIPv4OrIPv6 = 0;
 					ind.tuple.ulSrcIp = flow->ulSrcIp;
 					ind.tuple.ulDestIp = flow->ulDestIp;
 					ind.tuple.usSrcPort = (flow->ulPorts >> 16);
@@ -3360,6 +3362,7 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 					if (ffpCbFns.pFnFlowActivityRefresh) {
 						ASFFFPFlowRefreshInfo_t ind;
 
+						ind.tuple.bIPv4OrIPv6 = 0;
 						ind.tuple.ulSrcIp = flow->ulSrcIp;
 						ind.tuple.ulDestIp = flow->ulDestIp;
 						ind.tuple.usSrcPort = (flow->ulPorts >> 16);
