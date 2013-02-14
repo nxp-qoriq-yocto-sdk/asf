@@ -60,15 +60,15 @@ static inline unsigned long ASFFFPIPv6ComputeFlowHash1(
 {
 	unsigned long ulSrcIp = 0;
 	unsigned long ulDestIp = 0;
-	unsigned int	i;
 
-
-	for (i = 0; i < 4; ++i)
-		ulSrcIp += ip6SrcIp->s6_addr32[i];
-
-	for (i = 0; i < 4; ++i)
-		ulDestIp += ip6DestIp->s6_addr32[i];
-
+		ulSrcIp += ip6SrcIp->s6_addr32[0];
+		ulSrcIp += ip6SrcIp->s6_addr32[1];
+		ulSrcIp += ip6SrcIp->s6_addr32[2];
+		ulSrcIp += ip6SrcIp->s6_addr32[3];
+		ulDestIp += ip6DestIp->s6_addr32[0];
+		ulDestIp += ip6DestIp->s6_addr32[1];
+		ulDestIp += ip6DestIp->s6_addr32[2];
+		ulDestIp += ip6DestIp->s6_addr32[3];
 	ulSrcIp += ipv6_rule_salt;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 	ulDestIp += JHASH_GOLDEN_RATIO;

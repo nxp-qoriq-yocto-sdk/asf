@@ -221,6 +221,9 @@ static unsigned int asf_ipv6_reasmRandValue_g;
 unsigned int asf_reasmPools[ASF_MAX_REASM_POOLS];
 
 unsigned int asf_reasmIPv4_Id[NR_CPUS];
+#ifdef ASF_IPV6_FP_SUPPORT
+extern inline int _ipv6_addr_cmp(const struct in6_addr *a1, const struct in6_addr *a2);
+#endif
 
 void asf_ip_options_fragment(struct sk_buff  *skb)
 {
@@ -762,8 +765,8 @@ static inline struct asf_reasmCb_s *asfIPv6ReasmFindOrCreateCb(
 		prefetchw(pCb->pNext);
 		if ((fhdr->identification == pCb->id) &&
 		    (fhdr->nexthdr == pCb->proto)     &&
-		    (!ipv6_addr_cmp((struct in6_addr *)&(ip6h->saddr), (struct in6_addr *)&(pCb->ipv6sip))) &&
-		    (!ipv6_addr_cmp((struct in6_addr *)&(ip6h->daddr), (struct in6_addr *)&(pCb->ipv6dip))) &&
+		    (!_ipv6_addr_cmp((struct in6_addr *)&(ip6h->saddr), (struct in6_addr *)&(pCb->ipv6sip))) &&
+		    (!_ipv6_addr_cmp((struct in6_addr *)&(ip6h->daddr), (struct in6_addr *)&(pCb->ipv6dip))) &&
 		    (ulVSGId == pCb->ulVSGId)) {
 			return pCb;
 		}

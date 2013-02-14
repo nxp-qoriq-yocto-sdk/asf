@@ -60,6 +60,16 @@ static int asf_ffp_ipv6_init_flow_table(void);
 static void asf_ffp_ipv6_destroy_flow_table(void);
 
 
+inline int _ipv6_addr_cmp(const struct in6_addr *a1, const struct in6_addr *a2)
+{
+	if ((a1->s6_addr32[0] == a2->s6_addr32[0])
+		&& (a1->s6_addr32[1] == a2->s6_addr32[1])
+		&& (a1->s6_addr32[2] == a2->s6_addr32[2])
+		&& (a1->s6_addr32[3] == a2->s6_addr32[3])
+	)
+		return 0;
+	return 1;
+}
 
 
 static inline void ffp_copy_flow_stats(ffp_flow_t *flow, ASFFFPFlowStats_t *stats)
@@ -117,8 +127,8 @@ static inline ffp_flow_t *asf_ffp_ipv6_flow_lookup_in_bkt(
 #endif
 
 	for (flow = pHead->pNext; flow != pHead; flow = flow->pNext) {
-		if (!(ipv6_addr_cmp((struct in6_addr *)&(flow->ipv6SrcIp), (struct in6_addr *)sip))
-		&& !(ipv6_addr_cmp((struct in6_addr *)&(flow->ipv6DestIp), (struct in6_addr *)dip))
+		if (!(_ipv6_addr_cmp((struct in6_addr *)&(flow->ipv6SrcIp), (struct in6_addr *)sip))
+		&& !(_ipv6_addr_cmp((struct in6_addr *)&(flow->ipv6DestIp), (struct in6_addr *)dip))
 		&& (flow->ulPorts == ports)
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		&& (flow->ucProtocol == protocol)
@@ -171,8 +181,8 @@ static inline ffp_flow_t  *asf_ffp_ipv6_flow_lookup(
 	pHead = (ffp_flow_t *) asf_ffp_ipv6_bucket_by_hash(*pHashVal);
 
 	for (flow = pHead->pNext; flow != pHead; flow = flow->pNext) {
-		if (!(ipv6_addr_cmp((struct in6_addr *)&(flow->ipv6SrcIp), (struct in6_addr *)sip))
-		&& !(ipv6_addr_cmp((struct in6_addr *)&(flow->ipv6DestIp), (struct in6_addr *)dip))
+		if (!(_ipv6_addr_cmp((struct in6_addr *)&(flow->ipv6SrcIp), (struct in6_addr *)sip))
+		&& !(_ipv6_addr_cmp((struct in6_addr *)&(flow->ipv6DestIp), (struct in6_addr *)dip))
 		&& (flow->ulPorts == ports)
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		&& (flow->ucProtocol == protocol)
@@ -673,10 +683,10 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		XGSTATS_INC(NatPkts);
 		asf_debug_l2("applying NAT\n");
 		/* Update IP Checksum also */
-		if (ipv6_addr_cmp((struct in6_addr *)&(ip6h->saddr), (struct in6_addr *)&(flow->ipv6SrcNATIp)))
+		if (_ipv6_addr_cmp((struct in6_addr *)&(ip6h->saddr), (struct in6_addr *)&(flow->ipv6SrcNATIp)))
 			ipv6_addr_copy((struct in6_addr *)&(ip6h->saddr), (struct in6_addr *)&(flow->ipv6SrcNATIp));
 
-		if (ipv6_addr_cmp((struct in6_addr *)&(ip6h->daddr), (struct in6_addr *)&(flow->ipv6DestNATIp)))
+		if (_ipv6_addr_cmp((struct in6_addr *)&(ip6h->daddr), (struct in6_addr *)&(flow->ipv6DestNATIp)))
 			ipv6_addr_copy((struct in6_addr *)&(ip6h->daddr), (struct in6_addr *)&(flow->ipv6DestNATIp));
 
 
