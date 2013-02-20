@@ -160,6 +160,9 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 
 static inline void asf_skb_free_func(void *obj)
 {
+#ifdef CONFIG_DPA
+	asf_dec_skb_buf_count((struct sk_buff *)obj);
+#endif
 #ifdef ASF_TERM_FP_SUPPORT
 	if (((struct sk_buff *)obj)->mapped)
 		packet_kfree_skb((struct sk_buff *)obj);

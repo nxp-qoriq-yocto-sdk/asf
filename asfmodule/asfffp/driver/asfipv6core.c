@@ -1068,6 +1068,7 @@ ret_pkt_to_stk:
 			skb = pSkb;
 			pSkb = pSkb->next;
 			skb->next = NULL;
+			asf_dec_skb_buf_count(skb);
 			ASF_netif_receive_skb(skb);
 		}
 		return ASF_DONE;

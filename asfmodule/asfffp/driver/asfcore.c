@@ -183,6 +183,10 @@ MODULE_PARM_DESC(asf_reasm_num_cbs,
 	#define FM_FD_STAT_L4CV			0x00000004
 #endif
 
+#ifdef CONFIG_DPA
+#define PER_CPU_BP_COUNT(bp) \
+	(*(per_cpu_ptr((bp)->percpu_count, smp_processor_id())))
+#endif
 ptrIArry_tbl_t ffp_ptrary;
 ffp_bucket_t *ffp_flow_table;
 spinlock_t		asf_iface_lock;
@@ -494,6 +498,33 @@ int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb)
 
 	return 0;
 }
+/* deducts skb accounting from common pool */
+void asf_dec_skb_buf_count(struct sk_buff *skb)
+{
+	struct dpa_bp *bp;
+	struct sk_buff *skb_temp;
+
+	/* If first SKB doen't have bpid, then frag_list shouldn'y have bpid */
+	if (!(skb->bpid))
+		return;
+
+	bp = dpa_bpid2pool(skb->bpid);
+
+	PER_CPU_BP_COUNT(bp)--;
+	skb->bpid = 0;
+
+	for (skb_temp = skb_shinfo(skb)->frag_list;
+		skb_temp != NULL; skb_temp = skb_temp->next) {
+		/* we can have mix bpids */
+		if (skb_temp->bpid) {
+			bp = dpa_bpid2pool(skb_temp->bpid);
+
+			PER_CPU_BP_COUNT(bp)--;
+			skb_temp->bpid = 0;
+		}
+	}
+	return;
+}
 #endif
 /*
  * Lookups through the flows to find matching entry.
@@ -742,6 +773,9 @@ static inline int asfAdjustFragAndSendUp(struct sk_buff *skb, ASFNetDevEntry_t *
 				pTempSkb = pSkb->next;
 				pSkb->next = NULL;
 				pSkb->dev = dev;
+#ifdef CONFIG_DPA
+				asf_dec_skb_buf_count(pSkb);
+#endif
 				abuf.nativeBuffer = pSkb;
 				ffpCbFns.pFnNoFlowFound(anDev->ulVSGId,
 					anDev->ulCommonInterfaceId,
@@ -1393,6 +1427,7 @@ ipsecin:
 				/* Most Likely UDP encap - IKE packets*/
 				/* because asf_abuf_to_skb has already been done, we cannot
 				    return this packet to driver; so steal it by netif_rx */
+				asf_dec_skb_buf_count(abuf.nativeBuffer);
 				asf_debug("pFFPIPSecIn returned the packet");
 				goto rcv_pkt;
 			}

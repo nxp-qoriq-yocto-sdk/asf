@@ -369,6 +369,9 @@ struct annotations_t {
 
 #endif
 
+#ifdef CONFIG_DPA
+void asf_dec_skb_buf_count(struct sk_buff *skb);
+#endif
 
 typedef union ASFBuffer_u {
 	struct {
