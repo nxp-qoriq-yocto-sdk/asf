@@ -54,6 +54,8 @@
 #include <linux/sysctl.h>
 #ifdef CONFIG_DPA
 #include <dpa/dpaa_eth.h>
+#include <linux/fsl_bman.h>
+#include <linux/fsl_qman.h>
 #else
 #include <gianfar.h>
 #endif
@@ -430,6 +432,67 @@ static inline ffp_flow_t  *asf_ffp_flow_lookup_DPAA(
 	return asf_ffp_flow_lookup_in_bkt(sip, dip, ports,
 					protocol, vsg, szone,
 					(ffp_flow_t *)pHead);
+}
+struct sk_buff *asf_alloc_buf_skb(struct net_device *dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(dev);
+	struct dpa_bp *bp;
+	struct bm_buffer bmb[8];
+	struct sk_buff **skbh;
+	struct sk_buff *skb;
+	dma_addr_t addr;
+	int n;
+
+	/* choose to use the last bpid to get buffers */
+	bp = priv->dpa_bp;
+	n = bman_acquire(bp->pool, bmb, 1, 0);
+	if (unlikely(n <= 0))
+		return NULL;
+
+	addr = bm_buf_addr(&bmb[0]);
+	skbh = (struct sk_buff **)phys_to_virt(addr);
+	skb = *skbh;
+
+	dma_unmap_single(bp->dev, addr, bp->size, DMA_FROM_DEVICE);
+
+	skb->bpid = bp->bpid;
+
+	skb->data = ((u8 *)skbh + DPA_BP_HEAD);
+	skb->tail = skb->data;
+
+	return skb;
+}
+int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb)
+{
+	struct dpa_priv_s *priv = netdev_priv(dev);
+	struct dpa_bp *bp;
+	struct bm_buffer bmb;
+	dma_addr_t addr;
+	int ret;
+	struct sk_buff **skbh;
+	int pad;
+
+	bp = priv->dpa_bp;
+	pad = round_down(((u32)skb->end - (u32)skb->head) -
+			(bp->size + NET_SKB_PAD), L1_CACHE_BYTES);
+	skbh = (struct sk_buff **)(skb->head + pad);
+	addr = dma_map_single(bp->dev, skbh,
+				bp->size, DMA_FROM_DEVICE);
+	/* Recycle the SKB */
+	skb_recycle(skb);
+
+	*skbh = skb;
+
+	bm_buffer_set64(&bmb, addr);
+	ret = bman_release(bp->pool, &bmb, 1, 0);
+
+	if (unlikely(ret < 0)) {
+		cpu_pr_err(KBUILD_MODNAME ": dpa_free_buf_skb() "
+				"failed for bman_release error: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
 }
 #endif
 /*
@@ -2222,6 +2285,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 				if (pSkb->data < pSkb->head) {
 					asf_debug("SKB's head > data ptr .. "
 							"UNDER PANIC!!!\n");
+					asf_free_buf_skb(pSkb->dev, pSkb);
 					continue;
 				}
 
@@ -2262,6 +2326,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 				if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 					asf_debug("Error in transmit: "
 						"Should not happen\r\n");
+					asf_free_buf_skb(pSkb->dev, pSkb);
 				}
 				bSendOut = 1;
 			}
@@ -2532,6 +2597,7 @@ drop_pkt:
 	return;
 drop_pkt_1:
 
+	asf_free_buf_skb(abuf.ndev, (struct sk_buff *)abuf.nativeBuffer);
 	return;
 }
 #endif

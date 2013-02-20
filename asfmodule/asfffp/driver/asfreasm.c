@@ -2087,10 +2087,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				if (len < bytesLeft)
 					len &= ~7;
 #ifdef CONFIG_DPA
-				/* add 64B more for IPSec padding use */
-				skb2 = alloc_skb(len+ihl+ulDevXmitHdrLen+ \
-				    dev->needed_headroom+ASF_EXTRA_TAIL_ROOM, \
-				    GFP_ATOMIC);
+				skb2 = asf_alloc_buf_skb(ndev);
 #else
 				skb2 = gfar_new_skb(ndev);
 #endif
@@ -2156,10 +2153,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				}
 			}
 #ifdef CONFIG_DPA
-			/* add 64B more for IPSec padding use */
-			skb2 = alloc_skb(tot_len+ihl+ulDevXmitHdrLen+ \
-				dev->needed_headroom+ASF_EXTRA_TAIL_ROOM, \
-				GFP_ATOMIC);
+			skb2 = asf_alloc_buf_skb(ndev);
 #else
 			skb2 = gfar_new_skb(ndev);
 #endif
@@ -2191,13 +2185,32 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			*pOutSkb = skb2;
 			skb2->next = skb->next;
 			skb->next = NULL;
+#ifdef CONFIG_DPA
+		if (skb->bpid)
+			asf_free_buf_skb(skb->dev, skb);
+		else
 			ASFSkbFree(skb);
+#else
+			ASFSkbFree(skb);
+#endif
 			return 0;
 		}
 	}
 drop:
 	asf_reasm_debug("default error case!\n");
-	ASFSkbFree(skb);
+	skb2 = skb;
+	while (skb2) {
+		pLastSkb = skb2->next;
+#ifdef CONFIG_DPA
+		if (skb2->bpid)
+			asf_free_buf_skb(skb2->dev, skb2);
+		else
+			ASFSkbFree(skb2);
+#else
+		ASFSkbFree(skb2);
+#endif
+		skb2 = pLastSkb;
+	}
 	*pOutSkb = NULL;
 	return 1;
 }
