@@ -2279,7 +2279,11 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	mtu = ASF_MIN(flow->pmtu, flow->odev->mtu) + ETH_HLEN - flow->l2blob_len;
 #endif
 	asf_debug_l2("attempting to xmit the packet\n");
-	if (unlikely(abuf.frag_list || (iph->tot_len > mtu))) {
+	if (unlikely(abuf.frag_list
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	|| (iph->tot_len > mtu)
+#endif
+	)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		struct sk_buff *pSkb, *pTempSkb;
 		struct sk_buff *skb;
