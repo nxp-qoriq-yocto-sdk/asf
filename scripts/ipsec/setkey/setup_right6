@@ -1,0 +1,7 @@
+ip addr add 2001:db8:2:2::100/64 dev eth0
+ip addr add 2001:db8:200::20/64 dev eth1
+ifconfig eth0 up
+ifconfig eth1 up
+ip -6 route add 2001:db8:1:1::/64 via 2001:db8:200::10
+echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
+
