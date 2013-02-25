@@ -856,9 +856,10 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			headroom exists.
 		*/
 		tx_fd->offset = (u32)ip6h - (u32)abuf.pAnnot - flow->l2blob_len;
-		if (tx_fd->offset < (sizeof(struct annotations_t)))
+		if (tx_fd->offset < (sizeof(struct annotations_t))) {
+			asf_dperr("%s", periodic_errmsg[PERR_NO_L2_HDROOM]);
 			goto drop_pkt;
-
+		}
 		if (txdata >= (u8 *)abuf.ethh)
 			tx_fd->length20 = data_len -
 				((txdata - (u8 *)abuf.ethh) & 0xfffff);

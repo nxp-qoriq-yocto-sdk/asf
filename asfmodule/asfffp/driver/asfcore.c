@@ -87,6 +87,7 @@ MODULE_LICENSE("GPL");
 #define ASF_HLD_DEVICE_NAME "asf_hld"
 #endif
 
+char *periodic_errmsg[] = PERIODIC_ERRMSGS;
 char *asf_version = "asf-rel-0.2.0";
 /* Initilization Parameters */
 int asf_enable;
@@ -896,6 +897,7 @@ ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf,
 	ptr = (u8 *)skb->dpa_buffer;
 	if (unlikely(ptr < skb->head)) {
 		asf_debug("%s: no headroom; dropping pkt\n", __func__);
+		asf_dperr("%s", periodic_errmsg[PERR_REASM_NO_HDROOM]);
 		ASF_SKB_FREE_FUNC(skb);
 		pAbuf->nativeBuffer = NULL;
 		return;
@@ -1273,6 +1275,7 @@ non_tudp:
 		   when packet is fragmented */
 		if (!abuf.frag_list &&
 			(pParse->l4r & DPAA_PARSE_L4_CKSUM_DONE) == 0)
+			asf_dperr("%s", periodic_errmsg[PERR_HWTCP_CKSUM]);
 			break;
 	case DPAA_PARSE_L4_PROTO_UDP:
 		/* HW don't validate the checksum when UDP csum is 0 */
@@ -1280,6 +1283,7 @@ non_tudp:
 			((pParse->l4r & (DPAA_PARSE_L4_CKSUM_DONE |
 				DPAA_PARSE_L4_NONZERO_CKSUM))
 				== DPAA_PARSE_L4_NONZERO_CKSUM))
+			asf_dperr("%s", periodic_errmsg[PERR_HWUDP_CKSUM]);
 			break;
 #ifdef ASF_IPSEC_FP_SUPPORT
 	case DPAA_PARSE_L4_PROTO_IPSEC:
@@ -1827,7 +1831,7 @@ EXPORT_SYMBOL(asf_ffp_devfp_rx);
 	- drop - the skb is released
 	- pass to net stack - via netif_receive_skb() */
 #ifdef CONFIG_DPA
-static ASF_void_t ASFFFPProcessAndSendFD(
+ASF_void_t ASFFFPProcessAndSendFD(
 			ASFNetDevEntry_t *anDev,
 			ASFBuffer_t abuf)
 {
@@ -2332,9 +2336,10 @@ static ASF_void_t ASFFFPProcessAndSendFD(
 	   headroom exists.
 	 */
 	tx_fd->offset = (u32)iph - (u32)abuf.pAnnot - flow->l2blob_len;
-	if (tx_fd->offset < (sizeof(struct annotations_t)/* 64 Byte */))
+	if (tx_fd->offset < (sizeof(struct annotations_t)/* 64 Byte */)) {
+		asf_dperr("%s", periodic_errmsg[PERR_NO_L2_HDROOM]);
 		goto drop_pkt;
-
+	}
 	if (txdata >= (u8 *)abuf.ethh)
 		tx_fd->length20 = data_len -
 			((txdata - (u8 *)abuf.ethh) & 0xfffff);
@@ -2501,6 +2506,7 @@ ret_pkt_to_stk:
 		return;
 	}
 
+	asf_dperr("%s", periodic_errmsg[PERR_NO_FW]);
 	if (unlikely(((struct sk_buff *)abuf.nativeBuffer)->
 				mac_len > ETH_HLEN)) {
 		struct sk_buff *skb = (struct sk_buff *)abuf.nativeBuffer;

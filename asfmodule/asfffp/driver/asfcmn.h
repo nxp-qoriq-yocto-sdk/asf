@@ -18,6 +18,32 @@
 #ifndef __ASF_CMN_H
 #define __ASF_CMN_H
 
+#define PERIODIC_ERRMSGS { \
+       "misconfig: HW UDP checksum disabled", \
+       "misconfig: HW TCP checksum disabled", \
+       "misconfig: ASF FW present, but callbacks not registered", \
+       "misconfig: encrypted pkt, IPsec present, callbacks not registered", \
+       "error: no headroom for L2 header", \
+       "error: no headroom for annotation after reassembly", \
+       "info: anti-replay REPLAY", \
+       "info: anti-replay LATE", \
+       "SEC error", \
+       "warning: duplicate flow push - ignored", \
+       "misconfig: invalid errnum to PERIODIC_ERRMSGS" }
+
+#define PERR_HWUDP_CKSUM       0
+#define PERR_HWTCP_CKSUM       1
+#define PERR_NO_FW             2
+#define PERR_NO_IPSEC          3
+#define PERR_NO_L2_HDROOM      4
+#define PERR_REASM_NO_HDROOM   5
+#define PERR_REPLAY_ERROR      6
+#define PERR_LATE_ERROR                7
+#define PERR_SEC_ERROR         8
+#define PERR_DUP_FLOW_PUSH     9
+#define MAX_PERIODIC_ERRS      10
+
+extern char *periodic_errmsg[];
 
 #define asf_err(fmt, arg...)  \
 	printk(KERN_ERR"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
@@ -338,7 +364,7 @@ extern ASFFFPGlobalStats_t *get_asf_gstats(void);
 							unsigned int fqid);*/
 int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 							unsigned int fqid);
-static ASF_void_t ASFFFPProcessAndSendFD(ASFNetDevEntry_t *anDev,
+ASF_void_t ASFFFPProcessAndSendFD(ASFNetDevEntry_t *anDev,
 							ASFBuffer_t abuf);
 ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf);
 extern ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf, ASFNetDevEntry_t *pNdev);

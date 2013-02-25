@@ -45,8 +45,10 @@ extern ASFFFPGlobalStats_t *asf_gstats;
 #endif
 
 
+#ifndef CONFIG_DPA
 #define TRUE 1
 #define FALSE 0
+#endif
 
 
 #ifdef ASF_REASM_USE_L2SRAM
