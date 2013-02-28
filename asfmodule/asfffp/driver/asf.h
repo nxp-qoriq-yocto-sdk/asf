@@ -1049,6 +1049,25 @@ typedef struct ASFFFPGlobalStats_s {
 
 int ASFFFPQueryGlobalStats(ASFFFPGlobalStats_t *pStats);
 
+#ifdef CONFIG_DPA
+static inline unsigned long ASFFFPComputeFlowHash1_DPAA(
+				unsigned long ulSrcIp,
+				unsigned long ulDestIp,
+				unsigned long ulPorts)
+{
+	unsigned long long result;
+#ifdef USE_SRCIP_AS_HASH
+	result = ulSrcIp;
+#else
+	result = crc64_init();
+	result = crc64_compute_word(ulSrcIp, result);
+	result = crc64_compute_word(ulDestIp, result);
+	result = crc64_compute_hword((ulPorts >> 16), result);
+	result = crc64_compute_hword(ulPorts, result);
+#endif
+	return (unsigned long) result;
+}
+#endif
 
 /*
  * Utility API
