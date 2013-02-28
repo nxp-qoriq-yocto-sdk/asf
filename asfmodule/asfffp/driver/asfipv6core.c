@@ -459,8 +459,10 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 			(flow && flow->bIPsecIn) ? &flow->ipsecInfo : NULL,
 			pIpsecOpaque) != 0) {
 			asf_warn("IPSEC InVerify Failed\n");
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (flow)
 				FlowValidate = ASF_FLOWVALIDATE_NORAMAL;
+#endif
 			goto gen_indications;
 		}
 	}

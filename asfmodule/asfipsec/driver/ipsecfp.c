@@ -4342,15 +4342,15 @@ So all these special boundary cases need to be handled for nr_frags*/
 					uPacket, bHard, pSA->SAParams.ulSPI);
 				}
 			}
-		}
 sa_expired:
-#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			if (pHeadSkb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {
 				pHeadSkb->data_len = 0;
 				SECFP_DESC_FREE(desc);
 				ASFSkbFree(pHeadSkb);
 				goto sa_error;
+			}
 		}
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
 		update_chan_in(pSA);
