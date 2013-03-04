@@ -19,6 +19,7 @@
 
 #include <desc_constr.h>
 #include <linux/debugfs.h>
+#include <linux/interrupt.h>
 #include <intern.h>
 #ifdef ASF_QMAN_IPSEC
 #include "linux/fsl_qman.h"

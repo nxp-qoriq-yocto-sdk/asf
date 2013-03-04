@@ -2041,7 +2041,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			 */
 			if (skb->dev->priv_flags & IFF_802_1Q_VLAN) {
 
-				ndev = vlan_dev_info(skb->dev)->real_dev;
+				ndev = vlan_dev_priv(skb->dev)->real_dev;
 				/* Return Error if Parent device not found */
 				if (!ndev)
 					return 1;

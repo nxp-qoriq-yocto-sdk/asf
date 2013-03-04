@@ -818,7 +818,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	if (skb_shinfo(skb1)->nr_frags) {
 		total_frags = skb_shinfo(skb1)->nr_frags;
 		frag = &(skb_shinfo(skb1)->frags[total_frags - 1]);
-		charp = (u8 *)(page_address(frag->page) + frag->page_offset);
+		charp = (u8 *)(page_address((const struct page *)frag->page.p) + frag->page_offset);
 	}
 	/* Padding length calculation assumes that the block size is always
 		8 or 16 as is the case for DES/3DES/AES); In which case we
@@ -2217,7 +2217,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		unsigned int total_frags;
 		total_frags = skb_shinfo(skb)->nr_frags;
 		frag = &(skb_shinfo(skb)->frags[total_frags - 1]);
-		charp = (u8 *)(page_address(frag->page) +
+		charp = (u8 *)(page_address((const struct page *)frag->page.p) +
 					frag->page_offset);
 		ASFIPSEC_HEXDUMP(skb->data, skb_headlen(skb));
 		ASFIPSEC_HEXDUMP(charp, frag->size);
@@ -2648,7 +2648,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	if (skb_shinfo(pTailSkb)->nr_frags) {
 		total_frag = skb_shinfo(pTailSkb)->nr_frags;
 		frag = &skb_shinfo(pTailSkb)->frags[total_frag - 1];
-		charp = (void *)page_address(frag->page) + frag->page_offset;
+		charp = (void *)page_address((const struct page *)frag->page.p) + frag->page_offset;
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 		*pNextProto = charp[frag->size - 1];
 #else
@@ -2668,7 +2668,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 						- pHeadSkb->cb[SECFP_ICV_LENGTH] - 1);
 			} else {
 				frag = &skb_shinfo(pTailSkb)->frags[total_frag - 2];
-				charp = (void *)page_address(frag->page)
+				charp = (void *)page_address((const struct page *)frag->page.p)
 					+ frag->page_offset;
 				*pNextProto = charp[frag->size + last_frag_size
 					- pHeadSkb->cb[SECFP_ICV_LENGTH] - 1];
@@ -5618,6 +5618,8 @@ static int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 	unsigned char iplen;
 	struct flowi fl = {};
 	struct in_device *in_dev;
+	struct dst_entry *dst;
+	struct neighbour *neigh;
 
 	pSkb = ASFKernelSkbAlloc(1024, GFP_ATOMIC);
 
@@ -5674,7 +5676,8 @@ static int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		skb_dst_set(pSkb, dst_clone(&pRt->u.dst));
 #endif
 		ip_rt_put(pRt);
-		pSkb->dev = skb_dst(pSkb)->dev;
+		dst = skb_dst(pSkb);
+		pSkb->dev = dst->dev;
 		in_dev = (struct in_device *)(pSkb->dev->ip_ptr);
 		if ((in_dev == NULL) || (in_dev->ifa_list == NULL)) {
 			ASFKernelSkbFree(pSkb);
@@ -5683,13 +5686,9 @@ static int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		iph->saddr = htonl(in_dev->ifa_list->ifa_local);
 		BUFPUT16(&iph->check, ASFIPCkSum((char *)pSkb->data, ASF_IPLEN));
 
-		if (skb_dst(pSkb)->hh) {
-			rcu_read_lock();
-			neigh_hh_output(skb_dst(pSkb)->hh, pSkb);
-			rcu_read_unlock();
-		} else if (skb_dst(pSkb)->_neighbour) {
-			rcu_read_lock();
-			skb_dst(pSkb)->_neighbour->output(pSkb);
+		neigh = dst_neigh_lookup_skb(dst, pSkb);
+		if (neigh) {
+			dst_neigh_output(dst, neigh, pSkb);
 			rcu_read_unlock();
 		} else
 			ASFKernelSkbFree(pSkb);

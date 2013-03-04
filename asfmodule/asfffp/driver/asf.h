@@ -1086,5 +1086,10 @@ ASF_void_t ASFProcessNonTermPkt(
 /* compute hash index based on maximum number of buckets */
 #define ASF_HINDEX(hval, hmax) (hval&(hmax-1))
 
+static inline void ipv6_addr_copy(struct in6_addr *a1, const struct in6_addr *a2)
+{
+	memcpy(a1, a2, sizeof(struct in6_addr));
+}
+
 
 #endif

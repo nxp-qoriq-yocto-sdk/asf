@@ -85,8 +85,8 @@ static inline struct net_device *
 __vlan_get_real_dev(struct net_device *dev, u16 *vlan_id)
 {
 	if (vlan_id)
-		*vlan_id = vlan_dev_info(dev)->vlan_id;
-		return vlan_dev_info(dev)->real_dev;
+		*vlan_id = vlan_dev_priv(dev)->vlan_id;
+		return vlan_dev_priv(dev)->real_dev;
 }
 #endif
 
@@ -158,30 +158,6 @@ ASF_void_t  asfctrl_invalidate_sessions(void)
 }
 EXPORT_SYMBOL(asfctrl_invalidate_sessions);
 
-int asfctrl_l3_route_add(
-	int iif,
-	struct net_device *dev,
-	uint32_t daddr,
-	uint32_t saddr,
-	int tos,
-	void *l2_head
-)
-{
-	ASFCTRL_FUNC_ENTRY;
-#ifdef ASFCTRL_FWD_FP_SUPPORT
-	if (fn_fwd_l3_route_add)
-		return fn_fwd_l3_route_add(
-				iif,
-				dev,
-				daddr,
-				saddr,
-				tos,
-				l2_head);
-#endif
-	ASFCTRL_FUNC_EXIT;
-	return 0;
-}
-
 ASF_void_t  asfctrl_invalidate_l2blob(void)
 {
 	ASFFFPConfigIdentity_t cmd;
@@ -222,6 +198,7 @@ ASF_void_t asfctrl_l3_route_flush(void)
 #endif
 	ASFCTRL_FUNC_EXIT;
 }
+
 int asf_ip_send(struct sk_buff *skb)
 {
 	struct dst_entry *dst = skb_dst(skb);
@@ -230,17 +207,11 @@ int asf_ip_send(struct sk_buff *skb)
 	ASFCTRL_FUNC_ENTRY;
 	rcu_read_lock();
 
-	if (dst->hh) {
-		res = neigh_hh_output(dst->hh, skb);
+	neigh = dst_neigh_lookup_skb(dst, skb);
+	if (neigh) {
+		res = dst_neigh_output(dst, neigh, skb);
 		rcu_read_unlock();
 		return res;
-	} else {
-		neigh = dst_get_neighbour(dst);
-		if (neigh) {
-			res = neigh->output(skb);
-			rcu_read_unlock();
-			return res;
-		}
 	}
 	rcu_read_unlock();
 	ASFCTRL_DBG(" Packet send failure");
@@ -777,8 +748,7 @@ static int __init asfctrl_init(void)
 
 	register_netdevice_notifier(&asfctrl_dev_notifier);
 	devfp_register_hook(asf_ffp_devfp_rx, asfctrl_dev_fp_tx_hook);
-	route_hook_fn_register(&asfctrl_l3_route_add,
-				&asfctrl_l3_route_flush);
+	route_hook_fn_register(&asfctrl_l3_route_flush);
 #ifdef ASF_IPV6_FP_SUPPORT
 	ipv6_route_hook_fn_register(&asfctrl_l3_ipv6_route_flush);
 #endif

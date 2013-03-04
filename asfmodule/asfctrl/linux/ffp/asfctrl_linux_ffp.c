@@ -1347,7 +1347,7 @@ void asfctrl_linux_register_ffp(void)
 	ASFCTRL_FUNC_ENTRY;
 
 	need_ipv4_conntrack();
-	if (nf_conntrack_register_notifier(&asfctrl_conntrack_event_nb) < 0) {
+	if (nf_conntrack_register_notifier(&init_net, &asfctrl_conntrack_event_nb) < 0) {
 		ASFCTRL_ERR("Register conntrack notifications failed!");
 		return ;
 	}
@@ -1380,7 +1380,7 @@ void asfctrl_linux_unregister_ffp(void)
 
 	hook_firewall_asfctrl_cb(&fwasfctrl);
 
-	nf_conntrack_unregister_notifier(&asfctrl_conntrack_event_nb);
+	nf_conntrack_unregister_notifier(&init_net, &asfctrl_conntrack_event_nb);
 
 	ffp_sysfs_exit();
 	ASFCTRL_FUNC_EXIT;

@@ -1143,11 +1143,11 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 			frag = &skb_shinfo(skb)->frags[i];
 			if (i == total_frags - 1) {
 				usPadLen = *(u8 *)
-				(((u8 *)(page_address(frag->page) +
+				(((u8 *)(page_address(frag->page.p) +
 				frag->page_offset)) + frag->size - 2);
 
 				ptr2 = dma_map_single(pSA->ctx.jrdev,
-					(void *)page_address(frag->page)
+					(void *)page_address(frag->page.p)
 					+ frag->page_offset, frag->size
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 					+ pSA->ulCompleteOverHead,
@@ -1173,7 +1173,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 
 			(link_tbl_entry + i + 1)->ptr =
 				dma_map_single(pSA->ctx.jrdev,
-				(void *)page_address(frag->page) +
+				(void *)page_address(frag->page.p) +
 				frag->page_offset, frag->size,
 				DMA_BIDIRECTIONAL);
 			(link_tbl_entry + i + 1)->len = frag->size;
@@ -1464,11 +1464,11 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 			skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
 			(link_tbl_entry + i + 1)->ptr =
 					dma_map_single(pSA->ctx.jrdev,
-					(void *)page_address(frag->page) +
+					(void *)page_address(frag->page.p) +
 					frag->page_offset,
 					frag->size, DMA_BIDIRECTIONAL);
 
-			ASFIPSEC_HEXDUMP((void *)page_address(frag->page) +
+			ASFIPSEC_HEXDUMP((void *)page_address(frag->page.p) +
 					frag->page_offset , 64);
 
 			(link_tbl_entry + i + 1)->len = frag->size;
