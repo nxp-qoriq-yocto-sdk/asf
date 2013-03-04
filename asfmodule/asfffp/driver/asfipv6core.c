@@ -255,6 +255,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 	unsigned long		ulHashVal = abuf.pAnnot->hr_hilo.loHash;
 	unsigned short int	trhlen;
 	int			L2blobRefresh = 0;
+	unsigned int            retryCount = 0, err = 0;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	int			bSpecialIndication = 0,
 				bFlowValidate = 0;
@@ -902,14 +903,20 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 				ip_fast_csum((unsigned char *)iph, iph->ihl);
 		}
 
-		if (unlikely(qman_enqueue(priv->egress_fqs[smp_processor_id()],
-						tx_fd, 0) < 0)) {
-			XGSTATS_INC(DevXmitErr);
-			asf_err("qman_enque Error\n");
-			/* dma_unmap_single(dpa_bp->dev, qm_fd_addr(tx_fd),
-			dpa_bp->size, DMA_TO_DEVICE);*/
-			goto drop_pkt;
-		}
+		do {
+			err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
+					tx_fd, 0);
+			if (err == 0)
+				break;
+			if (++retryCount == ASF_MAX_TX_RETRY_CNT) {
+				XGSTATS_INC(DevXmitErr);
+				asf_err("qman_enque Error\n");
+				/* dma_unmap_single(dpa_bp->dev, qm_fd_addr(tx_fd),
+				dpa_bp->size, DMA_TO_DEVICE);*/
+				goto drop_pkt;
+			}
+			__delay(50);
+		} while (1);
 		bSendOut = 1;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)

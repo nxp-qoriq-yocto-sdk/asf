@@ -1940,6 +1940,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	unsigned short int	trhlen;
 	unsigned short int	iphlen;
 	int			L2blobRefresh = 0;
+	unsigned int            retryCount = 0, err = 0;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	int			bSpecialIndication = 0,
 				bFlowValidate = 0;
@@ -2460,14 +2461,18 @@ ASF_void_t ASFFFPProcessAndSendFD(
 
 	asf_debug("tx on fqid %d\n",
 			priv->egress_fqs[smp_processor_id()]->fqid);
-	if (unlikely(qman_enqueue(priv->egress_fqs[smp_processor_id()],
-					tx_fd, 0) < 0)) {
-		XGSTATS_INC(DevXmitErr);
-		asf_debug("qman_enque Error\n");
-		dma_unmap_single(dpa_bp->dev, qm_fd_addr(tx_fd),
-				dpa_bp->size, DMA_TO_DEVICE);
-		goto drop_pkt;
-	}
+	do {
+		err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
+								tx_fd, 0);
+		if (err == 0)
+			break;
+		if (++retryCount == ASF_MAX_TX_RETRY_CNT) {
+			XGSTATS_INC(DevXmitErr);
+			asf_debug("qman_enque Error\n");
+			goto drop_pkt;
+		}
+		__delay(50);
+	} while (1);
 	bSendOut = 1;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
