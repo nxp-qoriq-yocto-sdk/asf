@@ -139,6 +139,16 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 
 #define ASFKernelSkbFree(freeArg) kfree_skb((struct sk_buff *)freeArg)
 #ifdef ASF_TERM_FP_SUPPORT
+#ifdef CONFIG_DPA
+#define ASFSkbFree(freeArg) \
+{\
+	asf_dec_skb_buf_count((struct sk_buff *)freeArg);\
+	if (((struct sk_buff *)freeArg)->mapped) \
+		packet_kfree_skb((struct sk_buff *)freeArg);\
+	else\
+		kfree_skb((struct sk_buff *)freeArg);\
+}
+#else /*CONFIG_DPA*/
 #define ASFSkbFree(freeArg) \
 {\
 	if (((struct sk_buff *)freeArg)->mapped) \
@@ -146,6 +156,7 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 	else\
 		kfree_skb((struct sk_buff *)freeArg);\
 }
+#endif
 #else
 #define ASFSkbFree(freeArg) kfree_skb((struct sk_buff *)freeArg)
 #endif

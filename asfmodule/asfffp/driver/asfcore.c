@@ -525,6 +525,7 @@ void asf_dec_skb_buf_count(struct sk_buff *skb)
 	}
 	return;
 }
+EXPORT_SYMBOL(asf_dec_skb_buf_count);
 #endif
 /*
  * Lookups through the flows to find matching entry.

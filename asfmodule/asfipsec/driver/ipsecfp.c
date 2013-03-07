@@ -128,6 +128,8 @@ unsigned short ASFIpEac(unsigned int sum); /* Carries in high order 16 bits */
 int secfp_try_fastPathOut(unsigned int ulVSGId, struct sk_buff *skb,
 		ASFFFPIpsecInfo_t *pSecInfo);
 
+extern struct sk_buff *asf_alloc_buf_skb(struct net_device *dev);
+extern void asf_dec_skb_buf_count(struct sk_buff *skb);
 static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
 static inline void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA);
 
@@ -1524,6 +1526,9 @@ no_sa:
 				bSPDContainerPresent = 1;
 			else
 				bSPDContainerPresent = 0;
+#ifdef CONFIG_DPA
+			asf_dec_skb_buf_count(skb1);
+#endif
 			ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer,
 					secfp_SkbFree, skb1,
 					bSPDContainerPresent,
@@ -1821,7 +1826,10 @@ static inline int secfp_try_fastPathOutv4(
 #ifndef CONFIG_DPA
 							skb1->prev = gfar_new_skb(pSA->odev);
 #else
+#if 0
 							skb1->prev = dpa_alloc_buf_skb(pSA->odev);
+#endif
+							skb1->prev = asf_alloc_buf_skb(pSA->odev);
 #endif
 						if (skb1->prev) {
 							ASFIPSEC_DEBUG("Allocated skb->prev");
@@ -2060,6 +2068,9 @@ no_sa:
 			bSPDContainerPresent = 1;
 		else
 			bSPDContainerPresent = 0;
+#ifdef CONFIG_DPA
+		asf_dec_skb_buf_count(skb);
+#endif
 		ASFIPSecCbFn.pFnNoOutSA(ulVSGId , NULL, Buffer,
 				secfp_SkbFree, skb1, bSPDContainerPresent,
 				bRevalidate);
@@ -3293,6 +3304,9 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 				ulCommonInterfaceId, Buffer, secfp_SkbFree,
 				pHeadSkb, &IPSecOpque) == ASF_RTS) {
 				ASFIPSEC_DEBUG("Sending Decrypted Packet Up");
+#ifdef CONFIG_DPA
+				asf_dec_skb_buf_count(pHeadSkb);
+#endif
 				netif_receive_skb(pHeadSkb);
 				return;
 			}
@@ -3597,6 +3611,9 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 			ulCommonInterfaceId, Buffer, secfp_SkbFree,
 			skb, &IPSecOpque) == ASF_RTS) {
 			ASFIPSEC_DEBUG("Sending Decrypted Packet Up");
+#ifdef CONFIG_DPA
+			asf_dec_skb_buf_count(skb);
+#endif
 			netif_receive_skb(skb);
 			return;
 		}
@@ -4478,6 +4495,9 @@ sa_error:
 		/* Homogenous buffer */
 		Buffer.nativeBuffer = skb1;
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT23]);
+#ifdef CONFIG_DPA
+		asf_dec_skb_buf_count(skb1);
+#endif
 		if (ASFIPSecCbFn.pFnNoInSA) {
 			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
 				skb1, ulCommonInterfaceId);
@@ -5284,6 +5304,9 @@ sa_error:
 				ip_hdr(skb1)->protocol = IPPROTO_UDP;
 			}
 #endif
+#ifdef CONFIG_DPA
+			asf_dec_skb_buf_count(skb1);
+#endif
 			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
 				skb1, ulCommonInterfaceId);
 		}
@@ -5384,6 +5407,9 @@ callverify:
 	}
 	/* Homogenous buffer */
 	Buffer.nativeBuffer = skb;
+#ifdef CONFIG_DPA
+	asf_dec_skb_buf_count(skb);
+#endif
 	ASFIPSecCbFn.pFnVerifySPD(*(unsigned int *)
 			&(skb->cb[SECFP_VSG_ID_INDEX]),
 			pIPSecOpque->ulInSPDContainerId,

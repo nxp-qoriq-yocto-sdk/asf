@@ -508,6 +508,10 @@ static inline void asfIPv6ReasmDeleteCb(struct asf_reasmCb_s *pCb)
 
 }
 #endif
+#ifdef CONFIG_DPA
+extern struct sk_buff *asf_alloc_buf_skb(struct net_device *dev);
+extern int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb);
+#endif
 
 static inline unsigned int asfReasmComputeHash(unsigned int word_a, unsigned int word_b, unsigned int word_c)
 { /* Bob jenkins hash */
