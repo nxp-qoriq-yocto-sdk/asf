@@ -16,14 +16,34 @@ include asfconfig.mk
 #  Include Definitions
 #------------------------------------------------------------------------------
 .PHONY: all
-all: build
+all: min full
 
-build:
+min : export ASF_FEATURE_OPTION_FULL := n
+full : export ASF_FEATURE_OPTION_FULL := y
+
+min :
 	make -w -C asfffp -f Makefile
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile
 endif
 	make -w -C asfctrl -f Makefile
+	mkdir -p bin
+	mkdir -p bin/min
+	cp asfffp/driver/asf.ko asfctrl/linux/ffp/asfctrl.ko bin/min
+	cp asfipsec/driver/asfipsec.ko asfctrl/linux/ipsec/asfctrl_ipsec.ko bin/min
+
+full :
+	mkdir -p bin
+	mkdir -p bin/full
+	make -w -C asfffp -f Makefile
+	make -w -C asfffp -f Makefile
+ifeq ($(CONFIG_XFRM), y)
+	make -w -C asfipsec -f Makefile
+endif
+	make -w -C asfctrl -f Makefile
+
+	cp asfffp/driver/asf.ko asfctrl/linux/ffp/asfctrl.ko bin/full
+	cp asfipsec/driver/asfipsec.ko asfctrl/linux/ipsec/asfctrl_ipsec.ko bin/full
 
 #--------------------------------------------------------------
 .PHONY: clean
@@ -33,4 +53,4 @@ ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile clean
 endif
 	make -w -C asfctrl -f Makefile clean
-
+	rm -rf bin

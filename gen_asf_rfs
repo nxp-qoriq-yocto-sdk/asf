@@ -1,0 +1,12 @@
+dd if=rootfs.ext2.gz.uboot of=rootfs.ext2.gz bs=64 skip=1
+gunzip rootfs.ext2.gz
+mkdir asf_rootfs
+sudo mount -o loop rootfs.ext2 asf_rootfs
+sudo cp -r asfmodule/bin/full asf_rootfs/usr/driver/asf/.
+sudo cp -r asfmodule/bin/min asf_rootfs/usr/driver/asf/.
+sudo cp -r scripts asf_rootfs/usr/driver/asf/.
+sudo cp asf.sh asf_rootfs/usr/bin
+sudo umount asf_rootfs
+gzip -9 rootfs.ext2
+mkimage -A ppc -O linux -T ramdisk -C gzip -n 'rootfs.ext2.gz.uboot' -d rootfs.ext2.gz rootfs.ext2.gz.uboot
+rm -rf asf_rootfs
