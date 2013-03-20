@@ -482,13 +482,10 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 	dma_addr_t addr;
 
 	if (unlikely(in_irq())) {
-		struct tasklet_struct *tasklet;
 		/* Disable QMan IRQ and invoke NAPI */
 		int ret = qman_irqsource_remove(QM_PIRQ_DQRI);
 		if (likely(!ret)) {
-			tasklet = asfPerCpuPtr(percpu_tasklet,
-					smp_processor_id());
-			tasklet_schedule(tasklet);
+			tasklet_schedule(&percpu_tasklet[smp_processor_id()]);
 			return qman_cb_dqrr_stop;
 		}
 	}
@@ -1092,7 +1089,6 @@ int sec_qi_cgr_deinit(void)
 int secfp_qman_init(void)
 {
 	int err = -ENOMEM, ii;
-	struct tasklet_struct *tasklet = NULL;
 
 #ifdef SEC_CONGESTION_CONTROL
 	if (sec_qi_cgr_init()) {
@@ -1108,16 +1104,15 @@ int secfp_qman_init(void)
 		goto qm_init_failure;
 	}
 
-	percpu_tasklet = asfAllocPerCpu(sizeof(struct tasklet_struct));
+	percpu_tasklet = kzalloc(NR_CPUS * sizeof(struct tasklet_struct), GFP_KERNEL);
 	if (!percpu_tasklet) {
 		ASFIPSEC_ERR("allocate per-cpu memory for ASF IPsec tasklet\n");
 		goto tsklet_alloc_failure;
 	}
 
-	for_each_possible_cpu(ii) {
-		tasklet = asfPerCpuPtr(percpu_tasklet, ii);
-		tasklet_init(tasklet, secfp_poll, 0);
-	}
+	for_each_possible_cpu(ii)
+		tasklet_init(&percpu_tasklet[ii], secfp_poll, 0);
+
 	return 0;
 
 tsklet_alloc_failure:
@@ -1141,12 +1136,11 @@ void secfp_qman_deinit(void)
 
 	flush_scheduled_work();
 
-	if (percpu_tasklet) {
-		for_each_possible_cpu(ii) {
-			tasklet_kill(asfPerCpuPtr(percpu_tasklet, ii));
-		}
-		asfFreePerCpu(percpu_tasklet);
-	}
+	if (percpu_tasklet)
+		for_each_possible_cpu(ii)
+			tasklet_kill(&percpu_tasklet[ii]);
+	kfree(percpu_tasklet);
+
 #ifdef SEC_CONGESTION_CONTROL
 	sec_qi_cgr_deinit();
 #endif
