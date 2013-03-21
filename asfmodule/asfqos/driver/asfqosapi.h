@@ -26,6 +26,8 @@
 #ifndef __ASFQOSAPI_H
 #define __ASFQOSAPI_H
 
+#include <linux/netfilter.h>
+
 /****** Quality Of Service Module API (QOS API) **********/
 /*!	\brief	Defining ASF Max priority */
 #define	ASF_PRIO_MAX	8     /*  0-7 Priority bands */
@@ -47,20 +49,6 @@ typedef enum {
 	PROTO_SCTP = 132,
 	PROTO_INVALID = 0
 } enum_proto_t;
-
-typedef struct {
-	ASF_uint32_t	src_ip[4];
-	ASF_uint32_t	dst_ip[4];
-	ASF_uint16_t	src_port;
-	ASF_uint16_t	dst_port;
-	enum_proto_t	proto;
-	ASF_uint8_t		uciDscp;
-} ASFMarkerRule_t;
-
-typedef struct {
-	ASFMarkerRule_t	*rule;
-	ASF_uint32_t	num_rules;
-} marker_db_t;
 
 /*!	\brief	Enum defining QoS Queue discipline type. */
 typedef enum {

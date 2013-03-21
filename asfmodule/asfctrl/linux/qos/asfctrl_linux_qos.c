@@ -57,10 +57,13 @@ MODULE_DESCRIPTION(ASFCTRL_LINUX_QOS_DESC);
 #ifdef ASF_INGRESS_MARKER
 
 #define PORT_ANY 0xFFFF
-ASFMarkerRule_t	*marker_rule;
-unsigned int	num_rules;
+#ifdef	ASF_IPV6_FP_SUPPORT
+markerRule_t	*marker_rule_v6;
+unsigned int	num_rules_v6;
+#endif
+markerRule_t	*marker_rule_v4;
+unsigned int	num_rules_v4;
 u8		dscp_default = ASF_QM_NULL_DSCP;
-
 
 /* This Function will match the input arguments with Marker databse
    and reurns the DSCP value to be marked, if configured */
@@ -72,19 +75,21 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 				bool		is_ipv6)
 {
 	int		i;
-	ASFMarkerRule_t	*rule;
+	markerRule_t	*rule;
 
-	if (!marker_rule)
-		return ASF_QM_NULL_DSCP;
+	if (is_ipv6) {
+		if (!marker_rule_v6)
+			return ASF_QM_NULL_DSCP;
 
-	ASFCTRL_INFO("I/P: src_ip[0x%X], dst_ip[0x%X], src_port[%d],"
+		ASFCTRL_INFO("I/P: src_ip[0x%X%X%X%X], dst_ip[0x%X%X%X%X], src_port[%d],"
 			" dst_port[%d], proto[%d]\n",
-			src_ip[0], dst_ip[0], src_port, dst_port, proto);
+			src_ip[0], src_ip[1], src_ip[2], src_ip[3],
+			dst_ip[0], dst_ip[1], dst_ip[2], dst_ip[3],
+			src_port, dst_port, proto);
 
-	for (i = 0; i < num_rules; i++) {
-		rule = (ASFMarkerRule_t *) &marker_rule[i];
+		for (i = 0; i < num_rules_v6; i++) {
+			rule = (markerRule_t *) &marker_rule_v6[i];
 
-		if (is_ipv6) {
 			if ((src_ip[0] == rule->src_ip[0])
 			&& (src_ip[1] == rule->src_ip[1])
 			&& (src_ip[2] == rule->src_ip[2])
@@ -102,7 +107,18 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 				/* Masking the Last 2 bits */
 				return rule->uciDscp & 0xFC;
 			}
-		} else {	/* IPv4 Rue */
+		}
+	} else {/* IPv4 */
+		if (!marker_rule_v4)
+			return ASF_QM_NULL_DSCP;
+
+		ASFCTRL_INFO("I/P: src_ip[0x%X], dst_ip[0x%X], src_port[%d],"
+			" dst_port[%d], proto[%d]\n",
+			src_ip[0], dst_ip[0], src_port, dst_port, proto);
+
+		for (i = 0; i < num_rules_v4; i++) {
+			rule = (markerRule_t *) &marker_rule_v4[i];
+
 			if ((src_ip[0] == rule->src_ip[0])
 			&& (dst_ip[0] == rule->dst_ip[0])
 			&& ((rule->src_port == PORT_ANY) ||
@@ -126,7 +142,23 @@ ASF_uint8_t ASFMarkLnxPkt(void *buf)
 	return 1;
 }
 
-int ASFConfigMarker(marker_db_t	*arg)
+void ASFFlushIPv4Marker(void)
+{
+	ASFFFPConfigIdentity_t cmd;
+
+	if (NULL != marker_rule_v4) {
+		vfree(marker_rule_v4);
+		marker_rule_v4 = NULL;
+		num_rules_v4 = 0;
+	}
+	/* Invalidate flows */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.ulConfigMagicNumber = jiffies;
+	ASFFFPUpdateConfigIdentity(0, cmd);
+	printk(KERN_INFO "IPv4 Marker Rules Flushed\n");
+}
+
+int ASFConfigIPv4Marker(marker_db_t *arg)
 {
 	int			i;
 	ASFFFPConfigIdentity_t cmd;
@@ -134,44 +166,40 @@ int ASFConfigMarker(marker_db_t	*arg)
 	if (!arg->num_rules || !arg->rule)
 		return -EINVAL;
 
-	if (NULL != marker_rule)
-		vfree(marker_rule);
+	if (NULL != marker_rule_v4)
+		vfree(marker_rule_v4);
 
 	ASFCTRL_INFO("Marker rules[%d] configuration request!\n",
 						arg->num_rules);
 
-	num_rules = arg->num_rules;
+	num_rules_v4 = arg->num_rules;
 	/* Allocate Marker Database */
-	marker_rule = vmalloc(num_rules * sizeof(ASFMarkerRule_t));
-	if (NULL == marker_rule)
+	marker_rule_v4 = vmalloc(num_rules_v4 * sizeof(markerRule_t));
+	if (NULL == marker_rule_v4)
 		return -ENOMEM;
-	memcpy(marker_rule, arg->rule,
-		sizeof(ASFMarkerRule_t) * num_rules);
+	memcpy(marker_rule_v4, arg->rule,
+		sizeof(markerRule_t) * num_rules_v4);
 
-	/* TBD Use this Leg for Dynamic configuration*/
-	for (i = 0; i < num_rules; i++) {
-		ASFMarkerRule_t *rule;
+	for (i = 0; i < num_rules_v4; i++) {
+		markerRule_t *rule;
 
-		rule = (ASFMarkerRule_t *) &marker_rule[i];
+		rule = (markerRule_t *) &marker_rule_v4[i];
 
-		printk(KERN_INFO"src_ip[%-15pI4] dst_ip[%-15pI4] proto[%d] ",
+		printk(KERN_INFO"src_ip[%pI4] dst_ip[%pI4] proto[%d] ",
 			&rule->src_ip[0], &rule->dst_ip[0], rule->proto);
 
 		if (rule->src_port == PORT_ANY)
-			printk(KERN_INFO"src_port[ANY]  ");
+			printk("src_port[ANY]  ");
 		else
-			printk(KERN_INFO"src_port[%d] ", rule->src_port);
+			printk("src_port[%d] ", rule->src_port);
 
 		if (rule->dst_port == PORT_ANY)
-			printk(KERN_INFO"dst_port[ANY] ");
+			printk("dst_port[ANY] ");
 		else
-			printk(KERN_INFO"dst_port[%d] ", rule->dst_port);
+			printk("dst_port[%d] ", rule->dst_port);
 
-		printk(KERN_INFO"Dscp[0x%X]\n", rule->uciDscp);
+		printk("Dscp[0x%X]\n", rule->uciDscp);
 	}
-	/*  Register Marker Rules */
-	ASFRegisterQosMarkerFn(&ASFMatchMarkerRule, &ASFMarkLnxPkt);
-	/*vfree(marker_rule); */
 	/* Invalidate flows */
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.ulConfigMagicNumber = jiffies;
@@ -179,7 +207,74 @@ int ASFConfigMarker(marker_db_t	*arg)
 
 	return 0;
 }
-EXPORT_SYMBOL(ASFConfigMarker);
+
+#ifdef	ASF_IPV6_FP_SUPPORT
+void ASFFlushIPv6Marker(void)
+{
+	ASFFFPConfigIdentity_t cmd;
+
+	if (NULL != marker_rule_v6) {
+		vfree(marker_rule_v6);
+		marker_rule_v6 = NULL;
+		num_rules_v6 = 0;
+	}
+	/* Invalidate flows */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.ulConfigMagicNumber = jiffies;
+	ASFFFPUpdateConfigIdentity(0, cmd);
+	printk(KERN_INFO "IPv6 Marker Rules Flushed\n");
+}
+
+int ASFConfigIPv6Marker(marker_db_t *arg)
+{
+	int			i;
+	ASFFFPConfigIdentity_t cmd;
+
+	if (!arg->num_rules || !arg->rule)
+		return -EINVAL;
+
+	if (NULL != marker_rule_v6)
+		vfree(marker_rule_v6);
+
+	ASFCTRL_INFO("Marker rules[%d] configuration request!\n",
+						arg->num_rules);
+
+	num_rules_v6 = arg->num_rules;
+	/* Allocate Marker Database */
+	marker_rule_v6 = vmalloc(num_rules_v6 * sizeof(markerRule_t));
+	if (NULL == marker_rule_v6)
+		return -ENOMEM;
+	memcpy(marker_rule_v6, arg->rule,
+		sizeof(markerRule_t) * num_rules_v6);
+
+	for (i = 0; i < num_rules_v6; i++) {
+		markerRule_t *rule;
+
+		rule = (markerRule_t *) &marker_rule_v6[i];
+
+		printk(KERN_INFO"src_ip[%-15pI6] dst_ip[%-15pI6] proto[%d] ",
+			&rule->src_ip[0], &rule->dst_ip[0], rule->proto);
+
+		if (rule->src_port == PORT_ANY)
+			printk("src_port[ANY]  ");
+		else
+			printk("src_port[%d] ", rule->src_port);
+
+		if (rule->dst_port == PORT_ANY)
+			printk("dst_port[ANY] ");
+		else
+			printk("dst_port[%d] ", rule->dst_port);
+
+		printk("Dscp[0x%X]\n", rule->uciDscp);
+	}
+	/* Invalidate flows */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.ulConfigMagicNumber = jiffies;
+	ASFFFPUpdateConfigIdentity(0, cmd);
+
+	return 0;
+}
+#endif
 #endif /* CONFIG_MARKER */
 
 /* Global Variables */
@@ -381,6 +476,14 @@ static int __init asfctrl_linux_qos_init(void)
 	tbf_hook_fn_register(&asfctrl_qos_tbf_add,
 				&asfctrl_qos_tbf_del);
 #endif
+#ifdef ASF_INGRESS_MARKER
+	/*  Register Marker Rules */
+	ASFRegisterQosMarkerFn(&ASFMatchMarkerRule, &ASFMarkLnxPkt);
+	marker_v4_hook_fn_register(&ASFConfigIPv4Marker, &ASFFlushIPv4Marker);
+#ifdef	ASF_IPV6_FP_SUPPORT
+	marker_v6_hook_fn_register(&ASFConfigIPv6Marker, &ASFFlushIPv6Marker);
+#endif
+#endif
 	ASFCTRL_DBG("ASF Control Module - Forward Loaded\n");
 	return 0;
 }
@@ -400,9 +503,16 @@ static void __exit asfctrl_linux_qos_exit(void)
 #endif
 #ifdef ASF_EGRESS_SHAPER
 	tbf_hook_fn_register(NULL, NULL);
-
 #endif
-	ASFCTRL_DBG("ASF QOS Control Module Unloaded \n");
+#ifdef ASF_INGRESS_MARKER
+	/*  Register Marker Rules */
+	ASFRegisterQosMarkerFn(NULL, NULL);
+	marker_v4_hook_fn_register(NULL, NULL);
+#ifdef	ASF_IPV6_FP_SUPPORT
+	marker_v6_hook_fn_register(NULL, NULL);
+#endif
+#endif
+	ASFCTRL_DBG("ASF QOS Control Module Unloaded\n");
 }
 
 module_init(asfctrl_linux_qos_init);
