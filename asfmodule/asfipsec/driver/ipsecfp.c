@@ -218,9 +218,6 @@ int secfp_rng_read_data(struct device *dev, struct secfp_iv_info_s *ptr)
 	u32 i, ofl;
 
 	if (ptr && ptr->ul_num_avail < SECFP_IV_DATA_LO_THRESH) {
-		while (!atomic_add_unless(&priv->ul_rng_in_use, 1, 1))
-			cpu_relax();
-
 		ofl = in_be32(priv->reg + TALITOS_RNGUSR_LO) &
 				TALITOS_RNGUSR_LO_OFL;
 		ofl = ((ofl - 1) * 2) < SECFP_NUM_IV_DATA_GET_AT_ONE_TRY ?
@@ -243,8 +240,6 @@ int secfp_rng_read_data(struct device *dev, struct secfp_iv_info_s *ptr)
 			ptr->ul_num_avail += ofl * 2;
 		}
 	}
-	atomic_set(&priv->ul_rng_in_use, 0);
-
 	return 0;
 }
 
