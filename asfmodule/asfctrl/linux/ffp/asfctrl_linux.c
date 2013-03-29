@@ -777,11 +777,10 @@ static void __exit asfctrl_exit(void)
 		asfctrl_linux_unregister_ffp();
 
 	asfctrl_sysfs_exit();
-
-	route_hook_fn_unregister();
-
+	/* Unregister the hook*/
+	route_hook_fn_register(NULL);
 #ifdef ASF_IPV6_FP_SUPPORT
-	ipv6_route_hook_fn_unregister();
+	ipv6_route_hook_fn_register(NULL);
 #endif
 	devfp_register_hook(NULL, NULL);
 	unregister_netdevice_notifier(&asfctrl_dev_notifier);
