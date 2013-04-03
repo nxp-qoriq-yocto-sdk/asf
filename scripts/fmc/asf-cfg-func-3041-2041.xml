@@ -29,47 +29,15 @@
  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
-<netpdl>
-
-	<!-- Fragments detector -->
-
-	<!-- Identify IPv4 fragments -->
-	<protocol name="ipv4frag" prevproto="ipv4">
-		<execute-code>
-			<before>
-				<!-- If any error was detected (indicated in bits 6 & 12 of L3R) then exit -->
-				<if expr="($l3r bitwand 0x0208) != 0">
-					<if-true>
-						<action type="exit"/>
-					</if-true>
-				</if>
-				<!-- If it's a fragment then indicate it in shim2 and stop parsing -->
-				<if expr="(ipv4.mf != 0) or (ipv4.foffset != 0) ">
-					<if-true>
-						<!-- Set shim2 and exit -->
-						<action type="exit" confirmcustom="shim1" advance="yes" confirm = "yes" nextproto="end_parse"/>
-					</if-true>
-				</if>
-			</before>
-		</execute-code>
-	</protocol>
-
-	<!-- Identify IPv6 fragments -->
-	<protocol name="ipv6frag" prevproto="ipv6">
-		<format/>
-		<execute-code>
-			<before>
-				<!-- If any error was detected (indicated in bits 6 & 12 of L3R) then exit -->
-				<!-- If there is no fragment extension header (indicated in bits 9 & 14 of L3R) then exit -->
-				<if expr="(($l3r bitwand 0x0208) != 0) or (($l3r bitwand 0x0044) == 0)">
-					<if-true>
-						<action type="exit"/>
-					</if-true>
-				</if>
-				<!-- Set shim2 and exit -->
-				<action type="exit" confirmcustom="shim2" advance="yes" confirm = "yes" nextproto="end_parse"/>
-			</before>
-		</execute-code>
-	</protocol>
-
-</netpdl>
+<cfgdata>
+    <config>
+        <engine name="fm0">
+<!--
+            <port type="1G" number="0" policy="asf_fman_frag_policy_0"/>
+            <port type="1G" number="1" policy="asf_fman_frag_policy_1"/>
+-->
+            <port type="1G" number="3" policy="asf_fman_frag_policy_3"/>
+            <port type="1G" number="4" policy="asf_fman_frag_policy_10"/>
+        </engine>
+    </config>
+</cfgdata>

@@ -43,7 +43,6 @@ the policies indicated below.
 		<port type="1G" number="1" policy="asf_fman_frag_policy_1"/>
 	-->
 		<port type="10G" number="0" policy="asf_fman_frag_policy_4"/>
-	
 	</engine>
 
 	<engine name="fm1">
@@ -52,9 +51,8 @@ the policies indicated below.
 		<port type="1G" number="1" policy="asf_fman_frag_policy_6"/>
 		<port type="1G" number="2" policy="asf_fman_frag_policy_7"/>
 		<port type="1G" number="3" policy="asf_fman_frag_policy_8"/>
-	-->	
+	-->
 		<port type="10G" number="0" policy="asf_fman_frag_policy_9"/>
-	
 	</engine>
     </config>
 </cfgdata>
