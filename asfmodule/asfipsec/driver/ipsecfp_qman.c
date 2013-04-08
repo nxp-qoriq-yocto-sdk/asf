@@ -199,12 +199,12 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 		ASFIPSEC_DPERR("Could not allocate shared descriptor");
 		return -ENOMEM;
 	}
-	sh_desc = (u32 *)(((int)ctx->sh_desc_mem
+	sh_desc = (u32 *)(((dma_addr_t)ctx->sh_desc_mem
 			+ (L1_CACHE_BYTES - 1)) & ~(L1_CACHE_BYTES - 1));
 
 	ctx->sh_desc = sh_desc;
 	/* Leaving space for Pre header*/
-	sh_desc += (sizeof(struct preheader_t)/sizeof(sh_desc));
+	sh_desc += (sizeof(struct preheader_t)/sizeof(*sh_desc));
 
 	/* Shared Descriptor Creation */
 	if (dir == SECFP_OUT) {
@@ -302,12 +302,16 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 			skb->data, skb->len, DMA_BIDIRECTIONAL);
 
 	/* filling compound frame */
-	pSG->addr_lo = (uint32_t) (pInmap + ulHdrLen);
-	pSG->length = skb->len;
-
 	pSG[1].addr_lo = (uint32_t) pInmap;
+	pSG[1].addr_hi = (uint32_t) (pInmap>>32);
 	pSG[1].length = skb->len;
 	pSG[1].final = 1;
+
+	pInmap += ulHdrLen;
+	pSG->addr_lo = (uint32_t) pInmap;
+	pSG->addr_hi = (uint32_t) (pInmap>>32);
+	pSG->length = skb->len;
+
 	qmfd._format2 = qm_fd_compound;
 	qmfd.addr_lo = dma_map_single(pDev, pSG,
 		2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
@@ -372,9 +376,11 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 				pSA->ulCompleteOverHead);
 	/* filling compound frame */
 	pSG->addr_lo = (uint32_t) (pInmap);
+	pSG->addr_hi = (uint32_t) (pInmap>>32);
 	pSG->length = skb->len + pSA->ulCompleteOverHead;
 
 	pSG[1].addr_lo = (uint32_t) (pInmap);
+	pSG[1].addr_hi = (uint32_t) (pInmap>>32);
 	pSG[1].length = (skb->len);
 	pSG[1].final = 1;
 
@@ -404,7 +410,8 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 	scatter_gather_entry_t *pSG;
 	struct ses_pkt_info *pInfo;
 	u32 err_val = 0;
-	unsigned int		retryCount = 0;
+	unsigned int retryCount = 0;
+	dma_addr_t addr;
 
 	if (unlikely(in_irq())) {
 		struct tasklet_struct *tasklet;
@@ -451,7 +458,9 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 		goto out;
 	}
 
-	pInfo->cb_skb->data = (u8 *)phys_to_virt(pSG->addr_lo);
+	addr = ((dma_addr_t)(pSG->addr_hi)<<32) + pSG->addr_lo;
+	pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
+
 	if (pInfo->dir == SECFP_OUT) {
 		pInfo->cb_skb->len = pSG->length;
 		secfp_outComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);

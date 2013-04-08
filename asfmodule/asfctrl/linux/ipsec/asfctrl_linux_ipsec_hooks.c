@@ -380,7 +380,7 @@ static inline int is_sa_offloadable(struct xfrm_state *xfrm)
 int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 {
 	int i;
-	int 	handle;
+	uintptr_t handle;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -412,7 +412,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 		memset(&spdParams, 0, sizeof(ASF_IPSecPolicy_t));
 		spdParams.policyID = xp->index;
 		spdParams.policyAction = ASF_IPSEC_POLICY_ACTION_IPSEC;
-		handle = (uint32_t)(xp);
+		handle = (uintptr_t)(xp);
 		outSPDContainer.pSPDParams = &spdParams;
 
 		ASFIPSecConfig(ASF_DEF_VSG,
@@ -452,7 +452,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 		spdParams.policyAction = ASF_IPSEC_POLICY_ACTION_IPSEC;
 
 		inSPDContainer.pSPDParams = &spdParams;
-		handle = (uint32_t)(xp);
+		handle = (uintptr_t)(xp);
 		ASFIPSecConfig(ASF_DEF_VSG,
 			ASF_IPSEC_CONFIG_ADD_INSPDCONTAINER,
 			&inSPDContainer,
@@ -480,7 +480,7 @@ err:
 
 int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 {
-	int 	handle;
+	uintptr_t handle;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -560,7 +560,7 @@ int asfctrl_xfrm_flush(void)
 
 int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 {
-	uint32_t handle;
+	uintptr_t handle;
 	int sa_id, ret = -EINVAL;
 	struct xfrm_selector *sel = NULL;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -812,7 +812,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	outSA.pSASelector = &outSASel;
 	outSA.pSAParams = &SAParams;
-	handle = (uint32_t)xfrm;
+	handle = (uintptr_t)xfrm;
 	ASFIPSecRuntime(ASF_DEF_VSG,
 			ASF_IPSEC_RUNTIME_ADD_OUTSA,
 			&outSA,
@@ -856,7 +856,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 {
-	uint32_t handle;
+	uintptr_t handle;
 	int sa_id, ret = -EINVAL;
 	struct xfrm_selector *sel;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -1113,7 +1113,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	inSA.pSASelector = &inSASel;
 	inSA.pSAParams = &SAParams;
-	handle = (uint32_t)xfrm;
+	handle = (uintptr_t)xfrm;
 	ASFIPSecRuntime(ASF_DEF_VSG,
 			ASF_IPSEC_RUNTIME_ADD_INSA,
 			&inSA,

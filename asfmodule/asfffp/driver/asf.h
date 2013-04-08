@@ -85,7 +85,7 @@ typedef int ASF_int32_t;
 typedef short int ASF_int16_t;
 typedef char ASF_int8_t;
 typedef char ASF_char8_t;
-typedef unsigned long ASF_uint64_t;
+typedef unsigned long long ASF_uint64_t;
 typedef unsigned int ASF_uint32_t;
 typedef unsigned char ASF_uchar8_t;
 typedef unsigned char ASF_uint8_t;
@@ -169,9 +169,9 @@ typedef struct ASFInterfaceInfo_s {
 	ASF_uint32_t    ulMTU;
 	ASF_uint8_t     *ucDevIdentifierInPkt;
 	ASF_uint32_t    ulDevIdentiferInPktLen;
-	ASF_uint32_t *ulRelatedIDs;
+	ASF_uint64_t	*ulRelatedIDs;
 	ASF_uint32_t	ulNumRelatedIDs;
-	ASF_uint8_t		ucDevIdentifierType;
+	ASF_uint8_t	ucDevIdentifierType;
 } ASFInterfaceInfo_t;
 
 ASF_uint32_t ASFMapInterface(ASF_uint32_t ulCommonInterfaceId,
@@ -238,7 +238,7 @@ typedef struct ASFTERMCacheEntryTuple_s {
 typedef struct ASFFFPL2blobConfig_s {
 	ASF_boolean_t	bl2blobRefreshSent;
 	ASF_uint32_t	ulL2blobMagicNumber;
-	ASF_uint64_t	ulOldL2blobJiffies;
+	unsigned long	ulOldL2blobJiffies;
 } ASFFFPL2blobConfig_t;
 
 /****** Firewall API (FFP API) **********/
@@ -355,7 +355,11 @@ struct annotations_t {
 	struct sk_buff *skbh;
 	/*const */struct qm_fd *fd;	/**< Pointer to frame descriptor*/
 	uint32_t flag;		/**< All flags like ip_summed will reside here */
+#ifdef __LP64__
+	uint32_t reserved[15];	/**<May be used in future */
+#else
 	uint32_t reserved[17];	/**<May be used in future */
+#endif
 	t_FmPrsResult parse_result;	/**<Parsed result*/
 	uint64_t timestamp;		/**< TimeStamp */
 	union {

@@ -384,7 +384,7 @@ static inline ffp_bucket_t *asf_ffp_bucket_by_hash(unsigned long ulHashVal)
 
 static inline ffp_flow_t *asf_ffp_flow_lookup_in_bkt(
 				unsigned long sip, unsigned long dip,
-				unsigned long ports, unsigned char protocol,
+				uint32_t ports, unsigned char protocol,
 				unsigned long vsg, unsigned long szone,
 				ffp_flow_t *pHead)
 {
@@ -430,7 +430,7 @@ static inline ffp_flow_t *asf_ffp_flow_lookup_in_bkt_ex(ASFFFPFlowTuple_t *tuple
 static inline ffp_flow_t  *asf_ffp_flow_lookup_DPAA(
 					unsigned long sip,
 					unsigned long dip,
-					unsigned long ports,
+					uint32_t ports,
 					unsigned long vsg,
 					unsigned long szone,
 					unsigned char protocol,
@@ -470,7 +470,7 @@ struct sk_buff *asf_alloc_buf_skb(struct net_device *dev)
 	skb->bpid = bp->bpid;
 
 	skb->data = ((u8 *)skbh + DPA_BP_HEAD);
-	skb->tail = skb->data;
+	skb_reset_tail_pointer(skb);
 
 	return skb;
 }
@@ -485,7 +485,7 @@ int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb)
 	int pad;
 
 	bp = priv->dpa_bp;
-	pad = round_down(((u32)skb->end - (u32)skb->head) -
+	pad = round_down(((uintptr_t)skb_end_pointer(skb) - (uintptr_t)skb->head) -
 			(bp->size + NET_SKB_PAD), L1_CACHE_BYTES);
 	skbh = (struct sk_buff **)(skb->head + pad);
 	addr = dma_map_single(bp->dev, skbh,
@@ -716,7 +716,7 @@ int asfAdjustFragAndSendToStack(struct sk_buff *skb, ASFNetDevEntry_t *anDev)
 	x_hh_len = skb->mac_len-ETH_HLEN;
 
 	if (x_hh_len > 0) {
-		asfCopyWords((unsigned int *) ucL2blob, (unsigned int *)(skb->mac_header + ETH_HLEN), x_hh_len);
+		asfCopyWords((unsigned int *) ucL2blob, (unsigned int *)(skb_mac_header(skb) + ETH_HLEN), x_hh_len);
 		/* Possible combinations for PPPoE
 		 *    | MAC HDR | PPPoE | PPP | IP | TCP | DATA .... |
 		 *    | MAC HDR | VLAN | PPPoE | PPP | IP | TCP | DATA .... |
@@ -801,12 +801,12 @@ static inline int asfAdjustFragAndSendUp(struct sk_buff *skb, ASFNetDevEntry_t *
 
 static inline ffp_flow_t *ffp_flow_by_id(ASFFFPFlowId_t *id)
 {
-	return (ffp_flow_t *) (ffp_ptrary.pBase[id->ulArg1].ulMagicNum == id->ulArg2) ? ffp_ptrary.pBase[id->ulArg1].pData : NULL;
+	return (ffp_flow_t *) ((ffp_ptrary.pBase[id->ulArg1].ulMagicNum == id->ulArg2) ? ffp_ptrary.pBase[id->ulArg1].pData : NULL);
 }
 
 static inline ffp_flow_t *ffp_flow_by_id_ex(unsigned int ulIndex, unsigned int ulMagicNum)
 {
-	return (ffp_flow_t *) (ffp_ptrary.pBase[ulIndex].ulMagicNum == ulMagicNum) ? ffp_ptrary.pBase[ulIndex].pData : NULL;
+	return (ffp_flow_t *) ((ffp_ptrary.pBase[ulIndex].ulMagicNum == ulMagicNum) ? ffp_ptrary.pBase[ulIndex].pData : NULL);
 }
 
 static inline void asfFfpSendLogEx(ffp_flow_t *flow, unsigned long ulMsgId, ASF_uchar8_t *aMsg, unsigned long ulHashVal)
@@ -1013,7 +1013,7 @@ ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf,
 	pAbuf->pAnnot->skbh = skb;
 	pAbuf->iph = (struct iphdr *)skb->data;
 	/* pAbuf->nativeBuffer is already set */
-	pAbuf->ethh = (struct ethhdr *)skb->mac_header;
+	pAbuf->ethh = (struct ethhdr *)skb_mac_header(skb);
 	/*pAbuf->pAnnot->fd->length20 = skb->len +
 			((u32)pAbuf->iph - (u32)pAbuf->ethh); */
 	asf_debug("RES: skb 0x%p, skb->head 0x%p, skb->data 0x%p, "
@@ -1424,7 +1424,9 @@ non_tudp:
 	/* IpSecIn for ESP pkts */
 	if (unlikely(iph->protocol == IPPROTO_ESP)) {
 		XGSTATS_INC(ESPPkts);
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 ipsecin:
+#endif
 		if (pFFPIPSecIn) {
 			abuf.bbuffInDomain = ASF_TRUE;
 			asf_abuf_to_skb(&abuf);
@@ -1945,11 +1947,11 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	struct iphdr		*iph;
 	ffp_flow_t		*flow;
 	unsigned long		ulHashVal;
-	unsigned short int	trhlen;
 	unsigned short int	iphlen;
 	int			L2blobRefresh = 0;
 	unsigned int            retryCount = 0, err = 0;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	unsigned short int	trhlen;
 	int			bSpecialIndication = 0,
 				bFlowValidate = 0;
 	unsigned int		ulTcpState = 0;
@@ -1964,7 +1966,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	int			mtu;
 	u32			tunnel_hdr_len = 0;
 #endif
-	unsigned long int       *ptrhdrOffset;
+	uint32_t		*ptrhdrOffset;
 	struct qm_fd		*tx_fd;
 	u8			*txdata;
 	dma_addr_t		addr;
@@ -1991,7 +1993,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 #endif
 
 	iphlen = iph->ihl * 4;
-	ptrhdrOffset = (unsigned long *)(((unsigned char *) iph) + iphlen);
+	ptrhdrOffset = (uint32_t *)(((unsigned char *) iph) + iphlen);
 	flow = asf_ffp_flow_lookup_DPAA(iph->saddr, iph->daddr,
 					*ptrhdrOffset/* ports*/, anDev->ulVSGId,
 					anDev->ulZoneId, iph->protocol,
@@ -2449,7 +2451,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	/* if L2 header on egress is make sure that enough
 	   headroom exists.
 	 */
-	tx_fd->offset = (u32)iph - (u32)abuf.pAnnot - flow->l2blob_len;
+	tx_fd->offset = (uintptr_t)iph - (uintptr_t)abuf.pAnnot - flow->l2blob_len;
 	if (tx_fd->offset < (sizeof(struct annotations_t)/* 64 Byte */)) {
 		asf_dperr("%s", periodic_errmsg[PERR_NO_L2_HDROOM]);
 		goto drop_pkt;

@@ -930,9 +930,9 @@ static inline int asfIPv6CheckFragInfo(struct sk_buff *skb,
 	struct ipv6hdr *ipv6h = ipv6_hdr(skb);
 	struct frag_hdr *fhdr = (struct frag_hdr *)skb_transport_header(skb);
 	ASFFFPGlobalStats_t     *gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
-	unsigned int frag_len = skb->len - ((unsigned int)(fhdr + 1) - (unsigned int)ipv6h);
+	unsigned int frag_len = skb->len - ((uintptr_t)(fhdr + 1) - (uintptr_t)ipv6h);
 
-	*pIhl = ((unsigned int)(fhdr + 1) - (unsigned int)ipv6h);
+	*pIhl = ((uintptr_t)(fhdr + 1) - (uintptr_t)ipv6h);
 
 	if (unlikely(frag_len) <= 0) {
 		asf_reasm_debug("Invalid data length\r\n");
@@ -1440,7 +1440,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 	struct iphdr *iph = ip_hdr(skb);
 	struct asf_reasmCb_s *pCb;
 	unsigned int hashVal;
-	unsigned int ulOffset;
+	unsigned int ulOffset = 0;
 	unsigned int flags = 0;
 	unsigned int ulSegLen = 0;
 	unsigned int ihl;
@@ -1528,10 +1528,10 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 			if (ulOffset == 0) {
 				if (bFirstFragRcvd)
 					*bFirstFragRcvd = TRUE;
-				*(unsigned int *)  &(skb->cb[0]) = (unsigned int)&(skb->data[0]); /* beginning of the IP header */
+				*(uintptr_t *)  &(skb->cb[0]) = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
 #ifdef ASF_IPV6_FP_SUPPORT
-				*(unsigned int *)  &(skb->cb[4]) = skb_transport_header(skb) - skb_network_header(skb);
-				*(unsigned int *)  &(skb->cb[8]) = fhdr->nexthdr;
+				*(uintptr_t *)  &(skb->cb[8]) = skb_transport_header(skb) - skb_network_header(skb);
+				*(uintptr_t *)  &(skb->cb[16]) = fhdr->nexthdr;
 #endif
 			}
 
@@ -1567,10 +1567,10 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 				if (ulOffset == 0) {
 					if (bFirstFragRcvd)
 						*bFirstFragRcvd = TRUE;
-					*(unsigned int *)  &(skb->cb[0]) = (unsigned int)&(skb->data[0]); /* beginning of the IP header */
+					*(uintptr_t *)  &(skb->cb[0]) = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
 #ifdef ASF_IPV6_FP_SUPPORT
-					*(unsigned int *)  &(skb->cb[4]) = skb_transport_header(skb) - skb_network_header(skb);
-					*(unsigned int *)  &(skb->cb[8]) = fhdr->nexthdr;
+					*(uintptr_t *)  &(skb->cb[8]) = skb_transport_header(skb) - skb_network_header(skb);
+					*(uintptr_t *)  &(skb->cb[16]) = fhdr->nexthdr;
 #endif
 				}
 
@@ -1667,23 +1667,23 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 
 #ifdef ASF_IPV6_FP_SUPPORT
 					if (bIPv6 == true) {
-						pHeadSkb->data -= *(unsigned int *)&(pHeadSkb->cb[4]);;
-						memmove(pHeadSkb->data, (void *)(*(unsigned int *)&(pHeadSkb->cb[0])), *(unsigned int *)&(pHeadSkb->cb[4]));
+						pHeadSkb->data -= *(uintptr_t *)&(pHeadSkb->cb[8]);;
+						memmove(pHeadSkb->data, (void *)(*(uintptr_t *)&(pHeadSkb->cb[0])), *(uintptr_t *)&(pHeadSkb->cb[8]));
 						ip6h = (struct ipv6hdr *)pHeadSkb->data;
-						ip6h->payload_len = pCb->ulTotLen + *(unsigned int *)&(pHeadSkb->cb[4]);
+						ip6h->payload_len = pCb->ulTotLen + *(uintptr_t *)&(pHeadSkb->cb[8]);
 						if (ip6h->nexthdr == NEXTHDR_HOP) {
-							*(unsigned char *)(ip6h + 1) = *(unsigned int *)&(pHeadSkb->cb[8]);;
+							*(unsigned char *)(ip6h + 1) = *(uintptr_t *)&(pHeadSkb->cb[16]);;
 						} else {
-							ip6h->nexthdr = *(unsigned int *)&(pHeadSkb->cb[8]);
+							ip6h->nexthdr = *(uintptr_t *)&(pHeadSkb->cb[16]);
 						}
-						pHeadSkb->len +=  *(unsigned int *)&(pHeadSkb->cb[4]);
+						pHeadSkb->len +=  *(uintptr_t *)&(pHeadSkb->cb[8]);
 					} else
 #endif
 					{
 					/* Update the ip header */
 						asf_reasm_debug("pHeadSkb->cb = 0x%x, *pHeadSkb->cb=0x%x\r\n", pHeadSkb->cb, *(unsigned int *)  (&pHeadSkb->cb[0]));
 
-						pIpHdr = (struct iphdr *)  (*(unsigned int *)  &(pHeadSkb->cb[0]));
+						pIpHdr = (struct iphdr *)  (*(uintptr_t *)  &(pHeadSkb->cb[0]));
 						asf_reasm_debug("Updating the IP header, pIpHdr = 0x%x, cb field \r\n", pIpHdr);
 						pSrc = (unsigned int *)  pIpHdr;
 
@@ -1792,7 +1792,7 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 		asf_reasm_debug("Fragments with nr_frags not handled \r\n");
 		return 1;
 	}
-	if (ulTotalLen <= (pTempSkb->end - pTempSkb->data)) {
+	if (ulTotalLen <= (skb_end_pointer(pTempSkb) - pTempSkb->data)) {
 		asf_reasm_debug("Total fragment can fit in first skb \r\n");
 		skb = pTempSkb;
 		bAlloc = 0;
@@ -1849,7 +1849,7 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 		} else {
 			if ((frag == NULL) && (ulBytesToCopy == 0)) {
 				asf_reasm_debug("Exiting routine, ulBytesToCopy = %d skb->len = %d\r\n", ulBytesToCopy, skb->len);
-				skb->tail = skb->data + skb->len;
+				skb_set_tail_pointer(skb, skb->len);
 				bDone = 1;
 			} else {
 				if (frag == NULL)
@@ -1908,7 +1908,7 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 	unsigned int temp_len = (len + 3) & 4;
 	struct sk_buff *pTempSkb;
 
-	if ((skb->tail - (skb->data + skb->len)) >= temp_len) {
+	if ((skb_tail_pointer(skb) - (skb->data + skb->len)) >= temp_len) {
 		tgt = (unsigned int *)  (skb->data+skb->len);
 		src = (unsigned int *)  (skb_shinfo(skb)->frag_list->data);
 		for (ii = 0; ii < temp_len >> 2; ii++) {
@@ -2360,7 +2360,7 @@ int asfIpv6MakeFragment(struct sk_buff *skb,
 	unsigned int hdrtocpy = 0;
 	unsigned int ident = asfReasmGetNextId();
 
-	hdrtocpy = (unsigned int)(skb_transport_header(skb)) - (unsigned int)(skb_network_header(skb));
+	hdrtocpy = (uintptr_t)(skb_transport_header(skb)) - (uintptr_t)(skb_network_header(skb));
 
 	skb->data -= sizeof(struct frag_hdr);
 	memmove(skb->data, skb_network_header(skb), hdrtocpy);

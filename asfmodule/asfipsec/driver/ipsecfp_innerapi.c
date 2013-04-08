@@ -1370,7 +1370,7 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 /* Checks for SPI based matching entry */
 inSA_t *secfp_findInv4SA(unsigned int ulVSGId,
 		unsigned char ucProto,
-		unsigned long int ulSPI,
+		unsigned int ulSPI,
 		unsigned int daddr,
 		unsigned int *pHashVal)
 {
@@ -2661,14 +2661,13 @@ unsigned int secfp_createOutSA(
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	pSA->prepareOutPktFnPtr = NULL;
 	pSA->finishOutPktFnPtr = secfp_finishOffloadOutPacket;
-	pSA->ulLoSeqNum = 2;
 #else
 	pSA->prepareOutPktFnPtr = secfp_prepareOutPacket;
 	pSA->finishOutPktFnPtr = secfp_finishOutPacket;
+#endif
 	/* starting the seq number from 2 to avoid the conflict
 	with the Networking Stack seq number */
 	atomic_set(&pSA->ulLoSeqNum, 2);
-#endif
 	/*
 	* Get the NAT-T header packet
 	*/
@@ -2863,7 +2862,8 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 				memcpy(pOutSA->SAParams.tunnelInfo.addr.iphv6.saddr,
 					pModSA->u.addrInfo.IPAddr.ipv6addr, 16);
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-				memcpy((void *)(*(pOutSA->ctx.sh_desc + SHARED_GWV6_OFFSET(saddr.s6_addr32))),
+				memcpy((void *)(*((uintptr_t *)(pOutSA->ctx.sh_desc)
+					+ SHARED_GWV6_OFFSET(saddr.s6_addr32))),
 					pModSA->u.addrInfo.IPAddr.ipv6addr, 16);
 #endif
 			} else
@@ -2883,7 +2883,8 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 				memcpy(pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr,
 					pModSA->u.addrInfo.IPAddr.ipv6addr, 16);
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-				memcpy((void *)(*(pOutSA->ctx.sh_desc + SHARED_GWV6_OFFSET(daddr.s6_addr32))),
+				memcpy((void *)(*(uintptr_t *)((pOutSA->ctx.sh_desc)
+					+ SHARED_GWV6_OFFSET(daddr.s6_addr32))),
 					pModSA->u.addrInfo.IPAddr.ipv6addr, 16);
 #endif
 			} else
@@ -3276,7 +3277,8 @@ unsigned int secfp_ModifyInSA(unsigned long int ulVSGId,
 				memcpy(pInSA->SAParams.tunnelInfo.addr.iphv6.daddr,
 					pModSA->IPAddr.ipv6addr, 16);
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-				memcpy((void *)(*(pInSA->ctx.sh_desc + SHARED_GWV6_OFFSET(daddr.s6_addr32))),
+				memcpy((void *)(*(uintptr_t *)((pInSA->ctx.sh_desc)
+					+ SHARED_GWV6_OFFSET(daddr.s6_addr32))),
 					pModSA->IPAddr.ipv6addr, 16);
 #endif
 			} else
@@ -3295,7 +3297,8 @@ unsigned int secfp_ModifyInSA(unsigned long int ulVSGId,
 				memcpy(pInSA->SAParams.tunnelInfo.addr.iphv6.saddr,
 					pModSA->IPAddr.ipv6addr, 16);
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-				memcpy((void *)(*(pInSA->ctx.sh_desc + SHARED_GWV6_OFFSET(saddr.s6_addr32))),
+				memcpy((void *)(*(uintptr_t *)((pInSA->ctx.sh_desc)
+					+ SHARED_GWV6_OFFSET(saddr.s6_addr32))),
 					pModSA->IPAddr.ipv6addr, 16);
 #endif
 			} else

@@ -152,15 +152,15 @@
 #define SECFP_4X_NAT_HDR_SIZE		10
 #define SECFP_SPI_INDEX			12
 #define SECFP_IPHDR_INDEX		16
-#define SECFP_HASH_VALUE_INDEX		20
-#define SECFP_SEQNUM_INDEX		24
-#define SECFP_SABITMAP_DIFF_INDEX	28
-#define SECFP_SABITMAP_INFO_INDEX	32
-#define SECFP_TOS_INDEX 		33
-#define SECFP_UPDATE_TOS_INDEX		34
-#define SECFP_SABITMAP_COEF_INDEX	35
-#define SECFP_SABITMAP_REMAIN_INDEX	36
-#define SECFP_VSG_ID_INDEX		40
+#define SECFP_HASH_VALUE_INDEX		24
+#define SECFP_SEQNUM_INDEX		28
+#define SECFP_SABITMAP_DIFF_INDEX	32
+#define SECFP_SABITMAP_INFO_INDEX	36
+#define SECFP_TOS_INDEX 		37
+#define SECFP_UPDATE_TOS_INDEX		38
+#define SECFP_SABITMAP_COEF_INDEX	39
+#define SECFP_SABITMAP_REMAIN_INDEX	40
+#define SECFP_VSG_ID_INDEX		44
 
 
 /* For Outbound skb indices */
@@ -213,24 +213,24 @@
 #define SECFP_EXTRACT_PKTINFO(skb, iph, iphlen, spi, seqnum)	\
 {\
 	if (iph->protocol == SECFP_PROTO_ESP) {\
-		spi = *(unsigned long int *)	&(skb->data[iphlen]); \
-		seqnum = *(unsigned long int *)	&(skb->data[iphlen+4]); \
+		spi = *(unsigned int *)	&(skb->data[iphlen]); \
+		seqnum = *(unsigned int *)	&(skb->data[iphlen+4]); \
 	} \
 	else {\
-		spi = *(unsigned long int *)	&(skb->data[iphlen+4]); \
-		seqnum = *(unsigned long int *)	&(skb->data[iphlen+8]); \
+		spi = *(unsigned int *)	&(skb->data[iphlen+4]); \
+		seqnum = *(unsigned int *)	&(skb->data[iphlen+8]); \
 	} \
 }
 #ifdef ASF_IPV6_FP_SUPPORT
 #define SECFP_EXTRACT_IPV6_PKTINFO(skb, ipv6h, iphlen, spi, seqnum)    \
 {\
 	if (ipv6h->nexthdr == SECFP_PROTO_ESP) {\
-		spi = *(unsigned long int *)    &(skb->data[iphlen]); \
-		seqnum = *(unsigned long int *) &(skb->data[iphlen+4]); \
+		spi = *(unsigned int *)    &(skb->data[iphlen]); \
+		seqnum = *(unsigned int *) &(skb->data[iphlen+4]); \
 	} \
 	else {\
-		spi = *(unsigned long int *)    &(skb->data[iphlen+4]); \
-		seqnum = *(unsigned long int *) &(skb->data[iphlen+8]); \
+		spi = *(unsigned int *)    &(skb->data[iphlen+4]); \
+		seqnum = *(unsigned int *) &(skb->data[iphlen+8]); \
 	} \
 }
 #endif
@@ -631,13 +631,8 @@ typedef struct outSA_s {
 	void (*finishOutPktFnPtr)(struct sk_buff *,
 				struct outSA_s *, SPDOutContainer_t *,
 				unsigned int *, unsigned int, unsigned int);
-#ifndef ASF_SECFP_PROTO_OFFLOAD
 	atomic_t ulLoSeqNum;
 	atomic_t ulHiSeqNum;
-#else
-	unsigned int ulLoSeqNum;
-	unsigned int ulHiSeqNum;
-#endif
 	unsigned char l2blob[ASF_MAX_L2BLOB_LEN];
 	unsigned char bIVDataPresent:1,
 		bl2blob:1,
@@ -875,7 +870,7 @@ extern inSA_t *secfp_findInv6SA(unsigned int ulVSGId,
 
 extern inSA_t *secfp_findInv4SA(unsigned int ulVSGId,
 		unsigned char ucProto,
-		unsigned long int ulSPI,
+		unsigned int ulSPI,
 		unsigned int daddr,
 		unsigned int *pHashVal);
 

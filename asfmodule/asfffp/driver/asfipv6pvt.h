@@ -104,12 +104,12 @@ static inline ffp_bucket_t *asf_ffp_ipv6_bucket_by_hash(unsigned long ulHashVal)
 
 static inline ffp_flow_t *ffp_ipv6_flow_by_id(ASFFFPFlowId_t *id)
 {
-	return (ffp_flow_t *) (ffp_ipv6_ptrary.pBase[id->ulArg1].ulMagicNum == id->ulArg2) ? ffp_ipv6_ptrary.pBase[id->ulArg1].pData : NULL;
+	return (ffp_flow_t *) ((ffp_ipv6_ptrary.pBase[id->ulArg1].ulMagicNum == id->ulArg2) ? ffp_ipv6_ptrary.pBase[id->ulArg1].pData : NULL);
 }
 
 static inline ffp_flow_t *ffp_ipv6_flow_by_id_ex(unsigned int ulIndex, unsigned int ulMagicNum)
 {
-	return (ffp_flow_t *) (ffp_ipv6_ptrary.pBase[ulIndex].ulMagicNum == ulMagicNum) ? ffp_ipv6_ptrary.pBase[ulIndex].pData : NULL;
+	return (ffp_flow_t *) ((ffp_ipv6_ptrary.pBase[ulIndex].ulMagicNum == ulMagicNum) ? ffp_ipv6_ptrary.pBase[ulIndex].pData : NULL);
 }
 
 void ffp_ipv6_flow_free_rcu(struct rcu_head *rcu);

@@ -529,7 +529,7 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 						pOutSA->SAParams.ucProtocol;
 				inParams.bDir = SECFP_OUT;
 				ASFIPSecSAQueryStats(&inParams, &outParams);
-				printk(KERN_INFO"Stats:ulBytes=%lu, ulPkts=%lu",
+				printk(KERN_INFO"Stats:ulBytes=%llu, ulPkts=%llu",
 					outParams.ulBytes, outParams.ulPkts);
 
 				printk(KERN_INFO"L2BlobLen = %d, Magic = %d\n",
@@ -631,7 +631,7 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 					pInSA->SAParams.ucProtocol;
 				inParams.bDir = SECFP_IN;
 				ASFIPSecSAQueryStats(&inParams, &outParams);
-				printk(KERN_INFO"Stats:ulBytes=%lu,ulPkts= %lu",
+				printk(KERN_INFO"Stats:ulBytes=%llu,ulPkts= %llu",
 					outParams.ulBytes, outParams.ulPkts);
 #ifdef ASF_QMAN_IPSEC
 				printk(KERN_INFO"SecFQ=%d, RecvFQ=%d\n",

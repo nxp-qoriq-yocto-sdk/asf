@@ -579,7 +579,7 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 
 			if (!display)
 				continue;
-			p += sprintf(p, "%d {%lu, %lu}\t%s\t%u/%u/%s\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%u\n",
+			p += sprintf(p, "%d {%u, %u}\t%s\t%u/%u/%s\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%u\n",
 				     i,
 				     flow->id.ulArg1, flow->id.ulArg2,
 				     flow->odev ? flow->odev->name : "UNK",
@@ -612,7 +612,7 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 		}
 	}
 	if ((p-buf) > (200*(ffp_debug_show_count+2))) {
-		printk("Ooops! buffer is overwriten! allocated %u and required %u to display %d items\n",
+		printk("Ooops! buffer is overwriten! allocated %u and required %lu to display %d items\n",
 		       200*(ffp_debug_show_count+2), (p-buf), ffp_debug_show_count);
 	}
 	print_bigbuf(buf);
@@ -692,7 +692,7 @@ static int display_asf_proc_flow_ipv6_stats(char *page, char **start,
 		}
 	}
 	if ((p-buf) > (200*(ffp_debug_show_count+2))) {
-		printk(KERN_INFO"Ooops! buffer is overwriten! allocated %u and required %u to display %d items\n",
+		printk(KERN_INFO"Ooops! buffer is overwriten! allocated %u and required %lu to display %d items\n",
 		       200*(ffp_debug_show_count+2), (p-buf), ffp_debug_show_count);
 	}
 	print_bigbuf(buf);
@@ -748,7 +748,7 @@ static int display_asf_proc_flow_debug(char *page, char **start,
 			ulIdleTime = ulIdleTime/HZ;
 
 
-			p += sprintf(p, "{%lu, %lu}\t{%lu, %lu}\t%c%c%c%c%c%c%c%c\t%u\t%c%u\t%u\t%u\t%lu/%lu\t%pM:%pM..%02x%02x\n",
+			p += sprintf(p, "{%u, %u}\t{%u, %u}\t%c%c%c%c%c%c%c%c\t%u\t%c%u\t%u\t%u\t%lu/%lu\t%pM:%pM..%02x%02x\n",
 				     flow->id.ulArg1, flow->id.ulArg2,
 				     flow->other_id.ulArg1, flow->other_id.ulArg2,
 

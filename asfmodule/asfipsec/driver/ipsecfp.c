@@ -855,8 +855,8 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 		*(unsigned short int *) &(pTailSkb->data[pTailSkb->len +
 				usPadLen]) = usLastByte;
 
-	pTailSkb->tail = pTailSkb->data + pTailSkb->len + usPadLen
-				+ SECFP_ESP_TRAILER_LEN;
+		skb_set_tail_pointer(pTailSkb, pTailSkb->len + usPadLen
+				+ SECFP_ESP_TRAILER_LEN);
 	}
 	/* skb->data is at the Original IP header */
 
@@ -1830,7 +1830,7 @@ static inline int secfp_try_fastPathOutv4(
 							ASFIPSEC_DEBUG("Allocated skb->prev");
 							skb_reserve(skb1->prev, ETH_HLEN + SECFP_IPV4_HDR_LEN);
 							skb1->prev->len = (iph->tot_len - pSA->ulInnerPathMTU);
-							skb1->prev->tail = skb1->prev->data + skb1->prev->len;
+							skb_set_tail_pointer(skb1->prev, skb1->prev->len);
 						}
 					} else
 #endif
@@ -2107,7 +2107,7 @@ static inline void secfp_unmap_descs(struct sk_buff *skb)
 		pTempSkb = pTempSkb->next) {
 		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)*((unsigned int *)
 				&(pTempSkb->cb[SECFP_SKB_DATA_DMA_INDEX])),
-				pTempSkb->end - pTempSkb->head);
+				skb_end_pointer(pTempSkb) - pTempSkb->head);
 	}
 #ifdef CONFIG_ASF_SEC3x
 	secfp_dma_unmap_sglist(skb);
@@ -2164,7 +2164,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 	SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)(*(unsigned int *)
 			&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
-			skb->end - skb->head);
+			skb_end_pointer(skb) - skb->head);
 
 	if (unlikely(error || skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP)) {
 #ifdef CONFIG_ASF_SEC4x
@@ -2220,7 +2220,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		skb->data_len = 0; /* No req for this field anymore */
 		ASFIPSEC_HEXDUMP(skb->data, skb->len);
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-		skb->tail = skb->data + skb->len;
+		skb_set_tail_pointer(skb, skb->len);
 #endif
 	}
 
@@ -2325,7 +2325,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 					pOutSkb->data -= pSA->ulL2BlobLen;
 					pOutSkb->len += pSA->ulL2BlobLen;
 
-					pOutSkb->tail = pOutSkb->data + pOutSkb->len;
+					skb_set_tail_pointer(pOutSkb, pOutSkb->len);
 					pOutSkb->dev = pSA->odev;
 #ifdef CONFIG_DPA
 					skb_set_queue_mapping(pOutSkb,
@@ -2608,7 +2608,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	skb_frag_t *frag = NULL;
 	unsigned char *charp = NULL;
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-	struct iphdr *iph = (struct iphdr *)*(unsigned int *)
+	struct iphdr *iph = (struct iphdr *)*(uintptr_t *)
 				&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
 #ifndef ASF_QMAN_IPSEC
 	struct iphdr *inneriph = (struct iphdr *)(pTailSkb->data);
@@ -2865,7 +2865,7 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 		unsigned char protocol;
 		bool isFragmented = 0;
 
-		iph = (struct iphdr *)*(unsigned int *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
+		iph = (struct iphdr *)*(uintptr_t *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
 
 
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -3109,7 +3109,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 		{
 			SECFP_UNMAP_SINGLE_DESC(pdev, (void *)*((unsigned int *)
 					&(skb1->cb[SECFP_SKB_DATA_DMA_INDEX])),
-					skb1->end - skb1->head);
+					skb_end_pointer(skb1) - skb1->head);
 			skb1->prev = NULL;
 			secfp_unmap_descs(skb1);
 			SECFP_DESC_FREE(desc);
@@ -3157,7 +3157,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 
 			SECFP_UNMAP_SINGLE_DESC(pdev,
 				(void *)*((unsigned int *)&(skb1->cb[SECFP_SKB_DATA_DMA_INDEX])),
-				skb1->end - skb1->head);
+				skb_end_pointer(skb1) - skb1->head);
 			skb1->prev = NULL;
 			secfp_unmap_descs(skb1);
 			SECFP_DESC_FREE(desc);
@@ -3219,7 +3219,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 		SECFP_UNMAP_SINGLE_DESC(pdev, (void *)*((unsigned int *)
 				&(pHeadSkb->cb[SECFP_SKB_DATA_DMA_INDEX])),
-				pHeadSkb->end - pHeadSkb->head);
+				skb_end_pointer(pHeadSkb) - pHeadSkb->head);
 		secfp_unmap_descs(pHeadSkb);
 #endif
 		ulBeforeTrimLen = pHeadSkb->data_len;
@@ -3363,7 +3363,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 	unsigned int ulTempLen, iRetVal;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	inSA_t *pSA;
-	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(skb->cb[SECFP_IPHDR_INDEX]);
+	struct iphdr *iph = (struct iphdr *)*(uintptr_t *)&(skb->cb[SECFP_IPHDR_INDEX]);
 	ASFLogInfo_t AsfLogInfo;
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFIPSecOpqueInfo_t IPSecOpque = {};
@@ -3441,7 +3441,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 #endif
 		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t) *((unsigned int *)
 				&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
-				skb->end - skb->head);
+				skb_end_pointer(skb) - skb->head);
 		skb->data_len = 0;
 		skb->next = NULL;
 		ASFSkbFree(skb);
@@ -3492,7 +3492,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 			SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)
 				*((unsigned int *) &(skb->cb
 				[SECFP_SKB_DATA_DMA_INDEX])),
-				skb->end - skb->head);
+				skb_end_pointer(skb) - skb->head);
 			skb->data_len = 0;
 			skb->next = NULL;
 			ASFSkbFree(skb);
@@ -3509,7 +3509,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 
 	SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t) *((unsigned int *)
 			&(skb->cb[SECFP_SKB_DATA_DMA_INDEX])),
-		skb->end - skb->head);
+		skb_end_pointer(skb) - skb->head);
 #endif /*ASF_QMAN_IPSEC*/
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	if (skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {
@@ -4032,7 +4032,7 @@ static inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 		secin_sg_flag = SECFP_IN|bScatterGather;
 /*TBD - In the following Code, pTailSkb will not work for nr_frags.
 So all these special boundary cases need to be handled for nr_frags*/
-		if ((bCheckLen) && ((pTailSkb->end - pTailSkb->tail)
+		if ((bCheckLen) && ((skb_tailroom(pTailSkb))
 					< pSA->ulReqTailRoom)) {
 			ASFIPSEC_WARN("Received Skb does not have"
 					" enough tail room to continue");
@@ -4093,7 +4093,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 				/* pTailPrevSkb gets initialized in the case of fragments; This case comes
 				into picture only when we have fragments */
 				ulICVInPrevFrag = pSA->SAParams.uICVSize - pTailSkb->len;
-				pCurICVLocBytePtrInPrevFrag = pTailPrevSkb->tail - ulICVInPrevFrag;
+				pCurICVLocBytePtrInPrevFrag = skb_tail_pointer(pTailPrevSkb) - ulICVInPrevFrag;
 				pCurICVLocBytePtr = pTailSkb->data;
 
 				pTailPrevSkb->len -= ulICVInPrevFrag;
@@ -4175,14 +4175,14 @@ So all these special boundary cases need to be handled for nr_frags*/
 					pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
 					if (pSA->SAParams.ucAuthAlgo == SECFP_HMAC_AES_XCBC_MAC) {
 						if (pSA->SAParams.bUseExtendedSequenceNumber)
-							*((unsigned int *)(pTailSkb->tail + SECFP_ESN_MARKER_POSITION)) = 0xAAAAAAAA;
+							*((unsigned int *)(skb_tail_pointer(pTailSkb) + SECFP_ESN_MARKER_POSITION)) = 0xAAAAAAAA;
 						else
-							*((unsigned int *)(pTailSkb->tail + SECFP_ESN_MARKER_POSITION)) = 0;
+							*((unsigned int *)(skb_tail_pointer(pTailSkb) + SECFP_ESN_MARKER_POSITION)) = 0;
 					}
 					if (pSA->SAParams.bUseExtendedSequenceNumber) {
 						int kk;
-						pCurICVLoc = (unsigned int *)(pTailSkb->tail - pSA->SAParams.uICVSize);
-						pNewICVLoc = (unsigned int *)(pTailSkb->tail - pSA->SAParams.uICVSize + sizeof(unsigned int));
+						pCurICVLoc = (unsigned int *)(skb_tail_pointer(pTailSkb) - pSA->SAParams.uICVSize);
+						pNewICVLoc = (unsigned int *)(skb_tail_pointer(pTailSkb) - pSA->SAParams.uICVSize + sizeof(unsigned int));
 						for (kk = 2; kk >= 0; kk--)
 							*(pNewICVLoc + kk) = *(pCurICVLoc + kk);
 						secfp_appendESN(pSA, ulSeqNum, &ulLowerBoundSeqNum, (unsigned int *)pCurICVLoc);
@@ -4196,8 +4196,8 @@ So all these special boundary cases need to be handled for nr_frags*/
 		} else {
 			pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 0;
 			/* No need to do post SEC Lookup */
-			pTailSkb->tail = pTailSkb->data + skb_headlen(pTailSkb);
-			*(unsigned int *)pTailSkb->tail = 0;
+			skb_set_tail_pointer(pTailSkb, skb_headlen(pTailSkb));
+			*(unsigned int *)skb_tail_pointer(pTailSkb) = 0;
 		}
 
 		if (pSA->SAParams.bVerifyInPktWithSASelectors)
@@ -4208,7 +4208,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]) = ulVSGId;
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]) = pSA->SAParams.ulSPI;
 		/* Pass the skb data pointer */
-		*(unsigned int *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]) = (unsigned int)(&(pHeadSkb->data[0]));
+		*(uintptr_t *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]) = (uintptr_t)(&(pHeadSkb->data[0]));
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_HASH_VALUE_INDEX]) = ulHashVal;
 
 		ASFIPSEC_DBGL2("In Packet ulSPI=%d, ipaddr_ptr=0x%x,"
@@ -4811,7 +4811,7 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		secin_sg_flag = SECFP_IN|bScatterGather;
 /*TBD - In the following Code, pTailSkb will not work for nr_frags.
 So all these special boundary cases need to be handled for nr_frags*/
-		if ((bCheckLen) && ((pTailSkb->end - pTailSkb->tail)
+		if ((bCheckLen) && ((skb_tailroom(pTailSkb))
 					< pSA->ulReqTailRoom)) {
 			ASFIPSEC_WARN("Received Skb does not have"
 					" enough tail room to continue");
@@ -4873,7 +4873,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 				/* pTailPrevSkb gets initialized in the case of fragments; This case comes
 				into picture only when we have fragments */
 				ulICVInPrevFrag = pSA->SAParams.uICVSize - pTailSkb->len;
-				pCurICVLocBytePtrInPrevFrag = pTailPrevSkb->tail - ulICVInPrevFrag;
+				pCurICVLocBytePtrInPrevFrag = skb_tail_pointer(pTailPrevSkb) - ulICVInPrevFrag;
 				pCurICVLocBytePtr = pTailSkb->data;
 
 				pTailPrevSkb->len -= ulICVInPrevFrag;
@@ -4955,15 +4955,15 @@ So all these special boundary cases need to be handled for nr_frags*/
 					pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
 					if (pSA->SAParams.ucAuthAlgo == SECFP_HMAC_AES_XCBC_MAC) {
 						if (pSA->SAParams.bUseExtendedSequenceNumber) {
-							*((unsigned int *)(pTailSkb->tail + SECFP_ESN_MARKER_POSITION)) = 0xAAAAAAAA;
+							*((unsigned int *)(skb_tail_pointer(pTailSkb) + SECFP_ESN_MARKER_POSITION)) = 0xAAAAAAAA;
 						} else {
-							*((unsigned int *)(pTailSkb->tail + SECFP_ESN_MARKER_POSITION)) = 0;
+							*((unsigned int *)(skb_tail_pointer(pTailSkb) + SECFP_ESN_MARKER_POSITION)) = 0;
 						}
 					}
 					if (pSA->SAParams.bUseExtendedSequenceNumber) {
 						int kk;
-						pCurICVLoc = (unsigned int *)(pTailSkb->tail - pSA->SAParams.uICVSize);
-						pNewICVLoc = (unsigned int *)(pTailSkb->tail - pSA->SAParams.uICVSize + sizeof(unsigned int));
+						pCurICVLoc = (unsigned int *)(skb_tail_pointer(pTailSkb) - pSA->SAParams.uICVSize);
+						pNewICVLoc = (unsigned int *)(skb_tail_pointer(pTailSkb) - pSA->SAParams.uICVSize + sizeof(unsigned int));
 						for (kk = 2; kk >= 0; kk--)
 							*(pNewICVLoc + kk) = *(pCurICVLoc + kk);
 						secfp_appendESN(pSA, ulSeqNum, &ulLowerBoundSeqNum, (unsigned int *)pCurICVLoc);
@@ -4977,8 +4977,8 @@ So all these special boundary cases need to be handled for nr_frags*/
 		} else {
 			pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 0;
 			/* No need to do post SEC Lookup */
-			pTailSkb->tail = pTailSkb->data + skb_headlen(pTailSkb);
-			*(unsigned int *)pTailSkb->tail = 0;
+			skb_set_tail_pointer(pTailSkb, skb_headlen(pTailSkb));
+			*(unsigned int *)skb_tail_pointer(pTailSkb) = 0;
 		}
 		/* byte offset to move past the tunnel header for ESP*/
 #ifndef ASF_QMAN_IPSEC
@@ -5004,7 +5004,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]) = ulVSGId;
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]) = pSA->SAParams.ulSPI;
 		/* Pass the skb data pointer */
-		*(unsigned int *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]) = (unsigned int)(&(pHeadSkb->data[0]));
+		*(uintptr_t *)&(pHeadSkb->cb[SECFP_IPHDR_INDEX]) = (uintptr_t)(&(pHeadSkb->data[0]));
 		*(unsigned int *)&(pHeadSkb->cb[SECFP_HASH_VALUE_INDEX]) = ulHashVal;
 
 		ASFIPSEC_DBGL2("In Packet ulSPI=%d, ipaddr_ptr=0x%x,"
@@ -5706,7 +5706,7 @@ unsigned short ASFIPCkSum(char *data, unsigned short cnt)
 	pUp = (char *)data;
 	csum = csum1 = 0;
 
-	if (((int)pUp) & 1) {
+	if (((uintptr_t)pUp) & 1) {
 	/* Handle odd leading byte */
 		csum = ((unsigned short)UCHAR(*pUp++) << 8);
 		cnt1--;

@@ -135,8 +135,8 @@ typedef struct ASFFFPXtraGlobalStats_s {
 
 typedef struct ASFFFPFlowId_s {
 
-	unsigned long ulArg1;	/* Flow Index */
-	unsigned long ulArg2;	/* Flow Magic Number */
+	unsigned int ulArg1;	/* Flow Index */
+	unsigned int ulArg2;	/* Flow Magic Number */
 
 } ASFFFPFlowId_t;
 

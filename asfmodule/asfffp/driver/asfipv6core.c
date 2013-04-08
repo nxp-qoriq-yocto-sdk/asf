@@ -354,8 +354,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 
 			/* update skb */
 			skb = (struct sk_buff *)abuf.nativeBuffer;
-			nexthdr = *(unsigned int *)&(skb->cb[8]);
-			pL4hdr = (skb->data + *(unsigned int *)&(skb->cb[4]));
+			nexthdr = *(unsigned int *)&(skb->cb[16]);
+			pL4hdr = (skb->data + *(unsigned int *)&(skb->cb[8]));
 			skb_reset_network_header(skb);
 			/* make an abuf out of head skb; this buffer should not
 			   go through another asf_abuf_to_skb - ok because
@@ -850,7 +850,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 		/* if L2 header on egress is make sure that enough
 			headroom exists.
 		*/
-		tx_fd->offset = (u32)ip6h - (u32)abuf.pAnnot - flow->l2blob_len;
+		tx_fd->offset = (uintptr_t)ip6h - (uintptr_t)abuf.pAnnot - flow->l2blob_len;
 		if (tx_fd->offset < (sizeof(struct annotations_t))) {
 			asf_dperr("%s", periodic_errmsg[PERR_NO_L2_HDROOM]);
 			goto drop_pkt;
@@ -1230,8 +1230,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 				skb_set_transport_header(skb, exthdrsize);
 			}
 
-			skb_set_transport_header(skb, *(unsigned int *)&(skb->cb[4]));
-			nexthdr = *(unsigned int *)&(skb->cb[8]);
+			skb_set_transport_header(skb, *(uintptr_t *)&(skb->cb[8]));
+			nexthdr = *(uintptr_t *)&(skb->cb[16]);
 		} else {
 			nexthdr = fhdr->nexthdr;
 			exthdrsize += sizeof(struct frag_hdr);
