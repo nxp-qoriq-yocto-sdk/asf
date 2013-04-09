@@ -142,26 +142,31 @@ ASF_uint8_t ASFMarkLnxPkt(void *buf)
 	return 1;
 }
 
-void ASFFlushIPv4Marker(void)
+void asfctrl_qos_invalidate_flows(void)
 {
 	ASFFFPConfigIdentity_t cmd;
 
+	/* Invalidate flows */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.ulConfigMagicNumber = jiffies;
+	ASFFFPUpdateConfigIdentity(0, cmd);
+}
+
+void ASFFlushIPv4Marker(void)
+{
 	if (NULL != marker_rule_v4) {
 		vfree(marker_rule_v4);
 		marker_rule_v4 = NULL;
 		num_rules_v4 = 0;
 	}
 	/* Invalidate flows */
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.ulConfigMagicNumber = jiffies;
-	ASFFFPUpdateConfigIdentity(0, cmd);
+	asfctrl_qos_invalidate_flows();
 	printk(KERN_INFO "IPv4 Marker Rules Flushed\n");
 }
 
 int ASFConfigIPv4Marker(marker_db_t *arg)
 {
 	int			i;
-	ASFFFPConfigIdentity_t cmd;
 
 	if (!arg->num_rules || !arg->rule)
 		return -EINVAL;
@@ -201,9 +206,7 @@ int ASFConfigIPv4Marker(marker_db_t *arg)
 		printk("Dscp[0x%X]\n", rule->uciDscp);
 	}
 	/* Invalidate flows */
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.ulConfigMagicNumber = jiffies;
-	ASFFFPUpdateConfigIdentity(0, cmd);
+	asfctrl_qos_invalidate_flows();
 
 	return 0;
 }
@@ -211,24 +214,19 @@ int ASFConfigIPv4Marker(marker_db_t *arg)
 #ifdef	ASF_IPV6_FP_SUPPORT
 void ASFFlushIPv6Marker(void)
 {
-	ASFFFPConfigIdentity_t cmd;
-
 	if (NULL != marker_rule_v6) {
 		vfree(marker_rule_v6);
 		marker_rule_v6 = NULL;
 		num_rules_v6 = 0;
 	}
 	/* Invalidate flows */
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.ulConfigMagicNumber = jiffies;
-	ASFFFPUpdateConfigIdentity(0, cmd);
+	asfctrl_qos_invalidate_flows();
 	printk(KERN_INFO "IPv6 Marker Rules Flushed\n");
 }
 
 int ASFConfigIPv6Marker(marker_db_t *arg)
 {
 	int			i;
-	ASFFFPConfigIdentity_t cmd;
 
 	if (!arg->num_rules || !arg->rule)
 		return -EINVAL;
@@ -268,9 +266,7 @@ int ASFConfigIPv6Marker(marker_db_t *arg)
 		printk("Dscp[0x%X]\n", rule->uciDscp);
 	}
 	/* Invalidate flows */
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.ulConfigMagicNumber = jiffies;
-	ASFFFPUpdateConfigIdentity(0, cmd);
+	asfctrl_qos_invalidate_flows();
 
 	return 0;
 }
@@ -398,9 +394,72 @@ int asfctrl_qos_prio_flush(
 
 	return err;
 }
+
+int  asfctrl_qos_drr_add(
+		struct net_device	*dev,
+		uint32_t		handle,
+		uint32_t		parent,
+		uint32_t		quantum
+)
+{
+	int	err = -EINVAL;
+	ASFQOSCreateQdisc_t qdisc;
+
+	if (dev == NULL) {
+		ASFCTRL_ERR("Invalid Interface pointer\n");
+		return err;
+	}
+
+	/* If ASF is disabled, simply return */
+	if (0 == ASFGetStatus()) {
+		ASFCTRL_INFO("ASF not ready\n");
+		return err;
+	}
+	qdisc.qdisc_type = ASF_QDISC_DRR;
+	qdisc.dev = dev;
+	qdisc.handle = handle;
+	qdisc.parent = parent;
+	qdisc.u.drr.quantum = quantum;
+
+	if (!quantum)
+		err = ASFQOSRuntime(0, ASF_QOS_CREATE_QDISC , &qdisc);
+	else
+		err = ASFQOSRuntime(0, ASF_QOS_ADD_QDISC , &qdisc);
+
+	if (err != ASFQOS_SUCCESS)
+		ASFCTRL_ERR("Qdisc creation Failed! --\n");
+
+	return err;
+}
+
+int asfctrl_qos_drr_flush(
+		struct net_device	*dev,
+		uint32_t		handle,
+		uint32_t		parent
+)
+{
+	int	err = -EINVAL;
+	ASFQOSDeleteQdisc_t qdisc;
+
+	if (dev == NULL) {
+		ASFCTRL_ERR("Invalid Interface pointer\n");
+		return err;
+	}
+
+	qdisc.qdisc_type = ASF_QDISC_DRR;
+	qdisc.dev = dev;
+	qdisc.handle = handle;
+	qdisc.parent = parent;
+
+	err = ASFQOSRuntime(0, ASF_QOS_FLUSH, &qdisc);
+	if (err != ASFQOS_SUCCESS)
+		ASFCTRL_INFO("Qdisc Flush Failed! --\n");
+
+	return err;
+}
 #endif
 
-#ifdef ASF_EGRESS_SHAPER
+#if defined(ASF_EGRESS_SHAPER) || defined(ASF_HW_SHAPER)
 int  asfctrl_qos_tbf_add(struct tbf_opt *opt)
 {
 	ASFQOSCreateQdisc_t qdisc;
@@ -410,8 +469,8 @@ int  asfctrl_qos_tbf_add(struct tbf_opt *opt)
 		ASFCTRL_ERR("Invalid Interface pointer\n");
 		return err;
 	}
-	if (opt->parent == ROOT_ID) {
-		ASFCTRL_ERR(" TBF is not allowed as ROOT !,"
+	if (opt->parent != ROOT_ID) {
+		ASFCTRL_ERR(" Only Port Shaper is support!"
 				" Handle[0x%X]\n", opt->handle);
 		return err;
 	}
@@ -455,6 +514,8 @@ int asfctrl_qos_tbf_del(
 }
 #endif
 
+extern void asfctrl_invalidate_sessions(void);
+
 static int __init asfctrl_linux_qos_init(void)
 {
 
@@ -470,9 +531,12 @@ static int __init asfctrl_linux_qos_init(void)
 	/* Register Callback function with ASF control layer to */
 	prio_hook_fn_register(&asfctrl_qos_prio_add,
 				&asfctrl_qos_prio_flush);
+	drr_hook_fn_register(&asfctrl_qos_drr_add,
+				&asfctrl_qos_drr_flush,
+				&asfctrl_invalidate_sessions);
 #endif
 
-#ifdef ASF_EGRESS_SHAPER
+#if defined(ASF_EGRESS_SHAPER) || defined(ASF_HW_SHAPER)
 	tbf_hook_fn_register(&asfctrl_qos_tbf_add,
 				&asfctrl_qos_tbf_del);
 #endif
@@ -500,8 +564,9 @@ static void __exit asfctrl_linux_qos_exit(void)
 	ASFQOSRegisterCallbackFns(&asfctrl_Cbs);
 #if defined(ASF_EGRESS_SCH) || defined(ASF_HW_SCH)
 	prio_hook_fn_register(NULL, NULL);
+	drr_hook_fn_register(NULL, NULL, NULL);
 #endif
-#ifdef ASF_EGRESS_SHAPER
+#if defined(ASF_EGRESS_SHAPER) || defined(ASF_HW_SHAPER)
 	tbf_hook_fn_register(NULL, NULL);
 #endif
 #ifdef ASF_INGRESS_MARKER

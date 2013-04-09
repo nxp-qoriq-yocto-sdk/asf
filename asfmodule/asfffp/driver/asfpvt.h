@@ -232,7 +232,9 @@ typedef struct ffp_flow_s {
 #ifdef ASF_INGRESS_MARKER
 	ASFMKInfo_t	mkinfo;
 #endif
-
+#ifdef ASF_EGRESS_QOS
+	unsigned int tc_filter_res;
+#endif
 	/*bool bStatic;  -> 1 for Static and 0 for dynamic  */
 } ffp_flow_t;
 

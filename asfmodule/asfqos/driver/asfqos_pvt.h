@@ -83,8 +83,6 @@ struct  asf_prio_sched_data {
 struct  asf_prio_drr_sched_data {
 	uint32_t		bands; /* Number of Scheduler queues */
 	struct net_queue	q[ASF_PRIO_MAX]; /* Priority FIFO queues */
-	/* Port Shaper */
-	struct asf_tbf_data	*pShaper;
 	/* Last DRR Queue in Use */
 	uint8_t		last_drr_inuse;
 	/* Index of last DRR Queue */

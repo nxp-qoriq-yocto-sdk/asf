@@ -2119,8 +2119,10 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif
 			asf_set_queue_mapping(skb, iph->tos);
 #ifdef ASF_QOS
+		pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
+			*(unsigned int *)&(skb->cb[SECFP_SAD_SAI_INDEX]));
 		/* Enqueue the packet in Linux QoS framework */
-		asf_qos_handling(skb);
+		asf_qos_handling(skb, &pSA->tc_filter_res);
 #else
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
 #ifndef ASF_QMAN_IPSEC
@@ -2236,7 +2238,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
 #ifdef ASF_QOS
 					/* Enqueue the packet For QoS */
-					asf_qos_handling(pOutSkb);
+					asf_qos_handling(pOutSkb, &pSA->tc_filter_res);
 #else
 					if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
 						ASFIPSEC_WARN("Error in transmit: Should not happen");
@@ -5295,7 +5297,9 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 	unsigned int ulSAIndex;
 	SPDOutContainer_t *pOutContainer;
 	SPDOutSALinkNode_t *pOutSALinkNode;
-
+#ifdef ASF_QOS
+	outSA_t *pSA ;
+#endif
 	int bVal = in_interrupt();
 
 	if (!bVal)
@@ -5339,7 +5343,10 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 	SecInfo.outSAInfo.ulSAIndex = ulSAIndex;
 	SecInfo.outSAInfo.ulSAMagicNumber =
 		ptrIArray_getMagicNum(&secFP_OutSATable, ulSAIndex);
-
+#ifdef ASF_QOS
+	pSA = (outSA_t *) ptrIArray_getData(&secFP_OutSATable, ulSAIndex);
+	pSA->tc_filter_res = TC_FILTER_RES_INVALID;
+#endif
 	if (bHomogenous) {
 		skb = (struct sk_buff *)Buffer.nativeBuffer;
 	} else {

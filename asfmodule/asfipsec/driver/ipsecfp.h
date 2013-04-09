@@ -662,6 +662,10 @@ typedef struct outSA_s {
 
 	asfTmr_t	*pL2blobTmr;
 	ASFFFPL2blobConfig_t	l2blobConfig;
+#ifdef ASF_EGRESS_QOS
+	unsigned int tc_filter_res;
+#endif
+
 } outSA_t;
 
 

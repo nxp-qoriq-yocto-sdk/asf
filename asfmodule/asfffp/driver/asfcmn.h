@@ -381,7 +381,8 @@ struct asf_qos_fq {
 	uint32_t    ulEnqueuePkts;	/* Total number of packets received */
 	uint32_t    ulDroppedPkts;	/* Total number of packets dropped
 						due to Buffer overflow */
-	uint32_t    quantum;		/* reuired for DRR/WRR weight */
+	uint32_t    quantum;		/* Reuired for DRR/WRR weight */
+	uint32_t    classid;		/* Associated classid */
 	/** Others **/
 	spinlock_t	lock;
 };
@@ -390,11 +391,13 @@ struct asf_qos_fq {
 struct  asf_qdisc {
 	/*	 Frequently used	*/
 	int			(*enqueue)(struct sk_buff *skb,
-						struct  asf_qdisc *sch);
-#ifdef CONFIG_DPA
-	int			(*enqueue_fd)(struct qm_fd *tx_fd,
 						struct  asf_qdisc *sch,
-						ASF_uint8_t dscp);
+						u32 *tc_filter_res);
+#ifdef CONFIG_DPA
+	int			(*enqueue_fd)(ASFBuffer_t *abuf,
+						struct  asf_qdisc *sch,
+						ASF_uint8_t dscp,
+						u32 *tc_filter_res);
 	struct asf_qos_fq	*asf_fq[DPAA_ETH_TX_QUEUES][NR_CPUS];
 #else
 	void			(*dequeue)(struct  asf_qdisc *);
@@ -402,6 +405,8 @@ struct  asf_qdisc {
 					   to “asf_prio_sched_data” */
 	struct napi_struct	qos_napi;
 	struct timer_list	timer;
+	/* Port Shaper */
+	struct asf_tbf_data	*pShaper;
 #endif
 	uint32_t		handle;
 	uint32_t		parent; /* Parent ID */
@@ -410,11 +415,14 @@ struct  asf_qdisc {
 	uint8_t			qdisc_type;
 };
 
-inline void asf_qos_handling(struct sk_buff *);
+#define TC_FILTER_RES_INVALID	0xFFFFFFFF
+
+inline void asf_qos_handling(struct sk_buff *, u32 *tc_filter_res);
 #ifdef CONFIG_DPA
-inline int asf_qos_fd_handling(struct qm_fd *fd,
+inline int asf_qos_fd_handling(ASFBuffer_t *abuf,
 				struct net_device *dev,
-				ASF_uint8_t dscp
+				ASF_uint8_t dscp,
+				u32 *tc_filter_res
 				);
 #endif
 

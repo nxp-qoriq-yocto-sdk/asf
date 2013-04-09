@@ -1011,6 +1011,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 
 	return skb;
 }
+EXPORT_SYMBOL(asf_abuf_to_skb);
 /* setup abuf for skb head; skb frags are left as is  */
 ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf,
 					ASFNetDevEntry_t *pNdev)
@@ -2405,7 +2406,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 				vstats->ulOutBytes += pSkb->len;
 #ifdef ASF_QOS
 				/* Enqueue the packet in Linux QoS framework */
-				asf_qos_handling(pSkb);
+				asf_qos_handling(pSkb, &flow->tc_filter_res);
 #else
 				if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 					asf_debug("Error in transmit: "
@@ -2507,7 +2508,8 @@ ASF_void_t ASFFFPProcessAndSendFD(
 			priv->egress_fqs[smp_processor_id()]->fqid);
 	do {
 #ifdef ASF_QOS
-		err = asf_qos_fd_handling(tx_fd, flow->odev, iph->tos);
+		err = asf_qos_fd_handling(&abuf, flow->odev,
+					iph->tos, &flow->tc_filter_res);
 #else
 		err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 								tx_fd, 0);
@@ -3271,7 +3273,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #ifdef ASF_QOS
 						/* Enqueue the packet in Linux
 						QoS framework */
-						asf_qos_handling(pSkb);
+						asf_qos_handling(pSkb, &flow->tc_filter_res);
 #else
 						if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 							asf_debug("Error in transmit: Should not happen\r\n");
@@ -3342,7 +3344,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			asf_debug_l2("invoke hard_start_xmit skb-packet (blob_len %d)\n", flow->l2blob_len);
 #ifdef ASF_QOS
 			/* Enqueue the packet in Linux QoS framework */
-			asf_qos_handling(skb);
+			asf_qos_handling(skb, &flow->tc_filter_res);
 #else
 			if (asfDevHardXmit(skb->dev, skb)) {
 				XGSTATS_INC(DevXmitErr);
@@ -4550,10 +4552,14 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 
 		memcpy(&flow2->id, &flow1->other_id, sizeof(ASFFFPFlowId_t));
 		memcpy(&flow2->other_id, &flow1->id, sizeof(ASFFFPFlowId_t));
+#ifdef ASF_QOS
 #ifdef ASF_INGRESS_MARKER
 		/* Copying DSCP Mark info */
 		flow1->mkinfo.uciDscp = p->flow1.mkinfo.uciDscp;
 		flow2->mkinfo.uciDscp = p->flow2.mkinfo.uciDscp;
+#endif
+		flow1->tc_filter_res = TC_FILTER_RES_INVALID;
+		flow2->tc_filter_res = TC_FILTER_RES_INVALID;
 #endif
 
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -4894,9 +4900,12 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 			return ASFFFP_RESPONSE_SUCCESS;
 		} else if (p->bFFPConfigIdentityUpdate) {
 			memcpy(&flow->configIdentity, &p->u.fwConfigIdentity, sizeof(flow->configIdentity));
+#ifdef ASF_QOS
 #ifdef ASF_INGRESS_MARKER
 			/* Copying DSCP Mark info */
 			flow->mkinfo.uciDscp = p->mkinfo.uciDscp;
+#endif
+			flow->tc_filter_res = TC_FILTER_RES_INVALID;
 #endif
 			flow->bDrop = p->bDrop;
 			if (flow->bDrop) {
@@ -5467,7 +5476,7 @@ static inline void direct_xmit(struct sk_buff *skb)
 	}
 }
 
-inline void asf_qos_handling(struct sk_buff *skb)
+inline void asf_qos_handling(struct sk_buff *skb, u32 *tc_filter_res)
 {
 	if (asf_qos_enable) {
 #ifdef ASF_TC_QOS
@@ -5481,7 +5490,7 @@ inline void asf_qos_handling(struct sk_buff *skb)
 			((struct net_device *)skb->dev)->asf_qdisc;
 
 		if (root) {
-			root->enqueue(skb, root);
+			root->enqueue(skb, root, tc_filter_res);
 #ifndef CONFIG_DPA
 			/* Now dequeue the packets */
 			root->dequeue(root);
@@ -5495,18 +5504,26 @@ inline void asf_qos_handling(struct sk_buff *skb)
 EXPORT_SYMBOL(asf_qos_handling);
 
 #ifdef CONFIG_DPA
-inline int asf_qos_fd_handling(struct qm_fd *fd,
+inline int asf_qos_fd_handling(ASFBuffer_t *abuf,
 				struct net_device *dev,
-				ASF_uint8_t dscp
-				)
+				ASF_uint8_t dscp,
+				u32 *tc_filter_res
+)
 {
 	if (asf_qos_enable) {
 		struct  asf_qdisc *root = dev->asf_qdisc;
 
 		if (root)
-			return root->enqueue_fd(fd, root, dscp);
+			return root->enqueue_fd(abuf, root,
+					dscp, tc_filter_res);
+		/* else fall down */
 	}
-	return ASF_FAILURE;
+	{
+		struct dpa_priv_s *priv = netdev_priv(dev);
+
+		return qman_enqueue(priv->egress_fqs[smp_processor_id()],
+					(struct	qm_fd *)&(abuf->pAnnot->timestamp), 0);
+	}
 }
 EXPORT_SYMBOL(asf_qos_fd_handling);
 #endif

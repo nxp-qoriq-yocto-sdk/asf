@@ -115,7 +115,7 @@ static void print_stats(struct net_device *dev)
 		for (j = 0; j < 8; j++) {
 			asf_fq = root->asf_fq[i][j];
 			if (!asf_fq)
-				return;
+				break;
 
 			ulEnqueuePkts += asf_fq->ulEnqueuePkts;
 			ulDroppedPkts += asf_fq->ulDroppedPkts;

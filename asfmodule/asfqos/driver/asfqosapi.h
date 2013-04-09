@@ -124,7 +124,7 @@ typedef struct ASFQOSCreateQdisc_s {
 			configured.\n
 			We need to provide quantum/weight in Number of BYTES
 			for each queue. */
-			ASF_uint32_t	quantum[DPA_MAX_DRR_QUEUES];
+			ASF_uint32_t	quantum;
 		} drr;
 		/*!	\brief	Structure defining fields for
 			Weighted round robin QDisc*/

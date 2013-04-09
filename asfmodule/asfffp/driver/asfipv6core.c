@@ -910,7 +910,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 
 		do {
 #ifdef ASF_QOS
-			err = asf_qos_fd_handling(tx_fd, flow->odev, hdr->tc);
+			err = asf_qos_fd_handling(&abuf, flow->odev,
+					hdr->tc, &flow->tc_filter_res);
 #else
 			err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 					tx_fd, 0);
@@ -1715,7 +1716,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 #ifdef ASF_QOS
 		/* Enqueue the packet in Linux QoS framework */
-		asf_qos_handling(skb);
+		asf_qos_handling(skb, &flow->tc_filter_res);
 #else
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
 			asf_warn("Error in transmit: Should not happen\r\n");

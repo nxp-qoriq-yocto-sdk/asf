@@ -37,10 +37,10 @@
 #include "../../asfffp/driver/gplcode.h"
 #include "../../asfffp/driver/asf.h"
 #include "../../asfffp/driver/asfcmn.h"
+#include "../../asfctrl/linux/ffp/asfctrl.h"
 #include "asfqosapi.h"
 #include "asfqos_pvt.h"
 #include <linux/fsl_qman.h>
-
 
 #define ASF_QOS_VERSION	"1.1.0"
 #define ASF_QOS_DESC	"ASF Quality Of Service Component"
@@ -146,7 +146,11 @@ static int qos_add_shaper(ASF_uint32_t  ulVsgId,
 	priv = netdev_priv(qdisc->dev);
 	mac_dev = priv->mac_dev;
 	txport = mac_dev->port_dev[TX];
+	/* Adjust Values as per HW requirements */
+	qdisc->u.tbf.rate = (qdisc->u.tbf.rate * 8)/1000; /* Kbits/sec */
+	qdisc->u.tbf.maxBurst = 1024; /*KB*/
 
+	/* Convert Shaper Rate into Bits/Sec */
 	err = fm_port_setRateLimit(txport,
 				qdisc->u.tbf.maxBurst,
 				qdisc->u.tbf.rate);
@@ -155,8 +159,9 @@ static int qos_add_shaper(ASF_uint32_t  ulVsgId,
 				qdisc->dev->name);
 		return ASF_FAILURE;
 	}
-	printk(KERN_INFO "Rate limiting configured: Rate %d & Burst_Size %d\n",
+	asf_debug("Rate limiting configured: Rate %d & Burst_Size %d\n",
 				qdisc->u.tbf.rate, qdisc->u.tbf.maxBurst);
+
 	for (i = 0; i < ASF_MAX_IFACES; i++) {
 		if (shaper[i].dev == NULL) {
 			/* Add to list */
@@ -293,13 +298,13 @@ int prio_alloc_fqs(struct  asf_qdisc *sch)
 	return ASF_SUCCESS;
 }
 
-int drr_alloc_fqs(struct  asf_qdisc *sch, ASFQOSCreateQdisc_t *qdisc)
+int drr_alloc_fq(struct  asf_qdisc *sch, ASFQOSCreateQdisc_t *qdisc)
 {
 	struct dpa_priv_s	*priv;
 	struct qman_fq		*fq;
-	struct qm_mcc_initfq	 initfq;
+	struct qm_mcc_initfq	initfq;
 	struct asf_qos_fq	*asf_fq;
-	u32			i, j, flags;
+	u32			j, flags;
 	int			_errno;
 	struct mac_device	*mac_dev;
 	struct fm_port		*txport = NULL;
@@ -310,61 +315,65 @@ int drr_alloc_fqs(struct  asf_qdisc *sch, ASFQOSCreateQdisc_t *qdisc)
 
 	flags = QMAN_FQ_FLAG_TO_DCPORTAL | QMAN_FQ_FLAG_DYNAMIC_FQID;
 
-	for (i = 0; i <= MAX_NUM_DRR_WQ_IDX; i++) {
-		for (j = 0; j < NUM_FQ_PER_WQ; j++) {
-
-			asf_fq = (struct  asf_qos_fq *)
-				kzalloc(sizeof(struct  asf_qos_fq),
-					GFP_KERNEL);
-			if (!asf_fq) {
-				asf_err("OHHHH..NO Memory for QMAN_FQ\n");
-				return -ENOMEM;
-			}
-			asf_fq->egress_fq = priv_egress_fq;
-
-			_errno = qman_create_fq(0 , flags, &asf_fq->egress_fq);
-			if (_errno) {
-				asf_err("qman_create_fq() failed\n");
-				kfree(asf_fq);
-				return _errno;
-			}
-			spin_lock_init(&(asf_fq->lock));
-			/* Initialize FQ */
-			fq = &asf_fq->egress_fq;
-			initfq.we_mask = QM_INITFQ_WE_DESTWQ;
-			initfq.fqd.dest.channel	=
-				fm_get_tx_port_channel(txport);
-			/* Using WQ = 1 for DRR flows */
-			initfq.fqd.dest.wq = 1;
-			initfq.we_mask |= QM_INITFQ_WE_TDTHRESH |
-					QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_ICSCRED;
-			qm_fqd_taildrop_set(&initfq.fqd.td, TAILDROP_THRESHOLD, 1);
-			/* Set FQs credits */
-			initfq.fqd.ics_cred = asf_fq->quantum =
-						qdisc->u.drr.quantum[j];
-			asf_debug("Setting ics %d on FQ %d\n",
-					initfq.fqd.ics_cred, fq->fqid);
-
-			initfq.fqd.fq_ctrl = QM_FQCTRL_TDE | QM_FQCTRL_PREFERINCACHE;
-
-			_errno = qman_init_fq(fq, QMAN_INITFQ_FLAG_SCHED, &initfq);
-			if (_errno < 0) {
-				asf_err("qman_init_fq(%u) = %d\n",
-						qman_fq_fqid(fq), _errno);
-				qman_destroy_fq(fq, 0);
-				kfree(asf_fq);
-				return _errno;
-			}
-			asf_debug("#### CH: %d Created FQ_FQID %d on WQ %d\n",
-						initfq.fqd.dest.channel,
-						fq->fqid,
-						initfq.fqd.dest.wq);
-
-			asf_fq->net_dev = sch->dev;
-			sch->asf_fq[i][j] = asf_fq;
-		}
+	for (j = 0; j < NUM_FQ_PER_WQ; j++) {
+		if (sch->asf_fq[MAX_NUM_DRR_WQ_IDX][j] == NULL)
+			break;
 	}
-	return ASF_SUCCESS;
+	if (j == NUM_FQ_PER_WQ) {
+		asf_err("MAX %d Classes allowed per DRR Qdisc\n",
+							NUM_FQ_PER_WQ);
+		return -ENOMEM;
+	}
+
+	asf_fq = (struct  asf_qos_fq *) kzalloc(sizeof(struct  asf_qos_fq),
+								GFP_KERNEL);
+	if (!asf_fq) {
+		asf_err("OHHHH..NO Memory for QMAN_FQ\n");
+		return -ENOMEM;
+	}
+	asf_fq->egress_fq = priv_egress_fq;
+
+	_errno = qman_create_fq(0 , flags, &asf_fq->egress_fq);
+	if (_errno) {
+		asf_err("qman_create_fq() failed\n");
+		kfree(asf_fq);
+		return _errno;
+	}
+	spin_lock_init(&(asf_fq->lock));
+	/* Initialize FQ */
+	fq = &asf_fq->egress_fq;
+	initfq.we_mask = QM_INITFQ_WE_DESTWQ;
+	initfq.fqd.dest.channel	=
+		fm_get_tx_port_channel(txport);
+	/* Using WQ = 1 for DRR flows */
+	initfq.fqd.dest.wq = 1;
+	initfq.we_mask |= QM_INITFQ_WE_TDTHRESH |
+				QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_ICSCRED;
+	qm_fqd_taildrop_set(&initfq.fqd.td, TAILDROP_THRESHOLD, 1);
+	/* Set FQs credits */
+	initfq.fqd.ics_cred = asf_fq->quantum =
+				qdisc->u.drr.quantum;
+	asf_debug("Setting ics %d on FQ %d\n", initfq.fqd.ics_cred, fq->fqid);
+
+	initfq.fqd.fq_ctrl = QM_FQCTRL_TDE | QM_FQCTRL_PREFERINCACHE;
+
+	_errno = qman_init_fq(fq, QMAN_INITFQ_FLAG_SCHED, &initfq);
+	if (_errno < 0) {
+		asf_err("qman_init_fq(%u) = %d\n", qman_fq_fqid(fq), _errno);
+		qman_destroy_fq(fq, 0);
+		kfree(asf_fq);
+		return _errno;
+	}
+	asf_debug("#### CH: %d Created FQ_FQID %d on WQ %d\n",
+					initfq.fqd.dest.channel,
+					fq->fqid,
+					initfq.fqd.dest.wq);
+
+	asf_fq->net_dev = sch->dev;
+	asf_fq->classid = qdisc->handle;
+	sch->asf_fq[MAX_NUM_DRR_WQ_IDX][j] = asf_fq;
+
+	return ASFQOS_SUCCESS;
 }
 
 int wrr_alloc_fqs(struct  asf_qdisc *sch, ASFQOSCreateQdisc_t *qdisc)
@@ -462,8 +471,8 @@ int qdisc_cleanup_fqs(struct  asf_qdisc *sch)
 	return ASF_SUCCESS;
 }
 
-struct	qman_fq	*qos_get_fq(ASF_uint8_t prio,
-		struct  asf_qdisc *sch)
+struct	qman_fq	*qos_get_fq(u8 is_abuf, void *buf, ASF_uint8_t prio,
+			struct  asf_qdisc *sch, u32 *tc_filter_res)
 {
 	struct asf_qos_fq	*asf_fq;
 
@@ -477,12 +486,65 @@ struct	qman_fq	*qos_get_fq(ASF_uint8_t prio,
 		return &asf_fq->egress_fq;
 
 	case ASF_QDISC_DRR:
-		/* 8 DRR Queues Supported but 1 WQ '0' only */
-		asf_fq =  sch->asf_fq[MAX_NUM_DRR_WQ_IDX][prio];
-		queue_lock(&(asf_fq->lock));
-		asf_fq->ulEnqueuePkts++;
-		queue_unlock(&(asf_fq->lock));
-		return &asf_fq->egress_fq;
+		switch (*tc_filter_res) {
+		case TC_FILTER_RES_INVALID:
+		{
+			struct sk_buff *skb;
+			u32 classid, i;
+
+			if (is_abuf) {
+				skb = (struct sk_buff *)
+					asf_abuf_to_skb((ASFBuffer_t *)buf);
+			} else
+				skb = (struct sk_buff *) buf;
+			/* Checkout Filter table */
+			if (sch->parent != ROOT_ID) {
+				/* find actual qdisc and the root
+				   must be TBF only */
+				struct Qdisc *q =
+					tbf_get_inner_qdisc(sch->dev->qdisc);
+
+				classid = drr_filter_lookup(skb, q);
+			} else
+				classid = drr_filter_lookup(skb, sch->dev->qdisc);
+
+			asf_debug("Got CLASS_ID 0x%X\n", classid);
+			if (!classid) {
+				asf_debug("Matching Class[0x%X]"
+					" not found, DROP PKT!\n", classid);
+				return NULL;
+			}
+			/* convert classid to Fq index */
+			for (i = 0; i < NUM_FQ_PER_WQ; i++) {
+				asf_fq =  sch->asf_fq[MAX_NUM_DRR_WQ_IDX][i];
+				if (asf_fq && (asf_fq->classid == classid)) {
+					*tc_filter_res = i;
+					asf_debug("Matching class[0x%x] found"
+							" at FQ %d\n", classid , i);
+					queue_lock(&(asf_fq->lock));
+					asf_fq->ulEnqueuePkts++;
+					queue_unlock(&(asf_fq->lock));
+					return &asf_fq->egress_fq;
+				}
+			}
+			if (i == NUM_FQ_PER_WQ) {
+				asf_err("Matching Class[0x%X] not configured,"
+					" should not happen!\n", classid);
+				return NULL;
+			}
+
+		}
+		break;
+		default:
+			/* 8 DRR Queues Supported but 1 WQ '0' only */
+			asf_fq =  sch->asf_fq[MAX_NUM_DRR_WQ_IDX][*tc_filter_res];
+			if (!asf_fq)
+				return NULL;
+			queue_lock(&(asf_fq->lock));
+			asf_fq->ulEnqueuePkts++;
+			queue_unlock(&(asf_fq->lock));
+			return &asf_fq->egress_fq;
+		}
 
 	case ASF_QDISC_WRR:
 		/* We can have at max 3 WRR Queues */
@@ -499,20 +561,29 @@ struct	qman_fq	*qos_get_fq(ASF_uint8_t prio,
 	return NULL;
 }
 
-int qos_enqueue_fd(struct qm_fd *tx_fd,
+int qos_enqueue_fd(ASFBuffer_t *abuf,
 		struct  asf_qdisc *sch,
-		ASF_uint8_t dscp)
+		ASF_uint8_t dscp,
+		u32 *tc_filter_res)
 {
 
 	ASF_uint8_t prio = 7 - (dscp >> 5);
 	struct	qman_fq	*tx_fq;
+	struct qm_fd *tx_fd;
 
-	tx_fq = qos_get_fq(prio, sch);
+	tx_fq = qos_get_fq(1, (void *)abuf, prio, sch, tc_filter_res);
 	if (!tx_fq) {
-		asf_err("FQ not found!\n");
-		return ASF_FAILURE;
+		asf_debug("FQ not found!, Dropping FD\n");
+
+		if (unlikely(abuf->frag_list))
+			ASF_SKB_FREE_FUNC(abuf->nativeBuffer);
+		else
+			dpa_fd_release(abuf->ndev,
+				(struct qm_fd *)abuf->pAnnot->fd);
+		return ASF_SUCCESS;
 	}
 
+	tx_fd  = (struct qm_fd *)&(abuf->pAnnot->timestamp);
 	asf_debug("Enqueuing in fqid %d\n", tx_fq->fqid);
 
 	if (unlikely(qman_enqueue(tx_fq, tx_fd, 0) < 0)) {
@@ -531,9 +602,11 @@ int qos_enqueue_fd(struct qm_fd *tx_fd,
 		return ASF_SUCCESS;
 }
 
-int qos_enqueue_skb(struct sk_buff *skb, struct  asf_qdisc *sch)
+int qos_enqueue_skb(struct sk_buff *skb,
+			struct  asf_qdisc *sch,
+			u32 *tc_filter_res)
 {
-	struct qm_fd		*tx_fd;
+	struct qm_fd		*tx_fd, fd;
 	struct qman_fq		*tx_fq;
 	struct dpa_priv_s	*priv;
 	struct dpa_bp		*dpa_bp;
@@ -547,7 +620,7 @@ int qos_enqueue_skb(struct sk_buff *skb, struct  asf_qdisc *sch)
 	int dpa_max_frm = CONFIG_FSL_FM_MAX_FRAME_SIZE;
 	int dpa_rx_extra_headroom = CONFIG_FSL_FM_RX_EXTRA_HEADROOM;
 
-	priv = netdev_priv(sch->dev);
+	priv = netdev_priv(skb->dev);
 	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 	dpa_bp = priv->dpa_bp;
 
@@ -566,24 +639,33 @@ int qos_enqueue_skb(struct sk_buff *skb, struct  asf_qdisc *sch)
 		ASFSkbFree(skb);
 		skb = skb_new;
 	}
-	/* TODO What if SKB is cloned */
 
-	tx_fq = qos_get_fq(skb->queue_mapping, sch);
+	/* TODO, if SKB is cloned & require SG support*/
+	skb = skb_unshare(skb, GFP_ATOMIC);
+	if (!skb)
+		return ASF_SUCCESS;
+
+	tx_fq = qos_get_fq(0, (void *)skb, skb->queue_mapping, sch, tc_filter_res);
 	if (!tx_fq) {
-		asf_err("TX FQ not found\n");
+		asf_debug("TX FQ not found\n");
 		ASFSkbFree(skb);
-		return ASF_FAILURE;
+		return ASF_SUCCESS;
 	}
 	asf_debug("Will enqueuing in fqid %d, prio = %d\n",
 				tx_fq->fqid, skb->queue_mapping);
 
+	tx_fd = &fd;
+	/* Clear Required field in FD */
+	tx_fd->opaque_addr = 0;
+	tx_fd->opaque = 0;
+	tx_fd->cmd = 0;
 #define BP_MAX_BUF_SIZE	(DEFAULT_BUF_SIZE + 256)
 /* Maximum offset value for a contig or sg FD (represented on 9bits) */
 #define MAX_FD_OFFSET	((1 << 9) - 1)
 	/* Now Convert SKB to Tx_FD */
-	if (likely(skb_is_recycleable(skb, dpa_bp->size) &&
+	if (likely(skb->bpid || (skb_is_recycleable(skb, dpa_bp->size) &&
 		   (skb_end_pointer(skb) - skb->head <= BP_MAX_BUF_SIZE) &&
-		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count))) {
+		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count)))) {
 		/* Compute the minimum necessary fd offset */
 		offset = dpa_bp->size - skb->len - skb_tailroom(skb);
 
@@ -603,36 +685,32 @@ int qos_enqueue_skb(struct sk_buff *skb, struct  asf_qdisc *sch)
 			/* We're good to go for recycling*/
 			offset += extra_offset;
 			can_recycle = true;
-		} else
-			offset = DPA_BP_HEAD;
-	} else
+		}
+	}
+	if (can_recycle) {
+		/* Buffer will get recycled, setup fd accordingly */
+		tx_fd->cmd = FM_FD_CMD_FCO;
+		tx_fd->bpid = dpa_bp->bpid;
+		dma_dir = DMA_BIDIRECTIONAL;
+	} else {
 		offset = DPA_BP_HEAD;
+	}
 
 	skbh = (struct sk_buff **)(skb->data - offset);
 	*skbh = skb;
-
-	tx_fd  = (struct qm_fd *)((char *)skbh +
-			DPA_TX_PRIV_DATA_SIZE + DPA_PARSE_RESULTS_SIZE);
-	/* Clear Required field in FD */
-	tx_fd->opaque_addr = 0;
 
 	tx_fd->format = qm_fd_contig;
 	tx_fd->length20 = skb->len;
 	tx_fd->offset = offset;
 
-	if (likely(can_recycle)) {
-		/* Buffer will get recycled, setup fd accordingly */
-		tx_fd->cmd = FM_FD_CMD_FCO;
-		tx_fd->bpid = dpa_bp->bpid;
-		dma_dir = DMA_BIDIRECTIONAL;
-		/* Recycle SKB */
-		skb_recycle(skb);
-		(*percpu_priv->dpa_bp_count)++;
-	} else
-		/* Clear the fields */
-		tx_fd->cmd = 0;
-
 	/* TODO Does Linux will use DPAA HW Checksum */
+	if (!priv->mac_dev || skb->ip_summed != CHECKSUM_PARTIAL) {
+		/* Reaching Here means HW Checksum offloading not required.
+		   We are not implementing this as linux packet
+		   don't use this feature but still putting this
+		   check to catch if any packet comes */
+	} else
+		asf_err("HW CHECKSUM Offload handling required..!\n");
 
 	addr = dma_map_single(dpa_bp->dev, skbh, dpa_bp->size, dma_dir);
 	if (unlikely(addr == 0)) {
@@ -656,6 +734,14 @@ int qos_enqueue_skb(struct sk_buff *skb, struct  asf_qdisc *sch)
 	tx_fd->addr_hi = upper_32_bits(addr);
 	tx_fd->addr_lo = lower_32_bits(addr);
 
+	if (can_recycle) {
+		/* Recycle SKB */
+		if (!(skb->bpid))
+			(*percpu_priv->dpa_bp_count)++;
+		skb_recycle(skb);
+		skb = NULL;
+		percpu_priv->tx_returned++;
+	}
 	if (unlikely(qman_enqueue(tx_fq, tx_fd, 0) < 0)) {
 		struct asf_qos_fq *asf_fq;
 
@@ -667,13 +753,14 @@ int qos_enqueue_skb(struct sk_buff *skb, struct  asf_qdisc *sch)
 		} else
 			asf_fq->ulDroppedPkts++;
 
-		(*percpu_priv->dpa_bp_count)--;
-		dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, dma_dir);
-		ASFSkbFree(skb);
-		return ASF_FAILURE;
+		if (tx_fd->cmd & FM_FD_CMD_FCO) {
+			(*percpu_priv->dpa_bp_count)--;
+			percpu_priv->tx_returned--;
+		}
+		if (skb)
+			ASFSkbFree(skb);
 	}
 
-	skb = NULL;
 	return ASF_SUCCESS;
 }
 
@@ -681,7 +768,7 @@ int qos_enqueue_skb(struct sk_buff *skb, struct  asf_qdisc *sch)
 static int qos_create_sch(ASF_uint32_t  ulVsgId,
 			ASFQOSCreateQdisc_t *qdisc)
 {
-	struct  asf_qdisc *prio_root;
+	struct  asf_qdisc *root;
 	int	err, i;
 
 	if (qdisc->dev->asf_qdisc) {
@@ -696,29 +783,29 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 		return ASFQOS_FAILURE;
 	}
 	/* Now allocate Root Qdisc  */
-	prio_root = (struct asf_qdisc *)
+	root = (struct asf_qdisc *)
 		kzalloc(sizeof(struct  asf_qdisc), GFP_KERNEL);
-	if (NULL == prio_root) {
+	if (NULL == root) {
 		asf_err("OHHHH   NO Memory for Root Qdisc\n");
 		return ASFQOS_FAILURE;
 	}
 	/* fill up the structure data */
-	prio_root->enqueue = qos_enqueue_skb;
-	prio_root->enqueue_fd = qos_enqueue_fd;
-	prio_root->qdisc_type = qdisc->qdisc_type;
-	prio_root->handle = qdisc->handle;
-	prio_root->parent = qdisc->parent;
-	prio_root->state = SCH_READY;
-	prio_root->dev = qdisc->dev;
+	root->enqueue = qos_enqueue_skb;
+	root->enqueue_fd = qos_enqueue_fd;
+	root->qdisc_type = qdisc->qdisc_type;
+	root->handle = qdisc->handle;
+	root->parent = qdisc->parent;
+	root->state = SCH_READY;
+	root->dev = qdisc->dev;
 
 	switch (qdisc->qdisc_type) {
 	case ASF_QDISC_PRIO:
 	{
 		/* Create & initialize Tx FQs for QoS */
-		err = prio_alloc_fqs(prio_root);
+		err = prio_alloc_fqs(root);
 		if (err) {
-			qdisc_cleanup_fqs(prio_root);
-			kfree(prio_root);
+			qdisc_cleanup_fqs(root);
+			kfree(root);
 			return ASFQOS_FAILURE;
 		}
 
@@ -731,14 +818,6 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 	break;
 	case ASF_QDISC_DRR:
 	{
-		/* Create & initialize Tx FQs for QoS */
-		err = drr_alloc_fqs(prio_root, qdisc);
-		if (err) {
-			qdisc_cleanup_fqs(prio_root);
-			kfree(prio_root);
-			return ASFQOS_FAILURE;
-		}
-
 		/* Do Hardware Configuration , if required */
 		asf_set_wq_scheduling(WQ_CS_CFG_FMAN0,
 			0, 0, 0, 0, 0, 0, 0);
@@ -749,10 +828,10 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 	case ASF_QDISC_WRR:
 	{
 		/* Create & initialize Tx FQs for QoS */
-		err = wrr_alloc_fqs(prio_root, qdisc);
+		err = wrr_alloc_fqs(root, qdisc);
 		if (err) {
-			qdisc_cleanup_fqs(prio_root);
-			kfree(prio_root);
+			qdisc_cleanup_fqs(root);
+			kfree(root);
 			return ASFQOS_FAILURE;
 		}
 
@@ -771,23 +850,23 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 	break;
 	default:
 		asf_err("OHHHH, INVALID Scheduler Qdisc Type\n");
-		kfree(prio_root);
+		kfree(root);
 		return ASFQOS_FAILURE;
 	}
 
 	/* Telling net_device to use this root qdisc */
-	prio_root->dev->asf_qdisc = prio_root;
+	root->dev->asf_qdisc = root;
 
 	for (i = 0; i < ASF_MAX_IFACES; i++) {
 		if (qdisc_in_use[i] == NULL) {
 			spin_lock(&cnt_lock);
-			qdisc_in_use[i] = prio_root;
+			qdisc_in_use[i] = root;
 			qdisc_cnt++;
 			spin_unlock(&cnt_lock);
 			break;
 		}
 	}
-	asf_debug("CPU [%d]:ASF PRIO[%d][%s]: handle = 0x%X\n\n",
+	asf_debug("CPU [%d]:ASF QDISC[%d][%s]: handle = 0x%X\n\n",
 			smp_processor_id(), qdisc->qdisc_type,
 			qdisc->dev->name, qdisc->handle);
 
@@ -888,14 +967,34 @@ ASF_uint32_t ASFQOSRuntime(
 		qdisc = (ASFQOSCreateQdisc_t *)args;
 		switch (qdisc->qdisc_type) {
 		case ASF_QDISC_TBF:
+		{
 			asf_debug("Creating TBF QDISC\n");
 			iResult = qos_add_shaper(ulVsgId, qdisc);
-		break;
-
-		default:
-			asf_err("INVALID QDISC CREATE CMD\n");
 		}
+		break;
+		case ASF_QDISC_DRR:
+		{
+			struct  asf_qdisc *root;
 
+			root = qdisc->dev->asf_qdisc;
+
+			if (qdisc->parent != root->handle) {
+				asf_err("INVALID Parent[0x%X] for class[0x%X]\n",
+						qdisc->parent, qdisc->handle);
+				return ASFQOS_FAILURE;
+			}
+			/* Create & initialize Tx FQ for each DRR class */
+			iResult = drr_alloc_fq(root, qdisc);
+			if (iResult) {
+				qdisc_cleanup_fqs(root);
+				kfree(root);
+				return ASFQOS_FAILURE;
+			}
+		}
+		break;
+		default:
+			asf_err("INVALID QDISC ADD CMD\n");
+		}
 	}
 	break;
 
@@ -964,7 +1063,10 @@ ASF_int32_t ASFQOSQueryConfig(ASF_uint32_t ulVsgId,
 	{
 		for (i = 0; i < NUM_FQ_PER_WQ; i++) {
 			asf_fq =  qdisc->asf_fq[MAX_NUM_DRR_WQ_IDX][i];
-			p->quantum[i] = asf_fq->quantum;
+			if (asf_fq)
+				p->quantum[i] = asf_fq->quantum;
+			else
+				p->quantum[i] = 0;
 		}
 	}
 	break;
@@ -1000,15 +1102,21 @@ EXPORT_SYMBOL(ASFQOSQueryConfig);
 
 static int process_lnx_pkt(struct sk_buff *skb)
 {
-	/* Check if Callback to set skb Queue Mapping */
-	if (pSkbMarkfn)
-		skb->queue_mapping = pSkbMarkfn((void *)skb);
-	else
-		/* Use the initialization value */
-		skb->queue_mapping = non_asf_priority;
+	u32	tc_filter_res = 1;
+	/* If recevied DUMMY L2-blob packet, do not handle it */
+	if (asfctrl_skb_is_dummy(skb))
+		return ASF_FAILURE;
 
+	if (skb->queue_mapping == 0) {
+		/* Check if Callback to set skb Queue Mapping */
+		if (pSkbMarkfn)
+			skb->queue_mapping = pSkbMarkfn((void *)skb);
+		else
+			skb->queue_mapping = non_asf_priority;
+	}
+	asf_debug("Queue Mapping = %d\n", skb->queue_mapping);
 	/* Apply QoS */
-	asf_qos_handling(skb);
+	asf_qos_handling(skb, &tc_filter_res);
 	return ASF_SUCCESS;
 }
 
@@ -1040,7 +1148,7 @@ static void __exit asf_qos_exit(void)
 	struct asf_qdisc *root;
 	int bLockFlag;
 
-	asf_qos_fn_unregister();
+	asf_qos_fn_register(NULL);
 	asfqos_sysfs_exit();
 
 	ASF_RCU_READ_LOCK(bLockFlag);

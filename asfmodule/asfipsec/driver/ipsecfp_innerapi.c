@@ -1781,6 +1781,10 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 	SAParams_t *pSAParams = (SAParams_t *)(buff);
 
 	memcpy(&pSA->SAParams, pSAParams, sizeof(SAParams_t));
+#ifdef ASF_QOS
+	/* Invalidate TC result */
+	pSA->tc_filter_res = TC_FILTER_RES_INVALID;
+#endif
 	if (pSA->SAParams.bAuth) {
 		switch (pSAParams->ucAuthAlgo) {
 		case SECFP_HMAC_MD5:
@@ -1857,6 +1861,10 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 	unsigned char mdpadlen[] = { 16, 20, 32, 32, 64, 64 };
 
 	memcpy(&pSA->SAParams, pSAParams, sizeof(SAParams_t));
+#ifdef ASF_QOS
+	/* Invalidate TC result */
+	pSA->tc_filter_res = TC_FILTER_RES_INVALID;
+#endif
 	if (pSA->SAParams.bAuth) {
 		switch (pSAParams->ucAuthAlgo) {
 		case SECFP_HMAC_MD5:
@@ -2585,6 +2593,10 @@ unsigned int secfp_createOutSA(
 		}
 	}
 	pSA->ulTunnelId = ulTunnelId;
+#ifdef ASF_QOS
+	/* Invalidate TC result */
+	pSA->tc_filter_res = TC_FILTER_RES_INVALID;
+#endif
 	ulLastOutSAChan_g = (ulLastOutSAChan_g == 0) ? 1 : 0;
 	memcpy(&(pSA->SPDParams), &(pContainer->SPDParams),
 				sizeof(SPDOutParams_t));

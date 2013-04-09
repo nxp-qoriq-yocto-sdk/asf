@@ -13,6 +13,7 @@ include $(TOPDIR)/asfconfig.mk
 
 
 KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfqos/driver/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(TOPDIR)/asfctrl/linux/ffp/Module.symvers
 export KBUILD_EXTRA_SYMBOLS
 
 #EXTRA_CFLAGS += -DASFCTRL_DEBUG
