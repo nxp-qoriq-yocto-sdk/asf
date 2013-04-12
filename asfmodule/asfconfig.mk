@@ -27,6 +27,9 @@ endif
 #ASF_LINUX 	:= 2
 #ASF_FULL 	:= 3
 
+ifeq ($(CONFIG_DPA_ETH),y)
+EXTRA_CFLAGS += -DCONFIG_DPA
+endif
 ifeq ($(ASF_FEATURE_OPTION_FULL),y)
 EXTRA_CFLAGS += -DASF_FEATURE_OPTION=3
 else
@@ -56,8 +59,8 @@ endif
 ifeq ($(CONFIG_ASF_IPV6), y)
 EXTRA_CFLAGS += -DASF_IPV6_FP_SUPPORT
 endif
-ifeq ($(CONFIG_DPA), y)
-include $(KERNEL_PATH)/drivers/net/dpa/NetCommSw/ncsw_config.mk
+ifeq ($(CONFIG_DPA_ETH), y)
+include $(KERNEL_PATH)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 endif
 
 ifeq ($(CONFIG_ASF_SEC4x), y)

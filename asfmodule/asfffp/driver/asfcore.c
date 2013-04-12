@@ -499,7 +499,7 @@ int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb)
 	ret = bman_release(bp->pool, &bmb, 1, 0);
 
 	if (unlikely(ret < 0)) {
-		cpu_pr_err(KBUILD_MODNAME ": dpa_free_buf_skb() "
+		pr_err(KBUILD_MODNAME ": dpa_free_buf_skb() "
 				"failed for bman_release error: %d\n", ret);
 		return ret;
 	}
@@ -1206,7 +1206,7 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 	}
 	/* see if it is destined to us; may be pkts
 		received in promiscuous mode */
-	if (unlikely(compare_ether_addr_64bits(abuf.ethh->h_dest,
+	if (unlikely(ether_addr_equal_64bits(abuf.ethh->h_dest,
 			real_dev->dev_addr))) {
 		asf_debug_l2("PACKET_OTHERHOST on iface %s\n",
 				real_dev->name);
