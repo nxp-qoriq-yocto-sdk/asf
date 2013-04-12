@@ -44,6 +44,10 @@
 #define ASF_TCP_INAC_TMOUT	(5*60*60*24)
 #define ASF_UDP_INAC_TMOUT	(180)
 
+/*NF_CONN status BIT for Session offloaded to ASF */
+#define IPS_ASF_OFFLOADED_BIT 20
+#define IPS_ASF_OFFLOADED (1 << IPS_ASF_OFFLOADED_BIT)
+
 #define DEFVAL_INACTIVITY_DIVISOR	(4)
 #ifdef ASF_IPV6_FP_SUPPORT
 #define ASF_IPV6_HDR_LEN	(40)

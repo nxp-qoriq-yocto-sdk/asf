@@ -78,5 +78,15 @@ extern unsigned int ulTimeStamp_g;
 #define ASFIPSEC_HEXDUMP(data, len)
 #define ASFIPSEC_FPRINT(fmt, arg...)
 #endif
+#ifdef CONFIG_ASF_SEC3x
+#define DESC_HDR_LO_ICCR0_MASK cpu_to_be32(0x18000000)
+#define DESC_HDR_LO_ICCR0_PASS cpu_to_be32(0x08000000)
+#define DESC_HDR_LO_ICCR0_FAIL cpu_to_be32(0x10000000)
+#define DESC_HDR_MODE0_AES_XCBC_MAC cpu_to_be32(0x08400000)
+#define DESC_HDR_MODE0_AES_XCBC_CICV cpu_to_be32(0x02000000)
+#define DESC_HDR_MODE0_AES_CTR cpu_to_be32(0x00600000)
+#define DESC_HDR_MODE0_MDEU_CICV cpu_to_be32(0x04000000)
+#define DESC_HDR_TYPE_AESU_CTR_HMAC cpu_to_be32(3 << 6)
+#endif
 
 #endif
