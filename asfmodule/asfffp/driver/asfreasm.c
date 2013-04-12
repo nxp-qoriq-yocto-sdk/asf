@@ -2093,7 +2093,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 #ifdef CONFIG_DPA
 				skb2 = asf_alloc_buf_skb(ndev);
 #else
-				skb2 = gfar_new_skb(ndev);
+				skb2 = gfar_new_skb(netdev_priv(ndev));
 #endif
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
@@ -2159,7 +2159,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 #ifdef CONFIG_DPA
 			skb2 = asf_alloc_buf_skb(ndev);
 #else
-			skb2 = gfar_new_skb(ndev);
+			skb2 = gfar_new_skb(netdev_priv(ndev));
 #endif
 			if (!skb2)
 				goto drop;
@@ -2290,7 +2290,7 @@ int asfIpv6Fragment(struct sk_buff *skb,
 #ifdef CONFIG_DPA
 		frag = alloc_skb(len+ip6hpexh_len+32, GFP_ATOMIC);
 #else
-		frag = gfar_new_skb(skb->dev);
+		frag = gfar_new_skb(netdev_priv(skb->dev));
 #endif
 
 		if (unlikely(!frag)) {
