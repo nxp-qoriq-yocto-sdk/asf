@@ -70,6 +70,7 @@ struct net_queue {
 	uint32_t    ulDequeuePkts;	/* Total number of Dequeued packets */
 	uint32_t    ulTxErrorPkts;	/* Total number of packets dropped
 						due to TX Error */
+	uint32_t    classid;		/* Associated classid */
 	/** Others **/
 	spinlock_t			lock;
 };
@@ -95,6 +96,7 @@ extern int asf_qos_enable;
 extern int asfqos_sysfs_init(void);
 extern int asfqos_sysfs_exit(void);
 
+#ifdef CONFIG_DPA
 extern void asf_set_wq_scheduling(u32 wq_class,
 			u8 cs_elev, u8 csw2, u8 csw3, u8 csw4, u8 csw5,
 			u8 csw6, u8 csw7);
@@ -104,5 +106,5 @@ extern int fm_port_setRateLimit(struct fm_port *port,
 			uint32_t	rateLimit);
 
 extern int fm_port_delRateLimit(struct fm_port *port);
-
+#endif
 #endif

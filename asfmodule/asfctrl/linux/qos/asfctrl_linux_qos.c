@@ -78,6 +78,7 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 	markerRule_t	*rule;
 
 	if (is_ipv6) {
+#ifdef	ASF_IPV6_FP_SUPPORT
 		if (!marker_rule_v6)
 			return ASF_QM_NULL_DSCP;
 
@@ -108,6 +109,7 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 				return rule->uciDscp & 0xFC;
 			}
 		}
+#endif
 	} else {/* IPv4 */
 		if (!marker_rule_v4)
 			return ASF_QM_NULL_DSCP;

@@ -59,12 +59,10 @@ typedef enum {
 	ASF_QDISC_PRIO_DRR,
 	/*!	\brief	Queue discipline is token buffer filter.*/
 	ASF_QDISC_TBF,
-#ifdef CONFIG_DPA
 	/*!	\brief	Queue discipline is Deficit Round robin.*/
 	ASF_QDISC_DRR,
 	/*!	\brief	Queue discipline is Weighted Round robin.*/
 	ASF_QDISC_WRR,
-#endif
 	/*!	\brief	Maximum number of Queue disciplines for QoS.*/
 	ASF_QDISC_NUM
 } ASFQOSQdiscType_t;
@@ -117,16 +115,6 @@ typedef struct ASFQOSCreateQdisc_s {
 #define DPA_MAX_DRR_QUEUES	8
 #define DPA_MAX_WRR_QUEUES	3
 		/*!	\brief	Structure defining fields for
-			deficit round robin QDisc*/
-		struct {
-			/*!	\brief It represents the value of Wieght given
-			to a given Queue when DRR Scheduling is
-			configured.\n
-			We need to provide quantum/weight in Number of BYTES
-			for each queue. */
-			ASF_uint32_t	quantum;
-		} drr;
-		/*!	\brief	Structure defining fields for
 			Weighted round robin QDisc*/
 		struct {
 			/*!	\brief It represents the value of Wieght given
@@ -137,6 +125,16 @@ typedef struct ASFQOSCreateQdisc_s {
 			ASF_uint32_t	weight[DPA_MAX_WRR_QUEUES];
 		} wrr;
 #else
+		/*!	\brief	Structure defining fields for
+			deficit round robin QDisc*/
+		struct {
+			/*!	\brief It represents the value of Wieght given
+			to a given Queue when DRR Scheduling is
+			configured.\n
+			We need to provide quantum/weight in Number of BYTES
+			for each queue. */
+			ASF_uint32_t	quantum;
+		} drr;
 		/*!	\brief	Structure defining fields for priority
 			and deficit round robin QDisc*/
 		struct {

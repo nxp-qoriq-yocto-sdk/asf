@@ -17,6 +17,7 @@
 
 #include <linux/version.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/interrupt.h>
@@ -35,6 +36,7 @@
 #include "../../asfffp/driver/gplcode.h"
 #include "../../asfffp/driver/asf.h"
 #include "../../asfffp/driver/asfcmn.h"
+#include "../../asfctrl/linux/ffp/asfctrl.h"
 #include "asfqosapi.h"
 #include "asfqos_pvt.h"
 
@@ -81,16 +83,78 @@ uint8_t qdisc_cnt;
 spinlock_t cnt_lock;
 
 static ASFQOSCallbackFns_t	qosCbFns = {0};
+static int qos_flush_qdisc(ASF_uint32_t  ulVsgId,
+			ASFQOSDeleteQdisc_t *qdisc);
 
-static inline struct net_queue *qos_prio_classify(struct sk_buff *skb,
-						struct  asf_qdisc *sch)
+static inline struct net_queue *qos_classify(struct sk_buff *skb,
+						struct  asf_qdisc *sch,
+						u32 *tc_filter_res)
 {
 	struct  asf_prio_sched_data *prio_priv =
 		(struct  asf_prio_sched_data *)sch->priv;
 	struct net_queue *queue;
 
-	/* TODO generic Filter Support */
-	queue = &(prio_priv->q[skb->queue_mapping]);
+	switch (sch->qdisc_type) {
+	case ASF_QDISC_TBF:
+		queue = &(prio_priv->q[0]);
+		break;
+
+	case ASF_QDISC_PRIO:
+		queue = &(prio_priv->q[skb->queue_mapping]);
+		break;
+
+	case ASF_QDISC_PRIO_DRR:
+	case ASF_QDISC_DRR:
+	{
+		switch (*tc_filter_res) {
+		case TC_FILTER_RES_INVALID:
+		{
+			u32 classid, i;
+
+			/* Checkout Filter table */
+			if (sch->parent != ROOT_ID) {
+				/* find actual qdisc and the root
+				   must be TBF only */
+				struct Qdisc *q =
+					tbf_get_inner_qdisc(sch->dev->qdisc);
+
+				classid = drr_filter_lookup(skb, q);
+			} else
+				classid = drr_filter_lookup(skb, sch->dev->qdisc);
+
+			asf_debug("Got CLASS_ID 0x%X\n", classid);
+			if (!classid) {
+				asf_debug("Matching Class[0x%X]"
+					" not found, DROP PKT!\n", classid);
+				return NULL;
+			}
+			/* Convert classid to Queue index */
+			for (i = 0; i < prio_priv->bands; i++) {
+				queue = &(prio_priv->q[i]);
+				if (queue->classid == classid) {
+					*tc_filter_res = i;
+					asf_debug("Matching class[0x%x] found"
+							" at FQ %d\n", classid , i);
+					break;
+				}
+			}
+			if (i == prio_priv->bands) {
+				asf_err("Matching Class[0x%X] not configured,"
+					" should not happen!\n", classid);
+				return NULL;
+			}
+
+		}
+		break;
+		default:
+			queue = &(prio_priv->q[*tc_filter_res]);
+		}
+	}
+	break;
+	default:
+		asf_err("Invalid Qdisc Type %d\n", sch->qdisc_type);
+		return NULL;
+	}
 #ifndef ASF_HW_SCH
 	/* Reset the SKB Queue mapping, which is already
 	   set as per DSCP value */
@@ -107,11 +171,13 @@ static inline struct net_queue *qos_prio_classify(struct sk_buff *skb,
 }
 
 
-int qos_enqueue(struct sk_buff *skb, struct  asf_qdisc *sch)
+int qos_enqueue(struct sk_buff *skb,
+		struct  asf_qdisc *sch,
+		u32 *tc_filter_res)
 {
 	struct net_queue *queue;
 
-	queue = qos_prio_classify(skb, sch);
+	queue = qos_classify(skb, sch, tc_filter_res);
 	if (NULL == queue) {
 
 		asf_debug("QUEUE FULL:  skb->queue_mapping %d\n",
@@ -137,12 +203,13 @@ int qos_enqueue(struct sk_buff *skb, struct  asf_qdisc *sch)
 	return 0;
 }
 
-
-static int prio_dequeue(struct asf_prio_sched_data *priv, u32 *add_wait)
+static int prio_dequeue(struct asf_qdisc *sch, u32 *add_wait)
 {
-	int i;
+	struct asf_prio_sched_data *priv =
+			(struct  asf_prio_sched_data *)sch->priv;
 	struct net_queue *queue;
 	struct sk_buff *skb = NULL;
+	int i;
 
 	for (i = 0; i < priv->bands; i++) {
 
@@ -151,7 +218,7 @@ static int prio_dequeue(struct asf_prio_sched_data *priv, u32 *add_wait)
 			continue;
 
 		skb = queue->head;
-#ifdef ASF_EGRESS_SHAPER
+#if 0/* Queue Shaper shall be added in next Release */
 		/* If required, Shape the output traffic */
 		if (queue->shaper) {
 			u32 len = skb->len + layer_overhead;
@@ -205,6 +272,56 @@ static int prio_dequeue(struct asf_prio_sched_data *priv, u32 *add_wait)
 			}
 		}
 #endif /* SHAPER */
+#ifdef ASF_EGRESS_SHAPER
+	/* If required, Shape the Port traffic */
+	if (sch->pShaper) {
+		struct asf_tbf_data *shaper = sch->pShaper;
+		uint32_t len = skb->len + layer_overhead;
+
+		if (shaper->toks >= len) {
+			shaper->toks -= len;
+		} else {
+			unsigned long c_j = jiffies;
+			if (time_after(c_j, shaper->l_j)) {
+
+				uint32_t wait =
+				shaper->jiffies_to_wait;
+
+				asf_debug("last_j %lu c_j %lu\n",
+						shaper->l_j, c_j);
+
+				shaper->toks += shaper->buffer;
+				if (shaper->toks >
+						shaper->b_depth)
+					shaper->toks =
+						shaper->b_depth;
+
+				shaper->l_j = c_j + wait;
+				/* See if we have Enough Tokens */
+				if (shaper->toks >= len) {
+					shaper->toks -= len;
+				} else {
+					if ((*add_wait == 0) ||
+							(*add_wait > wait))
+						*add_wait = wait + 1;
+						/* Can't send packet further */
+						return 0;
+					}
+			} else {
+				unsigned long wait;
+
+				wait = (unsigned long)shaper->l_j
+						- (unsigned long)c_j;
+
+				if ((*add_wait == 0) || (*add_wait > wait))
+						*add_wait = wait + 1;
+
+				/* Can't send packet further */
+				return 0;
+			}
+		}
+	}
+#endif /* SHAPER */
 		queue_lock(&(queue->lock));
 		queue->head = skb->next;
 		queue->queue_size--;
@@ -255,9 +372,7 @@ static int prio_tx_napi(struct napi_struct *napi, int budget)
 	unsigned int i = 0;
 	u32 add_wait = 0;
 
-	while (prio_dequeue((struct  asf_prio_sched_data *)sch->priv,
-				&add_wait)) {
-
+	while (prio_dequeue(sch, &add_wait)) {
 		i++;
 
 		/* Note: In future , may need to check for
@@ -282,9 +397,10 @@ static int prio_tx_napi(struct napi_struct *napi, int budget)
 	return 1;
 }
 
-static int prio_drr_dequeue(struct asf_prio_drr_sched_data *priv,
-							u32 *add_wait)
+static int prio_drr_dequeue(struct asf_qdisc *sch, u32 *add_wait)
 {
+	struct asf_prio_drr_sched_data *priv =
+			(struct  asf_prio_drr_sched_data *)sch->priv;
 	int i, any_q_has_pkt = 0;
 	struct net_queue *queue;
 	struct sk_buff *skb = NULL;
@@ -305,7 +421,6 @@ static int prio_drr_dequeue(struct asf_prio_drr_sched_data *priv,
 	if (i == priv->bands)
 		return 0;
 
-#if 1
 	/* No packet in Priority Queues, Now Check
 	   for the DRR Queues */
 	i = priv->last_drr_inuse;
@@ -337,11 +452,10 @@ check_n_loop:
 	} /* End of WHILE Loop */
 
 shape:
-#endif
 #ifdef ASF_EGRESS_SHAPER
 	/* If required, Shape the Port traffic */
-	if (priv->pShaper) {
-		struct asf_tbf_data *shaper = priv->pShaper;
+	if (sch->pShaper) {
+		struct asf_tbf_data *shaper = sch->pShaper;
 		uint32_t len = skb->len + layer_overhead;
 
 		if (shaper->toks >= len) {
@@ -410,9 +524,7 @@ static int prio_drr_tx_napi(struct napi_struct *napi, int budget)
 	unsigned int i = 0;
 	u32 add_wait = 0;
 
-	while (prio_drr_dequeue((struct  asf_prio_drr_sched_data *)sch->priv,
-				&add_wait)) {
-
+	while (prio_drr_dequeue(sch, &add_wait)) {
 		i++;
 
 		/* Note: In future , may need to check for
@@ -441,15 +553,19 @@ static int prio_drr_tx_napi(struct napi_struct *napi, int budget)
 static int qos_create_sch(ASF_uint32_t  ulVsgId,
 			ASFQOSCreateQdisc_t *qdisc)
 {
-	struct  asf_qdisc *prio_root;
-	int i;
+	struct  asf_qdisc *prio_root, *root =
+			qdisc->dev->asf_qdisc;
+	int i, replace_qdisc = 0;
 
-	if (qdisc->dev->asf_qdisc) {
-		asf_err("Root Qdisc already exists on dev %s\n",
+	if (root) {
+		if ((qdisc->parent == ROOT_ID) ||
+			(root->qdisc_type != ASF_QDISC_TBF)) {
+			asf_err("Root Qdisc already exists on dev %s\n",
 						qdisc->dev->name);
-		return ASFQOS_FAILURE;
+			return ASFQOS_FAILURE;
+		} else
+			replace_qdisc = 1;
 	}
-
 	if (qdisc_cnt  >= ASF_MAX_IFACES) {
 		asf_err("NO more Qdisc supported: limit[%d] reached\n",
 							ASF_MAX_IFACES);
@@ -467,8 +583,10 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 	prio_root->dequeue = qos_dequeue;
 	prio_root->qdisc_type = qdisc->qdisc_type;
 	prio_root->handle = qdisc->handle;
+	prio_root->parent = qdisc->parent;
 	prio_root->state = SCH_READY;
 	prio_root->dev = qdisc->dev;
+	prio_root->pShaper = NULL;
 
 	switch (qdisc->qdisc_type) {
 	case ASF_QDISC_PRIO:
@@ -492,6 +610,7 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 			prio_priv->q[i].max_queue_size = queue_len;
 			prio_priv->q[i].shaper = NULL;
 
+
 			spin_lock_init(&(prio_priv->q[i].lock));
 		}
 		prio_root->priv = prio_priv;
@@ -505,10 +624,11 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 					(unsigned long)prio_root);
 	}
 	break;
+
 	case ASF_QDISC_PRIO_DRR:
+	case ASF_QDISC_DRR:
 	{
 		struct  asf_prio_drr_sched_data *prio_priv;
-		int drr_queue = 0;
 
 		prio_priv = (struct  asf_prio_drr_sched_data *)
 				kzalloc(sizeof(struct  asf_prio_drr_sched_data),
@@ -519,44 +639,16 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 			return ASFQOS_FAILURE;
 		}
 
-		prio_priv->bands = qdisc->u.prio_drr.bands;
-
+		prio_priv->bands = 0;
 		for (i = 0; i < ASF_PRIO_MAX; i++) {
 			prio_priv->q[i].head = NULL;
 			prio_priv->q[i].tail = NULL;
 			prio_priv->q[i].queue_size = 0;
 			prio_priv->q[i].max_queue_size = queue_len;
 			prio_priv->q[i].shaper = NULL;
-			prio_priv->q[i].quantum = qdisc->u.prio_drr.quantum[i];
-			prio_priv->q[i].deficit = prio_priv->q[i].quantum;
-			if (prio_priv->q[i].quantum == 0) {
-				if (drr_queue) {
-					asf_err("ERROR: All PRIO Queues"
-						" must be contiguous\n");
-					kfree(prio_priv);
-					kfree(prio_root);
-					return ASFQOS_FAILURE;
-				}
-				prio_priv->num_prio_bands++;
-			} else
-				drr_queue = 1;
-
-			asf_debug("CPU [%d]:ASF PRIO-DRR: Q[%d] quantum =%d\n",
-					smp_processor_id(), i,
-					prio_priv->q[i].quantum);
-
+			prio_priv->q[i].classid = 0;
 			spin_lock_init(&(prio_priv->q[i].lock));
 		}
-		prio_priv->max_drr_idx = prio_priv->bands - 1;
-		/* First DRR Queue index = Max Prio Queue idx + 1 =
-						num of prio queues */
-		prio_priv->last_drr_inuse = prio_priv->num_prio_bands;
-		prio_priv->pShaper = NULL;
-
-		asf_debug("ASF PRIO[%d] Last_DRR: Q[%d]\n",
-				prio_priv->num_prio_bands,
-				prio_priv->last_drr_inuse);
-
 		prio_root->priv = prio_priv;
 		/* Configure De-queue NAPI */
 		netif_napi_add(qdisc->dev, &(prio_root->qos_napi),
@@ -574,6 +666,13 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 	}
 
 	/* Telling net_device to use this root qdisc */
+	if (replace_qdisc) {
+		prio_root->pShaper = root->pShaper;
+		del_timer(&(root->timer));
+		/* NAPI */
+		napi_disable(&(root->qos_napi));
+		netif_napi_del(&(root->qos_napi));
+	}
 	prio_root->dev->asf_qdisc = prio_root;
 
 	for (i = 0; i < ASF_MAX_IFACES; i++) {
@@ -596,59 +695,90 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 static int qos_add_shaper(ASF_uint32_t  ulVsgId,
 			ASFQOSCreateQdisc_t *qdisc)
 {
-	struct  asf_qdisc	*prio_root = NULL;
+	struct  asf_qdisc	*root = NULL;
 	struct	asf_tbf_data	*shaper;
 	uint32_t		i;
 
-	/* Now locate Root Qdisc  */
-#if 0
-	for (i = 0; i < ASF_MAX_IFACES; i++) {
-		prio_root = qdisc_in_use[i];
-		if (!prio_root)
-			continue;
-
-		if ((prio_root->handle == (qdisc->parent & MAJOR_ID))
-			&& (prio_root->dev == qdisc->dev)) {
-
-			prio_priv = (struct  asf_prio_sched_data *)
-						prio_root->priv;
-			asf_debug("Parent found with handle 0x%X "
-				"on dev %s\n", prio_root->handle,
-					prio_root->dev->name);
-			break;
+	if (qdisc->parent == ROOT_ID) {
+		struct  asf_prio_sched_data *tbf_priv;
+		/* Create Shaper Qdisc */
+		root = (struct asf_qdisc *)
+			kzalloc(sizeof(struct  asf_qdisc), GFP_KERNEL);
+		if (NULL == root) {
+			asf_err("Ohhh...NO Memory for Root Qdisc\n");
+			return ASFQOS_FAILURE;
 		}
-	}
-#endif
-	prio_root = qdisc->dev->asf_qdisc;
+		/* fill up the structure data */
+		root->enqueue = qos_enqueue;
+		root->dequeue = qos_dequeue;
+		root->qdisc_type = qdisc->qdisc_type;
+		root->handle = qdisc->handle;
+		root->parent = qdisc->parent;
+		root->state = SCH_READY; /* Not Ready to use */
+		root->dev = qdisc->dev;
+		root->pShaper = NULL;
 
-	if (!prio_root) {
-		asf_err(" NO Parent Qdisc Exists on dev %s\n",
+		tbf_priv = (struct  asf_prio_sched_data *)
+				kzalloc(sizeof(struct  asf_prio_sched_data),
+				GFP_KERNEL);
+		if (NULL == tbf_priv) {
+			asf_err("OHHHH   NO Memory for TBF PRIV\n");
+			kfree(root);
+			return ASFQOS_FAILURE;
+		}
+
+		tbf_priv->bands = 1;
+		/* Using only 1 queue but must initialize all to
+		avoid any run time issues */
+		for (i = 0; i < ASF_PRIO_MAX; i++) {
+			tbf_priv->q[i].head = NULL;
+			tbf_priv->q[i].tail = NULL;
+			tbf_priv->q[i].queue_size = 0;
+			tbf_priv->q[i].max_queue_size = queue_len;
+			tbf_priv->q[i].shaper = NULL;
+			spin_lock_init(&(tbf_priv->q[i].lock));
+		}
+		root->priv = tbf_priv;
+		/* Configure De-queue NAPI */
+		netif_napi_add(qdisc->dev, &(root->qos_napi),
+					prio_tx_napi, qos_budget);
+		napi_enable(&(root->qos_napi));
+		setup_timer(&root->timer, timer_handler,
+					(unsigned long)root);
+	} else {
+		root = qdisc->dev->asf_qdisc;
+		if (!root) {
+			asf_err(" NO Parent Qdisc Exists on dev %s\n",
 							qdisc->dev->name);
-		return ASFQOS_FAILURE;
+			return ASFQOS_FAILURE;
+		}
 	}
 
 	asf_debug("Parent found with handle 0x%X " "on dev %s\n",
-				prio_root->handle, prio_root->dev->name);
+				root->handle, root->dev->name);
 
 	/* Allocate Shaper instance */
 	shaper = (struct asf_tbf_data *)
 			kzalloc(sizeof(struct  asf_tbf_data), GFP_KERNEL);
 	if (!shaper) {
 		asf_err("OHHHH:  NO Memory!!\n");
+		if (qdisc->parent == ROOT_ID)
+			kfree(root);
+
 		return ASFQOS_FAILURE;
 	}
 	/* RATE Per Jiffy */
 	shaper->b_depth = qdisc->u.tbf.rate; /* in Bytes */
 	shaper->buffer = qdisc->u.tbf.rate / HZ; /* in Bytes */
 
-	asf_debug("MTU  %d \n", prio_root->dev->mtu);
+	asf_debug("MTU  %d \n", root->dev->mtu);
 	/* Need to handle dynamic MTU change */
-	if (shaper->buffer < prio_root->dev->mtu) {
+	if (shaper->buffer < root->dev->mtu) {
 		int num;
 
-		num = (prio_root->dev->mtu/shaper->buffer - 1);
+		num = (root->dev->mtu/shaper->buffer - 1);
 		if (num)
-			shaper->buffer = prio_root->dev->mtu;
+			shaper->buffer = root->dev->mtu;
 
 		shaper->jiffies_to_wait = num;
 
@@ -659,12 +789,37 @@ static int qos_add_shaper(ASF_uint32_t  ulVsgId,
 	shaper->l_j = jiffies;
 
 
-	switch (prio_root->qdisc_type) {
+	switch (root->qdisc_type) {
+	case ASF_QDISC_TBF:
+	{
+		if (root->pShaper) {
+			asf_err("Shaper already attached.\n");
+			kfree(shaper);
+			return ASFQOS_FAILURE;
+		} else
+			root->pShaper = shaper;
+		/* This qdisc will be deleted when actual
+		scheduler will be attched */
+		root->dev->asf_qdisc = root;
+
+		for (i = 0; i < ASF_MAX_IFACES; i++) {
+			if (qdisc_in_use[i] == NULL) {
+				spin_lock(&cnt_lock);
+				qdisc_in_use[i] = root;
+				qdisc_cnt++;
+				spin_unlock(&cnt_lock);
+				break;
+			}
+		}
+	}
+	break;
+	case ASF_QDISC_PRIO_DRR:
+	case ASF_QDISC_DRR:
 	case ASF_QDISC_PRIO:
 	{
 		struct  asf_prio_sched_data *priv;
 
-		priv = (struct  asf_prio_sched_data *) prio_root->priv;
+		priv = (struct  asf_prio_sched_data *) root->priv;
 		/* Find out the Queue, to which shaper need to apply */
 		i = qdisc->parent & MINOR_ID;
 		if (i > priv->bands) {
@@ -687,22 +842,11 @@ static int qos_add_shaper(ASF_uint32_t  ulVsgId,
 
 	}
 	break;
-	case ASF_QDISC_PRIO_DRR:
-	{
-		struct  asf_prio_drr_sched_data *priv;
-
-		priv = (struct  asf_prio_drr_sched_data *) prio_root->priv;
-		if (priv->pShaper) {
-			asf_err("Shaper already attached.\n");
-			kfree(shaper);
-			return ASFQOS_FAILURE;
-		} else
-			priv->pShaper = shaper;
-	}
-	break;
 	default:
 		asf_err("OHHHH, Unsupported Parent Qdisc\n");
 		kfree(shaper);
+		if (qdisc->parent == ROOT_ID)
+			kfree(root);
 		return ASFQOS_FAILURE;
 	}
 
@@ -717,7 +861,7 @@ static int qos_del_qdisc(ASF_uint32_t  ulVsgId,
 			ASFQOSDeleteQdisc_t *qdisc)
 {
 	struct  asf_qdisc *root;
-	uint32_t	i;
+	uint32_t i;
 	int	bLockFlag;
 
 	root = qdisc->dev->asf_qdisc;
@@ -726,39 +870,86 @@ static int qos_del_qdisc(ASF_uint32_t  ulVsgId,
 		return ASFQOS_FAILURE;
 	}
 
+	if (qdisc->qdisc_type != ASF_QDISC_TBF) {
+		asf_err("Unsupported Qdisc Delete Command.\n");
+		return ASFQOS_SUCCESS;
+	}
 	ASF_RCU_READ_LOCK(bLockFlag);
-	switch (root->qdisc_type) {
-	case ASF_QDISC_PRIO:
-	{
-		struct  asf_prio_sched_data *root_priv;
-		/* Find out the Queue, to which shaper need to apply */
-		i = qdisc->parent & MINOR_ID;
-		i--; /* Index value */
+	/* If root Qdisc is TBF then simply delete Shaper */
+	if (root->qdisc_type == ASF_QDISC_TBF) {
+		root->dev->asf_qdisc = NULL;
+		kfree(root->priv);
+		del_timer(&(root->timer));
+		/* NAPI */
+		napi_disable(&(root->qos_napi));
+		netif_napi_del(&(root->qos_napi));
 
-		/* Deleting Per Queue Shaper */
-		root_priv = root->priv;
-		if (root_priv->q[i].shaper) {
-			kfree(root_priv->q[i].shaper);
-			root_priv->q[i].shaper =  NULL;
+		if (root->pShaper)
+			kfree(root->pShaper);
+		for (i = 0; i < ASF_MAX_IFACES; i++) {
+			if (qdisc_in_use[i] == root) {
+				spin_lock(&cnt_lock);
+				qdisc_in_use[i] = NULL;
+				qdisc_cnt--;
+				spin_unlock(&cnt_lock);
+				asf_debug("Deleted Qdisc at index %d, qdisc_cnt %d\n",
+					i, qdisc_cnt);
+				break;
+			}
 		}
+		kfree(root);
+	} else {
+		/* If Root is not TBF , it means we have
+		configured any SCHEDULER over SHAPER */
+		if (qdisc->parent != ROOT_ID) {
+			/* Should be Queue Level Shaper */
+			switch (root->qdisc_type) {
+			case ASF_QDISC_PRIO:
+			case ASF_QDISC_PRIO_DRR:
+			case ASF_QDISC_DRR:
+			{
+				struct  asf_prio_sched_data *root_priv;
+				/* Find out the Queue, to which shaper need to apply */
+				i = qdisc->parent & MINOR_ID;
+				i--; /* Index value */
 
-	}
-	break;
-	case ASF_QDISC_PRIO_DRR:
-	{
-		struct  asf_prio_drr_sched_data *root_priv;
+				/* Deleting Per Queue Shaper */
+				root_priv = root->priv;
+				if (root_priv->q[i].shaper) {
+					root_priv->q[i].shaper =  NULL;
+					kfree(root_priv->q[i].shaper);
+				}
 
-		root_priv = root->priv;
-		if (root_priv->pShaper) {
-			kfree(root_priv->pShaper);
-			root_priv->pShaper = NULL;
+			}
+			break;
+			default:
+				asf_err("Ohh.., Unsupported Parent Qdisc\n");
+			}
+
+			ASF_RCU_READ_UNLOCK(bLockFlag);
+			return ASFQOS_SUCCESS;
 		}
+		/* ELSE Request for Deleting Root TBF Shaper */
+		/* Delete Inactive Shaper Qdisc */
+		for (i = 0; i < ASF_MAX_IFACES; i++) {
+			struct  asf_qdisc *x = qdisc_in_use[i];
+			if (!x)
+				continue;
+			if ((x->handle == qdisc->handle) &&
+					(x->dev == qdisc->dev)) {
+				spin_lock(&cnt_lock);
+				qdisc_in_use[i] = NULL;
+				qdisc_cnt--;
+				spin_unlock(&cnt_lock);
+				asf_debug("Deleted Qdisc at index %d, qdisc_cnt %d\n",
+					i, qdisc_cnt);
+				kfree(x);
+				break;
+			}
+		}
+		/* Now delete Child Qdisc */
+		qos_flush_qdisc(ulVsgId, qdisc);
 	}
-	break;
-	default:
-		asf_err("Ohh.., Unsupported Parent Qdisc\n");
-	}
-
 	ASF_RCU_READ_UNLOCK(bLockFlag);
 	return ASFQOS_SUCCESS;
 }
@@ -772,10 +963,6 @@ static int qos_flush_qdisc(ASF_uint32_t  ulVsgId,
 	int	i;
 	int	bLockFlag;
 
-	if (qdisc->parent != ROOT_ID) {
-		asf_err("Qdisc is not ROOT, cann't flush\n");
-		return ASFQOS_FAILURE;
-	}
 	/* Root Qdisc  */
 	root = qdisc->dev->asf_qdisc;
 	if (!root) {
@@ -789,6 +976,8 @@ static int qos_flush_qdisc(ASF_uint32_t  ulVsgId,
 
 	/* Destroying Shaper */
 	switch (root->qdisc_type) {
+	case ASF_QDISC_PRIO_DRR:
+	case ASF_QDISC_DRR:
 	case ASF_QDISC_PRIO:
 	{
 		struct  asf_prio_sched_data *root_priv;
@@ -801,22 +990,12 @@ static int qos_flush_qdisc(ASF_uint32_t  ulVsgId,
 
 	}
 	break;
-	case ASF_QDISC_PRIO_DRR:
-	{
-		struct  asf_prio_drr_sched_data *root_priv;
-
-		root_priv = root->priv;
-		if (root_priv->pShaper)
-			kfree(root_priv->pShaper);
-	}
-	break;
 	default:
 		asf_err("Ohh.., Unsupported Parent Qdisc\n");
 	}
 
 	kfree(root->priv);
 	del_timer(&(root->timer));
-
 	/* NAPI */
 	napi_disable(&(root->qos_napi));
 	netif_napi_del(&(root->qos_napi));
@@ -829,6 +1008,21 @@ static int qos_flush_qdisc(ASF_uint32_t  ulVsgId,
 			spin_unlock(&cnt_lock);
 			asf_debug("Deleted Qdisc at index %d, qdisc_cnt %d\n",
 					i, qdisc_cnt);
+			break;
+		}
+	}
+	/* IF Port Shaper exists, Set it as Root Qdisc */
+	for (i = 0; i < ASF_MAX_IFACES; i++) {
+		struct  asf_qdisc *x = qdisc_in_use[i];
+		if (x && (x->dev == qdisc->dev)) {
+			/* Configure De-queue NAPI */
+			netif_napi_add(x->dev, &(x->qos_napi),
+					prio_tx_napi, qos_budget);
+			napi_enable(&(x->qos_napi));
+
+			setup_timer(&x->timer, timer_handler,
+					(unsigned long)x);
+			qdisc->dev->asf_qdisc = x;
 			break;
 		}
 	}
@@ -887,11 +1081,60 @@ ASF_uint32_t ASFQOSRuntime(
 			asf_debug("Creating TBF QDISC\n");
 			iResult = qos_add_shaper(ulVsgId, qdisc);
 		break;
+		case ASF_QDISC_DRR:
+		case ASF_QDISC_PRIO_DRR:
+		{
+			struct  asf_qdisc *root;
+			struct  asf_prio_drr_sched_data *drr_priv;
+			int	i;
 
-		default:
-			asf_err("INVALID QDISC CREATE CMD\n");
+			root = qdisc->dev->asf_qdisc;
+
+			if (qdisc->parent != root->handle) {
+				asf_err("INVALID Parent[0x%X] for class[0x%X]\n",
+						qdisc->parent, qdisc->handle);
+				return ASFQOS_FAILURE;
+			}
+			/* initialize Tx Queus for each DRR class */
+			drr_priv =
+				(struct  asf_prio_drr_sched_data *)root->priv;
+
+			if ((drr_priv->bands + 1) > ASF_PRIO_MAX) {
+				asf_err("AT MAX [%d] DRR Classes allowed\n",
+								ASF_PRIO_MAX);
+				return ASFQOS_FAILURE;
+			}
+			i = drr_priv->bands;
+			drr_priv->q[i].quantum = qdisc->u.drr.quantum;
+			drr_priv->q[i].deficit = drr_priv->q[i].quantum;
+			drr_priv->q[i].classid = qdisc->handle;
+			if (drr_priv->q[i].quantum == 0) {
+				if ((i > 0) &&
+					(drr_priv->q[i - 1].quantum != 0)) {
+					asf_err("ERROR: All PRIO Queues"
+						" must be contiguous\n");
+					return ASFQOS_FAILURE;
+				}
+				drr_priv->num_prio_bands++;
+			}
+
+			asf_debug("CPU [%d]:ASF PRIO-DRR: Q[%d] quantum =%d\n",
+					smp_processor_id(), i,
+					drr_priv->q[i].quantum);
+			drr_priv->max_drr_idx = drr_priv->bands;
+			/* First DRR Queue index = Max Prio Queue idx + 1 =
+						num of prio queues */
+			drr_priv->last_drr_inuse = drr_priv->num_prio_bands;
+			drr_priv->bands++;
+
+			asf_debug("ASF PRIO_bands[%d] DRR_bands: [%d]\n",
+					drr_priv->num_prio_bands,
+					drr_priv->bands);
 		}
-
+		break;
+		default:
+			asf_err("INVALID QDISC ADD CMD\n");
+		}
 	}
 	break;
 
@@ -952,6 +1195,7 @@ ASF_int32_t ASFQOSQueryQueueStats(ASF_uint32_t ulVsgId,
 	}
 	break;
 	case ASF_QDISC_PRIO_DRR:
+	case ASF_QDISC_DRR:
 	{
 		struct  asf_prio_drr_sched_data *prio_drr_priv;
 
@@ -1026,28 +1270,34 @@ ASF_int32_t ASFQOSQueryConfig(ASF_uint32_t ulVsgId,
 	}
 	break;
 	case ASF_QDISC_PRIO_DRR:
+	case ASF_QDISC_DRR:
 	{
 		struct  asf_prio_drr_sched_data *priv;
 
 		priv = qdisc->priv;
-
 		p->bands = priv->bands;
 		for (i = 0; i < priv->bands; i++) {
-			p->b_queue_shaper[i] = 0;
 			p->quantum[i] = priv->q[i].quantum;
+			if (priv->q[i].shaper) {
+				p->b_queue_shaper[i] = 1;
+				p->qShaper_rate[i] =
+					priv->q[i].shaper->b_depth * 8;
+			} else
+				p->b_queue_shaper[i] = 0;
 		}
 
-		if (priv->pShaper) {
-			p->b_port_shaper = 1;
-			p->pShaper_rate = priv->pShaper->b_depth * 8;
-		} else
-			p->b_port_shaper = 0;
 	}
 	break;
 	default:
 		asf_err("OHHHH, INVALID Scheduler Qdisc Type\n");
 		return ASFQOS_FAILURE;
+
 	}
+	if (qdisc->pShaper) {
+		p->b_port_shaper = 1;
+		p->pShaper_rate = qdisc->pShaper->b_depth * 8;
+	} else
+		p->b_port_shaper = 0;
 
 	return ASFQOS_SUCCESS;
 }
@@ -1057,6 +1307,12 @@ EXPORT_SYMBOL(ASFQOSQueryConfig);
 
 static int process_lnx_pkt(struct sk_buff *skb)
 {
+	u32	tc_filter_res = 1;
+
+	/* If recevied DUMMY L2-blob packet, do not handle it */
+	if (asfctrl_skb_is_dummy(skb))
+		return ASF_FAILURE;
+
 	/* Check if Callback to set skb Queue Mapping */
 	if (pSkbMarkfn)
 		skb->queue_mapping = pSkbMarkfn((void *)skb);
@@ -1065,7 +1321,7 @@ static int process_lnx_pkt(struct sk_buff *skb)
 		skb->queue_mapping = non_asf_priority;
 
 	/* Apply QoS */
-	asf_qos_handling(skb);
+	asf_qos_handling(skb, &tc_filter_res);
 	return ASF_SUCCESS;
 }
 
@@ -1111,7 +1367,7 @@ static void __exit asf_qos_exit(void)
 	struct asf_qdisc *root;
 	int bLockFlag;
 
-	asf_qos_fn_unregister();
+	asf_qos_fn_register(NULL);
 	asfqos_sysfs_exit();
 
 	ASF_RCU_READ_LOCK(bLockFlag);
@@ -1126,7 +1382,9 @@ static void __exit asf_qos_exit(void)
 			del_timer(&(root->timer));
 
 			switch (root->qdisc_type) {
+			case ASF_QDISC_PRIO_DRR:
 			case ASF_QDISC_PRIO:
+			case ASF_QDISC_DRR:
 			{
 				struct  asf_prio_sched_data *root_priv;
 
@@ -1138,18 +1396,14 @@ static void __exit asf_qos_exit(void)
 
 			}
 			break;
-			case ASF_QDISC_PRIO_DRR:
-			{
-				struct  asf_prio_drr_sched_data *root_priv;
-
-				root_priv = root->priv;
-				if (root_priv->pShaper)
-					kfree(root_priv->pShaper);
-			}
+			case ASF_QDISC_TBF:
 			break;
 			default:
 				asf_warn("Ohh.., Unsupported Parent Qdisc\n");
 			}
+
+			if (root->pShaper)
+				kfree(root->pShaper);
 
 			kfree(root->priv);
 			kfree(root);

@@ -129,7 +129,7 @@ static void print_stats(struct net_device *dev)
 
 	/* Print stats */
 	pr_info("\nQoS Stats for Dev %s ::\n", dev->name);
-	for (i = 0; i < ASF_PRIO_MAX; i++) {
+	for (i = 0; i < priv->bands; i++) {
 		pr_info("QUEUE [%d] :-->\n", i);
 		pr_info("nEnqueuePkts = %-10u  DequeuePkts = %-10u "
 		"DroppedPkts = %-10u TxErrorPkts = %-10u\n\n",
@@ -208,9 +208,6 @@ static ssize_t get_config_show(struct kobject *kobj,
 				pr_info("Shaper Rate for Q[%d] is"
 					" %d Kbps\n", i,
 					info.qShaper_rate[i]/1000);
-			else
-				pr_info("Shaper Not configured"
-							" for Q[%d]\n", i);
 		}
 	} else {
 		pr_info("Scheduler type =	%s\n", "PRIO_DRR");
@@ -221,14 +218,20 @@ static ssize_t get_config_show(struct kobject *kobj,
 		for (i = 0; i < info.bands; i++)
 			pr_info("Quantum(Q[%d])  =	%d\n", i,
 							info.quantum[i]);
-
 		pr_info("------------------------------------\n");
-		if (info.b_port_shaper)
-			pr_info("Port Shaper Rate is"
-					" %d Kbps\n", info.pShaper_rate/1000);
-		else
-			pr_info("Port Shaper Not configured\n");
+		for (i = 0; i < info.bands; i++) {
+			if (info.b_queue_shaper[i])
+				pr_info("Shaper Rate for Q[%d] is"
+					" %d Kbps\n", i,
+					info.qShaper_rate[i]/1000);
+		}
 	}
+	pr_info("------------------------------------\n");
+	if (info.b_port_shaper)
+		pr_info("Port Shaper Rate is"
+				" %d Kbps\n", info.pShaper_rate/1000);
+	else
+		pr_info("Port Shaper Not configured\n");
 #endif
 	pr_info("------------------------------------\n");
 	return 0;
