@@ -117,6 +117,9 @@ extern unsigned long asf_reasm_num_cbs;
 #ifdef ASF_IPV6_FP_SUPPORT
 extern unsigned long asf_ipv6_reasm_hash_list_size;
 extern unsigned long asf_ipv6_reasm_num_cbs;
+extern int ffp_ipv6_max_flows;
+extern int ffp_ipv6_hash_buckets;
+
 #endif
 
 module_param(asf_enable, bool, 0644);
@@ -144,6 +147,11 @@ MODULE_PARM_DESC(asf_reasm_num_cbs,
 module_param(asf_ipv6_reasm_num_cbs, ulong, 0444);
 MODULE_PARM_DESC(asf_reasm_num_cbs,
 				"Maximum number of IPv6 Reassembly context blocks per VSG");
+module_param(ffp_ipv6_max_flows, int, 0444);
+MODULE_PARM_DESC(ffp_ipv6_max_flows, "Maximum number of FFP IPv6 flows");
+module_param(ffp_ipv6_hash_buckets, int, 0444);
+MODULE_PARM_DESC(ffp_ipv6_hash_buckets,
+			"Number of hash buckets in FFP IPv6 flow hash table");
 #endif
 
 #define ASF_DO_INC_CHECKSUM

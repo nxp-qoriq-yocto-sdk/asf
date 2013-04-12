@@ -37,15 +37,9 @@
 #include "asfipv6pvt.h"
 
 #define ASF_DO_INC_CHECKSUM
-/* Initilization Parameters */
+
 int ffp_ipv6_max_flows = ASF_FFP_IPV6_MAX_FLOWS;
 int ffp_ipv6_hash_buckets = ASF_FFP_IPV6_MAX_HASH_BKT;
-
-module_param(ffp_ipv6_max_flows, int, 0444);
-MODULE_PARM_DESC(ffp_ipv6_max_flows, "Maximum number of FFP IPv6 flows");
-module_param(ffp_ipv6_hash_buckets, int, 0444);
-MODULE_PARM_DESC(ffp_ipv6_hash_buckets,
-			"Number of hash buckets in FFP IPv6 flow hash table");
 
 ptrIArry_tbl_t ffp_ipv6_ptrary;
 ffp_bucket_t *ffp_ipv6_flow_table;
