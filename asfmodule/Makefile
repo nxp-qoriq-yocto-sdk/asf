@@ -36,14 +36,19 @@ full :
 	mkdir -p bin
 	mkdir -p bin/full
 	make -w -C asfffp -f Makefile
-	make -w -C asfffp -f Makefile
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile
+endif
+ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
+	make -w -C asfqos -f Makefile
 endif
 	make -w -C asfctrl -f Makefile
 
 	cp asfffp/driver/asf.ko asfctrl/linux/ffp/asfctrl.ko bin/full
 	cp asfipsec/driver/asfipsec.ko asfctrl/linux/ipsec/asfctrl_ipsec.ko bin/full
+ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
+	cp asfqos/driver/asfqos.ko asfctrl/linux/qos/asfctrl_qos.ko bin/full 2>/dev/null
+endif
 
 #--------------------------------------------------------------
 .PHONY: clean
@@ -51,6 +56,9 @@ clean:
 	make -w -C asfffp -f Makefile clean
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile clean
+endif
+ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
+	make -w -C asfqos -f Makefile clean
 endif
 	make -w -C asfctrl -f Makefile clean
 	rm -rf bin

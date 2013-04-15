@@ -500,6 +500,27 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		cmd.u.fwConfigIdentity.ulConfigMagicNumber =
 				asfctrl_vsg_config_id;
 
+#ifdef ASF_INGRESS_MARKER
+		if (pASFCbFnQosMarker_p) {
+			if (bIPv6)
+				cmd.mkinfo.uciDscp = pASFCbFnQosMarker_p(
+						cmd.tuple.ipv6SrcIp,
+						cmd.tuple.ipv6DestIp,
+						cmd.tuple.usSrcPort,
+						cmd.tuple.usDestPort,
+						cmd.tuple.ucProtocol,
+						bIPv6);
+			else
+				cmd.mkinfo.uciDscp = pASFCbFnQosMarker_p(
+						&cmd.tuple.ulSrcIp,
+						&cmd.tuple.ulDestIp,
+						cmd.tuple.usSrcPort,
+						cmd.tuple.usDestPort,
+						cmd.tuple.ucProtocol,
+						bIPv6);
+		} else
+			cmd.mkinfo.uciDscp = ASF_QM_NULL_DSCP;
+#endif
 		if (ASFFFPRuntime(ASF_DEF_VSG,
 			ASF_FFP_MODIFY_FLOWS,
 			&cmd, sizeof(cmd), NULL, 0) ==
@@ -896,10 +917,53 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 	cmd.flow1.tuple.usDestPort = orig_dport;
 	cmd.flow1.tuple.usSrcPort = orig_sport;
+#ifdef ASF_INGRESS_MARKER
+	if (pASFCbFnQosMarker_p) {
+		if (pf_ipv6)
+			cmd.flow1.mkinfo.uciDscp = pASFCbFnQosMarker_p(
+					cmd.flow1.tuple.ipv6SrcIp,
+					cmd.flow1.tuple.ipv6DestIp,
+							orig_sport,
+							orig_dport,
+							orig_prot,
+							pf_ipv6);
+		else
+			cmd.flow1.mkinfo.uciDscp = pASFCbFnQosMarker_p(
+							&orig_sip,
+							&orig_dip,
+							orig_sport,
+							orig_dport,
+							orig_prot,
+							pf_ipv6);
+	} else
+		cmd.flow1.mkinfo.uciDscp = ASF_QM_NULL_DSCP;
+#endif
 
 	/* Fill command for flow 2 */
 	cmd.flow2.tuple.ucProtocol = reply_prot;
 	cmd.flow2.tuple.ucProtocol = reply_prot;
+#ifdef ASF_INGRESS_MARKER
+	if (pASFCbFnQosMarker_p) {
+		if (pf_ipv6)
+			cmd.flow2.mkinfo.uciDscp = pASFCbFnQosMarker_p(
+					cmd.flow2.tuple.ipv6SrcIp,
+					cmd.flow2.tuple.ipv6DestIp,
+							orig_sport,
+							orig_dport,
+							orig_prot,
+							pf_ipv6);
+		else
+			cmd.flow2.mkinfo.uciDscp = pASFCbFnQosMarker_p(
+							&orig_sip,
+							&orig_dip,
+							orig_sport,
+							orig_dport,
+							orig_prot,
+							pf_ipv6);
+	} else
+		cmd.flow2.mkinfo.uciDscp = ASF_QM_NULL_DSCP;
+#endif
+
 
 	if (pf_ipv6 == true) {
 		ipv6_addr_copy((struct in6_addr *)&(cmd.flow2.tuple.ipv6SrcIp), (struct in6_addr *)&ip6_reply_sip);

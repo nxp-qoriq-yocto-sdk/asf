@@ -121,7 +121,13 @@ extern int ffp_ipv6_max_flows;
 extern int ffp_ipv6_hash_buckets;
 
 #endif
+#ifdef ASF_QOS
+int asf_qos_enable;
+EXPORT_SYMBOL(asf_qos_enable);
 
+module_param(asf_qos_enable, bool, 0644);
+MODULE_PARM_DESC(asf_qos_enable, "Enable or disable ASF QoS Functionality");
+#endif
 module_param(asf_enable, bool, 0644);
 MODULE_PARM_DESC(asf_enable, "Enable or disable ASF upon loading");
 module_param(ffp_max_flows, int, 0444);
@@ -257,6 +263,21 @@ ASFFFPGlobalStats_t *get_asf_gstats() /* per cpu global stats */
 	return asf_gstats;
 }
 EXPORT_SYMBOL(get_asf_gstats);
+
+#ifdef ASF_INGRESS_MARKER
+pASFCbFnQosMarker_f pASFCbFnQosMarker_p;
+EXPORT_SYMBOL(pASFCbFnQosMarker_p);
+pASFQOSCbFnSkbMark_f	pSkbMarkfn;
+EXPORT_SYMBOL(pSkbMarkfn);
+
+ASF_void_t ASFRegisterQosMarkerFn(pASFCbFnQosMarker_f pFn1,
+						pASFQOSCbFnSkbMark_f pFn2)
+{
+	pASFCbFnQosMarker_p = pFn1;
+	pSkbMarkfn = pFn2;
+}
+EXPORT_SYMBOL(ASFRegisterQosMarkerFn);
+#endif
 
 #ifdef ASF_IPSEC_FP_SUPPORT
 ASFFFPIPSecInv4_f pFFPIPSecIn;
@@ -3136,6 +3157,16 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 		}
 
+#ifdef ASF_INGRESS_MARKER
+		if (ASF_QM_NULL_DSCP != flow->mkinfo.uciDscp) {
+		#ifdef ASF_DO_INC_CHECKSUM
+			csum_replace4(&iph->check, iph->tos,
+					flow->mkinfo.uciDscp);
+		#endif
+			iph->tos = flow->mkinfo.uciDscp;
+		}
+#endif
+
 #ifdef ASF_IPSEC_FP_SUPPORT
 		if (flow->bIPsecOut) {
 			if (pFFPIPSecOut) {
@@ -3182,7 +3213,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						iph = ip_hdr(pSkb);
 
 						pSkb->pkt_type = PACKET_FASTROUTE;
-						skb_set_queue_mapping(pSkb, 0);
+						asf_set_queue_mapping(pSkb,
+								iph->tos);
 
 						/* make following unconditional*/
 						if (flow->bVLAN)
@@ -3219,10 +3251,16 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						flow_stats->ulOutBytes += pSkb->len;
 						vstats->ulOutBytes += pSkb->len;
 #endif
+#ifdef ASF_QOS
+						/* Enqueue the packet in Linux
+						QoS framework */
+						asf_qos_handling(pSkb);
+#else
 						if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 							asf_debug("Error in transmit: Should not happen\r\n");
 							ASFSkbFree(pSkb);
 						}
+#endif
 					}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 					gstats->ulOutPkts += ulFrags;
@@ -3272,7 +3310,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			skb->pkt_type = PACKET_FASTROUTE;
-			skb_set_queue_mapping(skb, 0);
+			asf_set_queue_mapping(skb, iph->tos);
 
 			if (flow->bVLAN)
 				skb->vlan_tci = flow->tx_vlan_id;
@@ -3285,11 +3323,16 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 
 			asf_debug_l2("invoke hard_start_xmit skb-packet (blob_len %d)\n", flow->l2blob_len);
+#ifdef ASF_QOS
+			/* Enqueue the packet in Linux QoS framework */
+			asf_qos_handling(skb);
+#else
 			if (asfDevHardXmit(skb->dev, skb)) {
 				XGSTATS_INC(DevXmitErr);
 				asf_debug("Error in transmit: may happen as we don't check for gfar free desc\n");
 				ASFSkbFree(skb);
 			}
+#endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutPkts++;
 			vstats->ulOutPkts++;
@@ -4490,6 +4533,11 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 
 		memcpy(&flow2->id, &flow1->other_id, sizeof(ASFFFPFlowId_t));
 		memcpy(&flow2->other_id, &flow1->id, sizeof(ASFFFPFlowId_t));
+#ifdef ASF_INGRESS_MARKER
+		/* Copying DSCP Mark info */
+		flow1->mkinfo.uciDscp = p->flow1.mkinfo.uciDscp;
+		flow2->mkinfo.uciDscp = p->flow2.mkinfo.uciDscp;
+#endif
 
 #ifdef ASF_IPV6_FP_SUPPORT
 		if (bIPv6_flow1 == true) {
@@ -4829,6 +4877,10 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 			return ASFFFP_RESPONSE_SUCCESS;
 		} else if (p->bFFPConfigIdentityUpdate) {
 			memcpy(&flow->configIdentity, &p->u.fwConfigIdentity, sizeof(flow->configIdentity));
+#ifdef ASF_INGRESS_MARKER
+			/* Copying DSCP Mark info */
+			flow->mkinfo.uciDscp = p->mkinfo.uciDscp;
+#endif
 			flow->bDrop = p->bDrop;
 			if (flow->bDrop) {
 				if (flow->pL2blobTmr) {
@@ -5384,6 +5436,48 @@ static void asf_ffp_destroy_flow_table()
 	synchronize_rcu();
 }
 
+#ifdef ASF_QOS
+static inline void direct_xmit(struct sk_buff *skb)
+{
+#ifndef ASF_HW_SCH
+	/* Reset the SKB Queue mapping, which is already
+	set as per DSCP value */
+	skb->queue_mapping = 0;
+#endif
+	if (asfDevHardXmit(skb->dev, skb) != 0) {
+		asf_warn("Error in Xmit: may happen\r\n");
+		ASFSkbFree(skb);
+	}
+}
+
+inline void asf_qos_handling(struct sk_buff *skb)
+{
+	if (asf_qos_enable) {
+#ifdef ASF_TC_QOS
+		if (dev_queue_xmit(skb) != 0) {
+			asf_warn("Error in Xmit: may happen\r\n");
+			ASFSkbFree(skb);
+		}
+
+#else /* ASF_EGRESS_QOS */
+#ifndef CONFIG_DPA
+		struct  asf_qdisc *root =
+			((struct net_device *)skb->dev)->asf_qdisc;
+
+		if (root) {
+			root->enqueue(skb, root);
+			/* Now dequeue the packets */
+			root->dequeue(root);
+
+		} else
+#endif
+			direct_xmit(skb);
+#endif
+	} else
+		direct_xmit(skb);
+}
+EXPORT_SYMBOL(asf_qos_handling);
+#endif
 
 void asfDestroyNetDevEntries(void)
 {

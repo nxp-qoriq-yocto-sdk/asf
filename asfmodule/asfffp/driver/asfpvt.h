@@ -229,6 +229,9 @@ typedef struct ffp_flow_s {
 	asfTmr_t		*pInacRefreshTmr;
 	ASFFFPFlowId_t	  id;
 	ASFFFPFlowId_t	  other_id;
+#ifdef ASF_INGRESS_MARKER
+	ASFMKInfo_t	mkinfo;
+#endif
 
 	/*bool bStatic;  -> 1 for Static and 0 for dynamic  */
 } ffp_flow_t;

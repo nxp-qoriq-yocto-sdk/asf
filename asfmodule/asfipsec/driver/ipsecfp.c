@@ -2109,11 +2109,19 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
 		/* FASTROUTE is required for selective recycling*/
 		skb->pkt_type = PACKET_FASTROUTE;
-#ifdef CONFIG_DPA
-		skb_set_queue_mapping(skb, smp_processor_id());
-#else
-		skb_set_queue_mapping(skb, 0);
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (iph->version == 6) {
+			struct ipv6_redef *hdr;
+
+			hdr = (struct ipv6_redef *) iph;
+			asf_set_queue_mapping(skb, hdr->tc);
+		} else
 #endif
+			asf_set_queue_mapping(skb, iph->tos);
+#ifdef ASF_QOS
+		/* Enqueue the packet in Linux QoS framework */
+		asf_qos_handling(skb);
+#else
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
 #ifndef ASF_QMAN_IPSEC
 			/*TODO: DPAA driver always consumes skb */
@@ -2121,6 +2129,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif
 			return;
 		}
+#endif
 		pIPSecPPGlobalStats->ulTotOutProcPkts++;
 	} else {
 		ASFIPSEC_DEBUG("Need to call fragmentation module ");
@@ -2187,13 +2196,17 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 
 					skb_set_tail_pointer(pOutSkb, pOutSkb->len);
 					pOutSkb->dev = pSA->odev;
-#ifdef CONFIG_DPA
-					skb_set_queue_mapping(pOutSkb,
-							smp_processor_id());
-#else
-					skb_set_queue_mapping(pOutSkb, 0);
-#endif
+#ifdef ASF_IPV6_FP_SUPPORT
+					if (iph->version == 6) {
+						struct ipv6_redef *hdr;
 
+						hdr = (struct ipv6_redef *) iph;
+						asf_set_queue_mapping(pOutSkb,
+								hdr->tc);
+					} else
+#endif
+						asf_set_queue_mapping(pOutSkb,
+								iph->tos);
 					ASFIPSEC_FPRINT("Next skb = 0x%x", pTempSkb);
 					ASFIPSEC_FPRINT("Frag : skb = 0x%x, skb->data = 0x%x, skb->dev = 0x%x, skb->len = %d*****",
 						pOutSkb, pOutSkb->data, pOutSkb->dev, pOutSkb->len);
@@ -2221,12 +2234,17 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 					ASFIPSEC_FPRINT("Fragment offset field = 0x%x", iph->frag_off);
 
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
+#ifdef ASF_QOS
+					/* Enqueue the packet For QoS */
+					asf_qos_handling(pOutSkb);
+#else
 					if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
 						ASFIPSEC_WARN("Error in transmit: Should not happen");
 #ifndef ASF_QMAN_IPSEC
 						ASFSkbFree(pOutSkb);
 #endif
 					}
+#endif
 				}
 				rcu_read_unlock();
 				return;

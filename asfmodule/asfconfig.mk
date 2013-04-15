@@ -60,6 +60,34 @@ endif
 ifeq ($(CONFIG_ASF_IPV6), y)
 EXTRA_CFLAGS += -DASF_IPV6_FP_SUPPORT
 endif
+# QOS related function.
+ifeq ($(CONFIG_ASF_QOS), y)
+EXTRA_CFLAGS += -DASF_QOS
+endif
+ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
+EXTRA_CFLAGS += -DASF_EGRESS_QOS
+endif
+ifeq ($(CONFIG_ASF_TC_QOS), y)
+EXTRA_CFLAGS += -DASF_TC_QOS
+endif
+ifeq ($(CONFIG_ASF_EGRESS_SCH), y)
+EXTRA_CFLAGS += -DASF_EGRESS_SCH
+endif
+ifeq ($(CONFIG_ASF_EGRESS_SHAPER), y)
+EXTRA_CFLAGS += -DASF_EGRESS_SHAPER
+endif
+ifeq ($(CONFIG_ASF_INGRESS_MARKER), y)
+EXTRA_CFLAGS += -DASF_INGRESS_MARKER
+endif
+ifeq ($(CONFIG_ASF_HW_SCH), y)
+EXTRA_CFLAGS += -DASF_HW_SCH
+endif
+ifeq ($(CONFIG_ASF_SCH_MWRR), y)
+EXTRA_CFLAGS += -DASF_SCH_MWRR
+endif
+ifeq ($(CONFIG_ASF_HW_SHAPER), y)
+EXTRA_CFLAGS += -DASF_HW_SHAPER
+endif
 ifeq ($(CONFIG_DPA_ETH), y)
 include $(KERNEL_PATH)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 endif

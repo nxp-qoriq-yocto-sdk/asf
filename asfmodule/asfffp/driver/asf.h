@@ -650,6 +650,96 @@ enum {
 	ASF_LOG_ID_MAX
 } ;
 
+#ifdef ASF_INGRESS_MARKER
+#define ASF_QM_NULL_DSCP 0xFF
+#define ASF_QM_NULL_QID 0xFF
+
+/*!	\addtogroup	Functions
+	\{
+*/
+/*!	\addtogroup	Callbacks
+	\{
+*/
+/*!	\brief	This callback function is invoked by ASF
+	Firewall/Termination Control Module when it's about to
+	offload a new flow and marking information for same is
+	required from marking database exists in AS.
+	This callback function will return a DSCP value.*/
+/*!	(If returned value is ASF_QM_NULL_DSCP, No marking will be
+	done on that flow).If AS is not utilizing ASF control module
+	in anyway, then this callback can be ignored.
+	\param	uiSrcIp
+	Source IP
+	\param	uiDstIp
+	Destination IP
+	\param	usSrcPort
+	Source Port
+	\param	usDstPort
+	Destination Port
+	\param	ucProto
+	Protocol
+	\return	Int ****** */
+typedef ASF_uint8_t (*pASFCbFnQosMarker_f) (ASF_uint32_t *uiSrcIp,
+					ASF_uint32_t *uiDstIp,
+					ASF_uint16_t usSrcPort,
+					ASF_uint16_t usDstPort,
+					ASF_uint8_t ucProto,
+					bool	is_ipv6);
+/* CAll back function which will be used by ASF
+to get the priority of a linux packet .
+Priority will range from 0-7, where 0 is the highest priority */
+/*! \brief	This callback function is invoked by ASF QoS, to get
+	the priority of a linux packet which is not processed by ASF.*/
+/*!	This callback function returns priority for a given packet.
+	When ASF QoS is in use, Linux TC module gets bypassed and all
+	the linux traffic also re-directed to ASF module for QoS
+	processing. But for Non-ASF / Linux traffic, ASF will need to
+	know priority of packet and for this ASF calls this callback
+	function to get the priority.
+	Packet Priority ranges from 0-7, where 0 is the highest
+	priority & 7 is the lowest.If this callback is not registered
+	by AS, ASF uses default priority for all linux traffic.This
+	default priority can be changed by assigning a value to ASF
+	QoS load time parameter "non_asf_priority".
+*/
+typedef ASF_uint8_t (*pASFQOSCbFnSkbMark_f)(void *);
+/*!	\} end Callbacks */
+/*!	\} end Functions */
+
+extern pASFCbFnQosMarker_f	pASFCbFnQosMarker_p;
+extern pASFQOSCbFnSkbMark_f	pSkbMarkfn;
+
+/*!	\addtogroup	Functions
+	\{
+*/
+/*!	\addtogroup	API
+	\{
+*/
+/*!	\brief	AS registers two callback functions that need to be
+	called when marking information is required by ASF for a
+	packet.
+	\param	pFn1
+	Callback function.
+	\param	pFn2
+	Callback Function.
+	\return	It returns nothing.
+*/
+ASF_void_t ASFRegisterQosMarkerFn(pASFCbFnQosMarker_f pFn1,
+				pASFQOSCbFnSkbMark_f pFn2);
+/*!	\} end API */
+/*!	\} end Functions */
+/*!	\brief	This data structure holds the DSCP marking
+	information relevant for a flow.*/
+typedef struct ASFMKInfo_s {
+	/*!	\brief	Inner DSCP Value */
+	ASF_uint8_t	uciDscp;
+	/*!	\brief	Outer DSCP value for future use */
+	ASF_uint8_t	ucoDscp; /* for future use */
+	/*!	\brief	For future use */
+	ASF_uint16_t	usiQid;  /* for future use */
+} ASFMKInfo_t;
+
+#endif /* MARKER */
 typedef struct ASF_IPAddr_st {
 	ASF_boolean_t bIPv4OrIPv6;
 	union {
@@ -871,6 +961,10 @@ typedef struct ASFFFPFlowInfo_s {
 		They are valid when bIpsecIn and bIpsecOut set to TRUE respectively;
 	*/
 	ASFFFPIpsecInfo_t ipsecInInfo;
+#ifdef ASF_INGRESS_MARKER
+	/*!	\brief	Required to offload DSCP Marking information */
+	ASFMKInfo_t	mkinfo;
+#endif
 
 } ASFFFPFlowInfo_t;
 
@@ -915,6 +1009,9 @@ typedef struct ASFFFPUpdateFlowParams_s {
 	/* 5 tuple to identify the flow */
 	ASFFFPFlowTuple_t       tuple;
 	ASF_uint32_t	    ulZoneId;
+#ifdef ASF_INGRESS_MARKER
+	ASFMKInfo_t	mkinfo;
+#endif
 
 	ASF_uint8_t
 	bL2blobUpdate : 1,

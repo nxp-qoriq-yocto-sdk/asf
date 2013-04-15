@@ -354,6 +354,36 @@ static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 	}
 }
 
+#ifdef ASF_EGRESS_QOS
+/* We are interested in DSCP precedence field */
+/* Get Priority and Invert */
+#define asf_set_queue_mapping(skb_p, val) \
+				(skb_p->queue_mapping = 7 - (val >> 5))
+#else
+/* Every thing to TX queue '0' only */
+#define asf_set_queue_mapping(skb_p, val)	(skb_p->queue_mapping = 0)
+#endif
+
+#ifdef ASF_QOS
+struct  asf_qdisc {
+	/*	 Frequently used	*/
+	int			(*enqueue)(struct sk_buff *skb,
+						struct  asf_qdisc *sch);
+	void			(*dequeue)(struct  asf_qdisc *);
+	void			*priv;  /* Private scheduler data will point
+					   to “asf_prio_sched_data” */
+	u8			state;
+	struct net_device	*dev;
+	struct napi_struct	qos_napi;
+	struct timer_list	timer;
+	uint32_t		handle;
+	uint8_t			qdisc_type;
+};
+
+inline void asf_qos_handling(struct sk_buff *);
+
+#endif
+
 #define UCHAR(x) ((unsigned char) (x))
 
 #define BUFGET16(cp)	\

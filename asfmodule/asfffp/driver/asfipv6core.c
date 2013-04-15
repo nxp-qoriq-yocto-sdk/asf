@@ -1116,6 +1116,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	unsigned char		nexthdr;
 	unsigned int		exthdrsize = 0;
 	unsigned int pkt_len = 0;
+#ifdef ASF_EGRESS_QOS
+	struct ipv6_redef	*hdr;
+#endif
 
 	ACCESS_XGSTATS();
 
@@ -1137,6 +1140,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	vstats->ulInPkts++;
 #endif
 	ip6h = ipv6_hdr(skb);
+#ifdef ASF_EGRESS_QOS
+	hdr = (struct ipv6_redef *)ip6h;
+#endif
 
 #ifdef ASF_DEBUG_FRAME
 	asf_print(" Pkt (%x) skb->len = %d, ip6h->payload_len = %d",
@@ -1506,6 +1512,12 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	}
 	flow->ulLastPktInAt = jiffies;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
+
+#ifdef ASF_INGRESS_MARKER
+	if (ASF_QM_NULL_DSCP != flow->mkinfo.uciDscp)
+		hdr->tc = flow->mkinfo.uciDscp;
+#endif
+
 	if (!flow->bIPsecOut &&
 		(flow->l2blob_len == 0)) {
 		asf_debug("Generating L2blob Indication as L2blob Not found!\n");
@@ -1626,7 +1638,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		ip6h = ipv6_hdr(skb);
 
 		skb->pkt_type = PACKET_FASTROUTE;
-		skb_set_queue_mapping(skb, 0);
+		asf_set_queue_mapping(skb, hdr->tc);
 
 		/* make following unconditional*/
 		if (flow->bVLAN)
@@ -1686,11 +1698,15 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		vstats->ulOutBytes += skb->len;
 #endif
 
+#ifdef ASF_QOS
+		/* Enqueue the packet in Linux QoS framework */
+		asf_qos_handling(skb);
+#else
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
-			asf_debug("Error in transmit: Should not happen\r\n");
-			printk(KERN_INFO"Error in transmit: Should not happen\r\n");
+			asf_warn("Error in transmit: Should not happen\r\n");
 			ASFSkbFree(skb);
 		}
+#endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulOutPkts++;
 		vstats->ulOutPkts++;
