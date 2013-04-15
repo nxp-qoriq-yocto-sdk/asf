@@ -30,7 +30,6 @@
 #include "asfqosapi.h"
 #include "asfqos_pvt.h"
 
-#ifndef CONFIG_DPA
 
 struct net_device *curr_if;
 
@@ -75,21 +74,13 @@ static ssize_t set_if_store(struct kobject *kobj,
 				struct kobj_attribute *attr,
 				const char *buf, size_t count)
 {
-	int val;
 	char str[10];
 
-	sscanf(buf, "%d", &val);
-	if (val > 1) {
-		pr_info("Interface [%d] is INVALID... Please enter"
-					" a value	0 for ETH0\n "
-					"		1 for ETH1\n", val);
-		return -EINVAL;
-	}
-	sprintf(str, "eth%d", val);
+	sscanf(buf, "%s", &str[0]);
 
 	curr_if = dev_get_by_name(&init_net, (const char *)str);
 	if (curr_if == NULL) {
-		pr_err("OHHH Device ETH%d not found\n", val);
+		pr_err("OHHH Device %s not found\n", str);
 		return -EINVAL;
 	}
 	pr_info("\nQuery cmd will be executed for"
@@ -99,9 +90,13 @@ static ssize_t set_if_store(struct kobject *kobj,
 
 static void print_stats(struct net_device *dev)
 {
-	struct  asf_prio_sched_data *priv = NULL;
 	struct  asf_qdisc	*root = NULL;
-	int i;
+	int	i;
+#ifdef CONFIG_DPA
+	int	j;
+#else
+	struct  asf_prio_sched_data *priv = NULL;
+#endif
 
 	root = dev->asf_qdisc;
 
@@ -110,6 +105,26 @@ static void print_stats(struct net_device *dev)
 							dev->name);
 		return;
 	}
+#ifdef CONFIG_DPA
+	/* Print stats */
+	pr_info("\nQoS Stats for Dev %s ::\n", dev->name);
+	for (i = 0; i < DPA_MAX_PRIO_QUEUES; i++) {
+		struct asf_qos_fq *asf_fq = NULL;
+		int ulEnqueuePkts = 0, ulDroppedPkts = 0;
+
+		for (j = 0; j < 8; j++) {
+			asf_fq = root->asf_fq[i][j];
+			if (!asf_fq)
+				return;
+
+			ulEnqueuePkts += asf_fq->ulEnqueuePkts;
+			ulDroppedPkts += asf_fq->ulDroppedPkts;
+		}
+		pr_info("WQ [%d] :-->\n", i);
+		pr_info("nEnqueuePkts = %-10u  DroppedPkts = %-10u\n\n",
+			ulEnqueuePkts, ulDroppedPkts);
+	}
+#else
 	priv = (struct  asf_prio_sched_data *) root->priv;
 
 	/* Print stats */
@@ -123,6 +138,7 @@ static void print_stats(struct net_device *dev)
 			priv->q[i].ulDroppedPkts,
 			priv->q[i].ulTxErrorPkts);
 	}
+#endif
 }
 
 static ssize_t qos_stats_show(struct kobject *kobj,
@@ -157,6 +173,28 @@ static ssize_t get_config_show(struct kobject *kobj,
 	}
 
 	pr_info("------------------------------------\n");
+#ifdef CONFIG_DPA
+	if (info.sch_type == ASF_QDISC_PRIO) {
+		pr_info("Scheduler type =	%s\n", "STRICT_PRIORITY");
+	} else if (info.sch_type == ASF_QDISC_DRR) {
+		pr_info("Scheduler type =	%s\n", "DRR");
+		for (i = 0; i < ASF_PRIO_MAX; i++)
+			pr_info("(Quantum[%d])  =	%d\n", i,
+							info.quantum[i]);
+	} else if (info.sch_type == ASF_QDISC_WRR) {
+		pr_info("Scheduler type =	%s\n", "WRR");
+		for (i = 0; i < DPA_MAX_WRR_QUEUES; i++)
+			pr_info("(weight[%d])  =	%d\n", i,
+							info.quantum[i]);
+	}
+	pr_info("Handle         =	0x%X\n", info.handle);
+	pr_info("------------------------------------\n");
+	if (info.b_port_shaper)
+		pr_info("Port Shaper Rate is"
+				" %d  Kbps\n", info.pShaper_rate);
+	else
+		pr_info("Port Shaper Not configured\n");
+#else
 	if (info.sch_type == ASF_QDISC_PRIO) {
 		pr_info("Scheduler type =	%s\n",
 							"STRICT_PRIORITY");
@@ -191,8 +229,8 @@ static ssize_t get_config_show(struct kobject *kobj,
 		else
 			pr_info("Port Shaper Not configured\n");
 	}
+#endif
 	pr_info("------------------------------------\n");
-
 	return 0;
 }
 
@@ -201,8 +239,13 @@ static ssize_t reset_stats_write(struct kobject *kobj,
 				const char *buf, size_t count)
 {
 	int val;
+#ifndef CONFIG_DPA
 	ASFQOSQueryStatsInfo_t info;
+#else
+	int	i, j;
+	struct  asf_qdisc	*root = NULL;
 
+#endif
 	if (!curr_if) {
 		pr_info("Please set the Interface First\n");
 		return -EINVAL;
@@ -210,14 +253,36 @@ static ssize_t reset_stats_write(struct kobject *kobj,
 
 	sscanf(buf, "%d", &val);
 	/* Reset stats if  value is not 0*/
-	if (0 != val) {
-		info.dev = curr_if;
-		info.b_reset = 1;
-		ASFQOSQueryQueueStats(ASF_DEF_VSG, &info);
+	if (0 == val)
+		return count;
+#ifdef CONFIG_DPA
+	root = curr_if->asf_qdisc;
+	if (!root) {
+		pr_info(" QoS not configured on dev %s\n",
+							curr_if->name);
+		return count;
 	}
+	/* Reset stats */
+	for (i = 0; i < DPA_MAX_PRIO_QUEUES; i++) {
+		struct asf_qos_fq *asf_fq = NULL;
 
+		for (j = 0; j < 8; j++) {
+			asf_fq = root->asf_fq[i][j];
+			if (!asf_fq)
+				return count;
+
+			asf_fq->ulEnqueuePkts = 0;
+			asf_fq->ulDroppedPkts = 0;
+		}
+	}
+#else
+	info.dev = curr_if;
+	info.b_reset = 1;
+	ASFQOSQueryQueueStats(ASF_DEF_VSG, &info);
+#endif
 	return count;
 }
+
 
 static struct kobj_attribute qos_enabled_attr = \
 	__ATTR(qos_enabled, 0644,
@@ -288,4 +353,3 @@ int asfqos_sysfs_exit(void)
 	kobject_put(asfqos_kobj);
 	return 0;
 }
-#endif

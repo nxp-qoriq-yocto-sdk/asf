@@ -2291,7 +2291,15 @@ ASF_void_t ASFFFPProcessAndSendFD(
 			abuf.pCsum = ((u16 *)ptrhdrOffset) + 8;
 #endif /* ASF_DO_INC_CHECKSUM */
 	}
-
+#ifdef ASF_INGRESS_MARKER
+		if (ASF_QM_NULL_DSCP != flow->mkinfo.uciDscp) {
+		#ifdef ASF_DO_INC_CHECKSUM
+			csum_replace4(&iph->check, iph->tos,
+					flow->mkinfo.uciDscp);
+		#endif
+			iph->tos = flow->mkinfo.uciDscp;
+		}
+#endif
 #ifdef ASF_IPSEC_FP_SUPPORT
 	if (flow->bIPsecOut) {
 		abuf.bbuffInDomain = ASF_TRUE;
@@ -2347,8 +2355,8 @@ ASF_void_t ASFFFPProcessAndSendFD(
 				pSkb->pkt_type = PACKET_FASTROUTE;
 				/* pSkb->asf = 1; - field not
 				   defined in p4080 bsp */
-				skb_set_queue_mapping(skb,
-						smp_processor_id());
+				asf_set_queue_mapping(pSkb,
+							iph->tos);
 				ip_decrease_ttl(iph);
 
 				pSkb->data -= flow->l2blob_len;
@@ -2395,11 +2403,16 @@ ASF_void_t ASFFFPProcessAndSendFD(
 				gstats->ulOutBytes += pSkb->len;
 				flow_stats->ulOutBytes += pSkb->len;
 				vstats->ulOutBytes += pSkb->len;
+#ifdef ASF_QOS
+				/* Enqueue the packet in Linux QoS framework */
+				asf_qos_handling(pSkb);
+#else
 				if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 					asf_debug("Error in transmit: "
 						"Should not happen\r\n");
 					asf_free_buf_skb(pSkb->dev, pSkb);
 				}
+#endif
 				bSendOut = 1;
 			}
 			gstats->ulOutPkts += ulFrags;
@@ -2493,8 +2506,12 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	asf_debug("tx on fqid %d\n",
 			priv->egress_fqs[smp_processor_id()]->fqid);
 	do {
+#ifdef ASF_QOS
+		err = asf_qos_fd_handling(tx_fd, flow->odev, iph->tos);
+#else
 		err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 								tx_fd, 0);
+#endif
 		if (err == 0)
 			break;
 		if (++retryCount == ASF_MAX_TX_RETRY_CNT) {
@@ -5460,24 +5477,40 @@ inline void asf_qos_handling(struct sk_buff *skb)
 		}
 
 #else /* ASF_EGRESS_QOS */
-#ifndef CONFIG_DPA
 		struct  asf_qdisc *root =
 			((struct net_device *)skb->dev)->asf_qdisc;
 
 		if (root) {
 			root->enqueue(skb, root);
+#ifndef CONFIG_DPA
 			/* Now dequeue the packets */
 			root->dequeue(root);
-
-		} else
 #endif
+		} else
 			direct_xmit(skb);
 #endif
 	} else
 		direct_xmit(skb);
 }
 EXPORT_SYMBOL(asf_qos_handling);
+
+#ifdef CONFIG_DPA
+inline int asf_qos_fd_handling(struct qm_fd *fd,
+				struct net_device *dev,
+				ASF_uint8_t dscp
+				)
+{
+	if (asf_qos_enable) {
+		struct  asf_qdisc *root = dev->asf_qdisc;
+
+		if (root)
+			return root->enqueue_fd(fd, root, dscp);
+	}
+	return ASF_FAILURE;
+}
+EXPORT_SYMBOL(asf_qos_fd_handling);
 #endif
+#endif /*ASF_QOS*/
 
 void asfDestroyNetDevEntries(void)
 {

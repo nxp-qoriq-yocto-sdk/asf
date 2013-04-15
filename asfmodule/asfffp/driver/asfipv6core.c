@@ -275,6 +275,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 	struct qm_fd		*tx_fd;
 	u32			data_len;
 	t_FmPrsResult *pParse = &abuf.pAnnot->parse_result;
+#ifdef ASF_EGRESS_QOS
+	struct ipv6_redef	*hdr;
+#endif
 
 	ACCESS_XGSTATS();
 	data_len = abuf.pAnnot->fd->length20;
@@ -283,6 +286,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 	vstats->ulInPkts++;
 #endif
 	ip6h = (struct ipv6hdr *)abuf.iph;
+#ifdef ASF_EGRESS_QOS
+	hdr = (struct ipv6_redef *)ip6h;
+#endif
 	abuf.pCsum = NULL;
 
 #ifdef ASF_DEBUG_FRAME
@@ -611,6 +617,11 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 	}
 	flow->ulLastPktInAt = jiffies;
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
+
+#ifdef ASF_INGRESS_MARKER
+	if (ASF_QM_NULL_DSCP != flow->mkinfo.uciDscp)
+		hdr->tc = flow->mkinfo.uciDscp;
+#endif
 	if (!flow->bIPsecOut &&
 		(flow->l2blob_len == 0)) {
 		asf_debug("Generating L2blob Indication as L2blob Not found!\n");
@@ -745,7 +756,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			skb->next = NULL;
 			ip6h = ipv6_hdr(skb);
 			skb->pkt_type = PACKET_FASTROUTE;
-			skb_set_queue_mapping(skb, smp_processor_id());
+			asf_set_queue_mapping(skb, hdr->tc);
 
 			ip6h->hop_limit--;
 
@@ -898,8 +909,12 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 		}
 
 		do {
+#ifdef ASF_QOS
+			err = asf_qos_fd_handling(tx_fd, flow->odev, hdr->tc);
+#else
 			err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 					tx_fd, 0);
+#endif
 			if (err == 0)
 				break;
 			if (++retryCount == ASF_MAX_TX_RETRY_CNT) {

@@ -13,6 +13,8 @@
  * History
  *  Version	Date         	Author		Change Description *
  *  1.0		20 JUL 2012   Sachin Saxena	Initial Version.
+ *  1.1		20 FEB 2013   Sachin Saxena	Adding support for
+ *						DPAA HW based QoS.
  *
  */
 /****************************************************************************/
@@ -34,6 +36,32 @@
 /*!	\brief	Definition for Minor Id*/
 #define MINOR_ID	0x0000FFFF
 
+/*!
+  ASF Marker DataBase rules configuration information.
+*/
+typedef enum {
+	PROTO_UDP = 17,
+	PROTO_TCP = 6,
+	PROTO_IPV4 = 4,
+	PROTO_IPV6 = 41,
+	PROTO_SCTP = 132,
+	PROTO_INVALID = 0
+} enum_proto_t;
+
+typedef struct {
+	ASF_uint32_t	src_ip[4];
+	ASF_uint32_t	dst_ip[4];
+	ASF_uint16_t	src_port;
+	ASF_uint16_t	dst_port;
+	enum_proto_t	proto;
+	ASF_uint8_t		uciDscp;
+} ASFMarkerRule_t;
+
+typedef struct {
+	ASFMarkerRule_t	*rule;
+	ASF_uint32_t	num_rules;
+} marker_db_t;
+
 /*!	\brief	Enum defining QoS Queue discipline type. */
 typedef enum {
 	/*!	\brief	Queue discipline is based on priority.*/
@@ -43,6 +71,12 @@ typedef enum {
 	ASF_QDISC_PRIO_DRR,
 	/*!	\brief	Queue discipline is token buffer filter.*/
 	ASF_QDISC_TBF,
+#ifdef CONFIG_DPA
+	/*!	\brief	Queue discipline is Deficit Round robin.*/
+	ASF_QDISC_DRR,
+	/*!	\brief	Queue discipline is Weighted Round robin.*/
+	ASF_QDISC_WRR,
+#endif
 	/*!	\brief	Maximum number of Queue disciplines for QoS.*/
 	ASF_QDISC_NUM
 } ASFQOSQdiscType_t;
@@ -85,9 +119,36 @@ typedef struct ASFQOSCreateQdisc_s {
 			/*!	\brief Number of Priority Queues.This parameter
 			is required to be set exactly as "8" when creating
 			Priority Schduler. Value less or greater than 8 is
-			not support now.*/
+			not support for NON-DPAA. For DPAA this parameter is
+			required to set "4"*/
 			ASF_uint32_t	bands;
 		} prio;
+#ifdef CONFIG_DPA
+
+#define DPA_MAX_PRIO_QUEUES	4
+#define DPA_MAX_DRR_QUEUES	8
+#define DPA_MAX_WRR_QUEUES	3
+		/*!	\brief	Structure defining fields for
+			deficit round robin QDisc*/
+		struct {
+			/*!	\brief It represents the value of Wieght given
+			to a given Queue when DRR Scheduling is
+			configured.\n
+			We need to provide quantum/weight in Number of BYTES
+			for each queue. */
+			ASF_uint32_t	quantum[DPA_MAX_DRR_QUEUES];
+		} drr;
+		/*!	\brief	Structure defining fields for
+			Weighted round robin QDisc*/
+		struct {
+			/*!	\brief It represents the value of Wieght given
+			to a given Queue when WRR Scheduling is
+			configured.\n
+			We need to provide weight in Number 0-8
+			for each queue of the 3 Queues. */
+			ASF_uint32_t	weight[DPA_MAX_WRR_QUEUES];
+		} wrr;
+#else
 		/*!	\brief	Structure defining fields for priority
 			and deficit round robin QDisc*/
 		struct {
@@ -101,11 +162,13 @@ typedef struct ASFQOSCreateQdisc_s {
 			queue will behave as PRIORITY Queue.*/
 			ASF_uint32_t	quantum[ASF_PRIO_MAX];
 		} prio_drr;
+#endif
 		/*!	\brief	Structure defining fields for token
 		buffer filter QDisc*/
 		struct {
 			/*!	\brief	It represents value of bandwidth limit.
 				Unused for Scheduler. */
+			ASF_uint16_t	maxBurst;
 			ASF_uint32_t	rate; /* in Byte/sec */
 		} tbf;
 	} u;
@@ -343,30 +406,31 @@ typedef struct ASFQOSQueryConfig_s {
 	ASFQOSQdiscType_t	sch_type;
 	/*!	\brief	ID of scheduler */
 	ASF_uint32_t		handle; /* Qdisc Own ID: */
+	/*!	\brief	Weight of each queue in BYTES,
+	IF Scheduler is PRIO-DRR, DRR or WRR */
+	ASF_uint32_t		quantum[ASF_PRIO_MAX];
+	/*!	\brief	Flag to indicate that Port shaper
+	is configured. Applicable only if scheduler
+	type is PRIO-DRR.*/
+	ASF_boolean_t		b_port_shaper;
+	/*!	\brief	Port shaper rate. Applicable only if
+	scheduler type is PRIO-DRR.*/
+	ASF_uint32_t		pShaper_rate;
+#ifndef CONFIG_DPA
 	/*!	\brief	Number of bands/queues configured
 	for the scheduling. */
 	ASF_uint32_t		bands;
 	/*!	\brief	Maximum number of packets that may wait
 	inside the each queue.*/
 	ASF_uint32_t		queue_max_size;
-	/*!	\brief	Weight of each queue in BYTES,
-	IF Scheduler is PRIO-DRR. */
-	ASF_uint32_t		quantum[ASF_PRIO_MAX];
-	/*!	\brief	Flag to indicate that Port shaper
-	is configured. Applicable only if scheduler
-	type is PRIO-DRR.*/
-	ASF_boolean_t		b_port_shaper;
 	/*!	\brief	Per Queue Flag to indicate that Queue
 	shaper is configured.Applicable only if scheduler
 	type is PRIO.*/
 	ASF_boolean_t		b_queue_shaper[ASF_PRIO_MAX];
-	/*!	\brief	Port shaper rate. Applicable only if
-	scheduler type is PRIO-DRR.*/
-	ASF_uint32_t		pShaper_rate;
 	/*!	\brief	Queue shaper rate. Applicable only if
 	scheduler type is PRIO.*/
 	ASF_uint32_t		qShaper_rate[ASF_PRIO_MAX];
-
+#endif
 } ASFQOSQueryConfig_t;
 /*!	\addtogroup	Functions
 	\{

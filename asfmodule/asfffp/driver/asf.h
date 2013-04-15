@@ -740,6 +740,13 @@ typedef struct ASFMKInfo_s {
 } ASFMKInfo_t;
 
 #endif /* MARKER */
+
+struct ipv6_redef {
+	ASF_uint32_t	version:4,
+			tc:8,
+			flow_l:20;
+};
+
 typedef struct ASF_IPAddr_st {
 	ASF_boolean_t bIPv4OrIPv6;
 	union {

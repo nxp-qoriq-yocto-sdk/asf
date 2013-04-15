@@ -75,8 +75,6 @@ MODULE_PARM_DESC(non_asf_priority, "Default Priority Level for"
 		" NON-ASF Traffic\n\t\t\tRange: 0-7, where '0' is"
 		" the Highest Priority");
 
-#ifndef CONFIG_DPA
-
 char *asf_qos_version = ASF_QOS_VERSION;
 struct asf_qdisc *qdisc_in_use[ASF_MAX_IFACES] = {NULL};
 uint8_t qdisc_cnt;
@@ -1161,4 +1159,3 @@ static void __exit asf_qos_exit(void)
 }
 module_init(asf_qos_init);
 module_exit(asf_qos_exit);
-#endif

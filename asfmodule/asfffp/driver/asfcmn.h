@@ -360,27 +360,63 @@ static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 #define asf_set_queue_mapping(skb_p, val) \
 				(skb_p->queue_mapping = 7 - (val >> 5))
 #else
-/* Every thing to TX queue '0' only */
-#define asf_set_queue_mapping(skb_p, val)	(skb_p->queue_mapping = 0)
+
+#ifdef CONFIG_DPA
+	/* Every thing to TX queue '0' only */
+	#define asf_set_queue_mapping(skb_p, val)	\
+			(skb_p->queue_mapping = smp_processor_id())
+#else
+	/* Every thing to TX queue '0' only */
+	#define asf_set_queue_mapping(skb_p, val) (skb_p->queue_mapping = 0)
+#endif
 #endif
 
 #ifdef ASF_QOS
+#ifdef CONFIG_DPA
+struct asf_qos_fq {
+	struct qman_fq		egress_fq;
+	/* Related Device structure */
+	struct net_device	*net_dev;
+	/* Queue Statistics */
+	uint32_t    ulEnqueuePkts;	/* Total number of packets received */
+	uint32_t    ulDroppedPkts;	/* Total number of packets dropped
+						due to Buffer overflow */
+	uint32_t    quantum;		/* reuired for DRR/WRR weight */
+	/** Others **/
+	spinlock_t	lock;
+};
+#endif
+
 struct  asf_qdisc {
 	/*	 Frequently used	*/
 	int			(*enqueue)(struct sk_buff *skb,
 						struct  asf_qdisc *sch);
+#ifdef CONFIG_DPA
+	int			(*enqueue_fd)(struct qm_fd *tx_fd,
+						struct  asf_qdisc *sch,
+						ASF_uint8_t dscp);
+	struct asf_qos_fq	*asf_fq[DPAA_ETH_TX_QUEUES][NR_CPUS];
+#else
 	void			(*dequeue)(struct  asf_qdisc *);
 	void			*priv;  /* Private scheduler data will point
 					   to “asf_prio_sched_data” */
-	u8			state;
-	struct net_device	*dev;
 	struct napi_struct	qos_napi;
 	struct timer_list	timer;
+#endif
 	uint32_t		handle;
+	uint32_t		parent; /* Parent ID */
+	u8			state;
+	struct net_device	*dev;
 	uint8_t			qdisc_type;
 };
 
 inline void asf_qos_handling(struct sk_buff *);
+#ifdef CONFIG_DPA
+inline int asf_qos_fd_handling(struct qm_fd *fd,
+				struct net_device *dev,
+				ASF_uint8_t dscp
+				);
+#endif
 
 #endif
 

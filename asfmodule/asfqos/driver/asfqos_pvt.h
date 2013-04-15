@@ -97,4 +97,14 @@ extern int asf_qos_enable;
 extern int asfqos_sysfs_init(void);
 extern int asfqos_sysfs_exit(void);
 
+extern void asf_set_wq_scheduling(u32 wq_class,
+			u8 cs_elev, u8 csw2, u8 csw3, u8 csw4, u8 csw5,
+			u8 csw6, u8 csw7);
+
+extern int fm_port_setRateLimit(struct fm_port *port,
+			uint16_t	maxBurstSize,
+			uint32_t	rateLimit);
+
+extern int fm_port_delRateLimit(struct fm_port *port);
+
 #endif

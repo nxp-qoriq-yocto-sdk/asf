@@ -22,7 +22,10 @@
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
 #include <linux/if_arp.h>
+#include <linux/vmalloc.h>
+#ifndef CONFIG_DPA
 #include <gianfar.h>
+#endif
 #ifdef ASFCTRL_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
@@ -50,6 +53,134 @@ MODULE_AUTHOR("Freescale Semiconductor, Inc");
  *  \ingroup	Linux_module
  */
 MODULE_DESCRIPTION(ASFCTRL_LINUX_QOS_DESC);
+
+#ifdef ASF_INGRESS_MARKER
+
+#define PORT_ANY 0xFFFF
+ASFMarkerRule_t	*marker_rule;
+unsigned int	num_rules;
+u8		dscp_default = ASF_QM_NULL_DSCP;
+
+
+/* This Function will match the input arguments with Marker databse
+   and reurns the DSCP value to be marked, if configured */
+ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
+				ASF_uint32_t	*dst_ip,
+				ASF_uint16_t	src_port,
+				ASF_uint16_t	dst_port,
+				ASF_uint8_t	proto,
+				bool		is_ipv6)
+{
+	int		i;
+	ASFMarkerRule_t	*rule;
+
+	if (!marker_rule)
+		return ASF_QM_NULL_DSCP;
+
+	ASFCTRL_INFO("I/P: src_ip[0x%X], dst_ip[0x%X], src_port[%d],"
+			" dst_port[%d], proto[%d]\n",
+			src_ip[0], dst_ip[0], src_port, dst_port, proto);
+
+	for (i = 0; i < num_rules; i++) {
+		rule = (ASFMarkerRule_t *) &marker_rule[i];
+
+		if (is_ipv6) {
+			if ((src_ip[0] == rule->src_ip[0])
+			&& (src_ip[1] == rule->src_ip[1])
+			&& (src_ip[2] == rule->src_ip[2])
+			&& (src_ip[3] == rule->src_ip[3])
+			&& (dst_ip[0] == rule->dst_ip[0])
+			&& (dst_ip[1] == rule->dst_ip[1])
+			&& (dst_ip[2] == rule->dst_ip[2])
+			&& (dst_ip[3] == rule->dst_ip[3])
+			&& ((rule->src_port == PORT_ANY) ||
+				(src_port == rule->src_port))
+			&& ((rule->dst_port == PORT_ANY) ||
+				(dst_port == rule->dst_port))
+			&& (proto == rule->proto)) {
+				ASFCTRL_INFO("Rule Matched\n");
+				/* Masking the Last 2 bits */
+				return rule->uciDscp & 0xFC;
+			}
+		} else {	/* IPv4 Rue */
+			if ((src_ip[0] == rule->src_ip[0])
+			&& (dst_ip[0] == rule->dst_ip[0])
+			&& ((rule->src_port == PORT_ANY) ||
+				(src_port == rule->src_port))
+			&& ((rule->dst_port == PORT_ANY) ||
+				(dst_port == rule->dst_port))
+			&& (proto == rule->proto)) {
+				ASFCTRL_INFO("Rule Matched\n");
+				/* Masking the Last 2 bits */
+				return rule->uciDscp & 0xFC;
+			}
+		}
+	}
+	/* Reaching here means, No match found */
+	return dscp_default;
+}
+
+ASF_uint8_t ASFMarkLnxPkt(void *buf)
+{
+	/* Treat all linux packets at priority 2 */
+	return 1;
+}
+
+int ASFConfigMarker(marker_db_t	*arg)
+{
+	int			i;
+	ASFFFPConfigIdentity_t cmd;
+
+	if (!arg->num_rules || !arg->rule)
+		return -EINVAL;
+
+	if (NULL != marker_rule)
+		vfree(marker_rule);
+
+	ASFCTRL_INFO("Marker rules[%d] configuration request!\n",
+						arg->num_rules);
+
+	num_rules = arg->num_rules;
+	/* Allocate Marker Database */
+	marker_rule = vmalloc(num_rules * sizeof(ASFMarkerRule_t));
+	if (NULL == marker_rule)
+		return -ENOMEM;
+	memcpy(marker_rule, arg->rule,
+		sizeof(ASFMarkerRule_t) * num_rules);
+
+	/* TBD Use this Leg for Dynamic configuration*/
+	for (i = 0; i < num_rules; i++) {
+		ASFMarkerRule_t *rule;
+
+		rule = (ASFMarkerRule_t *) &marker_rule[i];
+
+		printk(KERN_INFO"src_ip[%-15pI4] dst_ip[%-15pI4] proto[%d] ",
+			&rule->src_ip[0], &rule->dst_ip[0], rule->proto);
+
+		if (rule->src_port == PORT_ANY)
+			printk(KERN_INFO"src_port[ANY]  ");
+		else
+			printk(KERN_INFO"src_port[%d] ", rule->src_port);
+
+		if (rule->dst_port == PORT_ANY)
+			printk(KERN_INFO"dst_port[ANY] ");
+		else
+			printk(KERN_INFO"dst_port[%d] ", rule->dst_port);
+
+		printk(KERN_INFO"Dscp[0x%X]\n", rule->uciDscp);
+	}
+	/*  Register Marker Rules */
+	ASFRegisterQosMarkerFn(&ASFMatchMarkerRule, &ASFMarkLnxPkt);
+	/*vfree(marker_rule); */
+	/* Invalidate flows */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.ulConfigMagicNumber = jiffies;
+	ASFFFPUpdateConfigIdentity(0, cmd);
+
+	return 0;
+}
+EXPORT_SYMBOL(ASFConfigMarker);
+#endif /* CONFIG_MARKER */
 
 /* Global Variables */
 /*ASFQOSCap_t g_qos_cap; */
@@ -102,7 +233,7 @@ ASF_void_t asfctrl_qos_fnRuntime(
 	return;
 }
 
-#ifdef ASF_EGRESS_SCH
+#if defined(ASF_EGRESS_SCH) || defined(ASF_HW_SCH)
 int  asfctrl_qos_prio_add(
 		struct net_device	*dev,
 		uint32_t		handle,
@@ -118,9 +249,15 @@ int  asfctrl_qos_prio_add(
 		return err;
 	}
 
+#ifdef CONFIG_DPA
+	if (bands != DPA_MAX_PRIO_QUEUES) {
+		ASFCTRL_ERR("Invalid Bands[%d]: Required %d Bands\n",
+						bands, DPA_MAX_PRIO_QUEUES);
+#else
 	if (bands != ASF_PRIO_MAX) {
 		ASFCTRL_ERR("Invalid Bands[%d]: Required %d Bands\n",
 						bands, ASF_PRIO_MAX);
+#endif
 		return err;
 	}
 	/* If ASF is disabled, simply return */
@@ -128,7 +265,6 @@ int  asfctrl_qos_prio_add(
 		ASFCTRL_INFO("ASF not ready\n");
 		return err;
 	}
-
 	qdisc.qdisc_type = ASF_QDISC_PRIO;
 	qdisc.dev = dev;
 	qdisc.handle = handle;
@@ -179,18 +315,11 @@ int  asfctrl_qos_tbf_add(struct tbf_opt *opt)
 		ASFCTRL_ERR("Invalid Interface pointer\n");
 		return err;
 	}
-
 	if (opt->parent == ROOT_ID) {
 		ASFCTRL_ERR(" TBF is not allowed as ROOT !,"
 				" Handle[0x%X]\n", opt->handle);
 		return err;
 	}
-	/* If ASF is disabled, simply return */
-	if (0 == ASFGetStatus()) {
-		ASFCTRL_INFO("ASF not ready\n");
-		return err;
-	}
-
 	qdisc.qdisc_type = ASF_QDISC_TBF;
 	qdisc.dev = opt->dev;
 	qdisc.handle = opt->handle;
@@ -242,7 +371,7 @@ static int __init asfctrl_linux_qos_init(void)
 
 	ASFQOSRegisterCallbackFns(&asfctrl_Cbs);
 
-#ifdef ASF_EGRESS_SCH
+#if defined(ASF_EGRESS_SCH) || defined(ASF_HW_SCH)
 	/* Register Callback function with ASF control layer to */
 	prio_hook_fn_register(&asfctrl_qos_prio_add,
 				&asfctrl_qos_prio_flush);
@@ -252,7 +381,6 @@ static int __init asfctrl_linux_qos_init(void)
 	tbf_hook_fn_register(&asfctrl_qos_tbf_add,
 				&asfctrl_qos_tbf_del);
 #endif
-
 	ASFCTRL_DBG("ASF Control Module - Forward Loaded\n");
 	return 0;
 }
@@ -267,7 +395,7 @@ static void __exit asfctrl_linux_qos_exit(void)
 
 	/* De-register Callback functins with QOS module */
 	ASFQOSRegisterCallbackFns(&asfctrl_Cbs);
-#ifdef ASF_EGRESS_SCH
+#if defined(ASF_EGRESS_SCH) || defined(ASF_HW_SCH)
 	prio_hook_fn_register(NULL, NULL);
 #endif
 #ifdef ASF_EGRESS_SHAPER
