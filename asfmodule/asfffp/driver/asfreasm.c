@@ -223,9 +223,6 @@ static unsigned int asf_ipv6_reasmRandValue_g;
 unsigned int asf_reasmPools[ASF_MAX_REASM_POOLS];
 
 unsigned int asf_reasmIPv4_Id[NR_CPUS];
-#ifdef ASF_IPV6_FP_SUPPORT
-extern inline int _ipv6_addr_cmp(const struct in6_addr *a1, const struct in6_addr *a2);
-#endif
 
 void asf_ip_options_fragment(struct sk_buff  *skb)
 {

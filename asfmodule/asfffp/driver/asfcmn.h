@@ -354,6 +354,18 @@ static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 	}
 }
 
+#ifdef ASF_IPV6_FP_SUPPORT
+static inline int _ipv6_addr_cmp(const struct in6_addr *a1, const struct in6_addr *a2)
+{
+	if ((a1->s6_addr32[0] == a2->s6_addr32[0])
+		&& (a1->s6_addr32[1] == a2->s6_addr32[1])
+		&& (a1->s6_addr32[2] == a2->s6_addr32[2])
+		&& (a1->s6_addr32[3] == a2->s6_addr32[3])
+	)
+		return 0;
+	return 1;
+}
+#endif
 #ifdef ASF_EGRESS_QOS
 /* We are interested in DSCP precedence field */
 /* Get Priority and Invert */

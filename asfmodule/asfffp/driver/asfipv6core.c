@@ -52,20 +52,6 @@ EXPORT_SYMBOL(asf_ffp_ipv6_hash_init_value);
 
 static int asf_ffp_ipv6_init_flow_table(void);
 static void asf_ffp_ipv6_destroy_flow_table(void);
-
-
-inline int _ipv6_addr_cmp(const struct in6_addr *a1, const struct in6_addr *a2)
-{
-	if ((a1->s6_addr32[0] == a2->s6_addr32[0])
-		&& (a1->s6_addr32[1] == a2->s6_addr32[1])
-		&& (a1->s6_addr32[2] == a2->s6_addr32[2])
-		&& (a1->s6_addr32[3] == a2->s6_addr32[3])
-	)
-		return 0;
-	return 1;
-}
-
-
 static inline void ffp_copy_flow_stats(ffp_flow_t *flow, ASFFFPFlowStats_t *stats)
 {
 	if (flow) {
