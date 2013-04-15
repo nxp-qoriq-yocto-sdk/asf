@@ -928,7 +928,6 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 	return;
 }
 
-#ifdef SECFP_SG_SUPPORT
 static inline void SECFP_SG_MAP(secfp_sgEntry_t *pSgEntry,
 	unsigned int len, u8 flags, u8 eptr, u32 ptr)
 {
@@ -1763,5 +1762,4 @@ void secfp_prepareInDescriptorWithFrags(struct sk_buff *skb,
 
 	return;
 }
-#endif /*SECFP_SG_MAP*/
 #endif /*defined(CONFIG_ASF_SEC3x)*/

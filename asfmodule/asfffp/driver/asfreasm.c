@@ -1960,7 +1960,8 @@ int asfIpv4Fragment(struct sk_buff *skb,
 	struct sk_buff *skb2, *pLastSkb;
 	unsigned int bytesLeft, len, ii, ptr = 0;
 	unsigned int *pSrc, *pTgt;
-	unsigned int offset = 0;
+	unsigned int offset = (iph->frag_off & IP_OFFSET) << 3;
+	unsigned int flags = iph->frag_off & IP_MF;
 	unsigned int tot_len;
 	bool bNewSkb = 1;
 	struct sk_buff *pSkb, *frag;
@@ -2135,7 +2136,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 					iph->frag_off = htons((offset >> 3));
 					iph->tot_len = htons(len + ihl);
 					iph->frag_off |= htons(IP_MF);
-					if (bytesLeft == 0)
+					if (bytesLeft == 0 && !flags)
 						iph->frag_off &= htons(~IP_MF);
 
 					ip_send_check(iph);
@@ -2414,7 +2415,6 @@ int asfIpv6MakeFragment(struct sk_buff *skb,
 EXPORT_SYMBOL(asfIpv6MakeFragment);
 #endif
 
-#ifdef ASF_SG_SUPPORT
 /* Copy some data bits from skb to kernel buffer. */
 
 static int asfSkbCopyBits(const struct sk_buff *this_skb,
@@ -2469,7 +2469,8 @@ static int asfSkbCopyBits(const struct sk_buff *this_skb,
 					begin_skip -= skb_shinfo(skb)->frags[i].size;
 				}
 				nbytes = (len <= (skb_shinfo(skb)->frags[i].size - begin_skip)) ? len : (skb_shinfo(skb)->frags[i].size - begin_skip);
-				src = page_address(skb_shinfo(skb)->frags[i].page);
+				src = page_address((const struct page *)
+					skb_shinfo(skb)->frags[i].page.p);
 				memcpy(dest, src + begin_skip + skb_shinfo(skb)->frags[i].page_offset, nbytes);
 				len -= nbytes;
 				dest += nbytes;
@@ -2482,7 +2483,8 @@ static int asfSkbCopyBits(const struct sk_buff *this_skb,
 
 			for ( ; i < skb_shinfo(skb)->nr_frags; i++) {
 				nbytes = (len <= skb_shinfo(skb)->frags[i].size) ? len : skb_shinfo(skb)->frags[i].size;
-				src = page_address(skb_shinfo(skb)->frags[i].page);
+				src = page_address((const struct page *)
+					skb_shinfo(skb)->frags[i].page.p);
 				memcpy(dest, src + skb_shinfo(skb)->frags[i].page_offset, nbytes);
 				len -= nbytes;
 				dest += nbytes;
@@ -2502,121 +2504,7 @@ static int asfSkbCopyBits(const struct sk_buff *this_skb,
 	}
 	return len;
 }
-#else
-/* Copy some data bits from skb to kernel buffer. */
-static int asfSkbCopyBits(const struct sk_buff *this_skb,
-			int offset,
-			void *to,
-			int len)
-{
-	unsigned char *dest = (unsigned char *) to, *src;
-	const struct	sk_buff *skb = this_skb;
-	int	nbytes, begin_skip, cur_off = 0, do_copy = 0;
-	unsigned int src_len;
 
-	asf_reasm_debug("offset %d len %d (skb->len %u)!\n",
-			offset, len, skb->len);
-
-	while (skb) {
-		{
-			src = skb->data;
-			src_len = skb->len;
-		}
-
-		if (!do_copy && (offset >= cur_off) && (offset < (cur_off+src_len))) {
-			do_copy = 1;
-			begin_skip = offset-cur_off;
-		} else {
-			begin_skip = 0;
-		}
-
-		if (do_copy) {
-			nbytes = (len <= (src_len-begin_skip)) ? len : (src_len-begin_skip);
-			asf_reasm_debug("memcpy %d bytes (len %d src_len %d begin_skip %d)\n",
-					nbytes, len, src_len, begin_skip);
-			if (nbytes < 0) {
-				asf_reasm_debug("!!!! This should never happen!!!\n");
-				return len;
-			}
-			memcpy(dest, src+begin_skip, nbytes);
-			len -= nbytes;
-			dest += nbytes;
-			if (len <= 0) {
-				asf_reasm_debug("SkbCopyBits done!\n");
-				return 0;
-			}
-		}
-		cur_off += src_len;
-
-		if (skb == this_skb)
-			skb = skb_shinfo(skb)->frag_list;
-		else
-			skb = skb->next;
-	}
-	return len;
-}
-#endif
-
-#ifdef ASF_SG_SUPPORT
-uint32_t asfSkbFraglistToNRFrags(struct sk_buff *skb)
-{
-	struct sk_buff *first_skb = skb;
-	struct sk_buff *skb_dtor;
-	unsigned int i;
-
-	skb = skb_shinfo(first_skb)->frag_list;
-
-	if (first_skb->gianfar_destructor) {
-
-		skb_dtor = skb_shinfo(first_skb)->gianfar_destructor_arg;
-
-		while (skb_dtor->next != NULL) {
-			skb_dtor = skb_dtor->next;
-		}
-
-	} else {
-		first_skb->gianfar_destructor = gfar_skb_destructor;
-		skb_shinfo(first_skb)->gianfar_destructor_arg = skb;
-		skb_dtor = skb;
-	}
-	while (skb != NULL) {
-
-
-		if ((skb_shinfo(first_skb)->nr_frags + 1 + skb_shinfo(skb)->nr_frags)
-				> ASF_MAX_SKB_FRAGS) {
-				skb_shinfo(first_skb)->frag_list = skb;
-				return ASF_FAILURE;
-		}
-		skb_fill_page_desc(first_skb,
-					skb_shinfo(first_skb)->nr_frags,
-					virt_to_page(skb->data),
-					((unsigned int)(skb->data) & ~PAGE_MASK),
-					(skb->len - skb->data_len));
-
-		for (i = 0; i < skb_shinfo(skb)->nr_frags; ++i) {
-			skb_fill_page_desc(first_skb,
-						skb_shinfo(first_skb)->nr_frags,
-						skb_shinfo(skb)->frags[i].page,
-						skb_shinfo(skb)->frags[i].page_offset,
-						skb_shinfo(skb)->frags[i].size);
-		}
-
-		first_skb->len += skb->len;
-		first_skb->data_len += skb->len;
-
-
-		if (skb_dtor != skb) {
-			skb_dtor->next = skb;
-			skb_dtor = skb;
-		}
-
-		skb = skb->next;
-	}
-	skb_shinfo(first_skb)->frag_list = NULL;
-	return ASF_SUCCESS;
-}
-EXPORT_SYMBOL(asfSkbFraglistToNRFrags);
-#endif
 /*
  * Callback from splice_to_pipe(), if we need to release some pages
  * at the end of the spd in case we error'ed out in filling the pipe.

@@ -136,6 +136,8 @@
 /* Information for preparing outer IP header */
 #define SECFP_IP_TTL			120
 
+/* MAximum supported MTU*/
+#define SECFP_MAX_MTU		9600
 
 /* skb Cb indices where various information is kept for post SEC operation */
 /* Common for outbound and inbound */

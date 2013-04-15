@@ -1583,7 +1583,186 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 #endif
 		}
 #endif
-	} else {
+	}
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	else if (unlikely(skb_shinfo(skb)->frag_list)) {
+		struct aead_edesc *edesc = descriptor;
+		static struct sec4_sg_entry *link_tbl_entry;
+		struct sk_buff *skb1;
+		dma_addr_t ptr, ptr2;
+		unsigned int *ptr1;
+		int i = 0, total_frags, dma_len, len_to_caam = 0;
+		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+		unsigned int iphdrlen, ulFragpadlen = 0;
+		dma_addr_t ptr_out;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+		iphdrlen = SECFP_IPV6_HDR_LEN;
+	else
+#endif
+		iphdrlen = SECFP_IPV4_HDR_LEN;
+
+		if ((pSA->ulSecHdrLen + iphdrlen) % 8)
+			ulFragpadlen = 8 - ((pSA->ulSecHdrLen + iphdrlen)%8);
+#endif
+		for (total_frags = 1, skb1 = skb_shinfo(skb)->frag_list;
+			 skb1->next != NULL; total_frags++, skb1 = skb1->next)
+			;
+		dma_len = sizeof(struct sec4_sg_entry) * (total_frags + 1);
+		ptr1 = (unsigned int *) &(skb->cb[SECFP_SKB_DATA_DMA_INDEX]);
+		*ptr1 = (unsigned int) link_tbl_entry;
+		ptr2 = dma_map_single(pSA->ctx.jrdev, skb->data,
+				skb_headlen(skb), DMA_BIDIRECTIONAL);
+
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+		link_tbl_entry = kzalloc(2*dma_len, GFP_DMA | flags);
+		link_tbl_entry->ptr = ptr2;
+		link_tbl_entry->len = skb_headlen(skb);
+#else
+		link_tbl_entry = kzalloc(dma_len, GFP_DMA | flags);
+		link_tbl_entry->ptr = ptr2 + pSA->ulSecHdrLen;
+		link_tbl_entry->len = skb_headlen(skb) - pSA->ulSecHdrLen;
+#endif
+		len_to_caam = link_tbl_entry->len;
+
+		ASFIPSEC_HEXDUMP(skb->data, 48);
+
+		skb1 = skb_shinfo(skb)->frag_list;
+
+		/* Parse the Frag list */
+		/* Prepare the list for SEC */
+		while (skb1) {
+			ptr = dma_map_single(pSA->ctx.jrdev, skb1->data,
+					skb_headlen(skb1), DMA_BIDIRECTIONAL);
+
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+			(link_tbl_entry + i + 1)->ptr = ptr;
+			(link_tbl_entry + i + 1)->len = skb_headlen(skb1);
+#else
+			(link_tbl_entry + i + 1)->ptr = ptr + pSA->ulSecHdrLen;
+			(link_tbl_entry + i + 1)->len = skb_headlen(skb1) - pSA->ulSecHdrLen;
+#endif
+			len_to_caam += (link_tbl_entry + i + 1)->len;
+
+			if (!skb1->next)
+				(link_tbl_entry + i + 1)->len |=
+						cpu_to_be32(0x40000000);
+			i++;
+			skb1 = skb1->next;
+		}
+		ASFIPSEC_FPRINT("\nlen_to_caam %d ulFragpadlen %d",
+				len_to_caam, ulFragpadlen);
+		/* Go ahead and Submit to SEC */
+		ptr = dma_map_single(pSA->ctx.jrdev, link_tbl_entry,
+					dma_len, DMA_BIDIRECTIONAL);
+		edesc->sec4_sg_dma = ptr;
+		edesc->sec4_sg = link_tbl_entry;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+		/* In case of protocol offload prepare seperate SG list for
+		   output */
+		memcpy(link_tbl_entry + total_frags + 1,
+			link_tbl_entry, dma_len);
+		link_tbl_entry = link_tbl_entry + total_frags + 1;
+
+		link_tbl_entry->ptr = ptr2 + iphdrlen + pSA->ulSecHdrLen + ulFragpadlen;
+		link_tbl_entry->len = skb_headlen(skb) - iphdrlen - pSA->ulSecHdrLen - ulFragpadlen;
+
+		ptr_out = dma_map_single(pSA->ctx.jrdev, link_tbl_entry,
+					dma_len, DMA_BIDIRECTIONAL);
+		(link_tbl_entry + total_frags + 1)->len += ulFragpadlen;
+
+		edesc->sec4_sg_bytes = 2*dma_len;
+
+		secfp_prepareInCaamJobDescriptor(descriptor, &pSA->ctx,
+				ptr , len_to_caam, ptr_out,
+				len_to_caam, 1);
+#else
+		edesc->sec4_sg_bytes = dma_len;
+
+		{
+		u32 *desc, options;
+		int ivsize = pSA->SAParams.ulIvSize;
+		int authsize = pSA->ctx.authsize;
+
+		desc = edesc->hw_desc;
+
+		/* insert shared descriptor pointer */
+		init_job_desc_shared(desc, pSA->ctx.shared_desc_phys,
+			desc_len(pSA->ctx.sh_desc), HDR_SHARE_DEFER);
+
+		append_load(desc, ptr2 + SECFP_ESP_HDR_LEN, ivsize,
+			LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT);
+
+		/* start auth operation */
+		append_operation(desc, pSA->ctx.class2_alg_type |
+					OP_ALG_AS_INITFINAL | OP_ALG_ICV_ON);
+
+		/* Load FIFO with data for Class 2 CHA */
+		options = FIFOLD_CLASS_CLASS2 | FIFOLD_TYPE_MSG;
+
+		append_fifo_load(desc, ptr2, SECFP_ESP_HDR_LEN, options);
+
+		/* copy iv from cipher/class1 input
+			context to class2 infifo */
+		/* Need to know the IV size */
+		append_move(desc, MOVE_SRC_CLASS1CTX |
+				MOVE_DEST_CLASS2INFIFO | ivsize);
+
+		{
+			u32 *jump_cmd, *uncond_jump_cmd;
+
+			/* JUMP if shared */
+			jump_cmd = append_jump(desc, JUMP_TEST_ALL |
+						JUMP_COND_SHRD);
+
+			/* start class 1 (cipher) operation,
+					non-shared version */
+			append_operation(desc, pSA->ctx.class1_alg_type
+					| OP_ALG_AS_INITFINAL);
+
+			uncond_jump_cmd = append_jump(desc, 0);
+
+			set_jump_tgt_here(desc, jump_cmd);
+
+			/* start class 1 (cipher) operation,
+				shared version */
+			append_operation(desc, pSA->ctx.class1_alg_type
+				| OP_ALG_AS_INITFINAL | OP_ALG_AAI_DK);
+
+			set_jump_tgt_here(desc, uncond_jump_cmd);
+		}
+
+		/* load payload & instruct class2 to
+			snoop class 1 if encrypting */
+		options = 0;
+		options |= LDST_SGF;
+
+		append_seq_in_ptr(desc, ptr, len_to_caam, options);
+
+		append_seq_fifo_load(desc, len_to_caam - authsize,
+				FIFOLD_CLASS_BOTH | FIFOLD_TYPE_LASTBOTH |
+				FIFOLD_TYPE_MSG);
+
+		append_seq_out_ptr(desc, ptr, len_to_caam, options);
+
+		append_seq_fifo_store(desc, len_to_caam - authsize,
+					FIFOST_TYPE_MESSAGE_DATA);
+
+		/* ICV */
+		append_seq_fifo_load(desc, authsize, FIFOLD_CLASS_CLASS2 |
+					FIFOLD_TYPE_LAST2 | FIFOLD_TYPE_ICV);
+#ifdef ASFIPSEC_DEBUG_FRAME
+		ASFIPSEC_DEBUG("\nData In Len:%d Data Out Len:%d Auth Size:%d",
+			len_to_caam, len_to_caam - 12, authsize);
+		print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
+		DUMP_PREFIX_ADDRESS, 16, 4, desc, desc_bytes(desc), 1);
+#endif
+		}
+#endif
+	}
+#endif
+	else {
 		dma_addr_t ptr;
 		int hdr_len;
 #ifdef ASF_IPV6_FP_SUPPORT

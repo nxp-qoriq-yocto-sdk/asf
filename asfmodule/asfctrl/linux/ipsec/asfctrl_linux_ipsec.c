@@ -269,6 +269,14 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
 #endif
+	if (skb_shinfo(skb)->frag_list) {
+		struct sk_buff *tmp_skb = skb_shinfo(skb)->frag_list;
+		while (tmp_skb) {
+			skb->len += tmp_skb->len;
+			skb->data_len +=  tmp_skb->len;
+			tmp_skb = tmp_skb->next;
+		}
+	}
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
 	x = xfrm_state_lookup(net, 0, &daddr, ulSPI, ucProtocol, family);
 #else

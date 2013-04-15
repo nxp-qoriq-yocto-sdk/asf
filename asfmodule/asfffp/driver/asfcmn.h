@@ -425,5 +425,4 @@ extern int asf_process_ip_options(
 extern  unsigned int asfReasmPullBuf(struct sk_buff *skb,
 	unsigned int len,
 	unsigned int *fragCnt);
-extern uint32_t asfSkbFraglistToNRFrags(struct sk_buff *skb);
 #endif

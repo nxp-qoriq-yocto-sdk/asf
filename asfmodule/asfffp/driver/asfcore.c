@@ -2744,7 +2744,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 		/* Do ip header length checks if the packet is received thru IPsec */
 		tot_len = ntohs(iph->tot_len);
-		if (unlikely((skb->len < tot_len) || (tot_len < (iph->ihl*4)))) {
+		if (unlikely(((skb->len < tot_len) &&
+			skb_shinfo(skb)->frag_list == NULL)
+				|| (tot_len < (iph->ihl*4)))) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpHdr++;
 #endif
