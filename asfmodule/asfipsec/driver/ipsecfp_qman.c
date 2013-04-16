@@ -267,12 +267,13 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 	int	iRetVal;
 	unsigned int	retryCount = 0;
 	struct	qm_fd qmfd = {};
-	struct sk_buff *skb = (struct sk_buff *) context;
+	struct sk_buff *skb1, *skb = (struct sk_buff *) context;
+	struct scatter_gather_entry_s *sgt = NULL;
 	struct device *pDev = pSA->ctx.jrdev;
 	struct ses_pkt_info *pInfo;
 	scatter_gather_entry_t *pSG;
-	dma_addr_t pInmap;
-	unsigned int ulHdrLen = 0;
+	dma_addr_t pInmap, addr;
+	unsigned int ulHdrLen = 0, i = 1;
 
 	ASFIPSEC_DEBUG("QMAN enqueue submit\n");
 
@@ -298,19 +299,84 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 	pInfo->dir = SECFP_IN;
 	ASFIPSEC_DEBUG("skb->len= %d headlen=%d\n", skb->len, skb_headlen(skb));
 	/* ToDo: We shouldn't work with jrdev anymore */
-	pInmap = dma_map_single(pSA->ctx.jrdev,
+	if (skb_shinfo(skb)->frag_list) {
+		struct scatter_gather_entry_s *sgt1;
+		unsigned int total_frags;
+		unsigned int ulFragpadlen = 0;
+		unsigned int len_to_caam = 0;
+		if (ulHdrLen % 8)
+			ulFragpadlen = 8 - (ulHdrLen % 8);
+		ulHdrLen += ulFragpadlen;
+		for (total_frags = 1, skb1 = skb_shinfo(skb)->frag_list;
+			skb1->next != NULL; total_frags++, skb1 = skb1->next)
+			;
+		sgt = kzalloc((2 * (total_frags + 1)) *
+			sizeof(struct scatter_gather_entry_s),
+			GFP_ATOMIC | GFP_DMA);
+		sgt[0].offset = 0;
+		sgt[0].length = skb_headlen(skb);
+		addr = dma_map_single(pSA->ctx.jrdev,
+				skb->data, skb_headlen(skb), DMA_BIDIRECTIONAL);
+		sgt[0].addr_lo = (uint32_t) (addr);
+		sgt[0].addr_hi = (uint32_t) (addr>>32);
+		len_to_caam = skb_headlen(skb);
+		skb1 = skb_shinfo(skb)->frag_list;
+		while (1) {
+			sgt[i].offset = 0;
+			sgt[i].length = skb1->len;
+			addr = dma_map_single(pSA->ctx.jrdev,
+				skb1->data, skb1->len, DMA_BIDIRECTIONAL);
+			len_to_caam += skb1->len;
+			sgt[i].addr_lo = (uint32_t) (addr);
+			sgt[i].addr_hi = (uint32_t) (addr>>32);
+			i++;
+			if (skb1->next == NULL)
+				break;
+			skb1 = skb1->next;
+		}
+		ASFIPSEC_DEBUG("len_to_caam%d total_frags %d\n",
+			len_to_caam, total_frags);
+		sgt[i - 1].final = 1;
+		pInmap = dma_map_single(pSA->ctx.jrdev,
+				sgt, (total_frags + 1)
+			* sizeof(struct scatter_gather_entry_s),
+			DMA_BIDIRECTIONAL);
+		pSG[1].extension = 1;
+		pSG[1].addr_lo = (uint32_t) pInmap;
+		pSG[1].addr_hi = (uint32_t) (pInmap>>32);
+		pSG[1].length = len_to_caam;
+		sgt1 = &sgt[i];
+		memcpy(sgt1, sgt, (total_frags + 1) *
+			sizeof(struct scatter_gather_entry_s));
+		addr = dma_map_single(pSA->ctx.jrdev,
+				skb->data, skb_headlen(skb), DMA_BIDIRECTIONAL);
+		sgt1[0].addr_lo = (uint32_t) (addr + ulHdrLen);
+		sgt1[0].addr_hi = (uint32_t) ((addr + ulHdrLen)>>32);
+		sgt1[0].length = skb_headlen(skb) - ulHdrLen;
+		sgt[i - 1].length += ulFragpadlen;
+		skb1->len += ulFragpadlen;
+		ASFIPSEC_DEBUG("len_from_caam%d total_frags %d\n",
+			 len_to_caam - ulHdrLen, total_frags);
+		pInmap = dma_map_single(pSA->ctx.jrdev,
+				sgt1, (total_frags + 1)
+			* sizeof(struct scatter_gather_entry_s),
+			DMA_BIDIRECTIONAL);
+		pSG->length = len_to_caam - ulHdrLen;
+		pSG->extension = 1;
+		pSG->addr_lo = (uint32_t) (pInmap);
+		pSG->addr_hi = (uint32_t) (pInmap >> 32);
+	} else {
+		pInmap = dma_map_single(pSA->ctx.jrdev,
 			skb->data, skb->len, DMA_BIDIRECTIONAL);
-
-	/* filling compound frame */
-	pSG[1].addr_lo = (uint32_t) pInmap;
-	pSG[1].addr_hi = (uint32_t) (pInmap>>32);
-	pSG[1].length = skb->len;
+		pSG->addr_lo = (uint32_t) (pInmap + ulHdrLen);
+		pSG->addr_hi = (uint32_t) ((pInmap + ulHdrLen)>>32);
+		pSG->length = skb->len;
+		pSG[1].addr_lo = (uint32_t) pInmap;
+		pSG[1].addr_hi = (uint32_t) (pInmap>>32);
+		pSG[1].length = skb->len;
+	}
 	pSG[1].final = 1;
 
-	pInmap += ulHdrLen;
-	pSG->addr_lo = (uint32_t) pInmap;
-	pSG->addr_hi = (uint32_t) (pInmap>>32);
-	pSG->length = skb->len;
 
 	qmfd._format2 = qm_fd_compound;
 	qmfd.addr_lo = dma_map_single(pDev, pSG,
@@ -327,6 +393,8 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 		else
 			__delay(50);
 		if (++retryCount == ASF_MAX_TX_RETRY_CNT) {
+			if (sgt)
+				kfree(sgt);
 			kfree(pInfo);
 			return iRetVal;
 		}
@@ -459,8 +527,16 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 	}
 
 	addr = ((dma_addr_t)(pSG->addr_hi)<<32) + pSG->addr_lo;
-	pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
-
+	if (!pSG->extension)
+		pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
+	else {
+		struct scatter_gather_entry_s *sgt =
+		(struct scatter_gather_entry_s *)phys_to_virt(addr);
+		addr = ((dma_addr_t)(sgt[0].addr_hi)<<32) + pSG->addr_lo;
+		pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
+		pInfo->cb_skb->len = sgt[0].length;
+		kfree(sgt);
+	}
 	if (pInfo->dir == SECFP_OUT) {
 		pInfo->cb_skb->len = pSG->length;
 		secfp_outComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);
@@ -505,6 +581,10 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 			return qman_cb_dqrr_consume;
 		} else
 #endif
+		if (skb_shinfo(pInfo->cb_skb)->frag_list)
+			secfp_inCompleteWithFrags(pInfo->cb_pDev,
+					NULL, 0, pInfo->cb_skb);
+		else
 			secfp_inComplete(pInfo->cb_pDev,
 					NULL, 0, pInfo->cb_skb);
 	}

@@ -2492,7 +2492,6 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	struct sk_buff *skb1 = NULL;
 	struct iphdr *iph = (struct iphdr *)*(uintptr_t *)
 				&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
-#ifndef ASF_QMAN_IPSEC
 	struct iphdr *inneriph = (struct iphdr *)(pHeadSkb->data);
 	unsigned int ulStripLen;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -2502,7 +2501,6 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	} else
 #endif
 		ulStripLen = *pTotLen - inneriph->tot_len;
-#endif
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
 
 	ASFIPSEC_FPRINT("pHeadSkb->data = 0x%x,"
@@ -2653,7 +2651,6 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	}
 #endif
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-#ifndef ASF_QMAN_IPSEC
 		*pTotLen -= ulStripLen;
 		if (pTailSkb->len > ulStripLen)
 			pTailSkb->len -= ulStripLen;
@@ -2677,7 +2674,6 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 			pTailSkb->next = NULL;
 		}
 
-#endif
 #endif
 	return 0;
 }
@@ -2963,14 +2959,14 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 	struct aead_edesc *desc;
 	desc = (struct aead_edesc *)((char *)pdesc -
 		offsetof(struct aead_edesc, hw_desc));
-#endif
-	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
-	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
 
 	ASFIPSEC_DEBUG("InComplete: iteration=%d, desc=0x%x, err = %d"
 			" refIndex = %d\n",
 			++ulNumIter[smp_processor_id()],
 			(unsigned int) desc, err, skb1->cb[SECFP_REF_INDEX]);
+#endif
+	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
+	pIPSecPPGlobalStats->ulTotInProcSecPkts++;
 	ASFIPSEC_FENTRY;
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 6) {
@@ -3836,15 +3832,16 @@ static inline int secfp_try_fastPathInv6(struct sk_buff *skb1,
 	struct talitos_desc *desc = NULL;
 #elif !defined(ASF_QMAN_IPSEC)
 	void *desc;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+	unsigned int ulFragpadlen = 0;
+#endif
 #endif
 	unsigned char ipv6TClass = 0;
 	unsigned int ulIpv6Exthl = 0;
 	unsigned int ulIpv6hl = 0;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	struct sk_buff *pTailPrevSkb = 0;
-#ifdef ASF_SECFP_PROTO_OFFLOAD
-	unsigned int ulFragpadlen = 0;
-#else
+#ifndef ASF_SECFP_PROTO_OFFLOAD
 	int ii;
 	unsigned int ulICVInPrevFrag;
 	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr;
@@ -4199,9 +4196,11 @@ So all these special boundary cases need to be handled for nr_frags*/
 #else
 		/* updating the length and data pointer of packet according
 		   to the packet after decryption */
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (skb_shinfo(pHeadSkb)->frag_list)
 			if (pSA->ulSecHdrLen % 8)
 				ulFragpadlen = 8 - (pSA->ulSecHdrLen);
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		pHeadSkb->data += SECFP_IPV6_HDR_LEN + pSA->ulSecHdrLen + ulFragpadlen;
 		pHeadSkb->len -= (SECFP_IPV6_HDR_LEN + pSA->ulSecHdrLen) - ulFragpadlen;
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
@@ -4562,14 +4561,15 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	struct talitos_desc *desc = NULL;
 #elif !defined(ASF_QMAN_IPSEC)
 	void *desc;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+	unsigned int ulFragpadlen = 0;
+#endif
 #endif
 	signed int iRetVal;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	struct sk_buff *pTailPrevSkb = 0;
-#ifdef ASF_SECFP_PROTO_OFFLOAD
-	unsigned int ulFragpadlen = 0;
-#else
+#ifndef ASF_SECFP_PROTO_OFFLOAD
 	int ii;
 	unsigned int ulICVInPrevFrag;
 	unsigned char *pCurICVLocBytePtrInPrevFrag, *pCurICVLocBytePtr;
@@ -4855,10 +4855,12 @@ So all these special boundary cases need to be handled for nr_frags*/
 			ulSecLen = pSA->ulSecHdrLen;
 #else
 			ulSecLen = pSA->ulSecHdrLen + SECFP_IPV4_HDR_LEN;
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			if (skb_shinfo(pHeadSkb)->frag_list)
 				if (ulSecLen % 8)
 					ulFragpadlen = (8 - (ulSecLen % 8));
 			ulSecLen+= ulFragpadlen;
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 #endif
 		} else {
 
@@ -5355,6 +5357,8 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 			(pFreeFn)(freeArg);
 		goto ret_stk;
 	}
+	if (skb_shinfo(skb)->frag_list)
+		skb->len = skb_headlen(skb);
 	if (secfp_try_fastPathOut(ulVsgId, skb, &SecInfo) != 0) {
 		if (pFreeFn)
 			(pFreeFn)(freeArg);

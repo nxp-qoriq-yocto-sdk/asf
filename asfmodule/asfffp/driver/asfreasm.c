@@ -96,7 +96,7 @@ unsigned long asf_ipv6_reasm_hash_list_size = ASF_REASM_MAX_HASH_LIST_SIZE;
 #endif
 
 #ifdef CONFIG_DPA
-#define ASF_EXTRA_TAIL_ROOM 32
+#define ASF_EXTRA_TAIL_ROOM 128
 #endif
 
 /* Values taken from iGateway code */
