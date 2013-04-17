@@ -28,6 +28,7 @@ endif
 #ASF_FULL 	:= 3
 
 ifeq ($(CONFIG_DPA_ETH),y)
+CONFIG_DPA=y
 EXTRA_CFLAGS += -DCONFIG_DPA
 endif
 ifeq ($(ASF_FEATURE_OPTION_FULL),y)

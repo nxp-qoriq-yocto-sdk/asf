@@ -1206,8 +1206,8 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 	}
 	/* see if it is destined to us; may be pkts
 		received in promiscuous mode */
-	if (unlikely(ether_addr_equal_64bits(abuf.ethh->h_dest,
-			real_dev->dev_addr))) {
+	if (unlikely(!(ether_addr_equal_64bits(abuf.ethh->h_dest,
+			real_dev->dev_addr)))) {
 		asf_debug_l2("PACKET_OTHERHOST on iface %s\n",
 				real_dev->name);
 		XGSTATS_INC(OtherHost);
