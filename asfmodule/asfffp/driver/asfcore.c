@@ -5476,7 +5476,7 @@ static inline void direct_xmit(struct sk_buff *skb)
 	}
 }
 
-inline void asf_qos_handling(struct sk_buff *skb, u32 *tc_filter_res)
+void asf_qos_handling(struct sk_buff *skb, u32 *tc_filter_res)
 {
 	if (asf_qos_enable) {
 #ifdef ASF_TC_QOS
@@ -5504,7 +5504,7 @@ inline void asf_qos_handling(struct sk_buff *skb, u32 *tc_filter_res)
 EXPORT_SYMBOL(asf_qos_handling);
 
 #ifdef CONFIG_DPA
-inline int asf_qos_fd_handling(ASFBuffer_t *abuf,
+int asf_qos_fd_handling(ASFBuffer_t *abuf,
 				struct net_device *dev,
 				ASF_uint8_t dscp,
 				u32 *tc_filter_res
