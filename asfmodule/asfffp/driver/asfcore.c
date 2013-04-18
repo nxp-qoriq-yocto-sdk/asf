@@ -1802,6 +1802,7 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		&& (iph->protocol != IPPROTO_UDP)
 #ifdef ASF_IPSEC_FP_SUPPORT
 		&& (iph->protocol != IPPROTO_ESP)
+		&& (iph->protocol != IPPROTO_AH)
 #endif
 		)) {
 		XGSTATS_INC(NonTcpUdpPkts);
@@ -1858,12 +1859,13 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #ifdef ASF_IPSEC_FP_SUPPORT
 
 	/* IPSEC IN PROCESS function call for any of following conditions
-	 *   iph->protocol == ESP
-	 *   udph->dport == 500 or 4500
-	 *   udph->sport == 500 or 4500
-	 */
+	*   iph->protocol == ESP
+	*   iph->protocol == AH
+	*   udph->dport == 500 or 4500
+	*   udph->sport == 500 or 4500
+	*/
 
-	if (iph->protocol == IPPROTO_ESP) {
+	if ((iph->protocol == IPPROTO_ESP) || (iph->protocol == IPPROTO_AH)) {
 		if (pFFPIPSecIn) {
 			if (pFFPIPSecIn(skb, 0, anDev->ulVSGId,
 				anDev->ulCommonInterfaceId) == 0) {

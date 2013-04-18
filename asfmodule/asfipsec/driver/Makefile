@@ -21,6 +21,7 @@ obj-m += asfipsec.o
 
 asfipsec-y := \
 	ipsecfp.o \
+	ipsecfp_ah.o \
 	ipsfpapi.o \
 	ipsecproc.o \
 	ipsecfp_innerapi.o

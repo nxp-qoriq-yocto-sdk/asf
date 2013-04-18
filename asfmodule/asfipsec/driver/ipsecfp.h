@@ -41,7 +41,34 @@
 				>> SECFP_IPV6_TCLASS_SHIFT); \
 }
 #endif
+#define SEQ_NO_OVERFLOW 0x40000085
+#define SECFP_HM_BUFFER TRUE
 #define ASF_IPSEC_SEC_SA_SHDESC_SIZE (64 * sizeof(u32))
+#define SECFP_MF_OFFSET_FLAG_NET_ORDER htons(IP_MF|IP_OFFSET)
+#ifdef ASF_QMAN_IPSEC
+#define VPN_TOT_OVHD	32
+#define VPN_HDROOM	32
+#else
+#define VPN_TOT_OVHD	(1400 + 32)
+#define VPN_HDROOM	(1100 + 32)
+#endif
+
+#define ASF_ICMP_DEST_UNREACH 3
+#define ASF_ICMP_CODE_FRAG_NEEDED 4
+#define ASF_NON_NATT_PACKET 0
+#define ASF_NATT_PACKET 1
+#define ASF_IPSEC_CONSUMED 99
+
+#define ASF_ICMP_ECHO_REPLY	0 /* Echo Reply */
+#define ASF_ICMP_QUENCH		4 /* Source Quench */
+#define ASF_ICMP_REDIRECT	5 /* Redirect */
+#define ASF_ICMP_TIME_EXCEED	11 /* Time-to-live Exceeded */
+#define ASF_ICMP_PARAM_PROB	12
+
+#define ASF_IPLEN	20
+#define ASF_ICMPLEN	8
+#define ASF_IP_MAXOPT	40
+
 /* DF related bits */
 #define SECFP_DF_COPY	0
 #define SECFP_DF_CLEAR	1
@@ -49,7 +76,7 @@
 
 /* Protocol related values */
 #define SECFP_PROTO_ESP		IPPROTO_ESP /*50*/
-#define SECFP_PROTO_AH		IPPROTO_AH /*50*/
+#define SECFP_PROTO_AH		IPPROTO_AH /*51*/
 #define SECFP_PROTO_IP		IPPROTO_IPIP /*4*/
 #define SECFP_PROTO_IPV6	IPPROTO_IPV6/*41*/
 #define SECFP_IPPROTO_ICMP	IPPROTO_ICMP /*1*/
@@ -58,6 +85,7 @@
 #define SECFP_ESP_HDR_LEN	8
 #define SECFP_IPV4_HDR_LEN	20
 #define SECFP_AH_MAX_HDR_LEN	16
+#define SECFP_AH_FIXED_HDR_LEN	12
 #define SECFP_ESP_TRAILER_LEN	2
 
 /* Options to set up descriptors */
@@ -78,6 +106,8 @@
 #define SECFP_HMAC_SHA512	7
 #define SECFP_HMAC_SHA1_160	8
 
+
+#define SECFP_ENC_NONE		0 /* No encryption */
 #define SECFP_DES		2 /* generic DES transform using DES-SBC */
 #define SECFP_3DES		3 /* generic triple-DES transform	*/
 #define SECFP_ESP_NULL		11
@@ -163,6 +193,8 @@
 #define SECFP_SABITMAP_COEF_INDEX	39
 #define SECFP_SABITMAP_REMAIN_INDEX	40
 #define SECFP_VSG_ID_INDEX		44
+#define SECFP_SECHDR_INDEX		48
+#define SECFP_SECLEN_INDEX		52
 
 
 /* For Outbound skb indices */
@@ -294,6 +326,9 @@
 
 #define SECFP_MAX_32BIT_VALUE	0xffffffff /* 2^32-1 */
 
+#define SECFP_AH_DIR_OUT 0
+#define SECFP_AH_DIR_IN  1
+
 typedef struct ASFIPSecOpqueInfo_st {
 	unsigned int ulInSPDContainerId;
 	unsigned int ulInSPDMagicNumber;
@@ -401,6 +436,7 @@ typedef struct SAParams_s {
 	unsigned char ulBlockSize;
 	unsigned char ulIvSize;
 	unsigned char uICVSize;
+	unsigned char ucAHPaddingLen;
 	unsigned char ucAuthKey[SECFP_MAX_AUTH_KEY_SIZE];
 	unsigned char ucEncKey[SECFP_MAX_CIPHER_KEY_SIZE];
 	unsigned int AntiReplayWin;
@@ -442,6 +478,35 @@ typedef struct inSA_s {
 	dma_addr_t	AuthKeyDmaAddr;
 	dma_addr_t	EncKeyDmaAddr;
 #endif
+#ifdef CONFIG_ASF_SEC4x
+	void (*prepareInDescriptor)(struct sk_buff *skb, void *pData,
+				void *descriptor, unsigned int ulOptionIndex);
+	void (*prepareInDescriptorWithFrags)(struct sk_buff *skb, void *pData,
+				void *descriptor, unsigned int ulOptionIndex);
+#else
+	void (*prepareInDescriptor)(struct sk_buff *skb, void *pData,
+				void *descriptor, unsigned int ulOptionIndex);
+	void (*prepareInDescriptorWithFrags)(struct sk_buff *skb, void *pData,
+				void *descriptor, unsigned int ulOptionIndex);
+#endif
+	void (*inCompleteWithFrags)(struct device *dev,
+#ifndef CONFIG_ASF_SEC4x
+			struct talitos_desc *desc,
+			void *context, int err);
+#else
+			u32 *pdesc,
+			u32 err, void *context);
+#endif
+
+	void (*inComplete)(struct device *dev,
+#ifndef CONFIG_ASF_SEC4x
+		struct talitos_desc *desc,
+		void *context, int err
+#else
+		u32 *pdesc,
+		u32 err, void *context
+#endif
+		);
 	unsigned int validIpPktLen; /* Sum of ESP or AH header + IP header
 					 IF ESP
 					 + CipherIV Len +
@@ -633,8 +698,22 @@ typedef struct outSA_s {
 	void (*finishOutPktFnPtr)(struct sk_buff *,
 				struct outSA_s *, SPDOutContainer_t *,
 				unsigned int *, unsigned int, unsigned int);
+	void (*prepareOutDescriptor)(struct sk_buff *skb, void *pData,
+				void *descriptor, unsigned int ulOptionIndex);
+	void (*prepareOutDescriptorWithFrags)(struct sk_buff *skb, void *pData,
+				void *descriptor, unsigned int ulOptionIndex);
+	void (*outComplete)(struct device *dev,
+#ifndef CONFIG_ASF_SEC4x
+		struct talitos_desc *desc,
+		void *context, int error
+#else
+		u32 *pdesc,
+		u32 error, void *context
+#endif
+		);
 	atomic_t ulLoSeqNum;
 	atomic_t ulHiSeqNum;
+	atomic_t SeqOverflow;
 	unsigned char l2blob[ASF_MAX_L2BLOB_LEN];
 	unsigned char bIVDataPresent:1,
 		bl2blob:1,
@@ -652,6 +731,7 @@ typedef struct outSA_s {
 	unsigned short ulTunnelId;
 	unsigned short tx_vlan_id; /*valid if bVLAN is 1*/
 	unsigned int ulCompleteOverHead;
+	unsigned int ulXmitHdrLen;
 	unsigned int ulInnerPathMTU;
 	unsigned long ulPkts[NR_CPUS];
 	unsigned long ulBytes[NR_CPUS];
@@ -696,6 +776,7 @@ typedef struct secfp_sgEntry_s {
 #define SECFP_IN_SPI_INDEX	6
 #define SECFP_UNUSED_INDEX	7
 #define MAX_IPSEC_RECYCLE_DESC		128
+#define ASF_MAX_IPSEC_RECYCLE_ICV	128
 
 #ifndef CONFIG_ASF_SEC4x
 extern void secfp_outComplete(struct device *dev,
@@ -738,6 +819,20 @@ extern int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 extern int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		outSA_t *pSA, bool keys_fit_inline);
+extern void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
+				void *descriptor, unsigned int ulOptionIndex);
+void
+secfp_finishOutAHPacket(struct sk_buff *skb, outSA_t *pSA,
+		SPDOutContainer_t *pContainer,
+		unsigned int *pOuterIpHdr,
+		unsigned int ulVSGId,
+		unsigned int ulSPDContainerIndex);
+void secfp_outAHComplete(struct device *dev,
+		u32 *pdesc,
+		u32 error, void *context
+		);
+void secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
+		SPDOutContainer_t *pContainer, unsigned int **pOuterIpHdr);
 #endif
 
 extern int gfar_start_xmit(struct sk_buff *skb,
@@ -891,6 +986,7 @@ extern bool secfp_verifySASels(inSA_t *pSA,
 		ASF_IPAddr_t saddr,
 		ASF_IPAddr_t daddr);
 
+void secfp_freeOutSA(struct rcu_head *pData);
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 extern void secfp_finishOffloadOutPacket(
 		struct sk_buff *skb, outSA_t *pSA,
@@ -930,6 +1026,20 @@ extern	void secfp_prepareInDescriptor(
 		struct sk_buff *skb,
 		void *pSA, void *, unsigned int);
 
+extern int secfp_buildAHSharedDesc(
+		struct caam_ctx *ctx,
+		void *pSA, uint8_t bDiir);
+
+extern int secfp_createAHInCaamCtx(inSA_t *pSA);
+
+extern int secfp_createAHOutCaamCtx(outSA_t *pSA);
+
+extern void secfp_prepareAHInDescriptor(
+		struct sk_buff *skb,
+		void *pData, void *descriptor,
+		unsigned int ulIndex);
+
+
 #ifndef CONFIG_ASF_SEC4x
 extern void secfp_prepareInDescriptorWithFrags(
 		struct sk_buff *skb,
@@ -942,4 +1052,12 @@ extern void secfp_prepareOutDescriptorWithFrags(
 #define secfp_prepareOutDescriptorWithFrags secfp_prepareOutDescriptor
 #endif
 #endif
+int secfp_updateAHOutSA(outSA_t *pSA, void *buff);
+int secfp_updateAHInSA(inSA_t *pSA, SAParams_t *pSAParams);
+void secfp_inAHComplete(struct device *dev,
+		u32 *pdesc,
+		u32 err, void *context
+		);
+int secfp_buildAHQMANSharedDesc(struct caam_ctx *ctx, u32 *sh_desc,
+		void *pSA, uint8_t bDir);
 #endif

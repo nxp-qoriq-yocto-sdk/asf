@@ -750,7 +750,7 @@ static inline outSA_t *secfp_allocOutSA(void)
 	return pSA;
 }
 
-static void secfp_freeOutSA(struct rcu_head *pData)
+void secfp_freeOutSA(struct rcu_head *pData)
 {
 	outSA_t *pSA = (outSA_t *) pData;
 #ifdef ASF_QMAN_IPSEC
@@ -2601,6 +2601,7 @@ unsigned int secfp_createOutSA(
 	memcpy(&(pSA->SPDParams), &(pContainer->SPDParams),
 				sizeof(SPDOutParams_t));
 
+	if (likely(SAParams->ucProtocol == SECFP_PROTO_ESP)) {
 	if (secfp_updateOutSA(pSA, SAParams)) {
 		GlobalErrors.ulInvalidAuthEncAlgo++;
 		ASFIPSEC_DEBUG("secfp_updateOutSA returned failure");
@@ -2669,13 +2670,15 @@ unsigned int secfp_createOutSA(
 		pSA->ulSecLenIncrease = SECFP_IPV6_HDR_LEN;
 #endif
 	}
-
+#ifndef ASF_QMAN_IPSEC
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	pSA->prepareOutPktFnPtr = NULL;
 	pSA->finishOutPktFnPtr = secfp_finishOffloadOutPacket;
 #else
 	pSA->prepareOutPktFnPtr = secfp_prepareOutPacket;
 	pSA->finishOutPktFnPtr = secfp_finishOutPacket;
+#endif
+	pSA->outComplete = secfp_outComplete;
 #endif
 	/* starting the seq number from 2 to avoid the conflict
 	with the Networking Stack seq number */
@@ -2697,7 +2700,7 @@ unsigned int secfp_createOutSA(
 	pSA->bSoftExpiry = 0;
 
 	/* update ICV size to output length */
-	if (SAParams->uICVSize) {
+	if (pSA->SAParams.bAuth) {
 		pSA->ulSecOverHead += SAParams->uICVSize;
 		pSA->ulSecLenIncrease += SAParams->uICVSize;
 	}
@@ -2742,6 +2745,48 @@ unsigned int secfp_createOutSA(
 #else /*CONFIG_ASF_SEC3x*/
 	secfp_createOutSATalitosDesc(pSA);
 #endif
+#ifndef ASF_QMAN_IPSEC
+			pSA->prepareOutDescriptor = secfp_prepareOutDescriptor;
+#if defined(CONFIG_ASF_SEC3x) && defined(SECFP_SG_SUPPORT)
+			pSA->prepareOutDescriptorWithFrags = secfp_prepareOutDescriptorWithFrags;
+#else
+			pSA->prepareOutDescriptorWithFrags = secfp_prepareOutDescriptor;
+#endif
+#endif
+#ifndef ASF_SECFP_PROTO_OFFLOAD
+			pSA->ulXmitHdrLen = pSA->ulSecHdrLen + pSA->usNatHdrSize;
+#else
+			pSA->ulXmitHdrLen = 0;
+#endif
+	} else {
+		/* AH Handling */
+
+		if (secfp_updateAHOutSA(pSA, SAParams)) {
+			GlobalErrors.ulInvalidAuthEncAlgo++;
+			kfree(pSA);
+			ASFIPSEC_DEBUG("secfp_updateAHOutSA returned failure");
+			if (!bVal)
+				local_bh_enable();
+			return SECFP_FAILURE;
+		}
+
+		pSA->ulInnerPathMTU = ulMtu - pSA->ulSecOverHead;
+		pSA->ulXmitHdrLen = pSA->ulSecHdrLen;
+		ASFIPSEC_DEBUG("ulMtu(%d) -  pSA->ulSecOverHead(%d), BlockSize=%d\n",
+				ulMtu, pSA->ulSecOverHead, pSA->SAParams.ulBlockSize);
+		ASFIPSEC_DEBUG("(pSA->ulInnerPathMTU) & (pSA->SAParams.ulBlockSize - 1 =%d \n",\
+			(pSA->ulInnerPathMTU) & (pSA->SAParams.ulBlockSize - 1));
+		ASFIPSEC_DEBUG("pSA->ulInnerPathMTU = %d\n", pSA->ulInnerPathMTU);
+#ifndef ASF_QMAN_IPSEC
+		pSA->prepareOutDescriptor = secfp_prepareAHOutDescriptor;
+		pSA->prepareOutDescriptorWithFrags = secfp_prepareAHOutDescriptor;
+#endif
+		ASFIPSEC_DEBUG("Mtu =%d, Overhead=%d block=%d iMtu=%d secOH=%d",
+		ulMtu, pSA->ulCompleteOverHead,
+		pSA->SAParams.ulBlockSize, pSA->ulInnerPathMTU,
+		pSA->ulSecOverHead);
+	}
+
 	ulIndex = ptrIArray_add(&secFP_OutSATable, pSA);
 	if (ulIndex < secFP_OutSATable.nr_entries) {
 		if (pContainer->SPDParams.bOnlySaPerDSCP) {
@@ -2911,10 +2956,17 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 			}
 			break;
 		case ASFIPSEC_UPDATE_MTU:
+			if (likely(pOutSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
 			pOutSA->ulInnerPathMTU =
 				pModSA->u.ulMtu - pOutSA->ulSecOverHead;
 			pOutSA->ulInnerPathMTU -= (pOutSA->ulInnerPathMTU)
 				& (pOutSA->SAParams.ulBlockSize - 1);
+			} else {
+				pOutSA->ulInnerPathMTU =
+					pModSA->u.ulMtu - pOutSA->ulSecOverHead;
+				ASFIPSEC_DEBUG("InnerMtu=%d,pOutSA->ulSecOverHead=%d",\
+					pOutSA->ulInnerPathMTU, pOutSA->ulSecOverHead);
+			}
 			break;
 		case ASFIPSEC_UPDATE_L2BLOB:
 			memcpy(pOutSA->l2blob, pModSA->u.l2blob.l2blob,
@@ -3134,6 +3186,7 @@ unsigned int secfp_CreateInSA(
 
 		memcpy(&(pSA->SPDParams), &(pContainer->SPDParams),
 						sizeof(SPDInParams_t));
+		if (likely(pSAParams->ucProtocol == SECFP_PROTO_ESP)) {
 		if (secfp_updateInSA(pSA, pSAParams)) {
 			GlobalErrors.ulInvalidAuthEncAlgo++;
 			kfree(pSA);
@@ -3191,6 +3244,34 @@ unsigned int secfp_CreateInSA(
 #else
 		secfp_createInSATalitosDesc(pSA);
 #endif
+#ifndef ASF_QMAN_IPSEC
+			pSA->prepareInDescriptor = secfp_prepareInDescriptor;
+#if defined(CONFIG_ASF_SEC3x) && defined(SECFP_SG_SUPPORT)
+			pSA->prepareInDescriptorWithFrags = secfp_prepareInDescriptorWithFrags;
+#else
+			pSA->prepareInDescriptorWithFrags = secfp_prepareInDescriptor;
+#endif
+			pSA->inComplete = secfp_inComplete;
+#ifdef SECFP_SG_SUPPORT
+			pSA->inCompleteWithFrags = secfp_inCompleteWithFrags;
+#endif
+#endif
+
+		} else {
+			/* AH Handling */
+			if (secfp_updateAHInSA(pSA, pSAParams)) {
+				GlobalErrors.ulInvalidAuthEncAlgo++;
+				kfree(pSA);
+				ASFIPSEC_DEBUG("secfp_updateAHInSA returned failure");
+				if (!bVal)
+					local_bh_enable();
+				return SECFP_FAILURE;
+			}
+#ifndef ASF_QMAN_IPSEC
+			pSA->prepareInDescriptor = secfp_prepareAHInDescriptor;
+			pSA->prepareInDescriptorWithFrags = secfp_prepareAHInDescriptor;
+#endif
+		}
 		/* Need to create and append Selector Set */
 		pNode = secfp_updateInSelSet(pContainer, pSrcSel,
 						pDstSel, ucSelFlags);

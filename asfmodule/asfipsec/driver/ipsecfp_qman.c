@@ -184,6 +184,85 @@ static inline int secfp_build_qman_desc(struct caam_ctx *ctx)
 	return iretval;
 }
 
+int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
+{
+	u32 *sh_desc;
+	struct preheader_t *prehdr;
+	int ret = 0;
+	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
+
+	/* build shared descriptor for this session */
+	ctx->sh_desc_mem = kzalloc(
+			ASF_IPSEC_SEC_SA_SHDESC_SIZE + L1_CACHE_BYTES - 1,
+			GFP_DMA | flags);
+	if (!ctx->sh_desc_mem) {
+		ASFIPSEC_DPERR("Could not allocate shared descriptor");
+		return -ENOMEM;
+	}
+	sh_desc = (u32 *)(((dma_addr_t)ctx->sh_desc_mem
+			+ (L1_CACHE_BYTES - 1)) & ~(L1_CACHE_BYTES - 1));
+
+	ctx->sh_desc = sh_desc;
+	/* Leaving space for Pre header*/
+	sh_desc += (sizeof(struct preheader_t)/sizeof(sh_desc));
+
+	/* Shared Descriptor Creation */
+	if (dir == SECFP_AH_DIR_OUT) {
+		spin_lock(&secFP_OutQmanFqLock);
+		ctx->RecvFq = secfp_qman_alloc_fq(ASF_QMAN_OUT_RECV_FQ);
+		ctx->SecFq = secfp_qman_alloc_fq(ASF_QMAN_OUT_SEC_FQ);
+		spin_unlock(&secFP_OutQmanFqLock);
+
+		if (!ctx->SecFq) {
+			kfree(ctx->sh_desc_mem);
+			ASFIPSEC_DPERR("No Sec FQ available, just return\n");
+			return -ENOMEM;
+		}
+		ret = secfp_buildAHQMANSharedDesc(ctx, sh_desc,
+					(outSA_t *)pSA, SECFP_AH_DIR_IN);
+		if (ret) {
+			ASFIPSEC_DPERR("prepareEncapShareDesc-ret=%d", ret);
+			secfp_qman_release_out_fq(ctx);
+			kfree(ctx->sh_desc_mem);
+			return ret;
+		}
+	} else {
+		spin_lock(&secFP_InQmanFqLock);
+		ctx->RecvFq = secfp_qman_alloc_fq(ASF_QMAN_IN_RECV_FQ);
+		ctx->SecFq = secfp_qman_alloc_fq(ASF_QMAN_IN_SEC_FQ);
+		spin_unlock(&secFP_InQmanFqLock);
+		if (!ctx->SecFq) {
+			kfree(ctx->sh_desc_mem);
+			ASFIPSEC_ERR("No Sec FQ available, just return\n");
+			return -ENOMEM;
+		}
+		ret = secfp_buildAHQMANSharedDesc(ctx, sh_desc,
+					(inSA_t *)pSA, SECFP_AH_DIR_OUT);
+		if (ret) {
+			ASFIPSEC_DPERR("prepareEncapShareDesc-ret=%d", ret);
+			secfp_qman_release_in_fq(ctx);
+			kfree(ctx->sh_desc_mem);
+			return ret;
+		}
+	}
+
+	prehdr = (struct preheader_t *)ctx->sh_desc;
+	prehdr->hi.field.idlen = (*(ctx->sh_desc + 2) & 0x3F);
+	prehdr->lo.field.pool_buffer_size = 256;
+
+	ASFIPSEC_FPRINT("Dir=%d - Shared Descriptor===>\n", dir);
+	ASFIPSEC_HEXDUMP(ctx->sh_desc, desc_bytes(ctx->sh_desc));
+
+	/* End of Shared Descriptor Creation */
+	ret = secfp_build_qman_desc(ctx);
+	if (ret) {
+		ASFIPSEC_DPERR("error in secfp_build_qman_desc");
+		kfree(ctx->sh_desc_mem);
+	}
+	return ret;
+
+
+}
 int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 {
 	u32 *sh_desc;
@@ -262,6 +341,50 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 	return ret;
 }
 
+void clearICVMutable(struct sk_buff *skb, struct ses_pkt_info *pInfo, inSA_t *pSA)
+{
+	struct iphdr *iph;
+	int ii;
+
+	pInfo->in_icv = kzalloc(pSA->ctx.split_key_len, GFP_ATOMIC | GFP_DMA);
+	if (pInfo->in_icv == NULL) {
+		ASFIPSEC_ERR("Unable to allocate memory for IN ICV");
+		return;
+	}
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+#endif
+		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
+			pInfo->in_icv[ii] = skb->data[SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii];
+
+		/*setting icv to zero before computing new ICV*/
+		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
+			skb->data[SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii] = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	} else {
+		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
+			pInfo->in_icv[ii] = skb->data[SECFP_IPV6_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii];
+
+		/*setting icv to zero before computing new ICV*/
+		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
+			skb->data[SECFP_IPV6_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii] = 0;
+	}
+#endif
+	/*setting mutable fields to zero */
+	if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		iph = (struct iphdr *)skb->data;
+		iph->frag_off = 0;
+		iph->ttl = 0;
+		iph->tos = 0;
+		iph->check = 0;
+	} else {
+		struct ipv6hdr *ipv6h;
+		ipv6h = (struct ipv6hdr *)skb->data;
+		ipv6h->hop_limit = 0;
+		ipv6h->priority = 0;
+		memset(ipv6h->flow_lbl, 0, 3);
+	}
+}
 int secfp_qman_in_submit(inSA_t *pSA, void *context)
 {
 	int	iRetVal;
@@ -297,8 +420,10 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 	pSG = pInfo->cb_SG;
 	pInfo->cb_skb = skb;
 	pInfo->dir = SECFP_IN;
+	pInfo->proto = pSA->SAParams.ucProtocol;
 	ASFIPSEC_DEBUG("skb->len= %d headlen=%d\n", skb->len, skb_headlen(skb));
 	/* ToDo: We shouldn't work with jrdev anymore */
+	if (pSA->SAParams.ucProtocol == SECFP_PROTO_ESP) {
 	if (skb_shinfo(skb)->frag_list) {
 		struct scatter_gather_entry_s *sgt1;
 		unsigned int total_frags;
@@ -375,6 +500,19 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 		pSG[1].addr_hi = (uint32_t) (pInmap>>32);
 		pSG[1].length = skb->len;
 	}
+	} else {
+		clearICVMutable(skb, pInfo, pSA);
+		pInmap = dma_map_single(pSA->ctx.jrdev,
+			skb->data - pSA->ctx.split_key_len,
+			skb->len + pSA->ctx.split_key_len,
+			DMA_BIDIRECTIONAL);
+		pInfo->dynamic = pSA->ctx.split_key_len;
+		/* filling compound frame */
+		pSG->addr_lo = pInmap;
+		pSG->length = skb->len;
+		pSG[1].addr_lo = (uint32_t) pInmap + pSA->ctx.split_key_len;
+		pSG[1].length = skb->len;
+	}
 	pSG[1].final = 1;
 
 
@@ -425,6 +563,7 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 	}
 
 	iph = (struct iphdr *)skb->data;
+	if (pSA->SAParams.ucProtocol == SECFP_PROTO_ESP) {
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 6) {
 		struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
@@ -432,16 +571,17 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 	} else
 #endif
 		ip_decrease_ttl(iph);
+	}
 
 	pSG = pInfo->cb_SG;
 	pInfo->cb_skb = skb;
 	pInfo->dir = SECFP_OUT;
+	pInfo->proto = pSA->SAParams.ucProtocol;
+	if (pSA->SAParams.ucProtocol == SECFP_PROTO_ESP) {
 	pInmap = dma_map_single(pSA->ctx.jrdev, (skb->data),
 		skb->len + SECFP_APPEND_BUF_LEN_FIELD + SECFP_NOUNCE_IV_LEN,
 		DMA_BIDIRECTIONAL);
 
-	ASFIPSEC_DEBUG("QMAN enqueue submit pSA->ulCompleteOverHead %d\n",
-				pSA->ulCompleteOverHead);
 	/* filling compound frame */
 	pSG->addr_lo = (uint32_t) (pInmap);
 	pSG->addr_hi = (uint32_t) (pInmap>>32);
@@ -449,6 +589,21 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 
 	pSG[1].addr_lo = (uint32_t) (pInmap);
 	pSG[1].addr_hi = (uint32_t) (pInmap>>32);
+	} else {
+		pInmap = dma_map_single(pSA->ctx.jrdev,
+				(skb->data - pSA->ctx.split_key_len),
+				skb->len + pSA->ctx.split_key_len,
+				DMA_BIDIRECTIONAL);
+		/* filling compound frame */
+		pInfo->dynamic = pSA->ctx.split_key_len;
+		pSG->addr_lo = (uint32_t) (pInmap);
+		pSG->length = skb->len;
+		pSG[1].addr_lo = (uint32_t) (pInmap) + pSA->ctx.split_key_len;
+	}
+
+	ASFIPSEC_DEBUG("QMAN enqueue submit pSA->ulCompleteOverHead %d\n",
+				pSA->ulCompleteOverHead);
+
 	pSG[1].length = (skb->len);
 	pSG[1].final = 1;
 
@@ -534,9 +689,15 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 		pInfo->cb_skb->len = sgt[0].length;
 		kfree(sgt);
 	}
+	if (pInfo->proto != SECFP_PROTO_ESP)
+		pInfo->cb_skb->data += pInfo->dynamic;
 	if (pInfo->dir == SECFP_OUT) {
-		pInfo->cb_skb->len = pSG->length;
-		secfp_outComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);
+		if (pInfo->proto == SECFP_PROTO_ESP)
+			pInfo->cb_skb->len = pSG->length;
+		if (pInfo->proto == SECFP_PROTO_ESP)
+			secfp_outComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);
+		else
+			secfp_outAHComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);
 	} else {
 #ifndef ASF_DEDICTD_CHAN_SEC_OUT
 		int hashval = 0, frag_cpu;
@@ -578,12 +739,16 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 			return qman_cb_dqrr_consume;
 		} else
 #endif
-		if (skb_shinfo(pInfo->cb_skb)->frag_list)
-			secfp_inCompleteWithFrags(pInfo->cb_pDev,
+		if (pInfo->proto == SECFP_PROTO_ESP)
+			if (skb_shinfo(pInfo->cb_skb)->frag_list)
+				secfp_inCompleteWithFrags(pInfo->cb_pDev,
+					NULL, 0, pInfo->cb_skb);
+			else
+				secfp_inComplete(pInfo->cb_pDev,
 					NULL, 0, pInfo->cb_skb);
 		else
-			secfp_inComplete(pInfo->cb_pDev,
-					NULL, 0, pInfo->cb_skb);
+			secfp_inAHComplete(pInfo->cb_pDev,
+				(u32 *)pInfo, 0, pInfo->cb_skb);
 	}
 out:
 	kfree(pInfo);

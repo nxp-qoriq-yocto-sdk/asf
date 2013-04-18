@@ -77,6 +77,10 @@ struct ses_pkt_info {
 	struct device	*cb_pDev;
 	u8 dir;
 	u8 dynamic;
+#ifdef ASF_QMAN_IPSEC
+	u8 proto;
+	unsigned char *in_icv;
+#endif
 };
 
 struct preheader_t {
@@ -159,6 +163,22 @@ struct aead_edesc {
 	int sec4_sg_bytes;
 	dma_addr_t sec4_sg_dma;
 	struct sec4_sg_entry *sec4_sg;
+	u32 hw_desc[0];
+};
+struct ipsec_ah_edesc {
+	int assoc_nents;
+	int src_nents;
+	int dst_nents;
+	/* this field stores the length of icv */
+	int icv_bytes;
+	/* this field stores the icv computed over the packet */
+	u8 *icv;
+	/* this field stores the icv retrieved from the incoming packet */
+	u8 *in_icv;
+	dma_addr_t icv_dma;
+	int link_tbl_bytes;
+	dma_addr_t link_tbl_dma;
+	struct link_tbl_entry *link_tbl;
 	u32 hw_desc[0];
 };
 

@@ -1249,7 +1249,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	}
 #endif
 #ifdef ASF_IPSEC_FP_SUPPORT
-	if (nexthdr == NEXTHDR_ESP) {
+	if (nexthdr == NEXTHDR_ESP || nexthdr == NEXTHDR_AUTH) {
 		/* Give packet to ASF IPSec */
 		if (pFFPIPSecIn) {
 			if (pFFPIPSecIn(skb, 0, anDev->ulVSGId,

@@ -44,33 +44,6 @@
 #include "ipseccmn.h"
 
 
-#define SECFP_MF_OFFSET_FLAG_NET_ORDER htons(IP_MF|IP_OFFSET)
-
-#ifdef ASF_QMAN_IPSEC
-/* this head room is for largest L2Blob */
-#define VPN_TOT_OVHD	32
-#define VPN_HDROOM	32
-#else
-#define VPN_TOT_OVHD	(1400 + 32)
-#define VPN_HDROOM	(1100 + 32)
-#endif
-
-#define ASF_ICMP_DEST_UNREACH 3
-#define ASF_ICMP_CODE_FRAG_NEEDED 4
-#define ASF_NON_NATT_PACKET 0
-#define ASF_NATT_PACKET 1
-#define ASF_IPSEC_CONSUMED 99
-
-#define ASF_ICMP_ECHO_REPLY	0 /* Echo Reply */
-#define ASF_ICMP_QUENCH		4 /* Source Quench */
-#define ASF_ICMP_REDIRECT	5 /* Redirect */
-#define ASF_ICMP_TIME_EXCEED	11 /* Time-to-live Exceeded */
-#define ASF_ICMP_PARAM_PROB	12
-
-#define ASF_IPLEN	20
-#define ASF_ICMPLEN	8
-#define ASF_IP_MAXOPT	40
-
 /* Data Structure initialization */
 /* Inbound SA SPI Table */
 char aNonIkeMarker_g[ASF_IPSEC_MAX_NON_IKE_MARKER_LEN];
@@ -130,10 +103,11 @@ int secfp_try_fastPathOut(unsigned int ulVSGId, struct sk_buff *skb,
 
 extern struct sk_buff *asf_alloc_buf_skb(struct net_device *dev);
 extern void asf_dec_skb_buf_count(struct sk_buff *skb);
-static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
+inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
 static inline void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA);
 
 #ifndef ASF_QMAN_IPSEC
+struct kmem_cache *icv_cache __read_mostly;
 struct kmem_cache *desc_cache __read_mostly;
 void *desc_rec_queue[NR_CPUS][MAX_IPSEC_RECYCLE_DESC];
 static unsigned int curr_desc[NR_CPUS];
@@ -151,7 +125,7 @@ static inline void *secfp_desc_alloc(void)
 	}
 }
 
-static inline void secfp_desc_free(void *desc)
+inline void secfp_desc_free(void *desc)
 {
 	u32 smp_processor_id = smp_processor_id();
 	u32 current_edesc = curr_desc[smp_processor_id];
@@ -308,7 +282,7 @@ void secfp_IVDeInit(void)
 #endif
 
 
-static inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
+inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
 {
 	ASFSkbFree(freeArg);
 }
@@ -387,6 +361,22 @@ int secfp_init(void)
 		ASFIPSEC_ERR("desc_cache create failed");
 		return -ENOMEM;
 	}
+
+	icv_cache = kmem_cache_create("icv_cache",
+#ifndef CONFIG_ASF_SEC4x
+			sizeof(struct talitos_desc),
+			__alignof__(struct talitos_desc),
+			SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA, NULL);
+#else
+			sizeof(struct ipsec_ah_edesc) + CAAM_DESC_BYTES_MAX,
+			__alignof__(struct ipsec_ah_edesc),
+			SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA, NULL);
+#endif
+	if (icv_cache == NULL) {
+		secfp_deInit();
+		ASFIPSEC_ERR("icv_cache create failed");
+		return -ENOMEM;
+	}
 #endif /*ASF_QMAN_IPSEC*/
 
 	pIPSecPPGlobalStats_g = asfAllocPerCpu(sizeof(AsfIPSecPPGlobalStats_t));
@@ -455,7 +445,7 @@ EXPORT_SYMBOL(vqentr_talitos_rng_data_read);
  */
 
 __be16 secfp_IPv4_IDs[NR_CPUS];
-static inline __be16 secfp_getNextId(void)
+inline __be16 secfp_getNextId(void)
 {
 	/* Stub : To be filled */
 	return secfp_IPv4_IDs[smp_processor_id()]++;
@@ -1351,10 +1341,10 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		}
 		if ((secout_sg_flag & SECFP_SCATTER_GATHER)
 			== SECFP_SCATTER_GATHER)
-			secfp_prepareOutDescriptorWithFrags(skb, pSA,
+			pSA->prepareOutDescriptorWithFrags(skb, pSA,
 						desc, 0);
 		else
-			secfp_prepareOutDescriptor(skb, pSA, desc, 0);
+			pSA->prepareOutDescriptor(skb, pSA, desc, 0);
 #endif /*ASF_QMAN_IPSEC*/
 
 		ASFIPSEC_FPRINT("Pkt Pre Processing len=%d", skb->len);
@@ -1381,13 +1371,13 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 #ifndef CONFIG_ASF_SEC4x
 		update_chan_out(pSA);
 		if (talitos_submit(pdev, pSA->chan, desc,
-			secfp_outComplete, (void *)skb) == -EAGAIN)
+			pSA->outComplete, (void *)skb) == -EAGAIN)
 #elif defined(ASF_QMAN_IPSEC)
 		if (secfp_qman_out_submit(pSA, (void *) skb))
 #else
 		if (caam_jr_enqueue(pSA->ctx.jrdev,
 			((struct aead_edesc *)desc)->hw_desc,
-			secfp_outComplete, (void *)skb))
+			pSA->outComplete, (void *)skb))
 #endif
 		{
 #ifdef ASFIPSEC_LOG_MSG
@@ -1435,13 +1425,13 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 			}
 			if ((secout_sg_flag & SECFP_SCATTER_GATHER)
 					== SECFP_SCATTER_GATHER)
-				secfp_prepareOutDescriptorWithFrags(skb,
+				pSA->prepareOutDescriptorWithFrags(skb,
 					pSA, desc, 1);
 			else
-				secfp_prepareOutDescriptor(skb, pSA, desc, 1);
+				pSA->prepareOutDescriptor(skb, pSA, desc, 1);
 
 			if (talitos_submit(pdev, pSA->chan, desc,
-					secfp_outComplete,
+					pSA->outComplete,
 					(void *)skb) == -EAGAIN) {
 				ASFIPSEC_WARN("Outbound Submission to"\
 						"SEC failed ");
@@ -1780,10 +1770,10 @@ static inline int secfp_try_fastPathOutv4(
 		}
 		if ((secout_sg_flag & SECFP_SCATTER_GATHER)
 			== SECFP_SCATTER_GATHER)
-			secfp_prepareOutDescriptorWithFrags(skb, pSA,
+			pSA->prepareOutDescriptorWithFrags(skb, pSA,
 						desc, 0);
 		else
-			secfp_prepareOutDescriptor(skb, pSA, desc, 0);
+			pSA->prepareOutDescriptor(skb, pSA, desc, 0);
 #endif /*ASF_QMAN_IPSEC*/
 
 		ASFIPSEC_FPRINT("Pkt Pre Processing len=%d", skb->len);
@@ -1807,13 +1797,13 @@ static inline int secfp_try_fastPathOutv4(
 #ifndef CONFIG_ASF_SEC4x
 		update_chan_out(pSA);
 		if (talitos_submit(pdev, pSA->chan, desc,
-			secfp_outComplete, (void *)skb) == -EAGAIN)
+			pSA->outComplete, (void *)skb) == -EAGAIN)
 #elif defined(ASF_QMAN_IPSEC)
 		if (secfp_qman_out_submit(pSA, (void *) skb))
 #else
 		if (caam_jr_enqueue(pSA->ctx.jrdev,
 			((struct aead_edesc *)desc)->hw_desc,
-			secfp_outComplete, (void *)skb))
+			pSA->outComplete, (void *)skb))
 #endif
 		{
 #ifdef ASFIPSEC_LOG_MSG
@@ -1867,7 +1857,7 @@ static inline int secfp_try_fastPathOutv4(
 				secfp_prepareOutDescriptor(skb, pSA, desc, 1);
 
 			if (talitos_submit(pdev, pSA->chan, desc,
-					secfp_outComplete,
+					pSA->outComplete,
 					(void *)skb) == -EAGAIN) {
 				ASFIPSEC_WARN("Outbound Submission to"\
 						"SEC failed ");
@@ -2683,8 +2673,9 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	return 0;
 }
 
-static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
+inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 					ASFIPSecOpqueInfo_t *pIPSecOpaque,
+					unsigned char ucProto,
 					unsigned int *pulCommonInterfaceId,
 					unsigned int ulBeforeTrimLen) {
 	ASFLogInfo_t AsfLogInfo;
@@ -2704,7 +2695,7 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 	rcu_read_lock();
 
 	pSA = secfp_findInSA(*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]),
-			SECFP_PROTO_ESP,
+			ucProto,
 			*(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]),
 			pIPSecOpaque->DestAddr,
 			(unsigned int *)&(pHeadSkb->cb[SECFP_HASH_VALUE_INDEX]));
@@ -2908,7 +2899,7 @@ static inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 	return 0;
 }
 
-static inline void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb)
+inline void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb)
 {
 	struct iphdr *iph;
 	u8 tos;
@@ -3159,7 +3150,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 		}
 
 		iRetVal = secfp_inCompleteSAProcess(&pHeadSkb, &IPSecOpque,
-				&ulCommonInterfaceId, ulBeforeTrimLen);
+				SECFP_PROTO_ESP, &ulCommonInterfaceId, ulBeforeTrimLen);
 		if (iRetVal == 1) {
 			ASFIPSEC_WARN("secfp_inCompleteSAProcess failed");
 			ASFSkbFree(pHeadSkb);
@@ -3474,7 +3465,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 		return;
 	}
 	iRetVal = secfp_inCompleteSAProcess(&skb, &IPSecOpque,
-		&ulCommonInterfaceId, ulBeforeTrimLen);
+		SECFP_PROTO_ESP, &ulCommonInterfaceId, ulBeforeTrimLen);
 	ASFIPSEC_DEBUG("\nUL Common IFACE ID is %d\n",
 				ulCommonInterfaceId);
 	if (iRetVal == 1) {
@@ -3571,11 +3562,10 @@ static inline void secfp_appendESN(inSA_t *pSA, unsigned int ulSeqNum,
 	(*(unsigned int *)(pData)) = ulHOSeqNum;
 }
 
-#ifndef ASF_SECFP_PROTO_OFFLOAD
 /* When an inbound packet arrives, first it is checked to see if it
  * is a replay packet. This routine does the replay check
  */
-static inline void secfp_checkSeqNum(inSA_t *pSA,
+static void secfp_checkSeqNum(inSA_t *pSA,
 					u32 ulSeqNum, u32 ulLowerBoundSeqNum, struct sk_buff *skb)
 {
 	unsigned int usSize = 0;
@@ -3806,7 +3796,6 @@ static inline void secfp_checkSeqNum(inSA_t *pSA,
 		}
 	}
 }
-#endif
 
 /*
  * return values = 0, pkt consumed
@@ -4175,11 +4164,11 @@ So all these special boundary cases need to be handled for nr_frags*/
 #ifdef CONFIG_ASF_SEC3x
 		if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 			== SECFP_SCATTER_GATHER)
-			secfp_prepareInDescriptorWithFrags(pHeadSkb, pSA,
+			pSA->prepareInDescriptorWithFrags(pHeadSkb, pSA,
 						desc, 0);
 		else
 #endif /* CONFIG_ASF_SEC3x */
-			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
+			pSA->prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 
 		/* Post submission, we can move the data pointer beyond the ESP header */
 		/* Trim the length accordingly */
@@ -4283,7 +4272,7 @@ sa_expired:
 		update_chan_in(pSA);
 		if (talitos_submit(pdev, pSA->chan, desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
-			secfp_inCompleteWithFrags : secfp_inComplete,
+			pSA->inCompleteWithFrags : pSA->inComplete,
 			(void *)pHeadSkb) == -EAGAIN)
 #elif defined(ASF_QMAN_IPSEC)
 		if (secfp_qman_in_submit(pSA, pHeadSkb))
@@ -4291,7 +4280,7 @@ sa_expired:
 		if (caam_jr_enqueue(pSA->ctx.jrdev,
 			((struct aead_edesc *)desc)->hw_desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
-			secfp_inCompleteWithFrags : secfp_inComplete,
+			pSA->inCompleteWithFrags : pSA->inComplete,
 			(void *)pHeadSkb))
 #endif
 	{
@@ -4337,13 +4326,13 @@ sa_expired:
 			}
 			if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 				== SECFP_SCATTER_GATHER)
-				secfp_prepareInDescriptorWithFrags(pHeadSkb,
+				pSA->prepareInDescriptorWithFrags(pHeadSkb,
 						pSA, desc, 0);
 			else
-				secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
+				pSA->prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 			if (talitos_submit(pdev, pSA->chan, desc,
-				(secin_sg_flag & SECFP_SCATTER_GATHER)
-				? secfp_inCompleteWithFrags : secfp_inComplete,
+				(secin_sg_flag & SECFP_SCATTER_GATHER) ?
+				pSA->inCompleteWithFrags : pSA->inComplete,
 				(void *)pHeadSkb) == -EAGAIN) {
 				ASFIPSEC_WARN("Inbound Submission to SEC failed");
 
@@ -4552,7 +4541,7 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	unsigned int ulHashVal = usMaxInSAHashTaleSize_g;
 	struct sk_buff *pHeadSkb = NULL, *pTailSkb = NULL;
 	unsigned char bScatterGather;
-	unsigned int len = 0;
+	unsigned int len = 0, ulSecLenIncrease;
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
@@ -4737,6 +4726,9 @@ So all these special boundary cases need to be handled for nr_frags*/
 			pContainer->SPDParams.bDPDAlive = 0;
 		}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
+		pHeadSkb->cb[SECFP_SECHDR_INDEX] = pSA->ulSecHdrLen;
+		pHeadSkb->cb[SECFP_SECLEN_INDEX] = SECFP_IPV4_HDR_LEN;
+
 		ulLowerBoundSeqNum = 0;
 #ifndef ASF_QMAN_IPSEC
 		if (likely(pSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
@@ -4867,12 +4859,25 @@ So all these special boundary cases need to be handled for nr_frags*/
 			ulSecLen+= ulFragpadlen;
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 #endif
+			ulSecLenIncrease = 4;
 		} else {
 
 			/* check anything needed for AH  --guess none*/
 			/* do not remove the tunnel header */
+			unsigned int *pESNLoc = 0;
 			ulSecLen = 0;
+			ulSecLenIncrease = 0;
 
+			if (pSA->SAParams.bDoAntiReplayCheck) {
+				if (pSA->SAParams.bUseExtendedSequenceNumber) {
+					pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
+					pESNLoc = (unsigned int *)(pTailSkb->tail);
+					secfp_appendESN(pSA, ulSeqNum, &ulLowerBoundSeqNum, (unsigned int *)pESNLoc);
+					*(unsigned int *)&(pHeadSkb->cb[SECFP_SEQNUM_INDEX]) = ulSeqNum;
+					secfp_checkSeqNum(pSA, ulSeqNum,
+							ulLowerBoundSeqNum, pHeadSkb);
+				}
+			}
 		}
 #endif
 
@@ -4906,10 +4911,12 @@ So all these special boundary cases need to be handled for nr_frags*/
 		if (pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX])
 			*(unsigned int *)&(pHeadSkb->cb[SECFP_SEQNUM_INDEX]) = ulSeqNum;
 
-		/* Move the skb data pointer to beginning of ESP header */
-		ASFIPSEC_DEBUG("In Offsetting data by ipheader len=%d", iph->ihl*4);
-		pHeadSkb->data += (iph->ihl*4);
-		pHeadSkb->len -= (iph->ihl*4);
+		/* if Proto is ESP -Move the skb data pointer  beginning of ESP header */
+		/* For AH -  data pointer should still point to outer ip header */
+
+		ASFIPSEC_DEBUG("In Offsetting data by len=%d", iph->ihl*ulSecLenIncrease);
+		pHeadSkb->data += (iph->ihl * ulSecLenIncrease);
+		pHeadSkb->len -= (iph->ihl*ulSecLenIncrease);
 #endif
 		/* Storing Common Interface Id */
 		if (!pSA->ulTunnelId)
@@ -4932,12 +4939,12 @@ So all these special boundary cases need to be handled for nr_frags*/
 #if defined(CONFIG_ASF_SEC3x)
 		if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 			== SECFP_SCATTER_GATHER)
-			secfp_prepareInDescriptorWithFrags(pHeadSkb, pSA,
+			pSA->prepareInDescriptorWithFrags(pHeadSkb, pSA,
 						desc, 0);
 		else
-			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
+			pSA->prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 #else
-			secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
+			pSA->prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 #endif
 
 		/* Post submission, we can move the data pointer beyond the ESP header */
@@ -5031,7 +5038,7 @@ sa_expired:
 		update_chan_in(pSA);
 		if (talitos_submit(pdev, pSA->chan, desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
-			secfp_inCompleteWithFrags : secfp_inComplete,
+			pSA->inCompleteWithFrags : pSA->inComplete,
 			(void *)pHeadSkb) == -EAGAIN)
 #elif defined(ASF_QMAN_IPSEC)
 		if (secfp_qman_in_submit(pSA, pHeadSkb))
@@ -5039,7 +5046,7 @@ sa_expired:
 		if (caam_jr_enqueue(pSA->ctx.jrdev,
 			((struct aead_edesc *)desc)->hw_desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
-			secfp_inCompleteWithFrags : secfp_inComplete,
+			pSA->inCompleteWithFrags : pSA->inComplete,
 			(void *)pHeadSkb))
 #endif
 		{
@@ -5085,13 +5092,13 @@ sa_expired:
 			}
 			if ((secin_sg_flag & SECFP_SCATTER_GATHER)
 				== SECFP_SCATTER_GATHER)
-				secfp_prepareInDescriptorWithFrags(pHeadSkb,
+				pSA->prepareInDescriptorWithFrags(pHeadSkb,
 						pSA, desc, 0);
 			else
-				secfp_prepareInDescriptor(pHeadSkb, pSA, desc, 0);
+				pSA->prepareInDescriptor(pHeadSkb, pSA, desc, 0);
 			if (talitos_submit(pdev, pSA->chan, desc,
 				(secin_sg_flag & SECFP_SCATTER_GATHER)
-				? secfp_inCompleteWithFrags : secfp_inComplete,
+				? pSA->inCompleteWithFrags : pSA->inComplete,
 				(void *)pHeadSkb) == -EAGAIN) {
 				ASFIPSEC_WARN("Inbound Submission to SEC failed");
 
@@ -5408,7 +5415,7 @@ ret_stk:
 	return;
 }
 EXPORT_SYMBOL(ASFIPSecDecryptAndSendPkt);
-static inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
+inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
 {
 	int ii;
 	if (!ASFIPSecCbFn.pFnAuditLog)

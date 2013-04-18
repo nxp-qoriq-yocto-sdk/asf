@@ -346,8 +346,9 @@ int is_policy_offloadable(struct xfrm_policy *xp)
 		ASFCTRL_WARN("IPSEC Transport Mode not supported");
 		return -EINVAL;
 	}
-	if (unlikely(tmpl->id.proto != IPPROTO_ESP)) {
-		ASFCTRL_WARN("Non ESP protocol not supported");
+	if ((unlikely(tmpl->id.proto != IPPROTO_ESP) &&
+		(tmpl->id.proto != IPPROTO_AH))) {
+		ASFCTRL_WARN("Non ESP/AH protocol not supported");
 		return -EINVAL;
 	}
 	if ((tmpl->calgos != 0) && (tmpl->calgos != 0xffffffff)) {
@@ -370,8 +371,10 @@ static inline int is_sa_offloadable(struct xfrm_state *xfrm)
 		return -EINVAL;
 	}
 
-	if (unlikely(xfrm->id.proto != IPPROTO_ESP)) {
-		ASFCTRL_WARN("Non ESP protocol not supported");
+	if (unlikely((xfrm->id.proto != IPPROTO_ESP)
+		&& (xfrm->id.proto != IPPROTO_AH)
+		)) {
+		ASFCTRL_WARN("Non ESP/AH protocol not supported");
 		return -EINVAL;
 	}
 	return 0;
@@ -659,7 +662,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.handleToSOrDSCPAndFlowLabel = ASF_IPSEC_QOS_TOS_COPY;
 	/*if not copy than set - SAParams.qos = defined value */
 	SAParams.handleDFBit = ASF_IPSEC_DF_COPY;
-	SAParams.protocol = ASF_IPSEC_PROTOCOL_ESP;
+	SAParams.protocol = xfrm->id.proto ;
 
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv4OrIPv6) {
@@ -726,6 +729,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				break;
 			default:
 				ASFCTRL_WARN("CCM ICV length not supported");
+				return -EINVAL;
 			}
 		} else if (ASF_IPSEC_EALG_AES_GCM_ICV8 == ret) {
 			switch (aead->alg_icv_len) {
@@ -740,6 +744,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				break;
 			default:
 				ASFCTRL_WARN("GCM ICV length not supported");
+				return -EINVAL;
 			}
 		} else {
 			SAParams.encAlgo = ASF_IPSEC_EALG_NULL_AES_GMAC;
@@ -961,7 +966,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
 	SAParams.handleToSOrDSCPAndFlowLabel = ASF_IPSEC_QOS_TOS_COPY;
 	SAParams.handleDFBit = ASF_IPSEC_DF_COPY;
-	SAParams.protocol = ASF_IPSEC_PROTOCOL_ESP;
+	SAParams.protocol = xfrm->id.proto;
 
 	SAParams.ulMtu = ASFCTRL_DEF_PMTU;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -1028,6 +1033,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				break;
 			default:
 				ASFCTRL_WARN("CCM ICV length not supported");
+				return -EINVAL;
 			}
 		} else if (ASF_IPSEC_EALG_AES_GCM_ICV8 == ret) {
 			switch (aead->alg_icv_len) {
@@ -1042,6 +1048,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				break;
 			default:
 				ASFCTRL_WARN("GCM ICV length not supported");
+				return -EINVAL;
 			}
 		} else {
 			SAParams.encAlgo = ASF_IPSEC_EALG_NULL_AES_GMAC;
@@ -1231,7 +1238,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 #ifdef ASF_IPV6_FP_SUPPORT
 		}
 #endif
-		delSA.ucProtocol = ASF_IPSEC_PROTOCOL_ESP;
+		delSA.ucProtocol = xfrm->id.proto;
 		delSA.ulSPI = xfrm->id.spi;
 		delSA.usDscpStart = 0;
 		delSA.usDscpEnd = 0;
@@ -1262,7 +1269,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 #ifdef ASF_IPV6_FP_SUPPORT
 		}
 #endif
-		delSA.ucProtocol = ASF_IPSEC_PROTOCOL_ESP;
+		delSA.ucProtocol = xfrm->id.proto;
 		delSA.ulSPI = xfrm->id.spi;
 
 		ASFIPSecRuntime(ASF_DEF_VSG,
@@ -1479,7 +1486,7 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 			asfctrl_vsg_ipsec_cont_magic_id,
 			xfrm->id.spi,
 			daddr,
-			ASF_IPSEC_PROTOCOL_ESP,
+			xfrm->id.proto,
 			Buffer,
 			asfctrl_generic_free,
 			skb);

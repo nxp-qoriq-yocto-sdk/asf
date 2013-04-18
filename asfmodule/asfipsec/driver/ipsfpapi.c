@@ -584,7 +584,7 @@ ASF_void_t ASFIPSecGetCapabilities(ASFIPSecCap_t *pCap)
 
 		pCap->bSelStoreInSPD = 0; /* Selector storage in SPD not supported */
 
-		pCap->bAH = 0; /* AH protocol not supported */
+		pCap->bAH = 1; /* AH protocol supported */
 		pCap->bESP = 1;	/* ESP protocol supported */
 		pCap->bIpComp = 0; /* IP Compression not supported */
 
@@ -833,6 +833,13 @@ aes_gcm_copy:
 				&pASFSAParams->encDecKey[encDecKeyLenBits/8],
 				AES_GMAC_SALT_LEN);
 			break;
+		case ASF_IPSEC_EALG_NULL:
+		pSAParams->ucCipherAlgo = SECFP_ESP_NULL;
+		pSAParams->bEncrypt = ASF_TRUE;
+		pSAParams->ulBlockSize = 4;
+		pSAParams->ulIvSize = 0;
+		pSAParams->EncKeyLen = 0;
+			break;
 		default:
 			ASFIPSEC_WARN("unsupported encr algo %d",
 				pASFSAParams->encAlgo);
@@ -843,11 +850,11 @@ aes_gcm_copy:
 					pSAParams->EncKeyLen);
 	} else {
 		ASFIPSEC_WARN("no encr/auth algo; choosing ESP_NULL\n");
-		pSAParams->ucCipherAlgo = SECFP_ESP_NULL;
+		pSAParams->ucCipherAlgo = SECFP_ENC_NONE;
 		pSAParams->bEncrypt = ASF_FALSE;
 		pSAParams->ulBlockSize = 0;
 		pSAParams->ulIvSize = 0;
-		pSAParams->uICVSize = 0;
+		pSAParams->EncKeyLen = 0;
 	}
 
 	pSAParams->bRedSideFragment = pASFSAParams->bRedSideFragment;
@@ -891,6 +898,8 @@ aes_gcm_copy:
 
 	if (pASFSAParams->protocol == ASF_IPSEC_PROTOCOL_ESP) {
 		pSAParams->ucProtocol = SECFP_PROTO_ESP;
+	} else 	if (pASFSAParams->protocol == ASF_IPSEC_PROTOCOL_AH) {
+		pSAParams->ucProtocol = SECFP_PROTO_AH;
 	} else {
 		return SECFP_FAILURE;
 	}

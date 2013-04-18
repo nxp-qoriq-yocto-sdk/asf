@@ -80,7 +80,7 @@ Split key generation-----------------------------------------------
 [06] 0x64260028 fifostr: class2 mdsplit-jdk len=40
 			@0xffe04000
 */
-static unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
+unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 					const u8 *key_in, u32 authkeylen)
 {
 	u32 *desc;
