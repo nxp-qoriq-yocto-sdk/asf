@@ -2188,7 +2188,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			skb2->next = skb->next;
 			skb->next = NULL;
 #ifdef CONFIG_DPA
-		if (skb->bpid)
+		if (skb->cb[BPID_INDEX])
 			asf_free_buf_skb(skb->dev, skb);
 		else
 			ASFSkbFree(skb);
@@ -2204,7 +2204,7 @@ drop:
 	while (skb2) {
 		pLastSkb = skb2->next;
 #ifdef CONFIG_DPA
-		if (skb2->bpid)
+		if (skb->cb[BPID_INDEX])
 			asf_free_buf_skb(skb2->dev, skb2);
 		else
 			ASFSkbFree(skb2);

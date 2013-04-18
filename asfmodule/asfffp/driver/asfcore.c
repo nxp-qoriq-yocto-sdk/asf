@@ -488,7 +488,7 @@ struct sk_buff *asf_alloc_buf_skb(struct net_device *dev)
 
 	dma_unmap_single(bp->dev, addr, bp->size, DMA_FROM_DEVICE);
 
-	skb->bpid = bp->bpid;
+	skb->cb[BPID_INDEX] = bp->bpid;
 
 	skb->data = ((u8 *)skbh + DPA_BP_HEAD);
 	skb_reset_tail_pointer(skb);
@@ -534,22 +534,22 @@ void asf_dec_skb_buf_count(struct sk_buff *skb)
 	struct sk_buff *skb_temp;
 
 	/* If first SKB doen't have bpid, then frag_list shouldn'y have bpid */
-	if (!(skb->bpid))
+	if (!(skb->cb[BPID_INDEX]))
 		return;
 
-	bp = dpa_bpid2pool(skb->bpid);
+	bp = dpa_bpid2pool(skb->cb[BPID_INDEX]);
 
 	PER_CPU_BP_COUNT(bp)--;
-	skb->bpid = 0;
+	skb->cb[BPID_INDEX] = 0;
 
 	for (skb_temp = skb_shinfo(skb)->frag_list;
 		skb_temp != NULL; skb_temp = skb_temp->next) {
 		/* we can have mix bpids */
-		if (skb_temp->bpid) {
-			bp = dpa_bpid2pool(skb_temp->bpid);
+		if (skb_temp->cb[BPID_INDEX]) {
+			bp = dpa_bpid2pool(skb_temp->cb[BPID_INDEX]);
 
 			PER_CPU_BP_COUNT(bp)--;
-			skb_temp->bpid = 0;
+			skb_temp->cb[BPID_INDEX] = 0;
 		}
 	}
 	return;
@@ -975,7 +975,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 
 		(*percpu_priv->dpa_bp_count)--;
 	} else {
-		skb->bpid = pAbuf->pAnnot->fd->bpid;
+		skb->cb[BPID_INDEX] = pAbuf->pAnnot->fd->bpid;
 	}
 
 	/* set data/length from eth hdr */
@@ -1003,7 +1003,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	/* update pointer */
 	pAbuf->nativeBuffer = skb;
 	/* Will be helpful in Defrag */
-	skb->dpa_buffer = pAbuf->pAnnot;
+	memcpy(&(skb->cb[ANNOTATION_ADDR_INDEX]), &(pAbuf->pAnnot), 4)
 	asf_debug("skb 0x%p, skb->head 0x%p, skb->data 0x%p, skb->tail 0x%p"
 		" skb->len 0x%x skb->mac_header 0x%p\n\n",
 	       skb, skb->head, skb->data, skb->tail,
@@ -1022,7 +1022,7 @@ ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf,
 	t_FmPrsResult	*pParse;
 	u8 *ptr;
 	/* locate a cache aligned annotation start */
-	ptr = (u8 *)skb->dpa_buffer;
+	memcpy(&ptr, &(skb->cb[ANNOTATION_ADDR_INDEX]), 4);
 	if (unlikely(ptr < skb->head)) {
 		asf_debug("%s: no headroom; dropping pkt\n", __func__);
 		asf_dperr("%s", periodic_errmsg[PERR_REASM_NO_HDROOM]);
@@ -1104,7 +1104,6 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 		return AS_FP_PROCEED;
 
 	ASF_RCU_READ_LOCK(bLockFlag);
-
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
 	ACCESS_XGSTATS();

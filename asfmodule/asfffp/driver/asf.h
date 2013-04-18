@@ -45,6 +45,9 @@
 #define ASF_MAX_TX_RETRY_CNT 32
 #endif
 
+/*ASF index used in skb control buffer*/
+#define BPID_INDEX 79
+#define ANNOTATION_ADDR_INDEX 87
 enum {
 	ASF_SUCCESS = 0,
 	ASF_FAILURE = -1
