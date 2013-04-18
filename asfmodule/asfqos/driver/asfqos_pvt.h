@@ -101,10 +101,10 @@ extern void asf_set_wq_scheduling(u32 wq_class,
 			u8 cs_elev, u8 csw2, u8 csw3, u8 csw4, u8 csw5,
 			u8 csw6, u8 csw7);
 
-extern int fm_port_setRateLimit(struct fm_port *port,
-			uint16_t	maxBurstSize,
-			uint32_t	rateLimit);
+extern int fm_port_set_rate_limit(struct fm_port *port,
+			uint16_t	max_burst_size,
+			uint32_t	rate_limit);
 
-extern int fm_port_delRateLimit(struct fm_port *port);
+extern int fm_port_del_rate_limit(struct fm_port *port);
 #endif
 #endif

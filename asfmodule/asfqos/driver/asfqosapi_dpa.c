@@ -151,7 +151,7 @@ static int qos_add_shaper(ASF_uint32_t  ulVsgId,
 	qdisc->u.tbf.maxBurst = 1024; /*KB*/
 
 	/* Convert Shaper Rate into Bits/Sec */
-	err = fm_port_setRateLimit(txport,
+	err = fm_port_set_rate_limit(txport,
 				qdisc->u.tbf.maxBurst,
 				qdisc->u.tbf.rate);
 	if (err) {
@@ -192,7 +192,7 @@ static int qos_del_shaper(ASF_uint32_t  ulVsgId,
 
 	for (i = 0; i < ASF_MAX_IFACES; i++) {
 		if (shaper[i].dev == qdisc->dev) {
-			err = fm_port_delRateLimit(shaper[i].txport);
+			err = fm_port_del_rate_limit(shaper[i].txport);
 			if (err) {
 				asf_err("Shaper Deletion Failed on dev %s\n",
 							qdisc->dev->name);
@@ -1160,7 +1160,7 @@ static void __exit asf_qos_exit(void)
 			root->dev->asf_qdisc = NULL;
 		}
 		if (shaper[i].dev)
-			fm_port_delRateLimit(shaper[i].txport);
+			fm_port_del_rate_limit(shaper[i].txport);
 	}
 	ASF_RCU_READ_UNLOCK(bLockFlag);
 }
