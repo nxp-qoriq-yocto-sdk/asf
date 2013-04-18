@@ -532,12 +532,18 @@ void asf_dec_skb_buf_count(struct sk_buff *skb)
 {
 	struct dpa_bp *bp;
 	struct sk_buff *skb_temp;
+	int i;
+	struct dpa_priv_s *priv = netdev_priv(skb->dev);
 
 	/* If first SKB doen't have bpid, then frag_list shouldn'y have bpid */
 	if (!(skb->cb[BPID_INDEX]))
 		return;
 
-	bp = dpa_bpid2pool(skb->cb[BPID_INDEX]);
+	bp = priv->dpa_bp;
+	for (i = 0; (skb->cb[BPID_INDEX] == (&bp[i])->bpid); i++) {
+		bp = &bp[i];
+		break;
+	}
 
 	PER_CPU_BP_COUNT(bp)--;
 	skb->cb[BPID_INDEX] = 0;
@@ -546,7 +552,11 @@ void asf_dec_skb_buf_count(struct sk_buff *skb)
 		skb_temp != NULL; skb_temp = skb_temp->next) {
 		/* we can have mix bpids */
 		if (skb_temp->cb[BPID_INDEX]) {
-			bp = dpa_bpid2pool(skb_temp->cb[BPID_INDEX]);
+			bp = priv->dpa_bp;
+			for (i = 0; (skb_temp->cb[BPID_INDEX] == (&bp[i])->bpid); i++) {
+				bp = &bp[i];
+				break;
+			}
 
 			PER_CPU_BP_COUNT(bp)--;
 			skb_temp->cb[BPID_INDEX] = 0;
