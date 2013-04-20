@@ -626,10 +626,10 @@ int qos_enqueue_skb(struct sk_buff *skb,
 
 	/* In case, packet is recieved from Linux,
 	   Head room may not be sufficient */
-	if (skb_headroom(skb) < DPA_BP_HEAD) {
+	if (skb_headroom(skb) < priv->tx_headroom) {
 		struct sk_buff *skb_new;
 
-		skb_new = skb_realloc_headroom(skb, DPA_BP_HEAD);
+		skb_new = skb_realloc_headroom(skb, priv->tx_headroom);
 		if (unlikely(!skb_new)) {
 			/* Increment Error Stat */
 			asf_err("Headroom Allocation error.\n");
@@ -673,7 +673,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 		 * And make sure the offset is no lower than DPA_BP_HEAD,
 		 * as required by FMan
 		 */
-		offset = max(offset, (int)DPA_BP_HEAD);
+		offset = max(offset, (int)priv->tx_headroom);
 
 		/*
 		 * We also need to align the buffer address to 16, such that
@@ -693,7 +693,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 		tx_fd->bpid = dpa_bp->bpid;
 		dma_dir = DMA_BIDIRECTIONAL;
 	} else {
-		offset = DPA_BP_HEAD;
+		offset = priv->tx_headroom;
 	}
 
 	skbh = (struct sk_buff **)(skb->data - offset);

@@ -490,7 +490,7 @@ struct sk_buff *asf_alloc_buf_skb(struct net_device *dev)
 
 	skb->cb[BPID_INDEX] = bp->bpid;
 
-	skb->data = ((u8 *)skbh + DPA_BP_HEAD);
+	skb->data = ((u8 *)skbh + priv->tx_headroom);
 	skb_reset_tail_pointer(skb);
 
 	return skb;
