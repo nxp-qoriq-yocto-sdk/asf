@@ -2483,8 +2483,11 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		goto drop_pkt;
 	}
 
-	/*Reusing Annotation unused (timestamp+hash) area As TX_FD*/
-	tx_fd  = (struct qm_fd *)&(abuf.pAnnot->timestamp);
+	/*Reusing unused annotation's (reserved ) area as TX_FD
+	As per current implementation, parse result is not in use for TX_FD
+	but in future if parse results need to be placed in TX_FD then TX_FD
+	will be written at some other memory location*/
+	tx_fd  = (struct qm_fd *)&(abuf.pAnnot->reserved[1]);
 
 	*(u32 *)tx_fd = 0; /* Resetting the unused area */
 	tx_fd->bpid = dpa_bp->bpid;
@@ -2496,10 +2499,6 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	   headroom exists.
 	 */
 	tx_fd->offset = (uintptr_t)iph - (uintptr_t)abuf.pAnnot - flow->l2blob_len;
-	if (tx_fd->offset < (sizeof(struct annotations_t)/* 64 Byte */)) {
-		asf_dperr("%s", periodic_errmsg[PERR_NO_L2_HDROOM]);
-		goto drop_pkt;
-	}
 	if (txdata >= (u8 *)abuf.ethh)
 		tx_fd->length20 = data_len -
 			((txdata - (u8 *)abuf.ethh) & 0xfffff);
@@ -5724,6 +5723,15 @@ static int __init asf_init(void)
 	spin_lock_init(&asf_app_lock);
 #endif
 
+#ifdef CONFIG_DPA
+	/*Check to prevent the asf initialization
+	with minimum headroom size*/
+	if (CONFIG_FSL_FM_RX_EXTRA_HEADROOM < 16) {
+		asf_err("rx_extra_headroom_size (%d) is not sufficient. ASF is not initialized.\n",
+			CONFIG_FSL_FM_RX_EXTRA_HEADROOM);
+		return -1;
+	}
+#endif
 	get_random_bytes(&rule_salt, sizeof(rule_salt));
 
 	if (asf_max_vsgs > ASF_MAX_VSGS) {
