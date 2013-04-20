@@ -1121,6 +1121,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 #ifdef ASF_EGRESS_QOS
 	struct ipv6_redef	*hdr;
 #endif
+	struct netdev_queue *txq;
 
 	ACCESS_XGSTATS();
 
@@ -1704,10 +1705,12 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		/* Enqueue the packet in Linux QoS framework */
 		asf_qos_handling(skb, &flow->tc_filter_res);
 #else
+		txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
 			asf_warn("Error in transmit: Should not happen\r\n");
 			ASFSkbFree(skb);
-		}
+		} else
+			skb->dev->trans_start = txq->trans_start = jiffies;
 #endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulOutPkts++;
