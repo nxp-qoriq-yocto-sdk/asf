@@ -21,13 +21,13 @@ obj-m += asfipsec.o
 
 asfipsec-y := \
 	ipsecfp.o \
-	ipsecfp_ah.o \
 	ipsfpapi.o \
 	ipsecproc.o \
 	ipsecfp_innerapi.o
 
 asfipsec-$(CONFIG_ASF_SEC3x) += ipsecfp_sec3x.o
-asfipsec-$(CONFIG_ASF_SEC4x) += ipsecfp_sec4x.o
+asfipsec-$(CONFIG_ASF_SEC4x) += ipsecfp_sec4x.o \
+				ipsecfp_ah.o
 asfipsec-$(CONFIG_DPA) += ipsecfp_qman.o
 
 all:

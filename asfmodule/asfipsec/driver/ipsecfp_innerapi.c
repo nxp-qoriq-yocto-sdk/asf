@@ -2759,6 +2759,7 @@ unsigned int secfp_createOutSA(
 			pSA->ulXmitHdrLen = 0;
 #endif
 	} else {
+#ifdef CONFIG_ASF_SEC4x
 		/* AH Handling */
 
 		if (secfp_updateAHOutSA(pSA, SAParams)) {
@@ -2785,6 +2786,12 @@ unsigned int secfp_createOutSA(
 		ulMtu, pSA->ulCompleteOverHead,
 		pSA->SAParams.ulBlockSize, pSA->ulInnerPathMTU,
 		pSA->ulSecOverHead);
+#else
+		ASFIPSEC_DEBUG("AH protocol not supported for sec 3x");
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_FAILURE;
+#endif
 	}
 
 	ulIndex = ptrIArray_add(&secFP_OutSATable, pSA);
