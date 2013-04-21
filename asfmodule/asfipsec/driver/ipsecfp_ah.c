@@ -53,12 +53,10 @@ inline void secfp_ah_icv_free(void *icv);
 extern ASFTERMProcessPkt_f	pTermProcessPkt;
 #endif
 
-extern inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg);
-extern inline void secfp_desc_free(void *desc);
-extern inline __be16 secfp_getNextId(void);
-extern inline void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb);
-extern inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
-extern inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
+extern secfp_desc_free(void *desc);
+extern void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb);
+extern void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
+extern int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 					ASFIPSecOpqueInfo_t *pIPSecOpaque,
 					unsigned char ucProto,
 					unsigned int *pulCommonInterfaceId);
@@ -94,6 +92,19 @@ int secfp_cnstr_seq_jobdesc(uint32_t *jobdesc, uint16_t *jobdescsz,
 			uint32_t *shrdesc, uint16_t shrdescsz,
 			void *inbuf, uint32_t insize,
 			void *outbuf, uint32_t outsize, uint32_t flag);
+
+static inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
+{
+	ASFSkbFree(freeArg);
+}
+
+extern __be16 secfp_IPv4_IDs[NR_CPUS];
+static inline __be16 secfp_getNextId(void)
+{
+	/* Stub : To be filled */
+	return secfp_IPv4_IDs[smp_processor_id()]++;
+}
+
 
 #ifndef ASF_QMAN_IPSEC
 inline void *secfp_ah_icv_alloc(void)

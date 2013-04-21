@@ -103,7 +103,7 @@ int secfp_try_fastPathOut(unsigned int ulVSGId, struct sk_buff *skb,
 
 extern struct sk_buff *asf_alloc_buf_skb(struct net_device *dev);
 extern void asf_dec_skb_buf_count(struct sk_buff *skb);
-inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
+void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
 static inline void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA);
 
 #ifndef ASF_QMAN_IPSEC
@@ -125,7 +125,7 @@ static inline void *secfp_desc_alloc(void)
 	}
 }
 
-inline void secfp_desc_free(void *desc)
+void secfp_desc_free(void *desc)
 {
 	u32 smp_processor_id = smp_processor_id();
 	u32 current_edesc = curr_desc[smp_processor_id];
@@ -2673,7 +2673,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	return 0;
 }
 
-inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
+int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 					ASFIPSecOpqueInfo_t *pIPSecOpaque,
 					unsigned char ucProto,
 					unsigned int *pulCommonInterfaceId,
@@ -2899,7 +2899,7 @@ inline int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 	return 0;
 }
 
-inline void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb)
+void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb)
 {
 	struct iphdr *iph;
 	u8 tos;
@@ -5449,7 +5449,7 @@ inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
 	ASFIPSecCbFn.pFnAuditLog(pAsfLogInfo);
 }
 
-static inline void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA)
+void asfFillLogInfoOut(ASFLogInfo_t *pAsfLogInfo, outSA_t *pSA)
 {
 	int ii;
 	if (!ASFIPSecCbFn.pFnAuditLog)
