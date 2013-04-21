@@ -17,6 +17,7 @@
 
 #include <linux/version.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/interrupt.h>
@@ -130,7 +131,7 @@ static void egress_ern(struct qman_portal	*portal,
 }
 
 
-static const struct qman_fq priv_egress_fq __devinitconst = {
+static const struct qman_fq priv_egress_fq = {
 	.cb = { .ern = egress_ern }
 };
 
@@ -616,9 +617,6 @@ int qos_enqueue_skb(struct sk_buff *skb,
 	enum dma_data_direction dma_dir = DMA_TO_DEVICE;
 	bool	can_recycle = false;
 	int	offset, extra_offset;
-	/* Following variables are required by few DPA specific Macros */
-	int dpa_max_frm = CONFIG_FSL_FM_MAX_FRAME_SIZE;
-	int dpa_rx_extra_headroom = CONFIG_FSL_FM_RX_EXTRA_HEADROOM;
 
 	priv = netdev_priv(skb->dev);
 	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
@@ -659,12 +657,14 @@ int qos_enqueue_skb(struct sk_buff *skb,
 	tx_fd->opaque_addr = 0;
 	tx_fd->opaque = 0;
 	tx_fd->cmd = 0;
-#define BP_MAX_BUF_SIZE	(DEFAULT_BUF_SIZE + 256)
+#define RECYCLE_EXTRA_SIZE	256
 /* Maximum offset value for a contig or sg FD (represented on 9bits) */
 #define MAX_FD_OFFSET	((1 << 9) - 1)
 	/* Now Convert SKB to Tx_FD */
-	if (likely(skb->bpid || (skb_is_recycleable(skb, dpa_bp->size) &&
-		   (skb_end_pointer(skb) - skb->head <= BP_MAX_BUF_SIZE) &&
+	if (likely(skb->cb[BPID_INDEX] ||
+			(skb_is_recycleable(skb, dpa_bp->size) &&
+		   (skb_end_pointer(skb) - skb->head <=
+				dpa_bp->size + RECYCLE_EXTRA_SIZE) &&
 		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count)))) {
 		/* Compute the minimum necessary fd offset */
 		offset = dpa_bp->size - skb->len - skb_tailroom(skb);
@@ -736,7 +736,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 
 	if (can_recycle) {
 		/* Recycle SKB */
-		if (!(skb->bpid))
+		if (!(skb->cb[BPID_INDEX]))
 			(*percpu_priv->dpa_bp_count)++;
 		skb_recycle(skb);
 		skb = NULL;

@@ -109,6 +109,16 @@ typedef struct ASFQOSCreateQdisc_s {
 			required to set "4"*/
 			ASF_uint32_t	bands;
 		} prio;
+		/*!	\brief	Structure defining fields for
+			deficit round robin QDisc*/
+		struct {
+			/*!	\brief It represents the value of Wieght given
+			to a given Queue when DRR Scheduling is
+			configured.\n
+			We need to provide quantum/weight in Number of BYTES
+			for each queue. */
+			ASF_uint32_t	quantum;
+		} drr;
 #ifdef CONFIG_DPA
 
 #define DPA_MAX_PRIO_QUEUES	4
@@ -125,16 +135,6 @@ typedef struct ASFQOSCreateQdisc_s {
 			ASF_uint32_t	weight[DPA_MAX_WRR_QUEUES];
 		} wrr;
 #else
-		/*!	\brief	Structure defining fields for
-			deficit round robin QDisc*/
-		struct {
-			/*!	\brief It represents the value of Wieght given
-			to a given Queue when DRR Scheduling is
-			configured.\n
-			We need to provide quantum/weight in Number of BYTES
-			for each queue. */
-			ASF_uint32_t	quantum;
-		} drr;
 		/*!	\brief	Structure defining fields for priority
 			and deficit round robin QDisc*/
 		struct {
