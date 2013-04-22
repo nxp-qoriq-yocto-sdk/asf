@@ -2759,7 +2759,7 @@ unsigned int secfp_createOutSA(
 			pSA->ulXmitHdrLen = 0;
 #endif
 	} else {
-#ifdef CONFIG_ASF_SEC4x
+#if defined (CONFIG_ASF_SEC4x) && defined (CONFIG_PPC32)
 		/* AH Handling */
 
 		if (secfp_updateAHOutSA(pSA, SAParams)) {
@@ -2787,6 +2787,8 @@ unsigned int secfp_createOutSA(
 		pSA->SAParams.ulBlockSize, pSA->ulInnerPathMTU,
 		pSA->ulSecOverHead);
 #else
+		GlobalErrors.ulInvalidAuthEncAlgo++;
+		kfree(pSA);
 		ASFIPSEC_DEBUG("AH protocol not supported for sec 3x");
 		if (!bVal)
 			local_bh_enable();
@@ -3265,6 +3267,7 @@ unsigned int secfp_CreateInSA(
 #endif
 
 		} else {
+#if defined (CONFIG_ASF_SEC4x) && defined (CONFIG_PPC32)
 			/* AH Handling */
 			if (secfp_updateAHInSA(pSA, pSAParams)) {
 				GlobalErrors.ulInvalidAuthEncAlgo++;
@@ -3278,6 +3281,15 @@ unsigned int secfp_CreateInSA(
 			pSA->prepareInDescriptor = secfp_prepareAHInDescriptor;
 			pSA->prepareInDescriptorWithFrags = secfp_prepareAHInDescriptor;
 #endif
+#else
+		GlobalErrors.ulInvalidAuthEncAlgo++;
+		kfree(pSA);
+		ASFIPSEC_DEBUG("AH protocol not supported for sec 3x");
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_FAILURE;
+#endif
+
 		}
 		/* Need to create and append Selector Set */
 		pNode = secfp_updateInSelSet(pContainer, pSrcSel,

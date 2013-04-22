@@ -183,7 +183,7 @@ static inline int secfp_build_qman_desc(struct caam_ctx *ctx)
 	ASFIPSEC_DEBUG("allocated 2 FQs %d %d", ulRecvFQID, ulSecFQID);
 	return iretval;
 }
-
+#ifdef CONFIG_PPC32
 int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 {
 	u32 *sh_desc;
@@ -263,6 +263,7 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 
 
 }
+#endif
 int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 {
 	u32 *sh_desc;
@@ -697,7 +698,13 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 		if (pInfo->proto == SECFP_PROTO_ESP)
 			secfp_outComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);
 		else
+#ifdef CONFIG_PPC32
 			secfp_outAHComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);
+#else
+			asf_skb_free_func(pInfo->cb_skb);
+			goto out;
+#endif
+
 	} else {
 #ifndef ASF_DEDICTD_CHAN_SEC_OUT
 		int hashval = 0, frag_cpu;
@@ -747,8 +754,14 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 				secfp_inComplete(pInfo->cb_pDev,
 					NULL, 0, pInfo->cb_skb);
 		else
+#ifdef CONFIG_PPC32
 			secfp_inAHComplete(pInfo->cb_pDev,
 				(u32 *)pInfo, 0, pInfo->cb_skb);
+#else
+			asf_skb_free_func(pInfo->cb_skb);
+			goto out;
+#endif
+
 	}
 out:
 	kfree(pInfo);

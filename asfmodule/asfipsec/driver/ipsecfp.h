@@ -819,6 +819,7 @@ extern int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 extern int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		outSA_t *pSA, bool keys_fit_inline);
+#ifdef CONFIG_PPC32
 extern void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
 				void *descriptor, unsigned int ulOptionIndex);
 void
@@ -833,6 +834,32 @@ void secfp_outAHComplete(struct device *dev,
 		);
 void secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		SPDOutContainer_t *pContainer, unsigned int **pOuterIpHdr);
+int secfp_updateAHOutSA(outSA_t *pSA, void *buff);
+int secfp_updateAHInSA(inSA_t *pSA, SAParams_t *pSAParams);
+void secfp_inAHComplete(struct device *dev,
+		u32 *pdesc,
+		u32 err, void *context
+		);
+#ifdef ASF_QMAN_IPSEC
+int secfp_buildAHQMANSharedDesc(struct caam_ctx *ctx, u32 *sh_desc,
+		void *pSA, uint8_t bDir);
+
+#else
+extern int secfp_buildAHSharedDesc(
+		struct caam_ctx *ctx,
+		void *pSA, uint8_t bDiir);
+
+extern int secfp_createAHInCaamCtx(inSA_t *pSA);
+
+extern int secfp_createAHOutCaamCtx(outSA_t *pSA);
+
+extern void secfp_prepareAHInDescriptor(
+		struct sk_buff *skb,
+		void *pData, void *descriptor,
+		unsigned int ulIndex);
+
+#endif
+#endif
 #endif
 
 extern int gfar_start_xmit(struct sk_buff *skb,
@@ -1026,19 +1053,6 @@ extern	void secfp_prepareInDescriptor(
 		struct sk_buff *skb,
 		void *pSA, void *, unsigned int);
 
-extern int secfp_buildAHSharedDesc(
-		struct caam_ctx *ctx,
-		void *pSA, uint8_t bDiir);
-
-extern int secfp_createAHInCaamCtx(inSA_t *pSA);
-
-extern int secfp_createAHOutCaamCtx(outSA_t *pSA);
-
-extern void secfp_prepareAHInDescriptor(
-		struct sk_buff *skb,
-		void *pData, void *descriptor,
-		unsigned int ulIndex);
-
 
 #ifndef CONFIG_ASF_SEC4x
 extern void secfp_prepareInDescriptorWithFrags(
@@ -1052,12 +1066,4 @@ extern void secfp_prepareOutDescriptorWithFrags(
 #define secfp_prepareOutDescriptorWithFrags secfp_prepareOutDescriptor
 #endif
 #endif
-int secfp_updateAHOutSA(outSA_t *pSA, void *buff);
-int secfp_updateAHInSA(inSA_t *pSA, SAParams_t *pSAParams);
-void secfp_inAHComplete(struct device *dev,
-		u32 *pdesc,
-		u32 err, void *context
-		);
-int secfp_buildAHQMANSharedDesc(struct caam_ctx *ctx, u32 *sh_desc,
-		void *pSA, uint8_t bDir);
 #endif
