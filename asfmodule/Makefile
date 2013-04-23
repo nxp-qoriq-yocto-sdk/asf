@@ -16,6 +16,7 @@ include asfconfig.mk
 #  Include Definitions
 #------------------------------------------------------------------------------
 .PHONY: all
+.NOTPARALLEL :
 all: min full
 
 min : export ASF_FEATURE_OPTION_FULL := n
