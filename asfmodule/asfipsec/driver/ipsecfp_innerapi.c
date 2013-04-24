@@ -2670,7 +2670,6 @@ unsigned int secfp_createOutSA(
 		pSA->ulSecLenIncrease = SECFP_IPV6_HDR_LEN;
 #endif
 	}
-#ifndef ASF_QMAN_IPSEC
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	pSA->prepareOutPktFnPtr = NULL;
 	pSA->finishOutPktFnPtr = secfp_finishOffloadOutPacket;
@@ -2679,7 +2678,6 @@ unsigned int secfp_createOutSA(
 	pSA->finishOutPktFnPtr = secfp_finishOutPacket;
 #endif
 	pSA->outComplete = secfp_outComplete;
-#endif
 	/* starting the seq number from 2 to avoid the conflict
 	with the Networking Stack seq number */
 	atomic_set(&pSA->ulLoSeqNum, 2);
