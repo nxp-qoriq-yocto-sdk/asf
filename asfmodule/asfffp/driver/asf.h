@@ -47,6 +47,7 @@
 
 /*ASF index used in skb control buffer*/
 #define BPID_INDEX 79
+#define BUF_INDOMAIN_INDEX 80
 #define ANNOTATION_ADDR_INDEX 87
 enum {
 	ASF_SUCCESS = 0,

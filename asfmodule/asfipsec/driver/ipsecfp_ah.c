@@ -1189,6 +1189,11 @@ void secfp_outAHComplete(struct device *dev,
 	ASF_IPSecTunEndAddr_t TunAddress;
 	unsigned short	bl2blobRefresh = 0;
 #endif
+#ifdef CONFIG_DPA
+	struct dpa_percpu_priv_s *percpu_priv;
+	struct dpa_priv_s       *priv = netdev_priv(skb->dev);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+#endif
 	unsigned short tot_len = 0;
 	unsigned short ipHdrLen = 0;
 #ifndef ASF_QMAN_IPSEC
@@ -1458,6 +1463,10 @@ sa_expired1:
 		} else
 #endif
 			asf_set_queue_mapping(skb,iph->tos);
+#ifdef CONFIG_DPA
+		if (skb->cb[BUF_INDOMAIN_INDEX])
+			(*percpu_priv->dpa_bp_count)--;
+#endif
 
 #ifdef ASF_QOS
 		asf_set_queue_mapping(skb, iph->tos);
@@ -1572,6 +1581,10 @@ sa_expired1:
 					ASFIPSEC_FPRINT("Fragment offset field = 0x%x", iph->frag_off);
 
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
+#ifdef CONFIG_DPA
+					if (skb->cb[BUF_INDOMAIN_INDEX])
+						(*percpu_priv->dpa_bp_count)--;
+#endif
 #ifdef ASF_QOS
 					/* Enqueue the packet in Linux
 					   QoS framework */

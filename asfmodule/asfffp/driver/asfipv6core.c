@@ -257,6 +257,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 	u8			*txdata;
 	dma_addr_t		addr;
 	struct dpa_priv_s	*priv;
+	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_bp		*dpa_bp;
 	struct qm_fd		*tx_fd;
 	u32			data_len;
@@ -790,6 +791,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 					skb_transport_header(skb));
 			asf_debug("Transmitting  buffer = 0x%x dev->index = %d"
 						"\r\n", skb, skb->dev->ifindex);
+			priv  = netdev_priv(skb->dev);
+			percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+			(*percpu_priv->dpa_bp_count)--;
 
 			bSendOut = 1;
 			if (asfDevHardXmit(skb->dev, skb) != 0) {
@@ -1122,10 +1126,18 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	struct ipv6_redef	*hdr;
 #endif
 	struct netdev_queue *txq;
+#ifdef CONFIG_DPA
+	struct dpa_percpu_priv_s *percpu_priv;
+	struct dpa_priv_s       *priv;
+#endif
 
 	ACCESS_XGSTATS();
 
 	skb = (struct sk_buff *) Buffer.nativeBuffer;
+#ifdef CONFIG_DPA
+	priv  = netdev_priv(skb->dev);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+#endif
 
 	anDev = ASFCiiToNetDev(ulCommonInterfaceId);
 
@@ -1701,6 +1713,10 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		vstats->ulOutBytes += skb->len;
 #endif
 
+#ifdef CONFIG_DPA
+		if (skb->cb[BUF_INDOMAIN_INDEX])
+			(*percpu_priv->dpa_bp_count)--;
+#endif
 #ifdef ASF_QOS
 		/* Enqueue the packet in Linux QoS framework */
 		asf_qos_handling(skb, &flow->tc_filter_res);

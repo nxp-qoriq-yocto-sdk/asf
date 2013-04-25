@@ -661,11 +661,10 @@ int qos_enqueue_skb(struct sk_buff *skb,
 /* Maximum offset value for a contig or sg FD (represented on 9bits) */
 #define MAX_FD_OFFSET	((1 << 9) - 1)
 	/* Now Convert SKB to Tx_FD */
-	if (likely(skb->cb[BPID_INDEX] ||
-			(skb_is_recycleable(skb, dpa_bp->size) &&
+	if (likely(skb_is_recycleable(skb, dpa_bp->size) &&
 		   (skb_end_pointer(skb) - skb->head <=
 				dpa_bp->size + RECYCLE_EXTRA_SIZE) &&
-		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count)))) {
+		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count))) {
 		/* Compute the minimum necessary fd offset */
 		offset = dpa_bp->size - skb->len - skb_tailroom(skb);
 
@@ -736,8 +735,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 
 	if (can_recycle) {
 		/* Recycle SKB */
-		if (!(skb->cb[BPID_INDEX]))
-			(*percpu_priv->dpa_bp_count)++;
+		(*percpu_priv->dpa_bp_count)++;
 		skb_recycle(skb);
 		skb = NULL;
 		percpu_priv->tx_returned++;

@@ -985,6 +985,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 
 		(*percpu_priv->dpa_bp_count)--;
 	} else {
+		skb->cb[BUF_INDOMAIN_INDEX] = pAbuf->bbuffInDomain;
 		skb->cb[BPID_INDEX] = pAbuf->pAnnot->fd->bpid;
 	}
 
@@ -1013,7 +1014,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	/* update pointer */
 	pAbuf->nativeBuffer = skb;
 	/* Will be helpful in Defrag */
-	memcpy(&(skb->cb[ANNOTATION_ADDR_INDEX]), &(pAbuf->pAnnot), 4)
+	memcpy(&(skb->cb[ANNOTATION_ADDR_INDEX]), &(pAbuf->pAnnot), 4);
 	asf_debug("skb 0x%p, skb->head 0x%p, skb->data 0x%p, skb->tail 0x%p"
 		" skb->len 0x%x skb->mac_header 0x%p\n\n",
 	       skb, skb->head, skb->data, skb->tail,
@@ -2004,6 +2005,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	u8			*txdata;
 	dma_addr_t		addr;
 	struct dpa_priv_s	*priv;
+	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_bp		*dpa_bp;
 	u32			data_len;
 	unsigned char		bSendOut  = 0;
@@ -2357,6 +2359,8 @@ ASF_void_t ASFFFPProcessAndSendFD(
 			struct iphdr *iph;
 			/* asf_display_frags(pSkb, "Before Xmit");*/
 			asf_display_skb_list(pSkb, "Before Xmit");
+			priv  = netdev_priv(skb->dev);
+			percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 			for (; pSkb != NULL; pSkb = pTempSkb) {
 				ulFrags++;
 				pTempSkb = pSkb->next;
@@ -2415,6 +2419,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 				gstats->ulOutBytes += pSkb->len;
 				flow_stats->ulOutBytes += pSkb->len;
 				vstats->ulOutBytes += pSkb->len;
+				(*percpu_priv->dpa_bp_count)--;
 #ifdef ASF_QOS
 				/* Enqueue the packet in Linux QoS framework */
 				asf_qos_handling(pSkb, &flow->tc_filter_res);
@@ -2746,11 +2751,19 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	unsigned int		tunnel_hdr_len = 0;
 #endif
 	struct netdev_queue *txq;
+#ifdef CONFIG_DPA
+	struct dpa_percpu_priv_s *percpu_priv;
+	struct dpa_priv_s       *priv;
+#endif
 
 	ACCESS_XGSTATS();
 
 	skb = (struct sk_buff *) Buffer.nativeBuffer;
 
+#ifdef CONFIG_DPA
+	priv  = netdev_priv(skb->dev);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+#endif
 	anDev = ASFCiiToNetDev(ulCommonInterfaceId);
 
 	if (unlikely(!anDev)) {
@@ -3282,6 +3295,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						flow_stats->ulOutBytes += pSkb->len;
 						vstats->ulOutBytes += pSkb->len;
 #endif
+#ifdef CONFIG_DPA
+						if (skb->cb[BUF_INDOMAIN_INDEX])
+							(*percpu_priv->dpa_bp_count)--;
+#endif
 #ifdef ASF_QOS
 						/* Enqueue the packet in Linux
 						QoS framework */
@@ -3355,6 +3372,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			vstats->ulOutBytes += skb->len;
 #endif
 
+#ifdef CONFIG_DPA
+			if (skb->cb[BUF_INDOMAIN_INDEX])
+				(*percpu_priv->dpa_bp_count)--;
+#endif
 			asf_debug_l2("invoke hard_start_xmit skb-packet (blob_len %d)\n", flow->l2blob_len);
 #ifdef ASF_QOS
 			/* Enqueue the packet in Linux QoS framework */
