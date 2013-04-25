@@ -1997,6 +1997,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	struct netdev_queue *txq;
+	struct net_device       *netdev;
 #if defined(CONFIG_ASF_SEC4x) && !defined(ASF_QMAN_IPSEC)
 	struct aead_edesc *desc;
 	desc = (struct aead_edesc *)((char *)pdesc -
@@ -2125,6 +2126,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		asf_qos_handling(skb, &pSA->tc_filter_res);
 #else
 		txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
+		netdev = skb->dev;
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
 #ifndef ASF_QMAN_IPSEC
 			/*TODO: DPAA driver always consumes skb */
@@ -2132,7 +2134,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif
 			return;
 		} else
-			skb->dev->trans_start = txq->trans_start = jiffies;
+			netdev->trans_start = txq->trans_start = jiffies;
 #endif
 		pIPSecPPGlobalStats->ulTotOutProcPkts++;
 	} else {
@@ -2247,13 +2249,14 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 					asf_qos_handling(pOutSkb, &pSA->tc_filter_res);
 #else
 					txq = netdev_get_tx_queue(pOutSkb->dev, pOutSkb->queue_mapping);
+					netdev = pOutSkb->dev;
 					if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
 						ASFIPSEC_WARN("Error in transmit: Should not happen");
 #ifndef ASF_QMAN_IPSEC
 						ASFSkbFree(pOutSkb);
 #endif
 					} else
-						pOutSkb->dev->trans_start = txq->trans_start = jiffies;
+						netdev->trans_start = txq->trans_start = jiffies;
 #endif
 				}
 				rcu_read_unlock();

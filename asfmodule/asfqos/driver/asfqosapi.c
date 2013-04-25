@@ -211,6 +211,7 @@ static int prio_dequeue(struct asf_qdisc *sch, u32 *add_wait)
 	struct sk_buff *skb = NULL;
 	int i;
 	struct netdev_queue *txq;
+	struct net_device       *netdev;
 
 	for (i = 0; i < priv->bands; i++) {
 
@@ -329,11 +330,12 @@ static int prio_dequeue(struct asf_qdisc *sch, u32 *add_wait)
 		queue->ulDequeuePkts++;
 		queue_unlock(&(queue->lock));
 		txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
+		netdev = skb->dev;
 		if (unlikely(0 != asfDevHardXmit(skb->dev, skb))) {
 			queue->ulTxErrorPkts++;
 			ASFSkbFree(skb);
 		} else
-			skb->dev->trans_start = txq->trans_start = jiffies;
+			netdev->trans_start = txq->trans_start = jiffies;
 		return 1;
 	} /* For Loop */
 
@@ -407,6 +409,7 @@ static int prio_drr_dequeue(struct asf_qdisc *sch, u32 *add_wait)
 	struct net_queue *queue;
 	struct sk_buff *skb = NULL;
 	struct netdev_queue *txq;
+	struct net_device       *netdev;
 
 	/* First look for packets in Priority Queues */
 	for (i = 0; i < priv->num_prio_bands; i++) {
@@ -512,11 +515,12 @@ shape:
 	queue->ulDequeuePkts++;
 	queue_unlock(&(queue->lock));
 	txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
+	netdev = skb->dev;
 	if (unlikely(0 != asfDevHardXmit(skb->dev, skb))) {
 		queue->ulTxErrorPkts++;
 		ASFSkbFree(skb);
 	} else
-		skb->dev->trans_start = txq->trans_start = jiffies;
+		netdev->trans_start = txq->trans_start = jiffies;
 	return 1;
 }
 

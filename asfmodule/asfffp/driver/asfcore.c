@@ -2751,6 +2751,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	unsigned int		tunnel_hdr_len = 0;
 #endif
 	struct netdev_queue *txq;
+	struct net_device       *netdev;
 #ifdef CONFIG_DPA
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv;
@@ -3304,12 +3305,13 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						QoS framework */
 						asf_qos_handling(pSkb, &flow->tc_filter_res);
 #else
-						txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
+						netdev = pSkb->dev;
+						txq = netdev_get_tx_queue(pSkb->dev, skb->queue_mapping);
 						if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 							asf_debug("Error in transmit: Should not happen\r\n");
 							ASFSkbFree(pSkb);
 						} else
-							skb->dev->trans_start = txq->trans_start = jiffies;
+							netdev->trans_start = txq->trans_start = jiffies;
 #endif
 					}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -3381,13 +3383,14 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			/* Enqueue the packet in Linux QoS framework */
 			asf_qos_handling(skb, &flow->tc_filter_res);
 #else
+			netdev = skb->dev;
 			txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
 			if (asfDevHardXmit(skb->dev, skb)) {
 				XGSTATS_INC(DevXmitErr);
 				asf_debug("Error in transmit: may happen as we don't check for gfar free desc\n");
 				ASFSkbFree(skb);
 			} else
-				skb->dev->trans_start = txq->trans_start = jiffies;
+				netdev->trans_start = txq->trans_start = jiffies;
 #endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutPkts++;
@@ -5503,17 +5506,19 @@ static void asf_ffp_destroy_flow_table()
 static inline void direct_xmit(struct sk_buff *skb)
 {
 	struct netdev_queue *txq;
+	struct net_device       *netdev;
 #ifndef ASF_HW_SCH
 	/* Reset the SKB Queue mapping, which is already
 	set as per DSCP value */
 	skb->queue_mapping = 0;
 #endif
 	txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
+	netdev = skb->dev;
 	if (asfDevHardXmit(skb->dev, skb) != 0) {
 		asf_warn("Error in Xmit: may happen\r\n");
 		ASFSkbFree(skb);
 	} else
-			skb->dev->trans_start = txq->trans_start = jiffies;
+		netdev->trans_start = txq->trans_start = jiffies;
 }
 
 void asf_qos_handling(struct sk_buff *skb, u32 *tc_filter_res)

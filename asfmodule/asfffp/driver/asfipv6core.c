@@ -1126,6 +1126,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	struct ipv6_redef	*hdr;
 #endif
 	struct netdev_queue *txq;
+	struct net_device       *netdev;
 #ifdef CONFIG_DPA
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv;
@@ -1722,11 +1723,12 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		asf_qos_handling(skb, &flow->tc_filter_res);
 #else
 		txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
+		netdev = skb->dev;
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
 			asf_warn("Error in transmit: Should not happen\r\n");
 			ASFSkbFree(skb);
 		} else
-			skb->dev->trans_start = txq->trans_start = jiffies;
+			netdev->trans_start = txq->trans_start = jiffies;
 #endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulOutPkts++;
