@@ -809,21 +809,9 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 			return ASFQOS_FAILURE;
 		}
 
-		/* Do Hardware Configuration, if required */
-		asf_set_wq_scheduling(WQ_CS_CFG_FMAN0,
-			0, 0, 0, 0, 0, 0, 0);
-		asf_set_wq_scheduling(WQ_CS_CFG_FMAN1,
-			0, 0, 0, 0, 0, 0, 0);
 	}
 	break;
 	case ASF_QDISC_DRR:
-	{
-		/* Do Hardware Configuration , if required */
-		asf_set_wq_scheduling(WQ_CS_CFG_FMAN0,
-			0, 0, 0, 0, 0, 0, 0);
-		asf_set_wq_scheduling(WQ_CS_CFG_FMAN1,
-			0, 0, 0, 0, 0, 0, 0);
-	}
 	break;
 	case ASF_QDISC_WRR:
 	{
@@ -835,17 +823,6 @@ static int qos_create_sch(ASF_uint32_t  ulVsgId,
 			return ASFQOS_FAILURE;
 		}
 
-		/* Do Hardware Configuration , if required */
-		asf_set_wq_scheduling(WQ_CS_CFG_FMAN0, 0,
-			qdisc->u.wrr.weight[0],
-			qdisc->u.wrr.weight[1],
-			qdisc->u.wrr.weight[2],
-			0, 0, 0);
-		asf_set_wq_scheduling(WQ_CS_CFG_FMAN1, 0,
-			qdisc->u.wrr.weight[0],
-			qdisc->u.wrr.weight[1],
-			qdisc->u.wrr.weight[2],
-			0, 0, 0);
 	}
 	break;
 	default:
