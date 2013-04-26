@@ -27,7 +27,7 @@ endif
 #ASF_LINUX 	:= 2
 #ASF_FULL 	:= 3
 
-ifeq ($(CONFIG_DPA_ETH),y)
+ifeq ($(CONFIG_FSL_DPAA_ETH),y)
 CONFIG_DPA=y
 EXTRA_CFLAGS += -DCONFIG_DPA
 endif
@@ -88,7 +88,7 @@ endif
 ifeq ($(CONFIG_ASF_HW_SHAPER), y)
 EXTRA_CFLAGS += -DASF_HW_SHAPER
 endif
-ifeq ($(CONFIG_DPA_ETH), y)
+ifeq ($(CONFIG_FSL_DPAA_ETH), y)
 include $(KERNEL_PATH)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 endif
 
