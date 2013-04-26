@@ -2960,7 +2960,8 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 	unsigned char ucNextProto;
 	unsigned char *pOrgEthHdr;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
-	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(skb1->cb[SECFP_IPHDR_INDEX]);
+	struct iphdr *iph = (struct iphdr *)*(uintptr_t *)
+				&(skb1->cb[SECFP_IPHDR_INDEX]);
 	inSA_t *pSA;
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;

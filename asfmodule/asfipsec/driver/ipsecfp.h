@@ -819,7 +819,6 @@ extern int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 extern int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		outSA_t *pSA, bool keys_fit_inline);
-#ifdef CONFIG_PPC32
 extern void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
 				void *descriptor, unsigned int ulOptionIndex);
 void
@@ -858,7 +857,6 @@ extern void secfp_prepareAHInDescriptor(
 		void *pData, void *descriptor,
 		unsigned int ulIndex);
 
-#endif
 #endif
 #endif
 

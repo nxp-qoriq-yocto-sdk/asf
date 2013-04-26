@@ -27,9 +27,7 @@ asfipsec-y := \
 
 asfipsec-$(CONFIG_ASF_SEC3x) += ipsecfp_sec3x.o
 asfipsec-$(CONFIG_ASF_SEC4x) += ipsecfp_sec4x.o
-ifeq ($(CONFIG_PPC32), y)
 asfipsec-$(CONFIG_ASF_SEC4x) += ipsecfp_ah.o
-endif
 asfipsec-$(CONFIG_DPA) += ipsecfp_qman.o
 
 all:

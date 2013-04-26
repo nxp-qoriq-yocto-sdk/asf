@@ -819,7 +819,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		support or it will be set to 0 */
 
 	if (pSA->SAParams.bUseExtendedSequenceNumber)
-		*(unsigned int *) &(pTailSkb->tail[0]) = ulHiSeqNum;
+		*(unsigned int *) (skb_tail_pointer(pTailSkb)) = ulHiSeqNum;
 
 	ASFIPSEC_PRINT("setting ICV to zero");
 	/* Setting ICV and padding to zero*/
@@ -865,7 +865,8 @@ void secfp_inAHComplete(struct device *dev,
 	unsigned int /*ulTempLen,*/ iRetVal;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	inSA_t *pSA;
-	struct iphdr *iph = (struct iphdr *)*(unsigned int *)&(skb->cb[SECFP_IPHDR_INDEX]);
+	struct iphdr *iph = (struct iphdr *)*(uintptr_t *)
+				&(skb->cb[SECFP_IPHDR_INDEX]);
 	ASFLogInfo_t AsfLogInfo;
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFIPSecOpqueInfo_t IPSecOpque = {};
@@ -1273,8 +1274,8 @@ void secfp_outAHComplete(struct device *dev,
 	}
 
 
+	iph = (struct iphdr *) skb->data;
 	if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
-		iph = (struct iphdr *) skb->data;
 
 		/*Update the Mutable fields of the outer IP header */
 		iph->tos = pSA->ipHdrInfo.hdrdata.iphv4.tos;
@@ -1455,6 +1456,7 @@ sa_expired1:
 	if (!skb->cb[SECFP_OUTB_FRAG_REQD]) {
 		/* FASTROUTE is required for selective recycling*/
 		skb->pkt_type = PACKET_FASTROUTE;
+#ifdef ASF_QOS
 #ifdef ASF_IPV6_FP_SUPPORT
 		if (iph->version == 6) {
 			struct ipv6_redef *hdr;
@@ -1468,8 +1470,6 @@ sa_expired1:
 			(*percpu_priv->dpa_bp_count)--;
 #endif
 
-#ifdef ASF_QOS
-		asf_set_queue_mapping(skb, iph->tos);
 		/* Enqueue the packet in Linux QoS framework */
 		asf_qos_handling(skb,&pSA->tc_filter_res);
 #else
@@ -1544,7 +1544,7 @@ sa_expired1:
 					pOutSkb->data -= pSA->ulL2BlobLen;
 					pOutSkb->len += pSA->ulL2BlobLen;
 
-					pOutSkb->tail = pOutSkb->data + pOutSkb->len;
+					skb_set_tail_pointer(pOutSkb, pOutSkb->len);
 					pOutSkb->dev = pSA->odev;
 					pOutSkb->pkt_type = PACKET_FASTROUTE;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -1697,7 +1697,7 @@ int secfp_buildAHSharedDesc(struct caam_ctx *ctx, void *pSA, uint8_t bDir)
 		ASFIPSEC_WARN("Could not allocate shared descriptor");
 		return -ENOMEM;
 	}
-	ctx->sh_desc = (u32 *)(((int)ctx->sh_desc_mem
+	ctx->sh_desc = (u32 *)(((dma_addr_t)ctx->sh_desc_mem
 			+ (L1_CACHE_BYTES - 1)) & ~(L1_CACHE_BYTES - 1));
 	if (ucAuthAlgo != SECFP_HMAC_AES_XCBC_MAC) {
 		keydest = KEYDST_MD_SPLIT;

@@ -2757,7 +2757,7 @@ unsigned int secfp_createOutSA(
 			pSA->ulXmitHdrLen = 0;
 #endif
 	} else {
-#if defined (CONFIG_ASF_SEC4x) && defined (CONFIG_PPC32)
+#ifdef CONFIG_ASF_SEC4x
 		/* AH Handling */
 
 		if (secfp_updateAHOutSA(pSA, SAParams)) {
@@ -3265,7 +3265,7 @@ unsigned int secfp_CreateInSA(
 #endif
 
 		} else {
-#if defined (CONFIG_ASF_SEC4x) && defined (CONFIG_PPC32)
+#ifdef CONFIG_ASF_SEC4x
 			/* AH Handling */
 			if (secfp_updateAHInSA(pSA, pSAParams)) {
 				GlobalErrors.ulInvalidAuthEncAlgo++;
