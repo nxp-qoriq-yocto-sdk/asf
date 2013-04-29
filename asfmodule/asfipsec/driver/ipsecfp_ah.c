@@ -1184,6 +1184,7 @@ void secfp_outAHComplete(struct device *dev,
 	struct iphdr *iph;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	unsigned int ulVSGId, ulSPDContainerIndex;
+	struct netdev_queue *txq;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	int cpu;
 	unsigned long uPacket = 0;
