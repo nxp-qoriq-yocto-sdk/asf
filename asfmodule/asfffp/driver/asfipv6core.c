@@ -839,9 +839,12 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			goto drop_pkt;
 		}
 
-		/*Resuing Annotation unused (timestamp+hash) area As TX_FD*/
-		tx_fd  = (struct qm_fd *)&(abuf.pAnnot->timestamp);
+		/*Reusing unused annotation's (reserved ) area as TX_FD
+		As per current implementation, parse result is not in use for TX_FD
+		but in future if parse results need to be placed in TX_FD then TX_FD
+		will be written at some other memory location*/
 
+		tx_fd  = (struct qm_fd *)&(abuf.pAnnot->reserved[1]);
 		*(u32 *)tx_fd = 0; /* Resetting the unused area */
 		tx_fd->bpid = dpa_bp->bpid;
 		tx_fd->addr_hi = upper_32_bits(addr);

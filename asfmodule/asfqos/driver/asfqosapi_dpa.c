@@ -584,7 +584,7 @@ int qos_enqueue_fd(ASFBuffer_t *abuf,
 		return ASF_SUCCESS;
 	}
 
-	tx_fd  = (struct qm_fd *)&(abuf->pAnnot->timestamp);
+	tx_fd  = (struct qm_fd *)&(abuf->pAnnot->reserved[1]);
 	asf_debug("Enqueuing in fqid %d\n", tx_fq->fqid);
 
 	if (unlikely(qman_enqueue(tx_fq, tx_fd, 0) < 0)) {

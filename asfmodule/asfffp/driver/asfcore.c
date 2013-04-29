@@ -5567,7 +5567,7 @@ int asf_qos_fd_handling(ASFBuffer_t *abuf,
 		struct dpa_priv_s *priv = netdev_priv(dev);
 
 		return qman_enqueue(priv->egress_fqs[smp_processor_id()],
-					(struct	qm_fd *)&(abuf->pAnnot->timestamp), 0);
+					(struct qm_fd *)&(abuf->pAnnot->reserved[1]), 0);
 	}
 }
 EXPORT_SYMBOL(asf_qos_fd_handling);
