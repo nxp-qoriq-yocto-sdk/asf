@@ -76,6 +76,7 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 {
 	int		i;
 	markerRule_t	*rule;
+	int             iDscp = dscp_default;
 
 	if (is_ipv6) {
 #ifdef	ASF_IPV6_FP_SUPPORT
@@ -106,7 +107,7 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 			&& (proto == rule->proto)) {
 				ASFCTRL_INFO("Rule Matched\n");
 				/* Masking the Last 2 bits */
-				return rule->uciDscp & 0xFC;
+				iDscp = rule->uciDscp & 0xFC;
 			}
 		}
 #endif
@@ -130,12 +131,12 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 			&& (proto == rule->proto)) {
 				ASFCTRL_INFO("Rule Matched\n");
 				/* Masking the Last 2 bits */
-				return rule->uciDscp & 0xFC;
+				iDscp = rule->uciDscp & 0xFC;
 			}
 		}
 	}
 	/* Reaching here means, No match found */
-	return dscp_default;
+	return iDscp;
 }
 
 ASF_uint8_t ASFMarkLnxPkt(void *buf)
