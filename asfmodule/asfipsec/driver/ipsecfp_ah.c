@@ -1256,6 +1256,16 @@ void secfp_outAHComplete(struct device *dev,
 
 	pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
 				*(unsigned int *)&(skb->cb[SECFP_SAD_SAI_INDEX]));
+	if (!pSA) {
+                ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
+			IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
+                ASFIPSEC_DEBUG("OutSA info not available");
+#ifndef ASF_QMAN_IPSEC
+		secfp_ahdesc_free_frags(desc, skb);
+#endif
+		ASFSkbFree(skb);
+		return;
+        }
 
 	/* Copy ICV into the AH header */
 #ifndef ASF_QMAN_IPSEC

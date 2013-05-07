@@ -2122,6 +2122,15 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #ifdef ASF_QOS
 		pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
 			*(unsigned int *)&(skb->cb[SECFP_SAD_SAI_INDEX]));
+		if (!pSA) {
+			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
+					IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
+			ASFIPSEC_DEBUG("OutSA info not available");
+			skb->data_len = 0;
+			ASFSkbFree(skb);
+			return;
+		}
+
 		/* Enqueue the packet in Linux QoS framework */
 		asf_qos_handling(skb, &pSA->tc_filter_res);
 #else
