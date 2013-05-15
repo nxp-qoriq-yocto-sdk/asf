@@ -34,6 +34,7 @@
         <engine name="fm0">
             <port type="1G" number="0" policy="asf_fman_frag_policy_0"/>
             <port type="1G" number="1" policy="asf_fman_frag_policy_1"/>
+            <port type="1G" number="2" policy="asf_fman_frag_policy_2"/>
             <port type="1G" number="3" policy="asf_fman_frag_policy_3"/>
             <port type="1G" number="4" policy="asf_fman_frag_policy_10"/>
         </engine>
