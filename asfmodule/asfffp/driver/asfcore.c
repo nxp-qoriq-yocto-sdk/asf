@@ -1088,6 +1088,9 @@ ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf,
 	case IPPROTO_ESP:
 		pParse->l4r = DPAA_PARSE_L4_IPSEC_ESP;
 		break;
+	case IPPROTO_AH:
+		pParse->l4r = DPAA_PARSE_L4_IPSEC_AH;
+		break;
 	default:
 		pParse->l4r = DPAA_PARSE_L4_OTHER_PROTO;
 	}
@@ -1428,6 +1431,9 @@ non_tudp:
 		if ((pParse->l4r & DPAA_PARSE_L4_IPSEC_MASK)
 			== DPAA_PARSE_L4_IPSEC_ESP)
 			break;
+                if ((pParse->l4r & DPAA_PARSE_L4_IPSEC_MASK)
+                        == DPAA_PARSE_L4_IPSEC_AH)
+                        break;
 			/* else, fall thru, not interested in this pkt */
 #endif
 	default:
@@ -1454,7 +1460,8 @@ non_tudp:
 	 */
 
 	/* IpSecIn for ESP pkts */
-	if (unlikely(iph->protocol == IPPROTO_ESP)) {
+	if (unlikely((iph->protocol == IPPROTO_ESP) ||
+			(iph->protocol == IPPROTO_AH))) {
 		XGSTATS_INC(ESPPkts);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 ipsecin:

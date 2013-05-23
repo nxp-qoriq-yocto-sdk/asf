@@ -371,7 +371,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 
 #ifdef ASF_IPSEC_FP_SUPPORT
 	/* ESP header */
-	if (nexthdr == NEXTHDR_ESP) {
+	if (nexthdr == NEXTHDR_ESP ||
+		nexthdr == NEXTHDR_AUTH) {
 		/* Give packet to ASF IPSec */
 		if (pFFPIPSecIn) {
 			struct sk_buff *skb;
