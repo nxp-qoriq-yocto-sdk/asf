@@ -146,7 +146,7 @@ ffp_flow_t *asf_ffp_ipv6_flow_lookup_in_bkt_ex(ASFFFPFlowTuple_t *tuple,
  * The argument 'head' is head of circular list (actually bucket ponter).
  */
 static inline ffp_flow_t  *asf_ffp_ipv6_flow_lookup(
-					ASF_IPv6Addr_t *sip, ASF_IPv6Addr_t *dip, unsigned long ports,
+					ASF_IPv6Addr_t *sip, ASF_IPv6Addr_t *dip, unsigned int ports,
 					unsigned long vsg, unsigned long szone, unsigned char protocol, unsigned long *pHashVal)
 {
 	ffp_flow_t *flow, *pHead;
@@ -249,7 +249,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 	int			iRetVal;
 	struct tcphdr		*ptcph = NULL;
 #endif
-	unsigned long int       *ptrhdrOffset;
+	unsigned int		*ptrhdrOffset;
 	unsigned char		nexthdr;
 	unsigned int		exthdrsize = 0;
 	unsigned char		*pL4hdr;
@@ -401,7 +401,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 	}
 
 
-	ptrhdrOffset = (unsigned long int *)pL4hdr;
+	ptrhdrOffset = (unsigned int *)pL4hdr;
 
 
 	flow = asf_ffp_ipv6_flow_lookup((ASF_IPv6Addr_t *)&(ip6h->saddr), (ASF_IPv6Addr_t *)&(ip6h->daddr),
