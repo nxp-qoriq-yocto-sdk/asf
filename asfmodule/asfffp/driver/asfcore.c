@@ -92,7 +92,7 @@ MODULE_LICENSE("GPL");
 char *periodic_errmsg[] = PERIODIC_ERRMSGS;
 char *asf_version = "asf-rel-0.2.0";
 /* Initilization Parameters */
-int asf_enable;
+bool asf_enable;
 int ffp_max_flows = ASF_FFP_MAX_FLOWS;
 int asf_max_vsgs = ASF_MAX_VSGS;
 int asf_max_ifaces = ASF_MAX_IFACES;
