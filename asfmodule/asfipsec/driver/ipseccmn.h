@@ -27,8 +27,6 @@ extern int ulMaxSupportedIPSecSAs_g ;
 extern int usMaxInSAHashTaleSize_g;
 extern int ulL2BlobRefreshPktCnt_g;
 extern int ulL2BlobRefreshTimeInSec_g;
-extern int bFirewallCoExistence_g;
-extern int bTightlyIntegrated_g;
 extern ASFIPSecGlobalErrorCounters_t GlobalErrors;
 extern AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats_g;
 extern AsfIPSec4GlobalPPStats_t IPSec4GblPPStats_g;

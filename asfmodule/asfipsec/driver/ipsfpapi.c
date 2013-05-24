@@ -42,8 +42,6 @@ int  ulMaxSupportedIPSecSAs_g = SECFP_MAX_SAS;
 int  usMaxInSAHashTaleSize_g = SECFP_INSA_HASH_TABLE_SZE;
 int  ulL2BlobRefreshPktCnt_g = ASF_MAX_L2BLOB_REFRESH_PKT_CNT;
 int  ulL2BlobRefreshTimeInSec_g = ASF_MAX_L2BLOB_REFRESH_TIME;
-int  bFirewallCoExistence_g = ASF_TRUE;
-int  bTightlyIntegrated_g = ASF_TRUE;
 ASF_boolean_t  bNotifyPreference_g = ASF_FALSE;
 
 ASFIPSecGlobalErrorCounters_t  GlobalErrors;
@@ -2079,10 +2077,6 @@ MODULE_LICENSE("GPL");
 module_param(ulMaxVSGs_g, int, 0444);
 MODULE_PARM_DESC(ulMaxVSGs_g, "Integer - Maximum number of VSGs supported");
 
-module_param(bTightlyIntegrated_g, bool, 0444);
-MODULE_PARM_DESC(bTightlyIntegrated_g, "Bool - Application stacks communicating"
-	"with ASF are tightly integrated or loosely integrate");
-
 module_param(ulMaxTunnels_g, int, 0444);
 MODULE_PARM_DESC(ulMaxTunnels_g,
 	"Integer - Maximum number of Tunnels supported");
@@ -2102,10 +2096,6 @@ MODULE_PARM_DESC(ulL2BlobRefreshPktCnt_g, "Integer - Freq with respect to "\
 module_param(ulL2BlobRefreshTimeInSec_g, int, 0644);
 MODULE_PARM_DESC(ulL2BlobRefreshTimeInSec_g, "Unsigned Integer - Frequency "\
 	"with respect to time with which the L2 blob for a given SA");
-
-module_param(bFirewallCoExistence_g, bool, 0444);
-MODULE_PARM_DESC(bFirewallCoExistence_g, "Bool - Whether ASF-IPsec co-exists "\
-	"with ASF-Firewall or is in independent state");
 
 static int __init ASFIPSec_Init(void)
 {
@@ -2180,18 +2170,6 @@ static int __init ASFIPSec_Init(void)
 	ASFIPSEC_DEBUG("Max L2Blob RefreshCnt = %u", ulL2BlobRefreshPktCnt_g);
 	ASFIPSEC_DEBUG("Max L2Blob RefreshTime = %u",
 					ulL2BlobRefreshTimeInSec_g);
-
-	if (bFirewallCoExistence_g) {
-		ASFIPSEC_DEBUG("Firewall Co-Existence : YES");
-	} else {
-		ASFIPSEC_DEBUG("Firewall Co-Existence : NO");
-	}
-
-	if (bTightlyIntegrated_g) {
-		ASFIPSEC_DEBUG("Application and ASF tightly coupled");
-	} else {
-		ASFIPSEC_DEBUG("Application and ASF loosly coupled");
-	}
 
 	if (SECFP_FAILURE == secfp_init()) {
 		asf_err("Failure in secfp_init.... Exiting\n");

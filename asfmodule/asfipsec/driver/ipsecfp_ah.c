@@ -53,7 +53,7 @@ inline void secfp_ah_icv_free(void *icv);
 extern ASFTERMProcessPkt_f	pTermProcessPkt;
 #endif
 
-extern secfp_desc_free(void *desc);
+extern void secfp_desc_free(void *desc);
 extern void secfp_inCompleteUpdateIpv4Pkt(struct sk_buff *pHeadSkb);
 extern void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA);
 extern int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
@@ -1184,7 +1184,9 @@ void secfp_outAHComplete(struct device *dev,
 	struct iphdr *iph;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	unsigned int ulVSGId, ulSPDContainerIndex;
+#ifndef ASF_QOS
 	struct netdev_queue *txq;
+#endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	int cpu;
 	unsigned long uPacket = 0;
@@ -1194,7 +1196,6 @@ void secfp_outAHComplete(struct device *dev,
 #ifdef CONFIG_DPA
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv = netdev_priv(skb->dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 #endif
 	unsigned short tot_len = 0;
 	unsigned short ipHdrLen = 0;
@@ -1208,6 +1209,9 @@ void secfp_outAHComplete(struct device *dev,
 
 	ASFIPSEC_DEBUG(" Entry");
 
+#ifdef CONFIG_DPA
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+#endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM) && !defined(CONFIG_ASF_SEC4x)
 	skb->cb[SECFP_REF_INDEX]--;
 	if (skb->cb[SECFP_REF_INDEX]) {

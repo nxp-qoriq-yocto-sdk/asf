@@ -1642,11 +1642,11 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 }
 
 static int fsl_send_acquire(struct xfrm_state *x, struct xfrm_tmpl *t,
-	struct xfrm_policy *xp, int dir)
+	struct xfrm_policy *xp)
 {
 	ASFCTRL_FUNC_TRACE;
 #ifdef ASFCTRL_IPSEC_DEBUG
-	asfctrl_xfrm_dump_policy(xp, dir);
+	asfctrl_xfrm_dump_policy(xp, 0);
 	asfctrl_xfrm_dump_tmpl(t);
 	asfctrl_xfrm_dump_state(x);
 #endif

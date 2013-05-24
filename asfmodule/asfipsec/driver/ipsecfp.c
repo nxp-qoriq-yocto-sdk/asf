@@ -1265,7 +1265,6 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		usPadLen = 0;
 #endif
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (skb_shinfo(skb1)->nr_frags) {
 		ASFIPSEC_DEBUG("has nr_frags = %d",
 				skb_shinfo(skb1)->nr_frags);
@@ -1283,6 +1282,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	/* For frag_list case, this will send each frag independently
 	   to SEC for encryption*/
 
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	for (; skb != NULL; skb = pNextSkb)
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	{
@@ -1498,6 +1498,7 @@ no_sa:
 	return 1;
 
 drop_skb_list:
+	pNextSkb = skb->next;
 	ASFSkbFree(skb);
 	while (pNextSkb) {
 		skb = pNextSkb;
@@ -1542,7 +1543,7 @@ static inline int secfp_try_fastPathOutv4(
 	unsigned int *pOuterIpHdr;
 	struct sk_buff *pNextSkb;
 	SPDOutContainer_t *pContainer;
-	struct sk_buff *tempSkb, *skb = skb1;
+	struct sk_buff *skb = skb1;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	ASF_boolean_t	bRevalidate = ASF_FALSE;
@@ -1649,6 +1650,7 @@ static inline int secfp_try_fastPathOutv4(
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			ASFIPSEC_DEBUG("Fragmentation activated");
 			if (pSA->SAParams.bRedSideFragment) {
+				struct sk_buff *tempSkb;
 				ASFIPSEC_DEBUG("Red side fragmentation is enabled");
 				if (iph->frag_off & IP_DF) {
 					ASFIPSEC_DEBUG("DF Bit is set while"\
@@ -1925,6 +1927,7 @@ no_sa:
 	return 1;
 
 drop_skb_list:
+	pNextSkb = skb->next;
 	ASFSkbFree(skb);
 	while (pNextSkb) {
 		skb = pNextSkb;
@@ -1987,7 +1990,6 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #ifdef CONFIG_DPA
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv  = netdev_priv(skb->dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 #endif
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -1996,12 +1998,17 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 	int tot_len;
 #endif
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
+#ifndef ASF_QOS
 	struct netdev_queue *txq;
 	struct net_device       *netdev;
+#endif
 #if defined(CONFIG_ASF_SEC4x) && !defined(ASF_QMAN_IPSEC)
 	struct aead_edesc *desc;
 	desc = (struct aead_edesc *)((char *)pdesc -
 			offsetof(struct aead_edesc, hw_desc));
+#endif
+#ifdef CONFIG_DPA
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 #endif
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
@@ -3035,7 +3042,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 		} else
 #endif
 		{
-			SECFP_UNMAP_SINGLE_DESC(pdev, (void *)*((unsigned int *)
+			SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)*((unsigned int *)
 					&(skb1->cb[SECFP_SKB_DATA_DMA_INDEX])),
 					skb_end_pointer(skb1) - skb1->head);
 			skb1->prev = NULL;
@@ -3095,7 +3102,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 			} /*else */
 
 			SECFP_UNMAP_SINGLE_DESC(pdev,
-				(void *)*((unsigned int *)&(skb1->cb[SECFP_SKB_DATA_DMA_INDEX])),
+				(dma_addr_t)*((unsigned int *)&(skb1->cb[SECFP_SKB_DATA_DMA_INDEX])),
 				skb_end_pointer(skb1) - skb1->head);
 			skb1->prev = NULL;
 			secfp_unmap_descs(skb1);
@@ -3154,7 +3161,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 		}
 		/* We have no requirement for the hint field anymore, let us clean up */
 		pHeadSkb->prev = NULL;
-		SECFP_UNMAP_SINGLE_DESC(pdev, (void *)*((unsigned int *)
+		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)*((unsigned int *)
 				&(pHeadSkb->cb[SECFP_SKB_DATA_DMA_INDEX])),
 				skb_end_pointer(pHeadSkb) - pHeadSkb->head);
 		secfp_unmap_descs(pHeadSkb);
@@ -3591,6 +3598,7 @@ static inline void secfp_appendESN(inSA_t *pSA, unsigned int ulSeqNum,
 /* When an inbound packet arrives, first it is checked to see if it
  * is a replay packet. This routine does the replay check
  */
+#ifndef ASF_QMAN_IPSEC
 static void secfp_checkSeqNum(inSA_t *pSA,
 					u32 ulSeqNum, u32 ulLowerBoundSeqNum, struct sk_buff *skb)
 {
@@ -3822,6 +3830,7 @@ static void secfp_checkSeqNum(inSA_t *pSA,
 		}
 	}
 }
+#endif
 
 /*
  * return values = 0, pkt consumed
@@ -4567,7 +4576,7 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	unsigned int ulHashVal = usMaxInSAHashTaleSize_g;
 	struct sk_buff *pHeadSkb = NULL, *pTailSkb = NULL;
 	unsigned char bScatterGather;
-	unsigned int len = 0, ulSecLenIncrease;
+	unsigned int len = 0;
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
@@ -4575,7 +4584,7 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 	unsigned char aSkipHeader[32], ucSkipLen = 0;
 	unsigned char secin_sg_flag = 0;
 #ifndef ASF_QMAN_IPSEC
-	unsigned int ulSecLen = 0;
+	unsigned int ulSecLen = 0, ulSecLenIncrease;
 #endif
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
