@@ -1,0 +1,20 @@
+#!/usr/sbin/setkey -f
+#
+#
+flush;
+spdflush;
+#
+# Security policies
+
+spdadd 192.168.2.0/24 192.168.1.0/24 any -P out ipsec
+       ah/tunnel/200.200.200.20-200.200.200.10/require;
+
+spdadd 192.168.1.0/24 192.168.2.0/24 any -P in ipsec
+       ah/tunnel/200.200.200.10-200.200.200.20/require;
+
+#hmac-sha1 authentication using 160 bit long keys
+add 200.200.200.10 200.200.200.20 ah 0x201 -m tunnel
+    -A hmac-sha1 0xe9c43acd5e8d779b6e09c87347852708ab49bdd3;
+
+add 200.200.200.20 200.200.200.10 ah 0x301 -m tunnel
+    -A hmac-sha1 0xea6856479330dc9c17b8f6c37e2a895363d83f21;

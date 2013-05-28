@@ -1,0 +1,17 @@
+#!/usr/sbin/setkey -f
+# Flush the SAD and SPD
+flush;
+spdflush;
+
+#
+# Security policies
+spdadd -6 2001:db8:1:1::/64 2001:db8:2:2::/64 any -P in ipsec  ah/tunnel/2001:db8:200::10-2001:db8:200::20/require;
+spdadd -6 2001:db8:2:2::/64 2001:db8:1:1::/64 any -P out ipsec ah/tunnel/2001:db8:200::20-2001:db8:200::10/require;
+
+#SAs using hmac-sha1 authentication.
+add -6 2001:db8:200::10 2001:db8:200::20 ah 0x401 -m tunnel
+    -A hmac-sha1 0xe9c43acd5e8d779b6e09c87347852708ab49bdd3;
+
+add -6 2001:db8:200::20 2001:db8:200::10 ah 0x501 -m tunnel
+    -A hmac-sha1 0xea6856479330dc9c17b8f6c37e2a895363d83f21;
+
