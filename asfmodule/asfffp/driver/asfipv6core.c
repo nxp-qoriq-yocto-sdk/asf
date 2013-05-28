@@ -1125,8 +1125,10 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 #ifdef ASF_EGRESS_QOS
 	struct ipv6_redef	*hdr;
 #endif
+#ifndef ASF_QOS
 	struct netdev_queue *txq;
 	struct net_device       *netdev;
+#endif
 #ifdef CONFIG_DPA
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv;

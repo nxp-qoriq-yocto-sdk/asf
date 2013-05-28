@@ -103,7 +103,7 @@ int asf_l2blob_refresh_interval = ASF_MAX_L2BLOB_REFRESH_TIME;
 int asf_reasm_timeout = ASF_REASM_REASM_TIMEOUT; /* in seconds ? */
 int asf_reasm_maxfrags = ASF_REASM_MAX_NUM_FRAGS;
 int asf_reasm_min_fragsize = ASF_REASM_MIN_FRAGSIZE;
-int asf_tcp_drop_oos;
+bool asf_tcp_drop_oos;
 #ifdef ASF_TERM_FP_SUPPORT
 int asf_default_mode = fwMode | termMode;
 #else
@@ -125,7 +125,7 @@ extern int ffp_ipv6_hash_buckets;
 int asf_qos_enable;
 EXPORT_SYMBOL(asf_qos_enable);
 
-module_param(asf_qos_enable, bool, 0644);
+module_param(asf_qos_enable, int, 0644);
 MODULE_PARM_DESC(asf_qos_enable, "Enable or disable ASF QoS Functionality");
 #endif
 module_param(asf_enable, bool, 0644);
@@ -2006,13 +2006,13 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	struct tcphdr		*ptcph = NULL;
 	int			mtu;
 	u32			tunnel_hdr_len = 0;
+	struct dpa_percpu_priv_s *percpu_priv;
 #endif
 	uint32_t		*ptrhdrOffset;
 	struct qm_fd		*tx_fd;
 	u8			*txdata;
 	dma_addr_t		addr;
 	struct dpa_priv_s	*priv;
-	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_bp		*dpa_bp;
 	u32			data_len;
 	unsigned char		bSendOut  = 0;
@@ -2757,8 +2757,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	unsigned int		tunnel_hdr_len = 0;
 #endif
+#ifndef ASF_QOS
 	struct netdev_queue *txq;
 	struct net_device       *netdev;
+#endif
 #ifdef CONFIG_DPA
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv;

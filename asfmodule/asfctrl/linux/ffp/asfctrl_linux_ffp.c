@@ -55,7 +55,7 @@ static uint32_t asf_ffp_tcp_state_check = ASFCTRL_TRUE;
 static uint32_t asf_ffp_tcp_tm_stmp_check = ASFCTRL_TRUE;
 static uint32_t asf_ffp_activity_divisor = DEFVAL_INACTIVITY_DIVISOR;
 
-module_param(asf_ffp_tcp_state_check, bool, 0644);
+module_param(asf_ffp_tcp_state_check, int, 0644);
 MODULE_PARM_DESC(asf_ffp_tcp_state_check, "Drop TCP out of sequence packets");
 
 static ASF_int32_t asf_linux_XmitL2blobDummyPkt(

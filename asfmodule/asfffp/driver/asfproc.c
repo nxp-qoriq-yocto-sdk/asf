@@ -613,7 +613,7 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 	}
 	if ((p-buf) > (200*(ffp_debug_show_count+2))) {
 		printk("Ooops! buffer is overwriten! allocated %u and required %lu to display %d items\n",
-		       200*(ffp_debug_show_count+2), (p-buf), ffp_debug_show_count);
+		       200*(ffp_debug_show_count+2), (unsigned long)(p-buf), ffp_debug_show_count);
 	}
 	print_bigbuf(buf);
 	printk("\nTotal %d (empty_l2blob %u)\n(max/bkt %u max-bkt-idx %u min/bkt %u empty-bkts %u)\n",
@@ -693,7 +693,7 @@ static int display_asf_proc_flow_ipv6_stats(char *page, char **start,
 	}
 	if ((p-buf) > (200*(ffp_debug_show_count+2))) {
 		printk(KERN_INFO"Ooops! buffer is overwriten! allocated %u and required %lu to display %d items\n",
-		       200*(ffp_debug_show_count+2), (p-buf), ffp_debug_show_count);
+		       200*(ffp_debug_show_count+2), (unsigned long)(p-buf), ffp_debug_show_count);
 	}
 	print_bigbuf(buf);
 	printk(KERN_INFO"\nTotal %d (empty_l2blob %u)\n(max/bkt %u max-bkt-idx %u min/bkt %u empty-bkts %u)\n",
