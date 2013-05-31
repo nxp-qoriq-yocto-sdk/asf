@@ -4225,6 +4225,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 #else
 		/* updating the length and data pointer of packet according
 		   to the packet after decryption */
+		if (likely(pSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (skb_shinfo(pHeadSkb)->frag_list)
 			if (pSA->ulSecHdrLen % 8)
@@ -4232,6 +4233,8 @@ So all these special boundary cases need to be handled for nr_frags*/
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		pHeadSkb->data += SECFP_IPV6_HDR_LEN + pSA->ulSecHdrLen + ulFragpadlen;
 		pHeadSkb->len -= (SECFP_IPV6_HDR_LEN + pSA->ulSecHdrLen) - ulFragpadlen;
+
+		}
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
 #endif /*ASF_QMAN_IPSEC*/
 
