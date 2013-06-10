@@ -571,7 +571,7 @@ EXPORT_SYMBOL(asf_dec_skb_buf_count);
  * The argument 'head' is head of circular list (actually bucket ponter).
  */
 static inline ffp_flow_t  *asf_ffp_flow_lookup(
-					unsigned long sip, unsigned long dip, unsigned long ports,
+					unsigned long sip, unsigned long dip, unsigned int ports,
 					unsigned long vsg, unsigned long szone, unsigned char protocol, unsigned long *pHashVal)
 {
 	ffp_flow_t *flow, *pHead;
@@ -2750,7 +2750,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	struct tcphdr		*ptcph = NULL;
 #endif
 	int			tot_len;
-	unsigned long int       *ptrhdrOffset;
+	unsigned int       *ptrhdrOffset;
 	unsigned long		ulZoneId;
 	struct sk_buff		*skb;
 	ASFNetDevEntry_t	*anDev;
@@ -2913,7 +2913,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		}
 	}
 	iphlen = iph->ihl * 4;
-	ptrhdrOffset = (unsigned long int *)(((unsigned char *) iph) + iphlen);
+	ptrhdrOffset = (unsigned int *)(((unsigned char *) iph) + iphlen);
 
 	flow = asf_ffp_flow_lookup(iph->saddr, iph->daddr,
 					*ptrhdrOffset/* ports*/, ulVsgId,

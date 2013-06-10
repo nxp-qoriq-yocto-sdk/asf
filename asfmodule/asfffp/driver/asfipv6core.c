@@ -1115,7 +1115,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	int			iRetVal;
 	struct tcphdr		*ptcph = NULL;
 #endif
-	unsigned long int       *ptrhdrOffset;
+	unsigned int       *ptrhdrOffset;
 	unsigned long		ulZoneId;
 	struct sk_buff		*skb;
 	ASFNetDevEntry_t	*anDev;
@@ -1294,7 +1294,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	}
 
 
-	ptrhdrOffset = (unsigned long int *)((unsigned char *) skb_transport_header(skb));
+	ptrhdrOffset = (unsigned int *)((unsigned char *) skb_transport_header(skb));
 
 	flow = asf_ffp_ipv6_flow_lookup((ASF_IPv6Addr_t *)&(ip6h->saddr), (ASF_IPv6Addr_t *)&(ip6h->daddr),
 					*ptrhdrOffset/* ports*/, ulVsgId,
