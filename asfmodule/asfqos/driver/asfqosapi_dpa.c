@@ -1078,6 +1078,11 @@ EXPORT_SYMBOL(ASFQOSQueryConfig);
 static int process_lnx_pkt(struct sk_buff *skb)
 {
 	u32	tc_filter_res = 1;
+	struct net_device *dev = skb->dev;
+
+	/* Checkthat Xmit function pointer is not null */
+	if (dev->netdev_ops->ndo_start_xmit == NULL)
+		return ASF_FAILURE;
 	/* If recevied DUMMY L2-blob packet, do not handle it */
 	if (asfctrl_skb_is_dummy(skb))
 		return ASF_FAILURE;
