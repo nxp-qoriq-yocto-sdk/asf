@@ -261,8 +261,6 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	init_sh_desc(sh_desc, HDR_SAVECTX | HDR_SHARE_SERIAL);
 #else
-	u32 seq_offset;
-	u64 counter;
 	/*
 	* Copy PDB options
 	*/
@@ -355,19 +353,6 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	pdb->anti_replay[1] = 0;/* Anti-Replay 2 */
 
 	ASFIPSEC_DEBUG("Created the PDB");
-
-	counter = pSA->ulHOSeqNum;
-	counter  = (counter << 32) + pSA->ulLastSeqNum;
-
-	append_data(sh_desc, &counter, sizeof(u64));
-	seq_offset = sizeof(*pdb) + sizeof(uint32_t);
-	*(u32 *)sh_desc += 2<<16;
-
-	append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF | MOVE_DEST_MATH0 | (seq_offset << 8) | 8);
-	append_math_add(sh_desc, REG0, REG0, ONE, 8);
-	append_move(sh_desc, MOVE_WAITCOMP | MOVE_DEST_DESCBUF | MOVE_SRC_MATH0 | (seq_offset << 8) | 8);
-	append_cmd(sh_desc, LDST_CLASS_DECO | CMD_STORE | 2 | ((seq_offset/sizeof(u32))<<8) | 0x420000);
-	append_move(sh_desc, MOVE_WAITCOMP | MOVE_DEST_DESCBUF | MOVE_SRC_MATH0 | (16 << 8) | 8);
 
 #endif /* ASF_SECFP_PROTO_OFFLOAD */
 
