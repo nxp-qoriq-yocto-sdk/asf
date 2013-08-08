@@ -1105,6 +1105,200 @@
 	</key>
 	</distribution>
 
+	<distribution name="ipv4eth11">
+	<queue count="128" base="0x3c80"/>
+	<key>
+		    <fieldref name="ipv4.src"/>
+	   	    <fieldref name="ipv4.dst"/>
+	            <fieldref name="ipv4.tos"/>
+	</key>
+
+	</distribution>
+	<distribution name="ipv6eth11">
+	<queue count="128" base="0x3c80"/>
+	<key>
+     		    <fieldref name="ipv6.src"/>
+   		    <fieldref name="ipv6.dst"/>
+	</key>
+	</distribution>
+
+	<distribution name="ipv4frag_dist_11">
+	<queue count="128" base="0x3c80" />
+	<key>
+	      	    <fieldref name="ipv4.dst" />
+	  	    <fieldref name="ipv4.src" />
+	</key>
+	<protocols>
+   		    <protocolref name="ipv4frag"/>
+	</protocols>
+
+	</distribution>
+	<distribution name="ipv6frag_dist_11">
+	<queue count="128" base="0x3c80" />
+	<key>
+		    <fieldref name="ipv6.dst" />
+		    <fieldref name="ipv6.src" />
+	</key>
+	<protocols>
+		    <protocolref name="ipv6frag"/>
+	</protocols>
+
+	</distribution>
+	<distribution name="tcpeth11">
+	<queue count="128" base="0x3c80"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="tcp.sport"/>
+		<fieldref name="tcp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="espeth11">
+	<queue count="128" base="0x3c80"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="ipsec_esp.spi"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth11">
+	<queue count="128" base="0x3c80"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="tcpeth11v6">
+	<queue count="128" base="0x3c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="tcp.sport"/>
+		<fieldref name="tcp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="espeth11v6">
+	<queue count="128" base="0x3c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="ipsec_esp.spi"/>
+	</key>
+
+	</distribution>
+	<distribution name="udpeth11v6">
+	<queue count="128" base="0x3c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="ipv4eth12">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="ipv4.tos"/>
+	</key>
+	</distribution>
+
+	<distribution name="ipv6eth12">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+	</key>
+
+	</distribution>
+	<distribution name="ipv4frag_dist_12">
+	<queue count="128" base="0x7c80" />
+	<key>
+		<fieldref name="ipv4.dst" />
+		<fieldref name="ipv4.src" />
+	</key>
+	<protocols>
+		<protocolref name="ipv4frag"/>
+	</protocols>
+	</distribution>
+
+	<distribution name="ipv6frag_dist_12">
+	<queue count="128" base="0x7c80" />
+	<key>
+		<fieldref name="ipv6.dst" />
+		<fieldref name="ipv6.src" />
+	</key>
+	<protocols>
+		<protocolref name="ipv6frag"/>
+	</protocols>
+	</distribution>
+
+	<distribution name="tcpeth12">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="tcp.sport"/>
+		<fieldref name="tcp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="espeth12">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="ipsec_esp.spi"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth12">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="tcpeth12v6">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="tcp.sport"/>
+		<fieldref name="tcp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="espeth12v6">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="ipsec_esp.spi"/>
+	</key>
+
+	</distribution>
+	<distribution name="udpeth12v6">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
 	<distribution name="default_dist_0">
 		<queue count="1" base="0x3800"/>
 	</distribution>
@@ -1147,6 +1341,14 @@
 
 	<distribution name="default_dist_10">
 		<queue count="1" base="0x3a00"/>
+	</distribution>
+
+	<distribution name="default_dist_11">
+		<queue count="1" base="0x3c80"/>
+	</distribution>
+
+	<distribution name="default_dist_12">
+		<queue count="1" base="0x7c80"/>
 	</distribution>
 
 	<policy name="asf_fman_frag_policy_0">
@@ -1259,4 +1461,23 @@
 	</dist_order>
 	</policy>
 
+	<policy name="asf_fman_frag_policy_11">
+	<dist_order>
+		<distributionref name="udpeth11"/>
+		<distributionref name="espeth11"/>
+		<distributionref name="udpeth11v6"/>
+		<distributionref name="espeth11v6"/>
+		<distributionref name="default_dist_11"/>
+	</dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_12">
+	<dist_order>
+		<distributionref name="udpeth12"/>
+		<distributionref name="espeth12"/>
+		<distributionref name="udpeth12v6"/>
+		<distributionref name="espeth12v6"/>
+		<distributionref name="default_dist_12"/>
+	</dist_order>
+	</policy>
 </netpcd>
