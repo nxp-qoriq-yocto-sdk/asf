@@ -29,24 +29,6 @@
 	xsi:noNamespaceSchemaLocation="xmlProject/pcd.xsd" name="example"
 	description="FMAN ASF configuration">
 
-	<distribution name="ipv4eth0">
-        <queue count="128" base="0x3800"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv6eth0">
-        <queue count="128" base="0x3800"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
-	</distribution>
-
-
 	<distribution name="ipv4frag_dist_0">
 		<queue count="128" base="0x3800" />
 		<key>
@@ -67,23 +49,6 @@
 		<protocols>
 			<protocolref name="ipv6frag"/>
 		</protocols>
-	</distribution>
-
-	<distribution name="ipv4eth1">
-        <queue count="128" base="0x3880"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-
-	</distribution>
-	<distribution name="ipv6eth1">
-        <queue count="128" base="0x3880"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
 	</distribution>
 
 	<distribution name="ipv4frag_dist_1">
@@ -108,23 +73,6 @@
 		</protocols>
 	</distribution>
 
-	<distribution name="ipv4eth2">
-        <queue count="128" base="0x3900"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv6eth2">
-        <queue count="128" base="0x3900"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
-	</distribution>
-
 	<distribution name="ipv4frag_dist_2">
 		<queue count="128" base="0x3900" />
 		<key>
@@ -145,23 +93,6 @@
 		<protocols>
 			<protocolref name="ipv6frag"/>
 		</protocols>
-	</distribution>
-
-	<distribution name="ipv4eth3">
-        <queue count="128" base="0x3980"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv6eth3">
-        <queue count="128" base="0x3980"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
 	</distribution>
 
 	<distribution name="ipv4frag_dist_3">
@@ -186,23 +117,6 @@
 		</protocols>
 	</distribution>
 
-	<distribution name="ipv4eth4">
-        <queue count="128" base="0x3c00"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv6eth4">
-        <queue count="128" base="0x3c00"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
-	</distribution>
-
 	<distribution name="ipv4frag_dist_4">
 		<queue count="128" base="0x3c00" />
 		<key>
@@ -223,23 +137,6 @@
 		<protocols>
 			<protocolref name="ipv6frag"/>
 		</protocols>
-	</distribution>
-
-	<distribution name="ipv4eth5">
-        <queue count="128" base="0x7800"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv6eth5">
-        <queue count="128" base="0x7800"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
 	</distribution>
 
 	<distribution name="ipv4frag_dist_5">
@@ -264,24 +161,6 @@
 		</protocols>
 	</distribution>
 
-	<distribution name="ipv4eth6">
-        <queue count="128" base="0x7880"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-
-	<distribution name="ipv6eth6">
-        <queue count="128" base="0x7880"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
-	</distribution>
-
 	<distribution name="ipv4frag_dist_6">
 		<queue count="128" base="0x7880" />
 		<key>
@@ -302,23 +181,6 @@
 		<protocols>
 			<protocolref name="ipv6frag"/>
 		</protocols>
-	</distribution>
-
-	<distribution name="ipv4eth7">
-        <queue count="128" base="0x7900"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv6eth7">
-        <queue count="128" base="0x7900"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
 	</distribution>
 
 	<distribution name="ipv4frag_dist_7">
@@ -343,23 +205,6 @@
 		</protocols>
 	</distribution>
 
-	<distribution name="ipv4eth8">
-        <queue count="128" base="0x7980"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv6eth8">
-        <queue count="128" base="0x7980"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
-	</distribution>
-
 	<distribution name="ipv4frag_dist_8">
 		<queue count="128" base="0x7980" />
 		<key>
@@ -380,39 +225,6 @@
 		<protocols>
 			<protocolref name="ipv6frag"/>
 		</protocols>
-	</distribution>
-
-	<distribution name="ipv4eth9">
-        <queue count="128" base="0x7c00"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv6eth9">
-        <queue count="128" base="0x7c00"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
-	</distribution>
-
-	<distribution name="ipv4eth10">
-        <queue count="128" base="0x3a00"/>
-        <key>
-		    <fieldref name="ipv4.src"/>
-		    <fieldref name="ipv4.dst"/>
-		    <fieldref name="ipv4.tos"/>
-	</key>
-	</distribution>
-	<distribution name="ipv6eth10">
-        <queue count="128" base="0x3a00"/>
-        <key>
-		    <fieldref name="ipv6.src"/>
-		    <fieldref name="ipv6.dst"/>
-	</key>
 	</distribution>
 
 	<distribution name="ipv4frag_dist_9">
