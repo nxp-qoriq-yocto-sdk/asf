@@ -1307,10 +1307,18 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (is_policy_offloadable(xp))
+	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
 
-	if (is_sa_offloadable(xfrm))
+	if (unlikely(!xp)) {
+		xp = xfrm_state_policy_mapping(xfrm);
+		if (unlikely(!xp)) {
+			ASFCTRL_WARN("Policy not found for this SA");
+			return -EINVAL;
+		}
+	}
+
+	if (is_policy_offloadable(xp))
 		return -EINVAL;
 
 	/* Check if Container is already configured down. */

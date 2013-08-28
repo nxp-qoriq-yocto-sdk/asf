@@ -400,7 +400,19 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 		asf_debug(" Non TCP/UDP packets, return packet to linux stack");
 		goto ret_pkt_to_stk;
 	}
+	if (nexthdr == NEXTHDR_UDP) {
+		struct udphdr *udph = (struct udphdr *)pL4hdr;
+		u16 ussrcprt = udph->source;
+		u16 usdstprt = udph->dest;
 
+		if (ussrcprt == ASF_IKE_NAT_FLOAT_PORT
+				|| ussrcprt == ASF_IKE_SERVER_PORT
+				|| usdstprt == ASF_IKE_SERVER_PORT
+				|| usdstprt == ASF_IKE_NAT_FLOAT_PORT) {
+			asf_debug("\n returning IKE packet to STK");
+			goto ret_pkt_to_stk;
+		}
+	}
 
 	ptrhdrOffset = (unsigned int *)pL4hdr;
 
@@ -1281,6 +1293,22 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 			return ASF_RTS;
 		}
 	}
+	if (nexthdr == NEXTHDR_UDP) {
+		struct udphdr *udph =
+			(struct udphdr *)skb_transport_header(skb);
+
+		u16 ussrcprt = udph->source;
+		u16 usdstprt = udph->dest;
+
+		if (ussrcprt == ASF_IKE_NAT_FLOAT_PORT
+				|| ussrcprt == ASF_IKE_SERVER_PORT
+				|| usdstprt == ASF_IKE_SERVER_PORT
+				|| usdstprt == ASF_IKE_NAT_FLOAT_PORT) {
+			asf_debug("\n returning IKE packet to STK");
+			return ASF_RTS;
+		}
+	}
+
 #endif
 
 
