@@ -31,7 +31,7 @@
 #include <net/pkt_sched.h>
 #include <linux/hrtimer.h>
 #include <dpa/dpaa_eth.h>
-#include <dpa/dpaa_eth-common.h>
+#include <dpa/dpaa_eth_common.h>
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
@@ -664,7 +664,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 	if (likely(skb_is_recycleable(skb, dpa_bp->size) &&
 		   (skb_end_pointer(skb) - skb->head <=
 				dpa_bp->size + RECYCLE_EXTRA_SIZE) &&
-		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count))) {
+		   (PER_CPU_BP_COUNT(dpa_bp) < dpa_bp->target_count))) {
 		/* Compute the minimum necessary fd offset */
 		offset = dpa_bp->size - skb->len - skb_tailroom(skb);
 
@@ -723,7 +723,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 		} else
 			asf_fq->ulDroppedPkts++;
 
-		(*percpu_priv->dpa_bp_count)--;
+		PER_CPU_BP_COUNT(dpa_bp)--;
 		ASFSkbFree(skb);
 		asf_debug("xmit dma_map Error\n");
 
@@ -735,7 +735,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 
 	if (can_recycle) {
 		/* Recycle SKB */
-		(*percpu_priv->dpa_bp_count)++;
+		PER_CPU_BP_COUNT(dpa_bp)++;
 		skb_recycle(skb);
 		skb = NULL;
 		percpu_priv->tx_returned++;
@@ -752,7 +752,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 			asf_fq->ulDroppedPkts++;
 
 		if (tx_fd->cmd & FM_FD_CMD_FCO) {
-			(*percpu_priv->dpa_bp_count)--;
+			PER_CPU_BP_COUNT(dpa_bp)++;
 			percpu_priv->tx_returned--;
 		}
 		if (skb)

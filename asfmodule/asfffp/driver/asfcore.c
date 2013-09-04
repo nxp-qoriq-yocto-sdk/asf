@@ -54,6 +54,7 @@
 #include <linux/sysctl.h>
 #ifdef CONFIG_DPA
 #include <dpa/dpaa_eth.h>
+#include <dpa/dpaa_eth_common.h>
 #include <linux/fsl_bman.h>
 #include <linux/fsl_qman.h>
 #else
@@ -197,10 +198,6 @@ MODULE_PARM_DESC(ffp_ipv6_hash_buckets,
 	#define FM_FD_STAT_L4CV			0x00000004
 #endif
 
-#ifdef CONFIG_DPA
-#define PER_CPU_BP_COUNT(bp) \
-	(*(per_cpu_ptr((bp)->percpu_count, smp_processor_id())))
-#endif
 ptrIArry_tbl_t ffp_ptrary;
 ffp_bucket_t *ffp_flow_table;
 spinlock_t		asf_iface_lock;
@@ -972,7 +969,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	t_FmPrsResult *pParse = &pAbuf->pAnnot->parse_result;
 	int cache_fudge;
 	struct dpa_priv_s		*priv;
-	struct dpa_percpu_priv_s	*percpu_priv;
+	struct dpa_bp		*dpa_bp;
 
 	if (NULL != pAbuf->nativeBuffer)
 		return skb;
@@ -980,10 +977,8 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 		to ingress iface bp any more */
 	if (unlikely(!(pAbuf->bbuffInDomain))) {
 		priv = netdev_priv(pAbuf->ndev);
-		percpu_priv = per_cpu_ptr(priv->percpu_priv,
-					smp_processor_id());
-
-		(*percpu_priv->dpa_bp_count)--;
+		dpa_bp = priv->dpa_bp;
+		PER_CPU_BP_COUNT(dpa_bp)--;
 	} else {
 		skb->cb[BUF_INDOMAIN_INDEX] = pAbuf->bbuffInDomain;
 		skb->cb[BPID_INDEX] = pAbuf->pAnnot->fd->bpid;
@@ -2006,7 +2001,6 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	struct tcphdr		*ptcph = NULL;
 	int			mtu;
 	u32			tunnel_hdr_len = 0;
-	struct dpa_percpu_priv_s *percpu_priv;
 #endif
 	uint32_t		*ptrhdrOffset;
 	struct qm_fd		*tx_fd;
@@ -2367,7 +2361,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 			/* asf_display_frags(pSkb, "Before Xmit");*/
 			asf_display_skb_list(pSkb, "Before Xmit");
 			priv  = netdev_priv(skb->dev);
-			percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+			dpa_bp = priv->dpa_bp;
 			for (; pSkb != NULL; pSkb = pTempSkb) {
 				ulFrags++;
 				pTempSkb = pSkb->next;
@@ -2426,7 +2420,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 				gstats->ulOutBytes += pSkb->len;
 				flow_stats->ulOutBytes += pSkb->len;
 				vstats->ulOutBytes += pSkb->len;
-				(*percpu_priv->dpa_bp_count)--;
+				PER_CPU_BP_COUNT(dpa_bp)--;
 #ifdef ASF_QOS
 				/* Enqueue the packet in Linux QoS framework */
 				asf_qos_handling(pSkb, &flow->tc_filter_res);
@@ -2767,8 +2761,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	struct net_device       *netdev;
 #endif
 #ifdef CONFIG_DPA
-	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv;
+	struct dpa_bp		*dpa_bp;
 #endif
 
 	ACCESS_XGSTATS();
@@ -2777,7 +2771,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 #ifdef CONFIG_DPA
 	priv  = netdev_priv(skb->dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	dpa_bp = priv->dpa_bp;
 #endif
 	anDev = ASFCiiToNetDev(ulCommonInterfaceId);
 
@@ -3312,7 +3306,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 #ifdef CONFIG_DPA
 						if (skb->cb[BUF_INDOMAIN_INDEX])
-							(*percpu_priv->dpa_bp_count)--;
+							PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 #ifdef ASF_QOS
 						/* Enqueue the packet in Linux
@@ -3390,7 +3384,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 #ifdef CONFIG_DPA
 			if (skb->cb[BUF_INDOMAIN_INDEX])
-				(*percpu_priv->dpa_bp_count)--;
+				PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 			asf_debug_l2("invoke hard_start_xmit skb-packet (blob_len %d)\n", flow->l2blob_len);
 #ifdef ASF_QOS

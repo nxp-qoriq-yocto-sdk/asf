@@ -765,7 +765,10 @@ void secfp_freeOutSA(struct rcu_head *pData)
 		secfp_cleanupSelList(pSA->pSelList);
 
 #ifdef CONFIG_ASF_SEC4x
-	kfree(pSA->ctx.key);
+	if (pSA->ctx.key)
+		kfree(pSA->ctx.key);
+	if (pSA->ctx.jrdev)
+		caam_jr_free(pSA->ctx.jrdev);
 	kfree(pSA->ctx.sh_desc_mem);
 #endif
 	asfReleaseNode(OutSAPoolId_g, pSA, pSA->bHeap);
@@ -1104,7 +1107,10 @@ static void secfp_freeInSA(struct rcu_head *rcu_data)
 	secfp_qman_release_fq(&pSA->ctx, SECFP_IN);
 #endif
 #ifdef CONFIG_ASF_SEC4x
-	kfree(pSA->ctx.key);
+	if (pSA->ctx.key)
+		kfree(pSA->ctx.key);
+	if (pSA->ctx.jrdev)
+		caam_jr_free(pSA->ctx.jrdev);
 	kfree(pSA->ctx.sh_desc_mem);
 #endif
 	asfReleaseNode(InSAPoolId_g, pSA, pSA->bHeap);

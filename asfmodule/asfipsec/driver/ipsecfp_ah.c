@@ -1194,8 +1194,8 @@ void secfp_outAHComplete(struct device *dev,
 	unsigned short	bl2blobRefresh = 0;
 #endif
 #ifdef CONFIG_DPA
-	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv = netdev_priv(skb->dev);
+	struct dpa_bp	   *dpa_bp;
 #endif
 	unsigned short tot_len = 0;
 	unsigned short ipHdrLen = 0;
@@ -1210,7 +1210,7 @@ void secfp_outAHComplete(struct device *dev,
 	ASFIPSEC_DEBUG(" Entry");
 
 #ifdef CONFIG_DPA
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	dpa_bp = priv->dpa_bp;
 #endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM) && !defined(CONFIG_ASF_SEC4x)
 	skb->cb[SECFP_REF_INDEX]--;
@@ -1482,7 +1482,7 @@ sa_expired1:
 			asf_set_queue_mapping(skb,iph->tos);
 #ifdef CONFIG_DPA
 		if (skb->cb[BUF_INDOMAIN_INDEX])
-			(*percpu_priv->dpa_bp_count)--;
+			PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 
 		/* Enqueue the packet in Linux QoS framework */
@@ -1598,7 +1598,7 @@ sa_expired1:
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
 #ifdef CONFIG_DPA
 					if (skb->cb[BUF_INDOMAIN_INDEX])
-						(*percpu_priv->dpa_bp_count)--;
+						PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 #ifdef ASF_QOS
 					/* Enqueue the packet in Linux
@@ -1760,20 +1760,22 @@ int secfp_createAHInCaamCtx(inSA_t *pSA)
 
 	if (pSA) {
 		struct caam_drv_private *priv = dev_get_drvdata(pdev);
-		int tgt_jr = atomic_inc_return(&priv->tfm_count);
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
-		/*
-		* distribute tfms across job rings to ensure in-order
-		* crypto request processing per tfm
-		*/
-		pSA->ctx.jrdev = priv->jrdev[(tgt_jr / 2) %
-				priv->total_jobrs];
+
+		pSA->ctx.jrdev = caam_jr_alloc();
+		if (IS_ERR(pSA->ctx.jrdev)) {
+			ASFIPSEC_DEBUG("Could not allocate Job Ring Device\n");
+			return -ENOMEM;
+		}
+
 		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len,
 					GFP_DMA | flags);
 
 		if (!pSA->ctx.key) {
 			ASFIPSEC_DEBUG("Could not allocate"\
 					"Caam key output memory\n");
+			caam_jr_free(pSA->ctx.jrdev);
+			pSA->ctx.jrdev = NULL;
 			return -ENOMEM;
 		}
 
@@ -1796,7 +1798,9 @@ int secfp_createAHInCaamCtx(inSA_t *pSA)
 				if (ret) {
 					ASFIPSEC_DEBUG("Failed\n");
 					kfree(pSA->ctx.key);
-
+					caam_jr_free(pSA->ctx.jrdev);
+					pSA->ctx.jrdev = NULL;
+					pSA->ctx.key = NULL;
 					return ret;
 				}
 			}
@@ -1810,6 +1814,9 @@ int secfp_createAHInCaamCtx(inSA_t *pSA)
 			ASFIPSEC_DEBUG("Unable to map key"\
 					"i/o memory\n");
 			kfree(pSA->ctx.key);
+			caam_jr_free(pSA->ctx.jrdev);
+			pSA->ctx.jrdev = NULL;
+			pSA->ctx.key = NULL;
 			return -ENOMEM;
 		}
 		pSA->ctx.authsize = pSA->SAParams.uICVSize;
@@ -1820,6 +1827,9 @@ int secfp_createAHInCaamCtx(inSA_t *pSA)
 		if (ret) {
 			ASFIPSEC_DEBUG("Failed\n");
 			kfree(pSA->ctx.key);
+			caam_jr_free(pSA->ctx.jrdev);
+			pSA->ctx.jrdev = NULL;
+			pSA->ctx.key = NULL;
 			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
 			pSA->ctx.split_key_pad_len, DMA_TO_DEVICE);
 
@@ -1839,14 +1849,14 @@ int secfp_createAHOutCaamCtx(outSA_t *pSA)
 
 	if (pSA) {
 		struct caam_drv_private *priv = dev_get_drvdata(pdev);
-		int tgt_jr = atomic_inc_return(&priv->tfm_count);
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
-		/*
-		* distribute tfms across job rings to ensure in-order
-		* crypto request processing per tfm
-		*/
-		pSA->ctx.jrdev = priv->jrdev[(tgt_jr / 2) %
-				priv->total_jobrs];
+
+		pSA->ctx.jrdev = caam_jr_alloc();
+
+		if (IS_ERR(pSA->ctx.jrdev)) {
+			ASFIPSEC_DEBUG("Could not allocate Job Ring Device\n");
+			return -ENOMEM;
+		}
 
 		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len,
 					GFP_DMA | flags);
@@ -1854,6 +1864,8 @@ int secfp_createAHOutCaamCtx(outSA_t *pSA)
 		if (!pSA->ctx.key) {
 			ASFIPSEC_DEBUG("Could not allocate"\
 					"Caam key output memory\n");
+			caam_jr_free(pSA->ctx.jrdev);
+			pSA->ctx.jrdev = NULL;
 			return -ENOMEM;
 		}
 
@@ -1876,7 +1888,9 @@ int secfp_createAHOutCaamCtx(outSA_t *pSA)
 				if (ret) {
 					ASFIPSEC_DEBUG("Failed\n");
 					kfree(pSA->ctx.key);
-
+					caam_jr_free(pSA->ctx.jrdev);
+					pSA->ctx.jrdev = NULL;
+					pSA->ctx.key = NULL;
 					return ret;
 				}
 			}
@@ -1890,6 +1904,9 @@ int secfp_createAHOutCaamCtx(outSA_t *pSA)
 			ASFIPSEC_DEBUG("Unable to map key"\
 					"i/o memory\n");
 			kfree(pSA->ctx.key);
+			caam_jr_free(pSA->ctx.jrdev);
+			pSA->ctx.jrdev = NULL;
+			pSA->ctx.key = NULL;
 			return -ENOMEM;
 		}
 		pSA->ctx.authsize = pSA->SAParams.uICVSize;
@@ -1900,6 +1917,9 @@ int secfp_createAHOutCaamCtx(outSA_t *pSA)
 		if (ret) {
 			ASFIPSEC_DEBUG("Failed\n");
 			kfree(pSA->ctx.key);
+			caam_jr_free(pSA->ctx.jrdev);
+			pSA->ctx.jrdev = NULL;
+			pSA->ctx.key = NULL;
 			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
 			pSA->ctx.split_key_pad_len, DMA_TO_DEVICE);
 

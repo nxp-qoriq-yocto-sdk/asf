@@ -43,6 +43,8 @@
 #define	ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT	(10*HZ)
 #ifdef CONFIG_DPA
 #define ASF_MAX_TX_RETRY_CNT 32
+#define PER_CPU_BP_COUNT(bp) \
+	(*(per_cpu_ptr((bp)->percpu_count, smp_processor_id())))
 #endif
 
 /*ASF index used in skb control buffer*/

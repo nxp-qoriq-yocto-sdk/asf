@@ -184,6 +184,10 @@ struct ipsec_ah_edesc {
 
 extern struct device *asf_caam_device(void);
 extern char *caam_jr_strstatus(char *outstr, u32 status);
+/* Prototypes for backend-level services exposed to APIs */
+/* Defined in jr.c */
+extern struct device *caam_jr_alloc(void);
+extern void caam_jr_free(struct device *rdev);
 extern int caam_jr_enqueue(struct device *dev, void *desc,
 			void (*callback) (struct device *dev, u32 *desc,
 			u32 error, void *context), void *context);

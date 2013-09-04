@@ -35,6 +35,10 @@
 #include "asfpvt.h"
 #include "asftcp.h"
 #include "asfipv6pvt.h"
+#ifdef CONFIG_DPA
+#include <dpa/dpaa_eth.h>
+#include <dpa/dpaa_eth_common.h>
+#endif
 
 #define ASF_DO_INC_CHECKSUM
 
@@ -257,7 +261,6 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 	u8			*txdata;
 	dma_addr_t		addr;
 	struct dpa_priv_s	*priv;
-	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_bp		*dpa_bp;
 	struct qm_fd		*tx_fd;
 	u32			data_len;
@@ -805,8 +808,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			asf_debug("Transmitting  buffer = 0x%x dev->index = %d"
 						"\r\n", skb, skb->dev->ifindex);
 			priv  = netdev_priv(skb->dev);
-			percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
-			(*percpu_priv->dpa_bp_count)--;
+			dpa_bp = priv->dpa_bp;
+			PER_CPU_BP_COUNT(dpa_bp)--;
 
 			bSendOut = 1;
 			if (asfDevHardXmit(skb->dev, skb) != 0) {
@@ -1147,8 +1150,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	struct net_device       *netdev;
 #endif
 #ifdef CONFIG_DPA
-	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_priv_s       *priv;
+	struct dpa_bp		*dpa_bp;
 #endif
 
 	ACCESS_XGSTATS();
@@ -1156,7 +1159,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	skb = (struct sk_buff *) Buffer.nativeBuffer;
 #ifdef CONFIG_DPA
 	priv  = netdev_priv(skb->dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	dpa_bp = priv->dpa_bp;
 #endif
 
 	anDev = ASFCiiToNetDev(ulCommonInterfaceId);
@@ -1751,7 +1754,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 #ifdef CONFIG_DPA
 		if (skb->cb[BUF_INDOMAIN_INDEX])
-			(*percpu_priv->dpa_bp_count)--;
+			PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 #ifdef ASF_QOS
 		/* Enqueue the packet in Linux QoS framework */
