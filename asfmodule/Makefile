@@ -32,6 +32,7 @@ endif
 	mkdir -p bin/min
 	cp asfffp/driver/asf.ko asfctrl/linux/ffp/asfctrl.ko bin/min
 	cp asfipsec/driver/asfipsec.ko asfctrl/linux/ipsec/asfctrl_ipsec.ko bin/min
+	$(CROSS_COMPILE)strip --strip-unneeded bin/min/*.ko
 
 full :
 	mkdir -p bin
@@ -50,6 +51,7 @@ endif
 ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
 	cp asfqos/driver/asfqos.ko asfctrl/linux/qos/asfctrl_qos.ko bin/full 2>/dev/null
 endif
+	$(CROSS_COMPILE)strip --strip-unneeded bin/full/*.ko
 
 #--------------------------------------------------------------
 .PHONY: clean
