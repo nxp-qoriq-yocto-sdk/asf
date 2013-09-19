@@ -997,7 +997,6 @@
 	</key>
 	</distribution>
 
-	</distribution>
 	<distribution name="ipv4frag_dist_12">
 	<queue count="128" base="0x7c80" />
 	<key>
