@@ -11,7 +11,7 @@ export TOPDIR
 
 include $(KERNEL_PATH)/.config
 include asfconfig.mk
-
+ifeq ($(CONFIG_AS_FASTPATH), y)
 #------------------------------------------------------------------------------
 #  Include Definitions
 #------------------------------------------------------------------------------
@@ -65,3 +65,13 @@ ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
 endif
 	make -w -C asfctrl -f Makefile clean
 	rm -rf bin
+else
+.PHONY: all
+all:
+	mkdir -p bin
+	mkdir -p bin/full
+	mkdir -p bin/min
+.PHONY: clean
+clean :
+	rm -rf bin
+endif

@@ -12,7 +12,7 @@ LD	= $(CROSS_COMPILE)ld
 EXTRA_CFLAGS := -mno-spe -mspe=no -mabi=no-spe
 
 ifneq ($(CONFIG_AS_FASTPATH),y)
- fatal := $(error ASF is Disabled in Kernel. Try to fix)
+$(warning ASF is Disabled in Kernel.)
 endif
 
 #EXTRA_CFLAGS += -DASF_DEBUG
