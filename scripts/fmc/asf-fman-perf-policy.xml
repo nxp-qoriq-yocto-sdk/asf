@@ -1077,6 +1077,44 @@
 	</key>
 	</distribution>
 
+	<distribution name="espeth13">
+	<queue count="128" base="0x7a00"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="ipsec_esp.spi"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth13">
+	<queue count="128" base="0x7a00"/>
+	<key>
+		<fieldref name="ipv4.src"/>
+		<fieldref name="ipv4.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="espeth13v6">
+	<queue count="128" base="0x7a00"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="ipsec_esp.spi"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth13v6">
+	<queue count="128" base="0x7a00"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
 	<distribution name="default_dist_0">
 		<queue count="1" base="0x3800"/>
 	</distribution>
@@ -1127,6 +1165,10 @@
 
 	<distribution name="default_dist_12">
 		<queue count="1" base="0x7c80"/>
+	</distribution>
+
+	<distribution name="default_dist_13">
+		<queue count="1" base="0x7a00"/>
 	</distribution>
 
 	<policy name="asf_fman_frag_policy_0">
@@ -1256,6 +1298,16 @@
 		<distributionref name="udpeth12v6"/>
 		<distributionref name="espeth12v6"/>
 		<distributionref name="default_dist_12"/>
+	</dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_13">
+	<dist_order>
+		<distributionref name="udpeth13"/>
+		<distributionref name="espeth13"/>
+		<distributionref name="udpeth13v6"/>
+		<distributionref name="espeth13v6"/>
+		<distributionref name="default_dist_13"/>
 	</dist_order>
 	</policy>
 </netpcd>
