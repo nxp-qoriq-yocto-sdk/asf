@@ -145,9 +145,9 @@ inline void secfp_ah_icv_free(void *icv)
 static inline void secfp_ahdesc_free_frags(void *desc, struct sk_buff *skb)
 {
 	struct ipsec_ah_edesc *edesc = desc;
-#if defined(SECFP_SG_SUPPORT) && defined(CONFIG_ASF_SEC4x)
-	struct link_tbl_entry *link_ptr;
+#ifdef CONFIG_ASF_SEC4x
 	if (skb_shinfo(skb)->nr_frags) {
+		struct link_tbl_entry *link_ptr;
 		link_ptr = edesc->link_tbl;
 		dma_unmap_single(pdev, edesc->link_tbl_dma,
 		edesc->link_tbl_bytes, DMA_BIDIRECTIONAL);
@@ -378,9 +378,7 @@ int secfp_updateAHInSA(inSA_t *pSA, SAParams_t *pSAParams)
 	pSA->option[1] = SECFP_NONE;
 
 	pSA->inComplete = secfp_inAHComplete;
-#ifdef SECFP_SG_SUPPORT
 	pSA->inCompleteWithFrags = secfp_inAHComplete;
-#endif
 
 	if (secfp_createAHInCaamCtx(pSA)) {
 		ASFIPSEC_DEBUG("secfp_createAHInCaamCtx returnfailure");

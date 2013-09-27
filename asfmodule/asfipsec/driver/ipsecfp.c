@@ -1234,14 +1234,12 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	pSA = secfp_findOutSA(ulVSGId, pSecInfo, skb1, ipv6TClass,
 			&pContainer, &bRevalidate);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-#ifndef SECFP_SG_SUPPORT
 	if (skb_shinfo(skb1)->frag_list) {
 		struct sk_buff *pSkb;
 		asfIpv6MakeFragment(skb, &pSkb);
 		skb = pSkb;
 		ipv6h = ipv6_hdr(skb);
 	}
-#endif
 #endif
 	if (unlikely(pSA == NULL)) {
 		ASFIPSEC_DEBUG("SA Not Found");
@@ -2689,7 +2687,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 			unsigned int remaininglen = *pTotLen - pHeadSkb->len;
 			skb1 = skb_shinfo(pHeadSkb)->frag_list;
 			while (skb1 && remaininglen > 0) {
-				if (skb1->len > remaininglen) {
+				if (skb1->len >= remaininglen) {
 					skb1->len = remaininglen;
 					pTailSkb = skb1;
 				}

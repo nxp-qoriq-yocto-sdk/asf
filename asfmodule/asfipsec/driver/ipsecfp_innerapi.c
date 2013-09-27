@@ -2751,7 +2751,7 @@ unsigned int secfp_createOutSA(
 #endif
 #ifndef ASF_QMAN_IPSEC
 			pSA->prepareOutDescriptor = secfp_prepareOutDescriptor;
-#if defined(CONFIG_ASF_SEC3x) && defined(SECFP_SG_SUPPORT)
+#if defined(CONFIG_ASF_SEC3x)
 			pSA->prepareOutDescriptorWithFrags = secfp_prepareOutDescriptorWithFrags;
 #else
 			pSA->prepareOutDescriptorWithFrags = secfp_prepareOutDescriptor;
@@ -3259,15 +3259,13 @@ unsigned int secfp_CreateInSA(
 #endif
 #ifndef ASF_QMAN_IPSEC
 			pSA->prepareInDescriptor = secfp_prepareInDescriptor;
-#if defined(CONFIG_ASF_SEC3x) && defined(SECFP_SG_SUPPORT)
+#if defined(CONFIG_ASF_SEC3x)
 			pSA->prepareInDescriptorWithFrags = secfp_prepareInDescriptorWithFrags;
 #else
 			pSA->prepareInDescriptorWithFrags = secfp_prepareInDescriptor;
 #endif
 			pSA->inComplete = secfp_inComplete;
-#ifdef SECFP_SG_SUPPORT
 			pSA->inCompleteWithFrags = secfp_inCompleteWithFrags;
-#endif
 #endif
 
 		} else {
