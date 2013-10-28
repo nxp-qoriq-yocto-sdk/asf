@@ -2070,7 +2070,7 @@ ASF_void_t  ASFIPSecInitConfigIdentity(ASFIPSecInitConfigIdentity_t  *pConfigIde
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Application Specific FastPath IPSec");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Dual BSD/GPL");
 
 /* ASF-IPSec Modules parameters */
 /* It should be driven from the ASF core module */

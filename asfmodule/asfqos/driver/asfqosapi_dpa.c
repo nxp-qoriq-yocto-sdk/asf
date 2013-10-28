@@ -46,10 +46,10 @@
 #define ASF_QOS_VERSION	"1.1.0"
 #define ASF_QOS_DESC	"ASF Quality Of Service Component"
 /** \brief	Driver's license
- *  \details	GPL
+ *  \details	Dual BSD/GPL
  *  \ingroup	Linux_module
  */
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Dual BSD/GPL");
 /** \brief	Module author
  *  \ingroup	Linux_module
  */

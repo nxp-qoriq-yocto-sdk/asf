@@ -81,7 +81,7 @@
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Application Specific FastPath");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Dual BSD/GPL");
 
 #ifdef ASF_TOOLKIT_SUPPORT
 /*! \brief Index used by Linux to register driver */

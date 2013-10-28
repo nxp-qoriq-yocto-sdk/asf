@@ -55,10 +55,10 @@
 #define ASFCTRL_LINUX_DESC 		"ASF Linux Integration Driver"
 
 /** \brief	Driver's license
- *  \details	GPL
+ *  \details	Dual BSD/GPL
  *  \ingroup	Linux_module
  */
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Dual BSD/GPL");
 /** \brief	Module author
  *  \ingroup	Linux_module
  */

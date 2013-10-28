@@ -44,10 +44,10 @@
 #define ASFCTRL_LINUX_IPSEC_DESC 	"ASF Linux-IPsec Integration Driver"
 
 /** \brief	Driver's license
- *  \details	GPL
+ *  \details	Dual BSD/GPL
  *  \ingroup	Linux_module
  */
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Dual BSD/GPL");
 /** \brief	Module author
  *  \ingroup	Linux_module
  */
