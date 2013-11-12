@@ -1354,6 +1354,8 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 			+ sizeof(ASF_IPSecPolicy_t),
 			&handle,
 			sizeof(uint32_t));
+		/* Changing the VSG Magic Number of Policy Delete */
+		asfctrl_invalidate_sessions();
 	}
 
 sa_check:
@@ -1422,6 +1424,8 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 			+ sizeof(ASF_IPSecPolicy_t),
 			&handle,
 			sizeof(uint32_t));
+		/* Changing the VSG Magic Number of Policy Delete */
+		asfctrl_invalidate_sessions();
 	}
 sa_check:
 	if (asfctrl_xfrm_add_insa(xfrm, xp)) {
