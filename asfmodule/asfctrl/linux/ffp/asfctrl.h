@@ -212,7 +212,8 @@ typedef void (*asfctrl_term_cache_flush_t)(void);
 extern void  asfctrl_register_term_func(asfctrl_term_l2blob_update p_l2blob,
 					asfctrl_term_cache_flush_t cache_flush);
 #endif
-
+extern int ipv6_chk_addr(struct net *net, struct in6_addr *addr,
+			struct net_device *dev, int strict);
 extern void asfctrl_linux_unregister_ffp(void);
 extern void asfctrl_linux_register_ffp(void);
 #define PRINT_IPV6(a) printk(KERN_INFO"%x:%x:%x:%x:%x:%x:%x:%x\n", a.s6_addr16[0], a.s6_addr16[1], a.s6_addr16[2], a.s6_addr16[3], a.s6_addr16[4], a.s6_addr16[5], a.s6_addr16[6], a.s6_addr16[7])

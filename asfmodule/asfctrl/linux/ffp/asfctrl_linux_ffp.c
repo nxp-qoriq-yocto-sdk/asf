@@ -845,7 +845,18 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		|| (inet_addr_type(net, ct_tuple_orig->dst.u3.ip) == RTN_BROADCAST)
 		|| (inet_addr_type(net, ct_tuple_reply->dst.u3.ip) == RTN_MULTICAST)
 		|| (inet_addr_type(net, ct_tuple_reply->dst.u3.ip) == RTN_BROADCAST)) {
-
+			ASFCTRL_INFO("Ignoring multicast connection");
+			return -EINVAL;
+		}
+	} else {
+		if (ipv6_chk_addr(net, &(ct_tuple_orig->src.u3.in6), NULL, 0)
+		|| ipv6_chk_addr(net, &(ct_tuple_reply->src.u3.in6), NULL, 0)) {
+			ASFCTRL_INFO("Ignoring Local connection");
+			return -EINVAL;
+		}
+		/* multicast/broadcast session cannot be offloaded  */
+		if (!((ipv6_addr_type(&ct_tuple_orig->dst.u3.in6) & IPV6_ADDR_UNICAST)
+		&& (ipv6_addr_type(&ct_tuple_reply->dst.u3.in6) & IPV6_ADDR_UNICAST))) {
 			ASFCTRL_INFO("Ignoring multicast connection");
 			return -EINVAL;
 		}
