@@ -2245,12 +2245,14 @@ void secfp_removeCINodeFromTunnelList(unsigned int ulVSGId,
 		bool bDir)
 {
 	struct SPDCILinkNode_s **pList;
+
+	spin_lock(&secfp_TunnelIfaceCIIndexListLock);
+
 	if (bDir == SECFP_OUT) {
 		pList = &secFP_TunnelIfaces[ulVSGId][ulTunnelId].pSPDCIOutList;
 	} else { /* for Inbound */
 		pList = &secFP_TunnelIfaces[ulVSGId][ulTunnelId].pSPDCIInList;
 	}
-	spin_lock(&secfp_TunnelIfaceCIIndexListLock);
 
 	if (pCINode == *pList) {
 		if (pCINode->pNext)
