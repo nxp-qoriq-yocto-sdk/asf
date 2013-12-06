@@ -3305,7 +3305,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						vstats->ulOutBytes += pSkb->len;
 #endif
 #ifdef CONFIG_DPA
-						if (skb->cb[BUF_INDOMAIN_INDEX])
+						if (pSkb->cb[BUF_INDOMAIN_INDEX])
 							PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 #ifdef ASF_QOS
