@@ -1545,6 +1545,7 @@ static inline int secfp_try_fastPathOutv4(
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	ASF_boolean_t	bRevalidate = ASF_FALSE;
+	unsigned int ulMTU;
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
 #elif !defined(ASF_QMAN_IPSEC)
@@ -1597,7 +1598,11 @@ static inline int secfp_try_fastPathOutv4(
 
 	if (unlikely(skb_shinfo(skb1)->frag_list)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-		if (unlikely(asfIpv4Fragment(skb1, SECFP_MAX_MTU, 0, ASF_TRUE,
+		if (pSecInfo->outContainerInfo.bControlPathPkt)
+			ulMTU = pSA->ulInnerPathMTU;
+		else
+			ulMTU = SECFP_MAX_MTU;
+		if (unlikely(asfIpv4Fragment(skb1, ulMTU, 0, ASF_TRUE,
 					skb1->dev, &skb))) {
 						ASF_IPSEC_PPS_ATOMIC_INC(
 						IPSec4GblPPStats_g.IPSec4GblPPStat
@@ -5382,6 +5387,7 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 		ulSAIndex = pOutSALinkNode->ulSAIndex;
 	}
 
+	SecInfo.outContainerInfo.bControlPathPkt = ASF_TRUE;
 	SecInfo.outContainerInfo.ulSPDContainerId = ulSPDContainerIndex;
 	SecInfo.outContainerInfo.ulSPDMagicNumber = ulSPDMagicNumber;
 	SecInfo.outContainerInfo.ulTunnelId = ulTunnelId;

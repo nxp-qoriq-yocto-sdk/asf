@@ -880,6 +880,7 @@ typedef struct ASFFFPIpsecContainerInfo_s {
 	ASF_uint32_t ulSPDMagicNumber;
 	ASF_uint32_t		 ulTimeStamp;
 	ASFFFPIpsecConfigIdentity_t  configIdentity;
+	ASF_boolean_t bControlPathPkt;
 } ASFFFPIpsecContainerInfo_t;
 
 typedef struct ASFFFPIpsecSAInfo_s {
