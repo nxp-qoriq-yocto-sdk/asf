@@ -481,12 +481,13 @@ struct sk_buff *asf_alloc_buf_skb(struct net_device *dev)
 
 	addr = bm_buf_addr(&bmb[0]);
 	skbh = (struct sk_buff **)phys_to_virt(addr);
-	skb = *skbh;
-
+	skb = *(skbh - 1);
 	dma_unmap_single(bp->dev, addr, bp->size, DMA_FROM_DEVICE);
 
 	skb->cb[BPID_INDEX] = bp->bpid;
 
+	skb->dev = dev;
+	skb->cb[BUF_INDOMAIN_INDEX] = ASF_TRUE;
 	skb->data = ((u8 *)skbh + priv->tx_headroom);
 	skb_reset_tail_pointer(skb);
 
@@ -506,13 +507,15 @@ int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb)
 	pad = round_down(((uintptr_t)skb_end_pointer(skb) - (uintptr_t)skb->head) -
 			(bp->size + NET_SKB_PAD), L1_CACHE_BYTES);
 	skbh = (struct sk_buff **)(skb->head + pad);
+
 	addr = dma_map_single(bp->dev, skbh,
 				bp->size, DMA_FROM_DEVICE);
+
 	/* Recycle the SKB */
 	skb_recycle(skb);
-
-	*skbh = skb;
-
+	skb->data = skb->head;
+	skb_reset_tail_pointer(skb);
+	*(skbh - 1) = skb;
 	bm_buffer_set64(&bmb, addr);
 	ret = bman_release(bp->pool, &bmb, 1, 0);
 
@@ -965,19 +968,22 @@ void asf_display_skb_list(struct sk_buff *skb, char *msg)
 	devfp_rx_hook and before netif_receive_skb */
 ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 {
-	struct sk_buff *skb = pAbuf->pAnnot->skbh;
+	struct sk_buff *skb = NULL, **skbh;
 	t_FmPrsResult *pParse = &pAbuf->pAnnot->parse_result;
 	int cache_fudge;
 	struct dpa_priv_s		*priv;
 	struct dpa_bp		*dpa_bp;
-
 	if (NULL != pAbuf->nativeBuffer)
-		return skb;
+		return pAbuf->nativeBuffer;
+
+	priv = netdev_priv(pAbuf->ndev);
+	dpa_bp = priv->dpa_bp;
+	skbh = (struct sk_buff **)(pAbuf->pAnnot);
+	skb = *(skbh - 1);
+
 	/* we do not try to return this frame back
 		to ingress iface bp any more */
 	if (unlikely(!(pAbuf->bbuffInDomain))) {
-		priv = netdev_priv(pAbuf->ndev);
-		dpa_bp = priv->dpa_bp;
 		PER_CPU_BP_COUNT(dpa_bp)--;
 	} else {
 		skb->cb[BUF_INDOMAIN_INDEX] = pAbuf->bbuffInDomain;
@@ -985,7 +991,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	}
 
 	/* set data/length from eth hdr */
-	cache_fudge = (unsigned char *)pAbuf->ethh - skb->head - NET_SKB_PAD;
+	cache_fudge = pAbuf->pAnnot->fd->offset;
 	skb->mac_len = pParse->ip_off[0];
 	skb->dev = pAbuf->ndev;
 	skb->data += cache_fudge;
@@ -2712,7 +2718,6 @@ drop_pkt:
 
 	return;
 drop_pkt_1:
-
 	asf_free_buf_skb(abuf.ndev, (struct sk_buff *)abuf.nativeBuffer);
 	return;
 }

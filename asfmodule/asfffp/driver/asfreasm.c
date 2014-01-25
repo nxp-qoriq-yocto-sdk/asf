@@ -2188,13 +2188,11 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			skb2->next = skb->next;
 			skb->next = NULL;
 #ifdef CONFIG_DPA
-		if (skb->cb[BPID_INDEX])
-			asf_free_buf_skb(skb->dev, skb);
-		else
-			ASFSkbFree(skb);
-#else
-			ASFSkbFree(skb);
+			if (skb->cb[BPID_INDEX])
+				asf_free_buf_skb(skb->dev, skb);
+			else
 #endif
+				ASFSkbFree(skb);
 			return 0;
 		}
 	}
@@ -2204,13 +2202,11 @@ drop:
 	while (skb2) {
 		pLastSkb = skb2->next;
 #ifdef CONFIG_DPA
-		if (skb->cb[BPID_INDEX])
-			asf_free_buf_skb(skb2->dev, skb2);
-		else
-			ASFSkbFree(skb2);
-#else
-		ASFSkbFree(skb2);
+		       if (skb2->cb[BPID_INDEX])
+				asf_free_buf_skb(skb2->dev, skb2);
+			else
 #endif
+				ASFSkbFree(skb2);
 		skb2 = pLastSkb;
 	}
 	*pOutSkb = NULL;

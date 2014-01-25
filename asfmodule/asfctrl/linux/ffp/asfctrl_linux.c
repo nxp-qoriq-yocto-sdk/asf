@@ -28,6 +28,7 @@
 #include <linux/if_arp.h>
 #ifdef CONFIG_DPA
 #include <dpa/dpaa_eth.h>
+#include <dpa/dpaa_eth_common.h>
 #else
 #include <gianfar.h>
 #endif

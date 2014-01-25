@@ -158,7 +158,15 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 }
 #endif
 #else
+#ifdef CONFIG_DPA
+#define ASFSkbFree(freeArg) \
+{\
+        asf_dec_skb_buf_count((struct sk_buff *)freeArg);\
+	kfree_skb((struct sk_buff *)freeArg);\
+}
+#else
 #define ASFSkbFree(freeArg) kfree_skb((struct sk_buff *)freeArg)
+#endif
 #endif
 
 #ifdef ASF_TERM_FP_SUPPORT

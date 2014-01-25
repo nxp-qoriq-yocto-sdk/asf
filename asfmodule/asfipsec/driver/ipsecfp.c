@@ -1198,7 +1198,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	outSA_t *pSA ;
 	struct ipv6hdr *ipv6h = ipv6_hdr(skb1);
 	unsigned int *pOuterIpHdr;
-	struct sk_buff *pNextSkb;
+	struct sk_buff *pNextSkb = NULL;
 	SPDOutContainer_t *pContainer;
 	struct sk_buff *skb = skb1;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
@@ -1496,7 +1496,6 @@ no_sa:
 	return 1;
 
 drop_skb_list:
-	pNextSkb = skb->next;
 	ASFSkbFree(skb);
 	while (pNextSkb) {
 		skb = pNextSkb;
@@ -1539,7 +1538,7 @@ static inline int secfp_try_fastPathOutv4(
 	outSA_t *pSA;
 	struct iphdr *iph = ip_hdr(skb1);
 	unsigned int *pOuterIpHdr;
-	struct sk_buff *pNextSkb;
+	struct sk_buff *pNextSkb = NULL;
 	SPDOutContainer_t *pContainer;
 	struct sk_buff *skb = skb1;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
@@ -1577,6 +1576,12 @@ static inline int secfp_try_fastPathOutv4(
 		ASFIPSEC_DEBUG("SA Not Found");
 		goto no_sa;
 	}
+	if (unlikely(pSA->odev == NULL)) {
+		ASFIPSEC_DEBUG("L2blob Not Resolved. Drop the packet");
+		goto l2blob_missing;
+	}
+	if (!skb1->dev)
+		skb1->dev = pSA->odev;
 
 	ASFIPSEC_DEBUG("SA Found");
 	pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);
@@ -1695,6 +1700,7 @@ static inline int secfp_try_fastPathOutv4(
 					;
 				tempSkb->next = pNextSkb;
 				pNextSkb = skb->next;
+				skb->next = NULL;
 			} else {
 				if (((pSA->SAParams.handleDf == SECFP_DF_SET) ||
 				((iph->frag_off & IP_DF) && (pSA->SAParams.handleDf
@@ -1928,10 +1934,32 @@ no_sa:
 	}
 	rcu_read_unlock();
 	return 1;
+l2blob_missing:
+	{
+		ASF_IPSecTunEndAddr_t TunAddress;
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
+
+		TunAddress.IP_Version = 4;
+		TunAddress.dstIP.bIPv4OrIPv6 = 0;
+		TunAddress.srcIP.bIPv4OrIPv6 = 0;
+		TunAddress.dstIP.ipv4addr =
+		pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+		TunAddress.srcIP.ipv4addr =
+		pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
+
+		if (ASFIPSecCbFn.pFnRefreshL2Blob)
+			ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId,
+				pSecInfo->outContainerInfo.ulTunnelId,
+				pSecInfo->outContainerInfo.ulSPDContainerId,
+				pSecInfo->outContainerInfo.ulSPDMagicNumber,
+				&TunAddress,
+				pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
+	}
+
 
 drop_skb_list:
-	pNextSkb = skb->next;
-	ASFSkbFree(skb);
+	if (skb)
+		ASFSkbFree(skb);
 	while (pNextSkb) {
 		skb = pNextSkb;
 		pNextSkb = skb->next;
@@ -5413,6 +5441,13 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 	}
 	if (skb_shinfo(skb)->frag_list)
 		skb->len = skb_headlen(skb);
+	if (skb_shinfo(skb)->nr_frags) {
+		ASFIPSEC_PRINT("Scattered packet not supported");
+		if (pFreeFn)
+			(pFreeFn)(freeArg);
+		goto ret_stk;
+	}
+
 	if (secfp_try_fastPathOut(ulVsgId, skb, &SecInfo) != 0) {
 		if (pFreeFn)
 			(pFreeFn)(freeArg);
