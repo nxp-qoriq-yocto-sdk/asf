@@ -24,21 +24,14 @@
 #include "ipsecfp.h"
 #include "ipseccmn.h"
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#include <linux/fs.h>
 /*
  * Implement following proc
  *	/proc/asf/ipsec/flows
  *	/proc/asf/ipsec/stats
  */
 
-enum {
-	SECFP_PROC_COMMAND = 1,
-	SECFP_MAX_TUNNELS,
-	SECFP_MAX_VSGS,
-	SECFP_MAX_SPD,
-	SECFP_MAX_SA,
-	SECFP_L2BLOB_REFRESH_NPKTS,
-	SECFP_L2BLOB_REFRESH_INTERVAL
-} ;
 struct algo_info {
 	const char *alg_name;
 	int alg_type;
@@ -147,13 +140,11 @@ static struct proc_dir_entry *secfp_dir;
 
 #define GSTATS_SUM(a) (total.ul##a += gstats->ul##a)
 #define GSTATS_TOTAL(a) (unsigned long) total.ul##a
-static int display_secfp_proc_global_stats(char *page, char **start,
-					 off_t off, int count,
-					 int *eof, void *data)
+
+static int display_secfp_proc_global_stats(struct seq_file *f, void *v)
 {
 	AsfIPSecPPGlobalStats_t total;
 	int cpu;
-
 	memset(&total, 0, sizeof(total));
 
 	for_each_online_cpu(cpu) {
@@ -167,15 +158,12 @@ static int display_secfp_proc_global_stats(char *page, char **start,
 		GSTATS_SUM(TotInProcSecPkts);
 		GSTATS_SUM(TotOutRecvPktsSecApply);
 		GSTATS_SUM(TotOutPktsSecAppled);
-		printk(KERN_INFO"\n cpu =%d Encrypted Pkts = %u Normal Pkts = %u",
-			cpu, gstats->ulTotInRecvPkts, gstats->ulTotOutRecvPkts);
 	}
-
-	printk(KERN_INFO"\n    InRcv %lu\tInProc %lu\tOutRcv %lu OutProc %lu\n",
+	seq_printf(f, "\n    InRcv %lu\tInProc %lu\tOutRcv %lu OutProc %lu\n",
 		GSTATS_TOTAL(TotInRecvPkts), GSTATS_TOTAL(TotInProcPkts),
 		GSTATS_TOTAL(TotOutRecvPkts), GSTATS_TOTAL(TotOutProcPkts));
 
-	printk(KERN_INFO"\nSEC-InRcv %lu\tInProc %lu\tOutRcv %lu OutProc %lu\n",
+	seq_printf(f, "\nSEC-InRcv %lu\tInProc %lu\tOutRcv %lu OutProc %lu\n",
 		GSTATS_TOTAL(TotInRecvSecPkts),
 		GSTATS_TOTAL(TotInProcSecPkts),
 		GSTATS_TOTAL(TotOutRecvPktsSecApply),
@@ -184,41 +172,45 @@ static int display_secfp_proc_global_stats(char *page, char **start,
 	return 0;
 }
 
-static int reset_secfp_proc_global_stats(char *page, char **start,
-					off_t off, int count,
-					int *eof, void *data)
+static int reset_secfp_proc_global_stats(struct seq_file *f, void *v)
 {
 	ASFIPSec4GlobalPPStats_t Outparams;
 
 	ASFIPSecGlobalQueryStats(&Outparams, ASF_TRUE);
 	memset(&GlobalErrors, 0, sizeof(ASFIPSecGlobalErrorCounters_t));
 
-	printk(KERN_INFO"\n    InRcv %u \t InProc %u \tOutRcv %u OutProc %u\n",
+	seq_printf(f, "\n    InRcv %u \t InProc %u \tOutRcv %u OutProc %u\n",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT1],
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT2],
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT3],
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT4]);
 
-	printk(KERN_INFO"\nSEC-InRcv %u \t InProc %u \tOutRcv %u OutProc %u\n",
+	seq_printf(f, "\nSEC-InRcv %u \t InProc %u \tOutRcv %u OutProc %u\n",
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT5],
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT6],
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT7],
 		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT8]);
 
-	printk(KERN_INFO"Resetting IPSEC Global Stats\n");
+	seq_printf(f, "Resetting IPSEC Global Stats\n");
 
 	return 0;
 }
 
-#define GLBERR_DISP(a) printk(KERN_INFO" " #a " = %u\n", total->ul##a)
-static int display_secfp_proc_global_errors(char *page, char **start,
-					off_t off, int count,
-					int *eof, void *data)
+#define GLBERR_DISP(a) do {\
+	if (total->ul##a)\
+		seq_printf(f, "%10u (" #a ")\n", total->ul##a);\
+	} while (0)
+
+#define GLPPPSTATS_DISP(s, a) seq_printf(f, "%10u (%s)\n",\
+					Outparams.IPSec4GblPPStat[a], s)
+
+static int display_secfp_proc_global_errors(struct seq_file *f, void *v)
 {
 	ASFIPSecGlobalErrorCounters_t *total;
 	ASFIPSec4GlobalPPStats_t Outparams;
 	total = &GlobalErrors;
 
+	seq_printf(f, " \nIPSEC ERRORS:\n");
 	GLBERR_DISP(InvalidVSGId);
 	GLBERR_DISP(InvalidTunnelId);
 	GLBERR_DISP(InvalidMagicNumber);
@@ -244,46 +236,29 @@ static int display_secfp_proc_global_errors(char *page, char **start,
 	GLBERR_DISP(OutSASPDContainerMisMatch);
 
 	ASFIPSecGlobalQueryStats(&Outparams, ASF_FALSE);
-	printk(KERN_INFO" \nERRORS:");
-	printk(KERN_INFO"%u (Does not enough tail room to continue)",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT9]);
-	printk(KERN_INFO"%u (No of packets Invalid ESP)",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT10]);
-	printk(KERN_INFO"%u (Decrypted Protocol != IPV4)",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT11]);
-	printk(KERN_INFO"%u (Invalid Pad length)",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
-	printk(KERN_INFO"%u (Submission to SEC failed)",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
-	printk(KERN_INFO"%u (Invalid sequence number )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT14]);
-	printk(KERN_INFO"%u (Anti-replay window check failed )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
-	printk(KERN_INFO"%u (Replay packet )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT16]);
-	printk(KERN_INFO"%u (ICV Comp Failed )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT17]);
-	printk(KERN_INFO"%u (Crypto Operation Failed )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
-	printk(KERN_INFO"%u (Anti Replay window -- Drop the packet )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT19]);
-	printk(KERN_INFO"%u (Verification of SA Selectross Failed )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT20]);
-	printk(KERN_INFO"%u (Packet size is > Path MTU and"\
-		"fragment bit set in SA or packet )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT21]);
-	printk(KERN_INFO"%u (Fragmentation Failed )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT22]);
-	printk(KERN_INFO"%u (IN SA Not Found )",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT23]);
-	printk(KERN_INFO"%u (OUT SA Not Found )\n",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
-	printk(KERN_INFO"%u (L2blob Not Found )\n",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
-	printk(KERN_INFO"%u (Desc Alloc Error )\n",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT26]);
-	printk(KERN_INFO"%u (SA Expired )\n",
-		Outparams.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT27]);
+	GLPPPSTATS_DISP("Not enough tail room", ASF_IPSEC_PP_GBL_CNT9);
+	GLPPPSTATS_DISP("No of packets Invalid ESP", ASF_IPSEC_PP_GBL_CNT10);
+	GLPPPSTATS_DISP("Decrypted Protocol != IPV4", ASF_IPSEC_PP_GBL_CNT11);
+	GLPPPSTATS_DISP("Invalid Pad length", ASF_IPSEC_PP_GBL_CNT12);
+	GLPPPSTATS_DISP("Submission to SEC failed", ASF_IPSEC_PP_GBL_CNT13);
+	GLPPPSTATS_DISP("Invalid sequence number", ASF_IPSEC_PP_GBL_CNT14);
+	GLPPPSTATS_DISP("Anti-replay window check failed",
+		ASF_IPSEC_PP_GBL_CNT15);
+	GLPPPSTATS_DISP("Replay packet", ASF_IPSEC_PP_GBL_CNT16);
+	GLPPPSTATS_DISP("ICV Comp Failed", ASF_IPSEC_PP_GBL_CNT17);
+	GLPPPSTATS_DISP("Crypto Operation Failed", ASF_IPSEC_PP_GBL_CNT18);
+	GLPPPSTATS_DISP("Anti Replay window -- Drop the packet",
+		ASF_IPSEC_PP_GBL_CNT19);
+	GLPPPSTATS_DISP("Verification of SA Selectross Failed",
+		ASF_IPSEC_PP_GBL_CNT20);
+	GLPPPSTATS_DISP("Packet size is > Path MTU and"\
+		"fragment bit set in SA or packet", ASF_IPSEC_PP_GBL_CNT21);
+	GLPPPSTATS_DISP("Fragmentation Failed", ASF_IPSEC_PP_GBL_CNT22);
+	GLPPPSTATS_DISP("IN SA Not Found", ASF_IPSEC_PP_GBL_CNT23);
+	GLPPPSTATS_DISP("OUT SA Not Found", ASF_IPSEC_PP_GBL_CNT24);
+	GLPPPSTATS_DISP("L2blob Not Found", ASF_IPSEC_PP_GBL_CNT25);
+	GLPPPSTATS_DISP("Desc Alloc Error", ASF_IPSEC_PP_GBL_CNT26);
+	GLPPPSTATS_DISP("SA Expired ", ASF_IPSEC_PP_GBL_CNT27);
 	return 0;
 }
 
@@ -292,9 +267,7 @@ static void print_SPDPolPPStats(AsfSPDPolPPStats_t PPStats)
 	return;
 }
 
-static int display_secfp_proc_out_spd(char *page, char **start,
-				off_t off, int count,
-				int *eof, void *data)
+static int display_secfp_proc_out_spd(struct seq_file *f, void *v)
 {
 	ASF_uint32_t ulVSGId = 0;
 	ASF_uint32_t ulTunnelId = 0;
@@ -308,14 +281,14 @@ static int display_secfp_proc_out_spd(char *page, char **start,
 		local_bh_disable();
 
 	if (secFP_TunnelIfaces[ulVSGId][ulTunnelId].bInUse == 0) {
-		printk(KERN_INFO"Tunnel Interface is not in use"\
+		seq_printf(f, "Tunnel Interface is not in use"\
 			".TunnelId=%u, VSGId=%u\n",
 			ulTunnelId, ulVSGId);
 		if (!bVal)
 			local_bh_enable();
 		return ASF_IPSEC_TUNNEL_NOT_FOUND;
 	}
-	printk(KERN_INFO"\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
+	seq_printf(f, "\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
 		ulVSGId, ulTunnelId,
 		secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
 
@@ -327,8 +300,8 @@ static int display_secfp_proc_out_spd(char *page, char **start,
 					pCINode->ulIndex));
 		if (!pOutContainer)
 			continue;
-		printk(KERN_INFO"=========OUT Policy==================\n");
-		printk(KERN_INFO"Id=%d, Proto 0x%x, Dscp 0x%x"\
+		seq_printf(f, "=========OUT Policy==================\n");
+		seq_printf(f, "Id=%d, Proto 0x%x, Dscp 0x%x"\
 			"Flags:Udp(%d) RED(%d),ESN(%d),DSCP(%d),DF(%d)\n",
 		pCINode->ulIndex,
 		pOutContainer->SPDParams.ucProto,
@@ -341,24 +314,22 @@ static int display_secfp_proc_out_spd(char *page, char **start,
 
 		print_SPDPolPPStats(pOutContainer->PPStats);
 
-		printk(KERN_INFO"List SA IDs:");
+		seq_printf(f, "List SA IDs:");
 		for (pOutSALinkNode = pOutContainer->SAHolder.pSAList;
 			pOutSALinkNode != NULL;
 			pOutSALinkNode = pOutSALinkNode->pNext) {
-			printk(KERN_INFO" %d ", pOutSALinkNode->ulSAIndex);
+			seq_printf(f, " %d ", pOutSALinkNode->ulSAIndex);
 			if (pOutSALinkNode->ulSAIndex % 10)
-				printk(KERN_INFO"\n\t");
+				seq_printf(f, "\n\t");
 		}
-		printk(KERN_INFO"\n");
+		seq_printf(f, "\n");
 	}
 	if (!bVal)
 		local_bh_enable();
 	return 0;
 }
 
-static int display_secfp_proc_in_spd(char *page, char **start,
-				off_t off, int count,
-				int *eof, void *data)
+static int display_secfp_proc_in_spd(struct seq_file *f,  void *v)
 {
 	int ulSAIndex;
 	ASF_uint32_t ulVSGId = 0;
@@ -373,14 +344,14 @@ static int display_secfp_proc_in_spd(char *page, char **start,
 		local_bh_disable();
 
 	if (secFP_TunnelIfaces[ulVSGId][ulTunnelId].bInUse == 0) {
-		printk(KERN_INFO"\nTunnel Interface is not in use"\
+		seq_printf(f, "\nTunnel Interface is not in use"\
 			".TunnelId=%u, VSGId=%u\n",
 			ulTunnelId, ulVSGId);
 		if (!bVal)
 			local_bh_enable();
 		return ASF_IPSEC_TUNNEL_NOT_FOUND;
 	}
-	printk(KERN_INFO"\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d",
+	seq_printf(f, "\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d",
 		ulVSGId, ulTunnelId,
 		secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
 
@@ -392,8 +363,8 @@ static int display_secfp_proc_in_spd(char *page, char **start,
 					pCINode->ulIndex));
 		if (!pInContainer)
 			continue;
-		printk(KERN_INFO"=========IN Policy==================\n");
-		printk(KERN_INFO"Id=%d, Proto 0x%x, Dscp 0x%x "\
+		seq_printf(f, "=========IN Policy==================\n");
+		seq_printf(f, "Id=%d, Proto 0x%x, Dscp 0x%x "\
 			"Flags:Udp(%d) ESN(%d),DSCP(%d),ECN(%d)\n",
 		pCINode->ulIndex,
 		pInContainer->SPDParams.ucProto,
@@ -405,32 +376,32 @@ static int display_secfp_proc_in_spd(char *page, char **start,
 
 		print_SPDPolPPStats(pInContainer->PPStats);
 
-		printk(KERN_INFO"List IN SA -SPI Val:");
+		seq_printf(f, "List IN SA -SPI Val:");
 
 		for (pSPILinkNode = pInContainer->pSPIValList, ulSAIndex = 0;
 			pSPILinkNode != NULL;
 			pSPILinkNode = pSPILinkNode->pNext, ulSAIndex++) {
 
-			printk(KERN_INFO"0x%x ", pSPILinkNode->ulSPIVal);
+			seq_printf(f, "0x%x ", pSPILinkNode->ulSPIVal);
 			if (ulSAIndex % 10)
-				printk(KERN_INFO"\n");
+				seq_printf(f, "\n");
 		}
-		printk(KERN_INFO"\n");
+		seq_printf(f, "\n");
 	}
 	if (!bVal)
 		local_bh_enable();
 	return 0;
 }
 
-static void print_SAParams(SAParams_t *SAParams)
+static void print_SAParams(struct seq_file *f,  SAParams_t *SAParams)
 {
-	printk(KERN_INFO"CId = %d TunnelInfo src = 0x%x,dst = 0x%x SPI=0x%x",
+	seq_printf(f, "CId = %d TunnelInfo src = 0x%x,dst = 0x%x SPI=0x%x",
 		SAParams->ulCId,
 		SAParams->tunnelInfo.addr.iphv4.saddr,
 		SAParams->tunnelInfo.addr.iphv4.daddr,
 		SAParams->ulSPI);
 
-	printk(KERN_INFO"\nProtocol = 0x%x, Dscp = 0x%x,"\
+	seq_printf(f, "\nProtocol = 0x%x, Dscp = 0x%x,"\
 		"AuthAlgo =%s(%d)(Len=%d), CipherAlgo = %s(%d) (Len=%d) ",
 		SAParams->ucProtocol, SAParams->ucDscp,
 		algo_getname(1, SAParams->ucAuthAlgo),
@@ -438,22 +409,20 @@ static void print_SAParams(SAParams_t *SAParams)
 		algo_getname(0, SAParams->ucCipherAlgo),
 		SAParams->ucCipherAlgo, SAParams->EncKeyLen);
 
-	printk(KERN_INFO"AntiReplay = %d, UDPEncap(NAT-T) = %d\n",
+	seq_printf(f, "AntiReplay = %d, UDPEncap(NAT-T) = %d\n",
 		SAParams->bDoAntiReplayCheck,
 		SAParams->bDoUDPEncapsulationForNATTraversal);
 
-	printk(KERN_INFO "LifeKBytes Soft = %lu - Hard = %lu:",
+	seq_printf(f, "LifeKBytes Soft = %lu - Hard = %lu:",
 		SAParams->softKbyteLimit,
 		SAParams->hardKbyteLimit);
 
-	printk(KERN_INFO "LifePacket Soft = %lu - Hard = %lu:",
+	seq_printf(f, "LifePacket Soft = %lu - Hard = %lu:",
 		SAParams->softPacketLimit,
 		SAParams->hardPacketLimit);
 }
 
-static int display_secfp_proc_out_sa(char *page, char **start,
-				off_t off, int count,
-				int *eof, void *data)
+static int display_secfp_proc_out_sa(struct seq_file *f,  void *v)
 {
 	ASF_uint32_t ulVSGId = 0;
 	ASF_uint32_t ulTunnelId = 0;
@@ -468,14 +437,14 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 		local_bh_disable();
 
 	if (secFP_TunnelIfaces[ulVSGId][ulTunnelId].bInUse == 0) {
-		printk(KERN_INFO"Tunnel Interface is not in use"\
+		seq_printf(f, "Tunnel Interface is not in use"\
 			".TunnelId=%u, VSGId=%u\n",
 			ulTunnelId, ulVSGId);
 		if (!bVal)
 			local_bh_enable();
 		return ASF_IPSEC_TUNNEL_NOT_FOUND;
 	}
-	printk(KERN_INFO"\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
+	seq_printf(f, "\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
 		ulVSGId, ulTunnelId,
 		secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
 
@@ -487,8 +456,8 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 					pCINode->ulIndex));
 		if (!pOutContainer)
 			continue;
-		printk(KERN_INFO"=========OUT Policy==================\n");
-		printk(KERN_INFO"Id=%d, Proto %d, Dscp %d "\
+		seq_printf(f, "=========OUT Policy==================\n");
+		seq_printf(f, "Id=%d, Proto %d, Dscp %d "\
 			"Flags:Udp(%d) RED(%d),ESN(%d),DSCP(%d),DF(%d)\n",
 		pCINode->ulIndex,
 		pOutContainer->SPDParams.ucProto,
@@ -500,11 +469,11 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 		pOutContainer->SPDParams.handleDf);
 
 		print_SPDPolPPStats(pOutContainer->PPStats);
-		printk(KERN_INFO"--------------SA_LIST--------------------");
+		seq_printf(f, "--------------SA_LIST--------------------");
 		for (pOutSALinkNode = pOutContainer->SAHolder.pSAList;
 			pOutSALinkNode != NULL;
 			pOutSALinkNode = pOutSALinkNode->pNext) {
-			printk(KERN_INFO"\nSA-ID= %d ", pOutSALinkNode->ulSAIndex);
+			seq_printf(f, "\nSA-ID= %d ", pOutSALinkNode->ulSAIndex);
 			pOutSA =
 				(outSA_t *) ptrIArray_getData(&secFP_OutSATable,
 					pOutSALinkNode->ulSAIndex);
@@ -512,7 +481,7 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 				ASFSAStats_t outParams = {0, 0};
 				ASFIPSecGetSAQueryParams_t inParams;
 
-				print_SAParams(&pOutSA->SAParams);
+				print_SAParams(f, &pOutSA->SAParams);
 
 				inParams.ulVSGId = ulVSGId;
 				inParams.ulTunnelId = ulTunnelId;
@@ -529,29 +498,27 @@ static int display_secfp_proc_out_sa(char *page, char **start,
 						pOutSA->SAParams.ucProtocol;
 				inParams.bDir = SECFP_OUT;
 				ASFIPSecSAQueryStats(&inParams, &outParams);
-				printk(KERN_INFO"Stats:ulBytes=%llu, ulPkts=%llu",
+				seq_printf(f, "Stats:ulBytes=%llu, ulPkts=%llu",
 					outParams.ulBytes, outParams.ulPkts);
 
-				printk(KERN_INFO"L2BlobLen = %d, Magic = %d\n",
+				seq_printf(f, "L2BlobLen = %d, Magic = %d\n",
 					pOutSA->ulL2BlobLen,
 				pOutSA->l2blobConfig.ulL2blobMagicNumber);
 #ifdef ASF_QMAN_IPSEC
-				printk(KERN_INFO"SecFQ=%d, RecvFQ=%d\n",
+				seq_printf(f, "SecFQ=%d, RecvFQ=%d\n",
 					pOutSA->ctx.SecFq->qman_fq.fqid,
 					pOutSA->ctx.RecvFq->qman_fq.fqid);
 #endif
 			}
 		}
-		printk(KERN_INFO"\n");
+		seq_printf(f, "\n");
 	}
 	if (!bVal)
 		local_bh_enable();
 
 	return 0;
 }
-static int display_secfp_proc_in_sa(char *page, char **start,
-				off_t off, int count,
-				int *eof, void *data)
+static int display_secfp_proc_in_sa(struct seq_file *f, void *v)
 {
 	int ulSAIndex;
 	ASF_uint32_t ulVSGId = 0;
@@ -568,14 +535,14 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 		local_bh_disable();
 
 	if (secFP_TunnelIfaces[ulVSGId][ulTunnelId].bInUse == 0) {
-		printk(KERN_INFO"Tunnel Interface is not in use"\
+		seq_printf(f, "Tunnel Interface is not in use"\
 			".TunnelId=%u, VSGId=%u\n",
 			ulTunnelId, ulVSGId);
 		if (!bVal)
 			local_bh_enable();
 		return ASF_IPSEC_TUNNEL_NOT_FOUND;
 	}
-	printk(KERN_INFO"\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
+	seq_printf(f, "\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d\n",
 		ulVSGId, ulTunnelId,
 		secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
 
@@ -588,8 +555,8 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 		if (!pInContainer)
 			continue;
 
-		printk(KERN_INFO"=========IN Policy==================\n");
-		printk(KERN_INFO"Id=%d, Proto %d, Dscp %d "\
+		seq_printf(f, "=========IN Policy==================\n");
+		seq_printf(f, "Id=%d, Proto %d, Dscp %d "\
 			"Flags:Udp(%d) ESN(%d),DSCP(%d),ECN(%d)\n",
 		pCINode->ulIndex,
 		pInContainer->SPDParams.ucProto,
@@ -600,11 +567,11 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 		pInContainer->SPDParams.bCopyEcn);
 
 		print_SPDPolPPStats(pInContainer->PPStats);
-		printk(KERN_INFO"--------------SA_LIST--------------------");
+		seq_printf(f, "--------------SA_LIST--------------------");
 		for (pSPILinkNode = pInContainer->pSPIValList, ulSAIndex = 0;
 			pSPILinkNode != NULL;
 			pSPILinkNode = pSPILinkNode->pNext, ulSAIndex++) {
-			printk(KERN_INFO"\nSPI = 0x%x", pSPILinkNode->ulSPIVal);
+			seq_printf(f, "\nSPI = 0x%x", pSPILinkNode->ulSPIVal);
 			ulHashVal = secfp_compute_hash(pSPILinkNode->ulSPIVal);
 			for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
 				pInSA != NULL; pInSA = pInSA->pNext) {
@@ -612,9 +579,9 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 				ASFSAStats_t outParams = {0, 0};
 				ASFIPSecGetSAQueryParams_t inParams;
 
-				printk(KERN_INFO"SpdContId =%d",
+				seq_printf(f, "SpdContId =%d",
 					pInSA->ulSPDInContainerIndex);
-				print_SAParams(&pInSA->SAParams);
+				print_SAParams(f, &pInSA->SAParams);
 
 				inParams.ulVSGId = ulVSGId;
 				inParams.ulTunnelId = ulTunnelId;
@@ -631,22 +598,173 @@ static int display_secfp_proc_in_sa(char *page, char **start,
 					pInSA->SAParams.ucProtocol;
 				inParams.bDir = SECFP_IN;
 				ASFIPSecSAQueryStats(&inParams, &outParams);
-				printk(KERN_INFO"Stats:ulBytes=%llu,ulPkts= %llu",
+				seq_printf(f, "Stats:ulBytes=%llu,ulPkts= %llu",
 					outParams.ulBytes, outParams.ulPkts);
 #ifdef ASF_QMAN_IPSEC
-				printk(KERN_INFO"SecFQ=%d, RecvFQ=%d\n",
+				seq_printf(f, "SecFQ=%d, RecvFQ=%d\n",
 					pInSA->ctx.SecFq->qman_fq.fqid,
 					pInSA->ctx.RecvFq->qman_fq.fqid);
 #endif
 			}
 		}
-		printk(KERN_INFO"\n");
+		seq_printf(f, "\n");
 	}
 	if (!bVal)
 		local_bh_enable();
 	return 0;
-
 }
+static void *int_seq_start(struct seq_file *f, loff_t *pos)
+{
+		return (*pos < 1) ? pos : NULL;
+}
+
+static void *int_seq_next(struct seq_file *f, void *v, loff_t *pos)
+{
+	return NULL;
+}
+
+static void int_seq_stop(struct seq_file *f, void *v)
+{
+		/* Nothing to do */
+}
+
+static const struct seq_operations int_seq_ops[] = {
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_secfp_proc_global_stats
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = reset_secfp_proc_global_stats
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_secfp_proc_global_errors
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_secfp_proc_out_spd
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_secfp_proc_in_spd
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_secfp_proc_out_sa
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_secfp_proc_in_sa
+	},
+	{
+	}
+};
+
+static int ipsec_gbl_stats_open(struct inode *inode, struct file *filp)
+{
+		return seq_open(filp, &int_seq_ops[0]);
+}
+
+static int ipsec_gbl_reset_stats_open(struct inode *inode, struct file *filp)
+{
+		return seq_open(filp, &int_seq_ops[1]);
+}
+
+static int ipsec_gbl_error_stats_open(struct inode *inode, struct file *filp)
+{
+		return seq_open(filp, &int_seq_ops[2]);
+}
+
+static int ipsec_gbl_out_spd_stats_open(struct inode *inode, struct file *filp)
+{
+		return seq_open(filp, &int_seq_ops[3]);
+}
+
+static int ipsec_gbl_in_spd_stats_open(struct inode *inode, struct file *filp)
+{
+		return seq_open(filp, &int_seq_ops[4]);
+}
+
+static int ipsec_gbl_out_sa_stats_open(struct inode *inode, struct file *filp)
+{
+		return seq_open(filp, &int_seq_ops[5]);
+}
+static int ipsec_gbl_in_sa_stats_open(struct inode *inode, struct file *filp)
+{
+		return seq_open(filp, &int_seq_ops[6]);
+}
+static int ipsec_gbl_sa_list_open(struct inode *inode, struct file *filp)
+{
+		return seq_open(filp, &int_seq_ops[7]);
+}
+
+
+static const struct file_operations proc_asfipsec_stats_operations[] = {
+	{
+		.open	   = ipsec_gbl_stats_open,
+		.read	   = seq_read,
+		.llseek	 = seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = ipsec_gbl_reset_stats_open,
+		.read	   = seq_read,
+		.llseek	 = seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = ipsec_gbl_error_stats_open,
+		.read	   = seq_read,
+		.llseek	 = seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = ipsec_gbl_out_spd_stats_open,
+		.read	   = seq_read,
+		.llseek	 = seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = ipsec_gbl_in_spd_stats_open,
+		.read	   = seq_read,
+		.llseek	 = seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = ipsec_gbl_out_sa_stats_open,
+		.read	   = seq_read,
+		.llseek	 = seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = ipsec_gbl_in_sa_stats_open,
+		.read	   = seq_read,
+		.llseek	 = seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = ipsec_gbl_sa_list_open,
+		.read	   = seq_read,
+		.llseek	 = seq_lseek,
+		.release	= seq_release,
+	}
+};
+
 
 int secfp_register_proc(void)
 {
@@ -661,49 +779,27 @@ int secfp_register_proc(void)
 
 	if (secfp_dir == NULL)
 		return -ENOMEM;
-
-	create_proc_read_entry(
-					SECFP_PROC_GLOBAL_STATS_NAME,
+	proc_create(SECFP_PROC_GLOBAL_STATS_NAME,
 					0444, secfp_dir,
-					display_secfp_proc_global_stats,
-					NULL);
-
-	create_proc_read_entry(
-					SECFP_PROC_RESET_STATS_NAME,
+					&proc_asfipsec_stats_operations[0]);
+	proc_create(SECFP_PROC_RESET_STATS_NAME,
 					0444, secfp_dir,
-					reset_secfp_proc_global_stats,
-					NULL);
-
-	create_proc_read_entry(
-					SECFP_PROC_GLOBAL_ERROR_NAME,
+					&proc_asfipsec_stats_operations[1]);
+	proc_create(SECFP_PROC_GLOBAL_ERROR_NAME,
 					0444, secfp_dir,
-					display_secfp_proc_global_errors,
-					NULL);
-
-	create_proc_read_entry(
-					SECFP_PROC_OUT_SPD,
+					&proc_asfipsec_stats_operations[2]);
+	proc_create(SECFP_PROC_OUT_SPD,
 					0444, secfp_dir,
-					display_secfp_proc_out_spd,
-					NULL);
-
-	create_proc_read_entry(
-					SECFP_PROC_IN_SPD,
+					&proc_asfipsec_stats_operations[3]);
+	proc_create(SECFP_PROC_IN_SPD,
 					0444, secfp_dir,
-					display_secfp_proc_in_spd,
-					NULL);
-
-	create_proc_read_entry(
-					SECFP_PROC_OUT_SA,
+					&proc_asfipsec_stats_operations[4]);
+	proc_create(SECFP_PROC_OUT_SA,
 					0444, secfp_dir,
-					display_secfp_proc_out_sa,
-					NULL);
-
-	create_proc_read_entry(
-					SECFP_PROC_IN_SA,
+					&proc_asfipsec_stats_operations[5]);
+	proc_create(SECFP_PROC_IN_SA,
 					0444, secfp_dir,
-					display_secfp_proc_in_sa,
-					NULL);
-
+					&proc_asfipsec_stats_operations[6]);
 	return 0;
 }
 

@@ -43,6 +43,8 @@
 
 #include <linux/version.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#include <linux/fs.h>
 #include "gplcode.h"
 #include "asf.h"
 #include "asfcmn.h"
@@ -63,9 +65,6 @@ static int ffp_debug_show_count = 50;
 
 extern void asf_ffp_cleanup_all_flows(void);
 
-
-
-
 extern ffp_bucket_t *ffp_flow_table;
 extern ASFFFPGlobalStats_t *asf_gstats;
 #ifdef ASF_FFP_XTRA_STATS
@@ -73,18 +72,30 @@ extern ASFFFPXtraGlobalStats_t *asf_xgstats;
 #endif
 extern ASFFFPVsgStats_t *asf_vsg_stats; /* per cpu vsg stats */
 extern int asf_max_vsgs;
-extern int asf_enable;
 extern int asf_l2blob_refresh_npkts;
 extern int asf_l2blob_refresh_interval;
 
-static int asf_exec_cmd_clear_stats(char *page, char **start,
-					 off_t off, int count,
-					 int *eof, void *data)
+enum {
+       ASF_FLOW_DEBUG = 0,
+       ASF_FLOW_STATS,
+       ASF_SHOW_IFACES,
+       ASF_SHOW_GLOBAL_STATS,
+       ASF_RESET_STATS,
+       ASF_DISPLAY_VSG_STATS,
+       #ifdef ASF_IPV6_FP_SUPPORT
+       ASF_DISPLAY_IPV6_FLOW_STATS,
+       #endif
+       #ifdef ASF_FFP_XTRA_STATS
+       ASF_DISPLAY_XTRA_GLOBAL_STATS
+       #endif
+};
+
+static int asf_exec_cmd_clear_stats(struct seq_file *f, void *v)
 {
 	int vsg, cpu, i;
 	ffp_flow_t *head, *flow;
 
-	printk("Clearing Global%s Stats\n",
+	pr_info("Clearing Global%s Stats\n",
 #ifdef ASF_FFP_XTRA_STATS
 	       " and XtraGlobal"
 #else
@@ -107,7 +118,7 @@ static int asf_exec_cmd_clear_stats(char *page, char **start,
 #endif
 	}
 
-	printk("Clearing VSG Stats\n");
+	pr_info("Clearing VSG Stats\n");
 	for (vsg = 0 ; vsg < asf_max_vsgs ; vsg++) {
 		for_each_online_cpu(cpu)
 		{
@@ -117,7 +128,7 @@ static int asf_exec_cmd_clear_stats(char *page, char **start,
 		}
 	}
 
-	printk(KERN_INFO "Clearing Flow Stats\n");
+	pr_info("Clearing Flow Stats\n");
 	for (i = 0; i < ffp_hash_buckets; i++) {
 		head = (ffp_flow_t *)  &ffp_flow_table[i];
 		for (flow = head->pNext; flow != head; flow = flow->pNext) {
@@ -131,9 +142,6 @@ static int asf_exec_cmd_clear_stats(char *page, char **start,
 	}
 	return 0;
 }
-
-
-
 
 static struct ctl_table asf_proc_table[] = {
 	{
@@ -219,9 +227,7 @@ EXPORT_SYMBOL(asf_dir);
 
 #define GSTATS_SUM(a) (total.ul##a += gstats->ul##a)
 #define GSTATS_TOTAL(a) (unsigned long) total.ul##a
-static int display_asf_proc_global_stats(char *page, char **start,
-					 off_t off, int count,
-					 int *eof, void *data)
+static int show_globalstats(struct seq_file *f, void *v)
 {
 	ASFFFPGlobalStats_t total;
 	int cpu;
@@ -249,19 +255,21 @@ static int display_asf_proc_global_stats(char *page, char **start,
 		GSTATS_SUM(PktsToFNP);
 	}
 
-	printk("IN %lu IN-MATCH %lu OUT %lu OUT-BYTES %lu\n",
-	       GSTATS_TOTAL(InPkts), GSTATS_TOTAL(InPktFlowMatches), GSTATS_TOTAL(OutPkts), GSTATS_TOTAL(OutBytes));
+	seq_printf(f, "IN %lu IN-MATCH %lu OUT %lu OUT-BYTES %lu\n",
+	       GSTATS_TOTAL(InPkts), GSTATS_TOTAL(InPktFlowMatches),
+		GSTATS_TOTAL(OutPkts), GSTATS_TOTAL(OutBytes));
 
-	printk("FLOW: ALLOC %lu FREE %lu ALLOC-FAIL %lu FREE-FAIL %lu\n",
+	seq_printf(f, "FLOW: ALLOC %lu FREE %lu ALLOC-FAIL %lu FREE-FAIL %lu\n",
 	       GSTATS_TOTAL(FlowAllocs), GSTATS_TOTAL(FlowFrees),
 	       GSTATS_TOTAL(FlowAllocFailures), GSTATS_TOTAL(FlowFreeFailures));
 
-	printk("ERR: CSUM %lu IPH %lu IPPH %lu AllocFail %lu MiscFail %lu TTL %lu\n",
+	seq_printf(f, "ERR: CSUM %lu IPH %lu IPPH %lu AllocFail %lu"
+		"MiscFail %lu TTL %lu\n",
 	       GSTATS_TOTAL(ErrCsum), GSTATS_TOTAL(ErrIpHdr),
 	       GSTATS_TOTAL(ErrIpProtoHdr), GSTATS_TOTAL(ErrAllocFailures),
 	       GSTATS_TOTAL(MiscFailures), GSTATS_TOTAL(ErrTTL));
 
-	printk("MISC: TO-FNP %lu\n", GSTATS_TOTAL(PktsToFNP));
+	seq_printf(f, "MISC: TO-FNP %lu\n", GSTATS_TOTAL(PktsToFNP));
 
 	return 0;
 }
@@ -269,10 +277,9 @@ static int display_asf_proc_global_stats(char *page, char **start,
 #ifdef ASF_FFP_XTRA_STATS
 #define XGSTATS_SUM(a) (total.ul##a += xgstats->ul##a)
 #define XGSTATS_TOTAL(a) total.ul##a
-#define XGSTATS_DISP(a) printk(" " #a " = %lu\n", total.ul##a)
-static int display_asf_proc_xtra_global_stats(char *page, char **start,
-					      off_t off, int count,
-					      int *eof, void *data)
+#define XGSTATS_DISP(a) seq_printf(f, " " #a " = %lu\n", total.ul##a)
+
+static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 {
 	ASFFFPXtraGlobalStats_t total;
 	int cpu;
@@ -445,9 +452,7 @@ static int display_asf_proc_xtra_global_stats(char *page, char **start,
 
 #define VSTATS_SUM(a) (total.ul##a += vstats->ul##a)
 #define VSTATS_TOTAL(a) (unsigned long)total.ul##a
-static int display_asf_proc_vsg_stats(char *page, char **start,
-				      off_t off, int count,
-				      int *eof, void *data)
+static int display_asf_proc_vsg_stats(struct seq_file *f, void *v)
 {
 	ASFFFPVsgStats_t total;
 	int cpu, vsg;
@@ -465,7 +470,8 @@ static int display_asf_proc_vsg_stats(char *page, char **start,
 			VSTATS_SUM(OutBytes);
 		}
 		if (VSTATS_TOTAL(InPkts)) {
-			printk("%d: IN %lu FLOW_MATCHES %lu OUT %lu OUT-BYTES %lu\n", vsg,
+			seq_printf(f, "%d: IN %lu FLOW_MATCHES %lu "
+				"OUT %lu OUT-BYTES %lu\n", vsg,
 			       VSTATS_TOTAL(InPkts),
 			       VSTATS_TOTAL(InPktFlowMatches),
 			       VSTATS_TOTAL(OutPkts),
@@ -492,19 +498,17 @@ static inline char *__asf_get_dev_type(ASF_uint32_t ulDevType)
 	else
 		return "INVALID";
 }
-static int display_asf_proc_iface_maps(char *page, char **start,
-				       off_t off, int count,
-				       int *eof, void *data)
+static int show_iface(struct seq_file *f, void *v)
 {
 	int i;
 	ASFNetDevEntry_t *dev;
 
-	printk("CII\tNAME\tTYPE\tVSG\tZONE\tID\tPAR-CII\tBR-CII\n");
+	seq_printf(f, "CII\tNAME\tTYPE\tVSG\tZONE\tID\tPAR-CII\tBR-CII\n");
 	for (i = 0; i < asf_max_ifaces; i++) {
 		dev = asf_ifaces[i];
 		if (!dev)
 			continue;
-		printk("%u\t%s\t%s\t%d\t%d\t0x%x\t%u\t%u\n",
+		seq_printf(f, "%u\t%s\t%s\t%d\t%d\t0x%x\t%u\t%u\n",
 		       dev->ulCommonInterfaceId,
 		       dev->ndev ? dev->ndev->name : "-",
 		       __asf_get_dev_type(dev->ulDevType),
@@ -517,45 +521,18 @@ static int display_asf_proc_iface_maps(char *page, char **start,
 	return 0;
 }
 
-
-void print_bigbuf(char *s)
-{
-	/* printk appears to truncate the buffer if > 2k.
-	 * so print 1 line at a time
-	 */
-	char *c;
-
-	while (*s && (c = strchr(s, '\n'))) {
-		*c = '\0';
-		printk("%s\n", s);
-		s = c+1;
-	}
-	printk(s);
-}
-
-
-static int display_asf_proc_flow_stats(char *page, char **start,
-				       off_t off, int count,
-				       int *eof, void *data)
+static int display_asf_proc_flow_stats(struct seq_file *f, void *v)
 {
 	int i, total = 0;
 	ffp_flow_t      *head, *flow;
-	char	    *buf, *p;
 	unsigned int    min_entr = ~1, max_entr = 0, max_entr_idx = ~1, cur_entr = 0, empty_entr = 0;
 	unsigned int    empty_l2blob = 0;
 	unsigned int    disp_cnt = 0, display = 0;
 
-	buf = (char *)  kmalloc(300*(ffp_debug_show_count+2), GFP_KERNEL);
-	if (!buf) {
-		printk("ffp_debug_show_count is too large : couldn't allocate memory!\n");
-		return 0;
-	}
-
-	printk(KERN_INFO"HIDX {ID}\tDST\tV/Z/P\tSIP:SPORT\tDIP:DPORT\t"
+	seq_printf(f, "HIDX {ID}\tDST\tV/Z/P\tSIP:SPORT\tDIP:DPORT\t"
 		"SNIP:SNPORT\tDNIP:DNPORT\tPKTS IN-OUT\n");
-	p = buf;
-	*p = '\0';
 	for (i = 0; i < ffp_hash_buckets; i++) {
+		spin_lock_bh(&ffp_flow_table[i].lock);
 		head = (ffp_flow_t *)  &ffp_flow_table[i];
 
 		if (head == head->pNext)
@@ -565,7 +542,6 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 			display = 1;
 
 		cur_entr = 0;
-		spin_lock_bh(&ffp_flow_table[i].lock);
 		for (flow = head->pNext; flow != head; flow = flow->pNext) {
 
 			total++;
@@ -573,30 +549,32 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 			if (flow->l2blob_len == 0)
 				empty_l2blob++;
 			if (flow == flow->pNext) {
-				printk("possible infinite loop.. exiting this bucket!\n");
+				seq_printf(f, "possible infinite loop.."
+						" exiting this bucket!\n");
 				break;
 			}
 
 			if (!display)
 				continue;
-			p += sprintf(p, "%d {%u, %u}\t%s\t%u/%u/%s\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%u\n",
-				     i,
-				     flow->id.ulArg1, flow->id.ulArg2,
-				     flow->odev ? flow->odev->name : "UNK",
-				     flow->ulVsgId,
-				     flow->ulZoneId,
-				     (flow->ucProtocol == 6) ? "TCP" : "UDP",
+			seq_printf(f, "%d {%u, %u}\t%s\t%u/%u/%s\t"
+			"%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t"
+			"%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%u\n",
+			i,
+			flow->id.ulArg1, flow->id.ulArg2,
+			flow->odev ? flow->odev->name : "UNK",
+			flow->ulVsgId,
+			flow->ulZoneId,
+			(flow->ucProtocol == 6) ? "TCP" : "UDP",
 
-				     NIPQUAD(flow->ulSrcIp),
-				     ntohs((flow->ulPorts&0xffff0000) >> 16),
-				     NIPQUAD(flow->ulDestIp),
-				     ntohs(flow->ulPorts&0xffff),
-
-				     NIPQUAD(flow->ulSrcNATIp),
-				     ntohs((flow->ulNATPorts&0xffff0000) >> 16),
-				     NIPQUAD(flow->ulDestNATIp),
-				     ntohs(flow->ulNATPorts&0xffff),
-				     flow->stats.ulOutPkts);
+			NIPQUAD(flow->ulSrcIp),
+			ntohs((flow->ulPorts&0xffff0000) >> 16),
+			NIPQUAD(flow->ulDestIp),
+			ntohs(flow->ulPorts&0xffff),
+			NIPQUAD(flow->ulSrcNATIp),
+			ntohs((flow->ulNATPorts&0xffff0000) >> 16),
+			NIPQUAD(flow->ulDestNATIp),
+			ntohs(flow->ulNATPorts&0xffff),
+			flow->stats.ulOutPkts);
 			disp_cnt++;
 			if (disp_cnt >= ffp_debug_show_count) {
 				display = 0;
@@ -611,38 +589,23 @@ static int display_asf_proc_flow_stats(char *page, char **start,
 			max_entr_idx = i;
 		}
 	}
-	if ((p-buf) > (200*(ffp_debug_show_count+2))) {
-		printk("Ooops! buffer is overwriten! allocated %u and required %lu to display %d items\n",
-		       200*(ffp_debug_show_count+2), (unsigned long)(p-buf), ffp_debug_show_count);
-	}
-	print_bigbuf(buf);
-	printk("\nTotal %d (empty_l2blob %u)\n(max/bkt %u max-bkt-idx %u min/bkt %u empty-bkts %u)\n",
+	seq_printf(f, "\nTotal %d (empty_l2blob %u)\n(max/bkt %u max-bkt-idx %u"
+		" min/bkt %u empty-bkts %u)\n",
 	       total, empty_l2blob, max_entr, max_entr_idx, min_entr, empty_entr);
-	kfree(buf);
 	return 0;
 }
 
 #ifdef ASF_IPV6_FP_SUPPORT
-static int display_asf_proc_flow_ipv6_stats(char *page, char **start,
-				       off_t off, int count,
-				       int *eof, void *data)
+static int display_asf_proc_flow_ipv6_stats(struct seq_file *f, void *v)
 {
 	int i, total = 0;
 	ffp_flow_t      *head, *flow;
-	char	    *buf, *p;
 	unsigned int    min_entr = ~1, max_entr = 0, max_entr_idx = ~1, cur_entr = 0, empty_entr = 0;
 	unsigned int    empty_l2blob = 0;
 	unsigned int    disp_cnt = 0, display = 0;
 
-	buf = (char *)  kmalloc(300*(ffp_debug_show_count+2), GFP_KERNEL);
-	if (!buf) {
-		printk(KERN_INFO"ffp_debug_show_count is too large : couldn't allocate memory!\n");
-		return 0;
-	}
-
-	p = buf;
-	*p = '\0';
-	p += sprintf(p, "\n======================================================================\n");
+	seq_printf(f, "\n==================================="
+		"===================================\n");
 	for (i = 0; i < ffp_ipv6_hash_buckets; i++) {
 		head = (ffp_flow_t *)  &ffp_ipv6_flow_table[i];
 
@@ -661,23 +624,37 @@ static int display_asf_proc_flow_ipv6_stats(char *page, char **start,
 			if (flow->l2blob_len == 0)
 				empty_l2blob++;
 			if (flow == flow->pNext) {
-				printk(KERN_INFO"possible infinite loop.. exiting this bucket!\n");
+				seq_printf(f, "possible infinite loop.."
+					" exiting this bucket!\n");
 				break;
 			}
 
 			if (!display)
 				continue;
-			p += sprintf(p, "Src IP      = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6SrcIp), ntohs((flow->ulPorts&0xffff0000) >> 16));
-			p += sprintf(p, "Dest IP     = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestIp), ntohs(flow->ulPorts&0xffff));
-			p += sprintf(p, "NAT Src IP  = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6SrcNATIp), ntohs((flow->ulNATPorts&0xffff0000) >> 16));
-			p += sprintf(p, "NAT Dest IP = %x:%x:%x:%x:%x:%x:%x:%x	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestNATIp), ntohs(flow->ulNATPorts&0xffff));
-			p += sprintf(p, "Proto = %s  Out dev = %s   l2blob len = %u   VSG = %u  Zone = %u\n", ((flow->ucProtocol == 6) ? "TCP" : "UDP"),
-																(flow->odev ? flow->odev->name : "UNK"),
-																flow->l2blob_len,
-																flow->ulVsgId,
-																flow->ulZoneId);
-			p += sprintf(p, "In pkts = %u	Out pkts = %u\n", flow->stats.ulInPkts, flow->stats.ulOutPkts);
-			p += sprintf(p, "======================================================================\n\n");
+			seq_printf(f, "Src IP      = %x:%x:%x:%x:%x:%x:%x:%x"
+			"	Port = %u\n",
+			PRINT_IPV6_OTH(flow->ipv6SrcIp),
+			ntohs((flow->ulPorts&0xffff0000) >> 16));
+			seq_printf(f, "Dest IP     = %x:%x:%x:%x:%x:%x:%x:%x"
+			"	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestIp),
+			ntohs(flow->ulPorts&0xffff));
+			seq_printf(f, "NAT Src IP  = %x:%x:%x:%x:%x:%x:%x:%x"
+			"	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6SrcNATIp),
+			ntohs((flow->ulNATPorts&0xffff0000) >> 16));
+			seq_printf(f, "NAT Dest IP = %x:%x:%x:%x:%x:%x:%x:%x"
+			"	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestNATIp),
+			ntohs(flow->ulNATPorts&0xffff));
+			seq_printf(f, "Proto = %s  Out dev = %s   l2blob len = %u"
+			"   VSG = %u  Zone = %u\n",
+			((flow->ucProtocol == 6) ? "TCP" : "UDP"),
+			(flow->odev ? flow->odev->name : "UNK"),
+			flow->l2blob_len,
+			flow->ulVsgId,
+			flow->ulZoneId);
+			seq_printf(f, "In pkts = %u	Out pkts = %u\n",
+				flow->stats.ulInPkts, flow->stats.ulOutPkts);
+			seq_printf(f, "===================================="
+				"==================================\n\n");
 			disp_cnt++;
 			if (disp_cnt >= ffp_debug_show_count)
 				display = 0;
@@ -691,38 +668,23 @@ static int display_asf_proc_flow_ipv6_stats(char *page, char **start,
 			max_entr_idx = i;
 		}
 	}
-	if ((p-buf) > (200*(ffp_debug_show_count+2))) {
-		printk(KERN_INFO"Ooops! buffer is overwriten! allocated %u and required %lu to display %d items\n",
-		       200*(ffp_debug_show_count+2), (unsigned long)(p-buf), ffp_debug_show_count);
-	}
-	print_bigbuf(buf);
-	printk(KERN_INFO"\nTotal %d (empty_l2blob %u)\n(max/bkt %u max-bkt-idx %u min/bkt %u empty-bkts %u)\n",
+	seq_printf(f, "\nTotal %d (empty_l2blob %u)\n(max/bkt %u"
+			" max-bkt-idx %u min/bkt %u empty-bkts %u)\n",
 	       total, empty_l2blob, max_entr, max_entr_idx, min_entr, empty_entr);
-	kfree(buf);
 	return 0;
 }
 #endif
-static int display_asf_proc_flow_debug(char *page, char **start,
-				       off_t off, int count,
-				       int *eof, void *data)
+static int display_asf_proc_flow_debug(struct seq_file *f, void *v)
 {
 	int i, total = 0;
 	ffp_flow_t      *head, *flow;
-	char	    *buf, *p;
 	unsigned int    disp_cnt = 0, display = 0;
 	unsigned long curTime = jiffies, last_in, ulIdleTime;
 
-	buf = (char *)  kmalloc(300*(ffp_debug_show_count+2), GFP_KERNEL);
-	if (!buf) {
-		printk("ffp_debug_show_count is too large : couldn't allocate memory!\n");
-		return 0;
-	}
-
 	/* display private information for each for debugging */
 
-	printk("{ID}\t{OTH-ID}\tFLAGS\tPMTU\tSEQDLT\tBLEN\tTXVID\tIDLE/INAC\t{BLOB}\n");
-	p = buf;
-	*p = '\0';
+	seq_printf(f, "{ID}\t{OTH-ID}\tFLAGS\tPMTU\tSEQDLT\tBLEN"
+			"\tTXVID\tIDLE/INAC\t{BLOB}\n");
 	for (i = 0; i < ffp_hash_buckets; i++) {
 		head = (ffp_flow_t *)  &ffp_flow_table[i];
 		if (i == ffp_debug_show_index)
@@ -732,7 +694,8 @@ static int display_asf_proc_flow_debug(char *page, char **start,
 		for (flow = head->pNext; flow != head; flow = flow->pNext) {
 			total++;
 			if (flow == flow->pNext) {
-				printk("possible infinite loop.. exiting this bucket!\n");
+				seq_printf(f, "possible infinite loop.."
+					" exiting this bucket!\n");
 				break;
 			}
 
@@ -748,30 +711,32 @@ static int display_asf_proc_flow_debug(char *page, char **start,
 			ulIdleTime = ulIdleTime/HZ;
 
 
-			p += sprintf(p, "{%u, %u}\t{%u, %u}\t%c%c%c%c%c%c%c%c\t%u\t%c%u\t%u\t%u\t%lu/%lu\t%pM:%pM..%02x%02x\n",
-				     flow->id.ulArg1, flow->id.ulArg2,
-				     flow->other_id.ulArg1, flow->other_id.ulArg2,
+			seq_printf(f, "{%u, %u}\t{%u, %u}\t"
+				"%c%c%c%c%c%c%c%c\t%u\t%c%u\t%u\t%u"
+				"\t%lu/%lu\t%pM:%pM..%02x%02x\n",
+				flow->id.ulArg1, flow->id.ulArg2,
+				flow->other_id.ulArg1, flow->other_id.ulArg2,
 
-				     flow->bDrop ? 'D' : '-',  /* drop all packets */
-				     flow->l2blob_len ? 'B' : '-', /* valid l2blob or not */
-				     flow->bNat ? 'N' : '-',
-				     flow->bVLAN ? 'V' : '-',
-				     flow->bPPPoE ? 'P' : '-',
-				     flow->bIPsecIn ? 'I' : '-',
-				     flow->bIPsecOut ? 'O' : '-',
-				     ASF_TCP_IS_BIT_SET(flow, FIN_RCVD) ? 'F' : (ASF_TCP_IS_BIT_SET(flow, RST_RCVD) ? 'R' : '-'),
+				flow->bDrop ? 'D' : '-',  /* drop all packets */
+				flow->l2blob_len ? 'B' : '-', /* valid l2blob or not */
+				flow->bNat ? 'N' : '-',
+				flow->bVLAN ? 'V' : '-',
+				flow->bPPPoE ? 'P' : '-',
+				flow->bIPsecIn ? 'I' : '-',
+				flow->bIPsecOut ? 'O' : '-',
+				ASF_TCP_IS_BIT_SET(flow, FIN_RCVD) ? 'F' : (ASF_TCP_IS_BIT_SET(flow, RST_RCVD) ? 'R' : '-'),
 
-				     flow->pmtu,
-				     flow->tcpState.bPositiveDelta ? '+' : '-',
-				     flow->tcpState.ulSeqDelta,
-				     flow->l2blob_len,
-				     flow->tx_vlan_id,
-				     ulIdleTime,
-				     flow->ulInacTime,
-				     flow->l2blob,
-				     flow->l2blob+6,
-				     flow->l2blob[flow->l2blob_len-2],
-				     flow->l2blob[flow->l2blob_len-1]);
+				flow->pmtu,
+				flow->tcpState.bPositiveDelta ? '+' : '-',
+				flow->tcpState.ulSeqDelta,
+				flow->l2blob_len,
+				flow->tx_vlan_id,
+				ulIdleTime,
+				flow->ulInacTime,
+				flow->l2blob,
+				flow->l2blob+6,
+				flow->l2blob[flow->l2blob_len-2],
+				flow->l2blob[flow->l2blob_len-1]);
 
 			disp_cnt++;
 			if (disp_cnt >= ffp_debug_show_count) {
@@ -780,9 +745,7 @@ static int display_asf_proc_flow_debug(char *page, char **start,
 		}
 		spin_unlock_bh(&ffp_flow_table[i].lock);
 	}
-	print_bigbuf(buf);
-	printk("\nTotal %d\n", total);
-	kfree(buf);
+	seq_printf(f, "\nTotal %d\n", total);
 	return 0;
 }
 
@@ -791,10 +754,174 @@ static int display_asf_proc_xtra_flow_stats(char *page, char **start,
 					    off_t off, int count,
 					    int *eof, void *data)
 {
-	printk("No xtra flow stats for now!\n");
+	pr_info("No xtra flow stats for now!\n");
 	return 0;
 }
 #endif
+
+static void *int_seq_start(struct seq_file *f, loff_t *pos)
+{
+	return (*pos < 1) ? pos : NULL;
+}
+static void *int_seq_next(struct seq_file *f, void *v, loff_t *pos)
+{
+	return NULL;
+}
+static void int_seq_stop(struct seq_file *f, void *v)
+{
+	/* Nothing to do */
+}
+static const struct seq_operations int_seq_ops[] = {
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_asf_proc_flow_debug
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_asf_proc_flow_stats
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = show_iface
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = show_globalstats
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = asf_exec_cmd_clear_stats
+	},
+	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_asf_proc_vsg_stats
+	}
+	#ifdef ASF_IPV6_FP_SUPPORT
+	, {
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_asf_proc_flow_ipv6_stats
+	}
+	#endif
+	#ifdef ASF_FFP_XTRA_STATS
+	, {
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_asfproc_xtra_global_stats
+	}
+	#endif
+};
+
+static int flowdebug_open(struct inode *inode, struct file *filp)
+{
+	return seq_open(filp, &int_seq_ops[ASF_FLOW_DEBUG]);
+}
+static int flowstats_open(struct inode *inode, struct file *filp)
+{
+	return seq_open(filp, &int_seq_ops[ASF_FLOW_STATS]);
+}
+
+static int iface_open(struct inode *inode, struct file *filp)
+{
+	return seq_open(filp, &int_seq_ops[ASF_SHOW_IFACES]);
+}
+
+static int globalstats_open(struct inode *inode, struct file *filp)
+{
+	return seq_open(filp, &int_seq_ops[ASF_SHOW_GLOBAL_STATS]);
+}
+
+static int reset_stats(struct inode *inode, struct file *filp)
+{
+	return seq_open(filp, &int_seq_ops[ASF_RESET_STATS]);
+}
+static int display_vsg_stats_open(struct inode *inode, struct file *filp)
+{
+	return seq_open(filp, &int_seq_ops[ASF_DISPLAY_VSG_STATS]);
+}
+#ifdef ASF_IPV6_FP_SUPPORT
+static int ipv6_flow_stats_open(struct inode *inode, struct file *filp)
+{
+	return seq_open(filp, &int_seq_ops[ASF_DISPLAY_IPV6_FLOW_STATS]);
+}
+#endif
+#ifdef ASF_FFP_XTRA_STATS
+static int xtra_globalstats_open(struct inode *inode, struct file *filp)
+{
+	return seq_open(filp, &int_seq_ops[ASF_DISPLAY_XTRA_GLOBAL_STATS]);
+}
+#endif
+
+static const struct file_operations proc_asf_stats_operations[] = {
+	{
+		.open	   = flowdebug_open,
+		.read	   = seq_read,
+		.llseek	 	= seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = flowstats_open,
+		.read	   = seq_read,
+		.llseek	 	= seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = iface_open,
+		.read	   = seq_read,
+		.llseek	 	= seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = globalstats_open,
+		.read	   = seq_read,
+		.llseek	 	= seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = reset_stats,
+		.read	   = seq_read,
+		.llseek	 	= seq_lseek,
+		.release	= seq_release,
+	},
+	{
+		.open	   = display_vsg_stats_open,
+		.read	   = seq_read,
+		.llseek	 	= seq_lseek,
+		.release	= seq_release,
+	}
+	#ifdef ASF_IPV6_FP_SUPPORT
+	,
+	{
+		.open	   = ipv6_flow_stats_open,
+		.read	   = seq_read,
+		.llseek	 	= seq_lseek,
+		.release	= seq_release,
+	}
+	#endif
+	#ifdef ASF_FFP_XTRA_STATS
+	,
+	{
+		.open	   = xtra_globalstats_open,
+		.read	   = seq_read,
+		.llseek	 	= seq_lseek,
+		.release	= seq_release,
+	}
+	#endif
+};
 
 int asf_register_proc(void)
 {
@@ -813,75 +940,64 @@ int asf_register_proc(void)
 	asf_dir->owner = THIS_MODULE;
 #endif
 
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_GLOBAL_STATS_NAME,
-					  0444, asf_dir,
-					  display_asf_proc_global_stats,
-					  NULL);
+	proc_file = proc_create(ASF_PROC_GLOBAL_STATS_NAME,
+				0444, asf_dir,
+		&proc_asf_stats_operations[ASF_SHOW_GLOBAL_STATS]);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
 #endif
 
 #ifdef ASF_FFP_XTRA_STATS
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_XTRA_GLOBAL_STATS_NAME,
-					  0444, asf_dir,
-					  display_asf_proc_xtra_global_stats,
-					  NULL);
+	proc_file = proc_create(ASF_PROC_XTRA_GLOBAL_STATS_NAME,
+				0444, asf_dir,
+		&proc_asf_stats_operations[ASF_DISPLAY_XTRA_GLOBAL_STATS]);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
 #endif
 #endif
 
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_VSG_STATS_NAME,
-					  0444, asf_dir,
-					  display_asf_proc_vsg_stats,
-					  NULL);
+	proc_file = proc_create(ASF_PROC_VSG_STATS_NAME,
+			0444, asf_dir,
+		&proc_asf_stats_operations[ASF_DISPLAY_VSG_STATS]);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
 #endif
 
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_RESET_STATS_NAME,
-					  0444, asf_dir,
-					  asf_exec_cmd_clear_stats,
-					  NULL);
+	proc_file = proc_create(ASF_PROC_RESET_STATS_NAME,
+			0444, asf_dir,
+		&proc_asf_stats_operations[ASF_RESET_STATS]);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
 #endif
 
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_IFACE_MAPS,
-					  0444, asf_dir,
-					  display_asf_proc_iface_maps,
-					  NULL);
+	proc_file = proc_create(ASF_PROC_IFACE_MAPS,
+			0444, asf_dir,
+		&proc_asf_stats_operations[ASF_SHOW_IFACES]);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
 #endif
 
+	proc_file = proc_create(ASF_PROC_FLOW_STATS_NAME,
+			0444, asf_dir,
+		&proc_asf_stats_operations[ASF_FLOW_STATS]);
 
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_FLOW_STATS_NAME,
-					  0444, asf_dir,
-					  display_asf_proc_flow_stats,
-					  NULL);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
 #endif
 
 #ifdef ASF_IPV6_FP_SUPPORT
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_FLOW_IPV6_STATS_NAME,
-					  0444, asf_dir,
-					  display_asf_proc_flow_ipv6_stats,
-					  NULL);
+	proc_file = proc_create(ASF_PROC_FLOW_IPV6_STATS_NAME,
+			0444, asf_dir,
+		&proc_asf_stats_operations[ASF_DISPLAY_IPV6_FLOW_STATS]);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
@@ -889,28 +1005,25 @@ int asf_register_proc(void)
 #endif
 
 #ifdef ASF_FFP_XTRA_STATS
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_XTRA_FLOW_STATS_NAME,
-					  0444, asf_dir,
-					  display_asf_proc_xtra_flow_stats,
-					  NULL);
+	proc_file = proc_create(ASF_PROC_XTRA_FLOW_STATS_NAME,
+			  0444, asf_dir,
+		&proc_asf_stats_operations[ASF_FLOW_DEBUG]);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
 #endif
 #endif
 
-	proc_file = create_proc_read_entry(
-					  ASF_PROC_FLOW_DEBUG_NAME,
-					  0444, asf_dir,
-					  display_asf_proc_flow_debug,
-					  NULL);
+	proc_file = proc_create(ASF_PROC_FLOW_DEBUG_NAME,
+			  0444, asf_dir,
+			&proc_asf_stats_operations[ASF_FLOW_DEBUG]);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	if (proc_file)
 		proc_file->owner = THIS_MODULE;
 #endif
 	return 0;
 }
+
 
 
 int asf_unregister_proc(void)
