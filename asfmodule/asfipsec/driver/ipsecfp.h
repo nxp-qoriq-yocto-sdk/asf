@@ -20,6 +20,7 @@
 
 #include <linux/ip.h>
 #include <linux/ipv6.h>
+#include <linux/interrupt.h>
 
 #ifdef CONFIG_ASF_SEC3x
 #include "linux/hw_random.h"
