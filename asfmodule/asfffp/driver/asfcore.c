@@ -1018,7 +1018,8 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	/* update pointer */
 	pAbuf->nativeBuffer = skb;
 	/* Will be helpful in Defrag */
-	memcpy(&(skb->cb[ANNOTATION_ADDR_INDEX]), &(pAbuf->pAnnot), 4);
+	memcpy(&(skb->cb[ANNOTATION_ADDR_INDEX]), &(pAbuf->pAnnot),
+						sizeof(unsigned long));
 	asf_debug("skb 0x%p, skb->head 0x%p, skb->data 0x%p, skb->tail 0x%p"
 		" skb->len 0x%x skb->mac_header 0x%p\n\n",
 	       skb, skb->head, skb->data, skb->tail,
@@ -1037,7 +1038,8 @@ ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf,
 	t_FmPrsResult	*pParse;
 	u8 *ptr;
 	/* locate a cache aligned annotation start */
-	memcpy(&ptr, &(skb->cb[ANNOTATION_ADDR_INDEX]), 4);
+	memcpy(&ptr, &(skb->cb[ANNOTATION_ADDR_INDEX]),
+				sizeof(unsigned long));
 	if (unlikely(ptr < skb->head)) {
 		asf_debug("%s: no headroom; dropping pkt\n", __func__);
 		asf_dperr("%s", periodic_errmsg[PERR_REASM_NO_HDROOM]);
