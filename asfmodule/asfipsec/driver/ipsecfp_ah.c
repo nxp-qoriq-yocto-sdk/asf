@@ -1153,6 +1153,9 @@ void secfp_inAHComplete(struct device *dev,
 				ulCommonInterfaceId, Buffer, secfp_SkbFree,
 				skb, &IPSecOpque) == ASF_RTS) {
 				ASFIPSEC_DEBUG("Sending Decrypted Packet Up");
+#ifdef CONFIG_DPA
+				asf_dec_skb_buf_count(skb);
+#endif
 				netif_receive_skb(skb);
 				return;
 			}

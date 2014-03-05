@@ -1376,6 +1376,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 				skb = pSkb;
 				pSkb = pSkb->next;
 				skb->next = NULL;
+#ifdef CONFIG_DPA
+				asf_dec_skb_buf_count(skb);
+#endif
 				ASF_netif_receive_skb(skb);
 			}
 			return ASF_DONE;

@@ -781,6 +781,9 @@ int asfAdjustFragAndSendToStack(struct sk_buff *skb, ASFNetDevEntry_t *anDev)
 				}
 			}
 			pSkb->dev = dev;
+#ifdef CONFIG_DPA
+				asf_dec_skb_buf_count(pSkb);
+#endif
 			asf_debug("For Loop (@2): skb->len %d (x_hh_len %d)\n", pSkb->len, x_hh_len);
 
 			asf_debug("pSkb->len = 0x%x, pSkb->data = 0x%x\r\n", pSkb->len, pSkb->data);
@@ -3553,6 +3556,9 @@ ret_pkt_to_stk:
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	gstats->ulPktsToFNP++;
+#endif
+#ifdef CONFIG_DPA
+	asf_dec_skb_buf_count(skb);
 #endif
 	if (ffpCbFns.pFnNoFlowFound) {
 		ASFBuffer_t	abuf;
