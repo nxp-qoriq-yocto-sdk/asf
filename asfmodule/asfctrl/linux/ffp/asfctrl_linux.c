@@ -454,7 +454,7 @@ char *print_netevent(int event)
 static int asfctrl_dev_notifier_fn(struct notifier_block *this,
 				unsigned long event, void *ptr)
 {
-	struct net_device *dev = (struct net_device *)ptr;
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 
 	ASFCTRL_FUNC_ENTRY;
 	ASFCTRL_DBG("%s - event %ld (%s)\n",
