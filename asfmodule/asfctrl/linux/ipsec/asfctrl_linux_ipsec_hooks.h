@@ -36,8 +36,8 @@ enum alg_type {
 #define ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM 1
 #define ASF_MAX_TUNNEL		64
 
-#define ASF_OUT_CONTANER_ID 	0
-#define ASF_IN_CONTANER_ID 	1
+#define ASF_IN_CONTANER_ID 	0
+#define ASF_OUT_CONTANER_ID 	1
 #define MAX_POLICY_CONT_ID 	2
 
 #define ASFCTRL_DEF_PMTU 1500
