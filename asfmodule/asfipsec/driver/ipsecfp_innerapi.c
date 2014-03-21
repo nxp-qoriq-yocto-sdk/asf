@@ -4020,6 +4020,8 @@ ASF_uint32_t ASFIPSecFlushAllSA(ASF_uint32_t ulVSGId, ASF_uint32_t ulTunnelId)
 		}
 		pCINode = pCINode->pNext;
 	}
+	memset(secFP_SPIHashTable, 0, (sizeof(inSAList_t *)
+		* usMaxInSAHashTaleSize_g));
 	if (!bVal)
 		local_bh_enable();
 	return SECFP_SUCCESS;

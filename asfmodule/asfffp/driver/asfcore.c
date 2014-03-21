@@ -5035,6 +5035,8 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 					flow->bIPsecOut,
 					p->u.ipsec.bIPsecOut,
 					flow->pL2blobTmr);
+				memset(&flow->ipsecInfo.outSAInfo, -1,
+					sizeof(flow->ipsecInfo.outSAInfo));
 				memcpy(&flow->ipsecInfo.outContainerInfo,
 					&p->u.ipsec.ipsecInfo.outContainerInfo,
 					sizeof(flow->ipsecInfo.outContainerInfo));
