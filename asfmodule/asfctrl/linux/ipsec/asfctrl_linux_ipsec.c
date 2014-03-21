@@ -791,6 +791,9 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 				outInfo->configIdentity.ulVSGConfigMagicNumber,
 				outInfo->ulSPDMagicNumber,
 				outInfo->ulSPDContainerId);
+		/* Invalidate the SA info as 0 is a valid index */
+		ipsecInInfo->outSAInfo.ulSAIndex = -1;
+		ipsecInInfo->outSAInfo.ulSAMagicNumber = -1;
 	}
 	if (pol_in) {
 		err = is_policy_offloadable(pol_in);

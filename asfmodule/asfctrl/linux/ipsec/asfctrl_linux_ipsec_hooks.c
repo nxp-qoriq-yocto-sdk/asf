@@ -270,8 +270,6 @@ static inline int match_sa_index_no_lock(struct xfrm_state *xfrm, int dir)
 static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 {
 	int cur_id;
-	bool bLockFlag;
-	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 
 	if (!match_sa_index_no_lock(xfrm, dir)) {
 		ASFCTRL_INFO("SA already allocated");
@@ -285,14 +283,12 @@ static inline int alloc_sa_index(struct xfrm_state *xfrm, int dir)
 		if (sa_table[dir][cur_id].status == 0) {
 			sa_table[dir][cur_id].status = 1;
 			current_sa_count[dir]++;
-			ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 			return cur_id;
 		}
 	}
 	ASFCTRL_WARN("\nMaximum SAs are offloaded");
 
 ret_unlock:
-	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 	return -EINVAL;
 }
 
@@ -580,9 +576,18 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	ASFCTRL_FUNC_ENTRY;
 
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 	sa_id = alloc_sa_index(xfrm, OUT_SA);
-	if (sa_id < 0)
+	if (sa_id < 0) {
+		ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 		return sa_id;
+	}
+	sa_table[OUT_SA][sa_id].spi = xfrm->id.spi;
+	sa_table[OUT_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
+
+	xfrm->asf_sa_direction = OUT_SA;
+	xfrm->asf_sa_cookie = sa_id + 1;
 
 	memset(&outSA, 0, sizeof(ASFIPSecRuntimeAddOutSAArgs_t));
 
@@ -824,8 +829,6 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			sizeof(ASFIPSecRuntimeAddOutSAArgs_t),
 			&handle, sizeof(uint32_t));
 
-	xfrm->asf_sa_direction = OUT_SA;
-	xfrm->asf_sa_cookie = sa_id + 1;
 	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv4OrIPv6) {
@@ -844,10 +847,8 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
 #endif
-	sa_table[OUT_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[OUT_SA][sa_id].container_id = outSA.ulSPDContainerIndex;
 	sa_table[OUT_SA][sa_id].ref_count++;
-	sa_table[OUT_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x OUT-SPD=%d",
@@ -878,9 +879,17 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	ASFCTRL_FUNC_ENTRY;
 
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 	sa_id = alloc_sa_index(xfrm, IN_SA);
-	if (sa_id < 0)
+	if (sa_id < 0) {
+		ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 		return sa_id;
+	}
+	sa_table[IN_SA][sa_id].spi = xfrm->id.spi;
+	sa_table[IN_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
+	xfrm->asf_sa_direction = IN_SA;
+	xfrm->asf_sa_cookie = sa_id + 1;
 
 	memset(&inSA, 0, sizeof(ASFIPSecRuntimeAddInSAArgs_t));
 	memset(&inSASel, 0, sizeof(ASF_IPSecSASelector_t));
@@ -1127,8 +1136,6 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			sizeof(ASFIPSecRuntimeAddInSAArgs_t),
 			&handle, sizeof(uint32_t));
 
-	xfrm->asf_sa_direction = IN_SA;
-	xfrm->asf_sa_cookie = sa_id + 1;
 	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv4OrIPv6) {
@@ -1148,11 +1155,9 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	}
 #endif
 
-	sa_table[IN_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[IN_SA][sa_id].container_id = inSA.ulInSPDContainerIndex;
 	sa_table[IN_SA][sa_id].ref_count++;
 /*	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
-	sa_table[IN_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x IN-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
