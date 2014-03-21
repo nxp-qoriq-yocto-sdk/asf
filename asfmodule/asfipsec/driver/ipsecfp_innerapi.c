@@ -3802,6 +3802,9 @@ ASF_uint32_t asfFlushInSA(SPDInContainer_t *pInContainer,
 	SPDInSPIValLinkNode_t *pSPINode;
 	ASF_boolean_t bFound = ASF_FALSE;
 
+	if (!pInSA)
+		return SECFP_FAILURE;
+
 	for (pNode = pInContainer->pSelIndex; pNode != NULL;
 					pNode = pNode->pNext) {
 		if (pInSA->ulSPDSelSetIndex == pNode->ulIndex) {
@@ -3813,8 +3816,6 @@ ASF_uint32_t asfFlushInSA(SPDInContainer_t *pInContainer,
 	if (bFound == ASF_TRUE)
 		secfp_deleteInContainerSelList(pInContainer, pNode);
 
-	if (!pInSA)
-		return SECFP_FAILURE;
 
 	pSPINode = secfp_findInSPINode(pInContainer, pInSA->SAParams.ulSPI);
 
