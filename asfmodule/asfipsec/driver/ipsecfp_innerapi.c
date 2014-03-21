@@ -1495,6 +1495,10 @@ outSA_t *secfp_findOutSA(
 	*ppContainer = pContainer = (SPDOutContainer_t *)
 		ptrIArray_getData(&(secfp_OutDB),
 			pSecInfo->outContainerInfo.ulSPDContainerId);
+	if (!pContainer) {
+		ASFIPSEC_DEBUG("NO Valid Container found.");
+		return NULL;
+	}
 
 	ASFIPSEC_DEBUG("Valid Container found pContainer = 0x%x",
 			(unsigned int) pContainer);

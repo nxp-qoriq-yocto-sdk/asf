@@ -1878,6 +1878,7 @@ static inline int secfp_try_fastPathOutv4(
 				skb->cb[SECFP_REF_INDEX] -= 2; /* Removed for the core and current submission */
 				if (skb->cb[SECFP_REF_INDEX] != 0) {
 					skb->cb[SECFP_ACTION_INDEX] = SECFP_DROP;
+					SECFP_DESC_FREE(desc);
 				} else { /* CB already happened, and returned */
 
 					/* So, we can release it */
@@ -1893,6 +1894,8 @@ static inline int secfp_try_fastPathOutv4(
 		if (skb->cb[SECFP_REF_INDEX] == 0) {
 			/* Some error happened in the c/b. Free the skb */
 			ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
+			if (desc)
+				SECFP_DESC_FREE(desc);
 			skb->data_len = 0;
 			goto drop_skb_list;
 		}
@@ -4426,6 +4429,7 @@ sa_expired:
 					pSA->ulSecHdrLen);
 		if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
 			ASFIPSEC_TRACE;
+			SECFP_DESC_FREE(desc);
 			pHeadSkb->data_len = 0;
 			/* CB already finished processing the skb & there was an error*/
 			ASFSkbFree(pHeadSkb);
@@ -5192,6 +5196,7 @@ sa_expired:
 					pSA->ulSecHdrLen);
 		if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
 			ASFIPSEC_TRACE;
+			SECFP_DESC_FREE(desc);
 			pHeadSkb->data_len = 0;
 			/* CB already finished processing the skb & there was an error*/
 			ASFSkbFree(pHeadSkb);
