@@ -31,6 +31,7 @@
 #include <dpa/dpaa_eth_common.h>
 #else
 #include <gianfar.h>
+#include <asf_gianfar.h>
 #endif
 #include <net/neighbour.h>
 #include <net/dst.h>
