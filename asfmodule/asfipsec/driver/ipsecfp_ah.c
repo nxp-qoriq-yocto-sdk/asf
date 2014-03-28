@@ -214,7 +214,7 @@ static inline unsigned int secfp_inHandleAHQmanICVCheck(struct sk_buff *skb,
 					struct ses_pkt_info *pInfo)
 {
 
-	ASFIPSEC_DEBUG("Received ICV=%x, len=%d:", pInfo->in_icv, skb->cb[SECFP_ICV_LENGTH]);
+	ASFIPSEC_DEBUG("Received ICV=%xp len=%d:", pInfo->in_icv, skb->cb[SECFP_ICV_LENGTH]);
 	ASFIPSEC_HEXDUMP(pInfo->in_icv, skb->cb[SECFP_ICV_LENGTH]);
 	ASFIPSEC_DEBUG("Computed ICV: %x\n", skb->data[-(pInfo->dynamic)]);
 	ASFIPSEC_HEXDUMP((skb->data - pInfo->dynamic), skb->cb[SECFP_ICV_LENGTH]);
@@ -229,19 +229,21 @@ static inline unsigned int secfp_inHandleAHQmanICVCheck(struct sk_buff *skb,
 
 static inline void secfp_copyAHIcvQman(struct sk_buff *skb, outSA_t *pSA)
 {
-	u8 ii;
+	u8 ii, *p;
 	ASFIPSEC_DEBUG("copying ICV len=%d", pSA->SAParams.uICVSize);
+	p = skb->data -  pSA->ctx.split_key_len;
+
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
 #endif
 		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
 			skb->data[SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii]
-				= skb->data[ii - pSA->ctx.split_key_len];
+				= p[ii];
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
 		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
 			skb->data[SECFP_IPV6_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii]
-				= skb->data[ii - pSA->ctx.split_key_len];
+				= p[ii];
 	}
 #endif
 }
@@ -1187,6 +1189,7 @@ void secfp_outAHComplete(struct device *dev,
 	unsigned int ulVSGId, ulSPDContainerIndex;
 #ifndef ASF_QOS
 	struct netdev_queue *txq;
+	struct netdev_queue *netdev;
 #endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	int cpu;
@@ -1490,11 +1493,15 @@ sa_expired1:
 		asf_qos_handling(skb,&pSA->tc_filter_res);
 #else
 		txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
+		netdev = skb->dev;
 		if (asfDevHardXmit(skb->dev, skb) != 0) {
+#ifndef ASF_QMAN_IPSEC
+			/*TODO: DPAA driver always consumes skb */
 			ASFSkbFree(skb);
+#endif
 			return;
 		} else
-			skb->dev->trans_start = txq->trans_start = jiffies;
+			netdev->trans_start = txq->trans_start = jiffies;
 #endif
 		pIPSecPPGlobalStats->ulTotOutProcPkts++;
 	} else {
@@ -1528,6 +1535,7 @@ sa_expired1:
 				skb->len -= pSA->ulL2BlobLen;
 				ASFIPSEC_FPRINT("Before Fragmentation");
 
+				skb_reset_network_header(skb);
 				iph = ip_hdr(skb);
 #ifdef ASF_IPV6_FP_SUPPORT
 				if (iph->version == 4) {
@@ -1607,11 +1615,15 @@ sa_expired1:
 					asf_qos_handling(pOutSkb, &pSA->tc_filter_res);
 #else
 					txq = netdev_get_tx_queue(pOutSkb->dev, pOutSkb->queue_mapping);
+					netdev = skb->dev;
 					if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
 						ASFIPSEC_WARN("Error in transmit: Should not happen");
+#ifndef ASF_QMAN_IPSEC
+						/*TODO: DPAA driver always consumes skb */
 						ASFSkbFree(pOutSkb);
+#endif
 					} else
-						pOutSkb->dev->trans_start = txq->trans_start = jiffies;
+						netdev->trans_start = txq->trans_start = jiffies;
 #endif
 
 				}
