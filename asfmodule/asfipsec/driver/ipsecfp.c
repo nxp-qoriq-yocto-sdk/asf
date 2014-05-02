@@ -1287,12 +1287,16 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		pNextSkb = skb->next;
 		skb->next = NULL;
 		if (skb->len > pSA->ulInnerPathMTU) {
-			ASFIPSEC_DEBUG("Packet size is > Path MTU and fragment bit set in SA or packet");
-			/* Need to send to normal path */
-			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
-			icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0,
-				pSA->ulInnerPathMTU);
-			goto drop_skb_list;
+			if (pSecInfo->outContainerInfo.bControlPathPkt) {
+				skb->cb[SECFP_OUTB_FRAG_REQD] = 1;
+			} else {
+				ASFIPSEC_DEBUG("Packet size is > Path MTU and fragment bit set in SA or packet");
+				/* Need to send to normal path */
+				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
+				icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0,
+						pSA->ulInnerPathMTU);
+				goto drop_skb_list;
+			}
 		}
 		ASFIPSEC_DEBUG("outv6: skb = 0x%x skb1 = 0x%x, nextSkb = 0x%x",
 			(unsigned int) skb, (unsigned int) skb1, (unsigned int) pNextSkb);
