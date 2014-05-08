@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ FMAN0/1 FMC policy file
+
+ Copyright 2011-2012, Freescale Semiconductor, Inc. All rights reserved
+
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ 1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN
+ NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<netpcd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="xmlProject/pcd.xsd" name="example"
+	description="FMAN ASF configuration">
+
+	<distribution name="udpeth0v6">
+        <queue count="128" base="0x3800"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth1v6">
+        <queue count="128" base="0x3880"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth2v6">
+        <queue count="128" base="0x3900"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth3v6">
+        <queue count="128" base="0x3980"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth4v6">
+        <queue count="128" base="0x3c00"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth5v6">
+        <queue count="128" base="0x7800"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth6v6">
+        <queue count="128" base="0x7880"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth7v6">
+        <queue count="128" base="0x7900"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth8v6">
+        <queue count="128" base="0x7980"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth9v6">
+        <queue count="128" base="0x7c00"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth10v6">
+        <queue count="128" base="0x3a00"/>
+        <key>
+		    <fieldref name="ipv6.src"/>
+		    <fieldref name="ipv6.dst"/>
+		    <fieldref name="udp.sport"/>
+		    <fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth11v6">
+	<queue count="128" base="0x3c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth12v6">
+	<queue count="128" base="0x7c80"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="udpeth13v6">
+	<queue count="128" base="0x7a00"/>
+	<key>
+		<fieldref name="ipv6.src"/>
+		<fieldref name="ipv6.dst"/>
+		<fieldref name="udp.sport"/>
+		<fieldref name="udp.dport"/>
+	</key>
+	</distribution>
+
+	<distribution name="default_dist_0">
+		<queue count="1" base="0x3800"/>
+	</distribution>
+
+	<distribution name="default_dist_1">
+		<queue count="1" base="0x3880"/>
+	</distribution>
+
+	<distribution name="default_dist_2">
+		<queue count="1" base="0x3900"/>
+	</distribution>
+
+	<distribution name="default_dist_3">
+		<queue count="1" base="0x3980"/>
+	</distribution>
+
+	<distribution name="default_dist_4">
+		<queue count="1" base="0x3c00"/>
+	</distribution>
+
+	<distribution name="default_dist_5">
+		<queue count="1" base="0x7800"/>
+	</distribution>
+
+	<distribution name="default_dist_6">
+		<queue count="1" base="0x7880"/>
+	</distribution>
+
+	<distribution name="default_dist_7">
+		<queue count="1" base="0x7900"/>
+	</distribution>
+
+	<distribution name="default_dist_8">
+		<queue count="1" base="0x7980"/>
+	</distribution>
+
+	<distribution name="default_dist_9">
+		<queue count="1" base="0x7c00"/>
+	</distribution>
+
+	<distribution name="default_dist_10">
+		<queue count="1" base="0x3a00"/>
+	</distribution>
+
+	<distribution name="default_dist_11">
+		<queue count="1" base="0x3c80"/>
+	</distribution>
+
+	<distribution name="default_dist_12">
+		<queue count="1" base="0x7c80"/>
+	</distribution>
+
+	<distribution name="default_dist_13">
+		<queue count="1" base="0x7a00"/>
+	</distribution>
+
+	<policy name="asf_fman_frag_policy_0">
+        <dist_order>
+            <distributionref name="udpeth0v6"/>
+            <distributionref name="default_dist_0"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_1">
+        <dist_order>
+            <distributionref name="udpeth1v6"/>
+            <distributionref name="default_dist_1"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_2">
+        <dist_order>
+            <distributionref name="udpeth2v6"/>
+            <distributionref name="default_dist_2"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_3">
+        <dist_order>
+            <distributionref name="udpeth3v6"/>
+            <distributionref name="default_dist_3"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_4">
+        <dist_order>
+            <distributionref name="udpeth4v6"/>
+            <distributionref name="default_dist_4"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_5">
+        <dist_order>
+            <distributionref name="udpeth5v6"/>
+            <distributionref name="default_dist_5"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_6">
+        <dist_order>
+            <distributionref name="udpeth6v6"/>
+            <distributionref name="default_dist_6"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_7">
+        <dist_order>
+            <distributionref name="udpeth7v6"/>
+            <distributionref name="default_dist_7"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_8">
+        <dist_order>
+            <distributionref name="udpeth8v6"/>
+            <distributionref name="default_dist_8"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_9">
+        <dist_order>
+            <distributionref name="udpeth9v6"/>
+            <distributionref name="default_dist_9"/>
+        </dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_10">
+	<dist_order>
+		<distributionref name="udpeth10v6"/>
+		<distributionref name="default_dist_10"/>
+	</dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_11">
+	<dist_order>
+		<distributionref name="udpeth11v6"/>
+		<distributionref name="default_dist_11"/>
+	</dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_12">
+	<dist_order>
+		<distributionref name="udpeth12v6"/>
+		<distributionref name="default_dist_12"/>
+	</dist_order>
+	</policy>
+
+	<policy name="asf_fman_frag_policy_13">
+	<dist_order>
+		<distributionref name="udpeth13v6"/>
+		<distributionref name="default_dist_13"/>
+	</dist_order>
+	</policy>
+</netpcd>
