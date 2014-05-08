@@ -792,7 +792,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 				outInfo->ulSPDMagicNumber,
 				outInfo->ulSPDContainerId);
 		/* Invalidate the SA info as 0 is a valid index */
-		ipsecInInfo->outSAInfo.ulSAIndex = -1;
+		ipsecInInfo->outSAInfo.ulSAIndex = SECFP_MAX_SAS;
 		ipsecInInfo->outSAInfo.ulSAMagicNumber = -1;
 	}
 	if (pol_in) {

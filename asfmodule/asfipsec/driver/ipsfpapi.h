@@ -22,7 +22,7 @@
 
 /* IPSEC Max capacity default values */
 #define SECFP_MAX_SPD_CONTAINERS	256
-#define SECFP_MAX_SAS			256 /*including DSCP_SAs*/
+#define SECFP_MAX_SAS			ASF_MAX_SAS /*including DSCP_SAs*/
 #define SECFP_MAX_DSCP_SA		8
 #define SECFP_MAX_SPI_ENTRIES		SECFP_MAX_SAS
 #define SECFP_MAX_NUM_TUNNEL_IFACES	SECFP_MAX_SAS
