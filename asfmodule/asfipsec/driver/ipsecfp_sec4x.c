@@ -748,7 +748,6 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 	int ret = 0;
 
 	if (pSA) {
-		struct caam_drv_private *priv = dev_get_drvdata(pdev);
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
 		pSA->ctx.jrdev = caam_jr_alloc();
@@ -835,7 +834,6 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 	int ret = 0;
 
 	if (pSA) {
-		struct caam_drv_private *priv = dev_get_drvdata(pdev);
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 		pSA->ctx.jrdev = caam_jr_alloc();
 		if (IS_ERR(pSA->ctx.jrdev)) {

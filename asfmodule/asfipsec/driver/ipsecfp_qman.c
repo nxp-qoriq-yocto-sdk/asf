@@ -1287,8 +1287,7 @@ int secfp_qman_init(void)
 	return 0;
 
 tsklet_alloc_failure:
-	if (secfp_qman_fq_deinit())
-		ASFIPSEC_ERR("Unable to remove fqs\n");
+	secfp_qman_fq_deinit();
 qm_init_failure:
 #ifdef SEC_CONGESTION_CONTROL
 	sec_qi_cgr_deinit();
@@ -1302,8 +1301,7 @@ void secfp_qman_deinit(void)
 {
 	int ii;
 
-	if (secfp_qman_fq_deinit())
-		ASFIPSEC_ERR("Unable to remove fqs\n");
+	secfp_qman_fq_deinit();
 
 	flush_scheduled_work();
 

@@ -1952,7 +1952,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			   struct sk_buff **pOutSkb)
 {
 	struct iphdr *iph = ip_hdr(skb);
-	unsigned int ihl = iph->ihl*4;
+	unsigned short ihl = iph->ihl*4;
 	unsigned int ulReqHeadRoom = ulDevXmitHdrLen + ASF_REASM_IP_HDR_LEN;
 	struct sk_buff *skb2, *pLastSkb;
 	unsigned int bytesLeft, len, ii, ptr = 0;
