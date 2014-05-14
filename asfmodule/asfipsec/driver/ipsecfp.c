@@ -5457,6 +5457,9 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 		goto ret_stk;
 	}
 
+#ifdef CONFIG_DPA
+	skb->cb[BUF_INDOMAIN_INDEX] = 0;
+#endif
 	if (secfp_try_fastPathOut(ulVsgId, skb, &SecInfo) != 0) {
 		if (pFreeFn)
 			(pFreeFn)(freeArg);
@@ -5490,6 +5493,9 @@ ASF_void_t ASFIPSecDecryptAndSendPkt(ASF_uint32_t ulVSGId,
 			(pFreeFn)(freeArg);
 		goto ret_stk;
 	}
+#ifdef CONFIG_DPA
+	skb->cb[BUF_INDOMAIN_INDEX] = 0;
+#endif
 	if (secfp_try_fastPathIn(skb, 0, ulVSGId, ulCommonInterfaceId) != 0) {
 		if (pFreeFn)
 			(pFreeFn)(freeArg);

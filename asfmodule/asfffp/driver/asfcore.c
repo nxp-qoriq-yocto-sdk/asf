@@ -90,6 +90,13 @@ MODULE_LICENSE("Dual BSD/GPL");
 /*! \brief Name used when mounting path */
 #define ASF_HLD_DEVICE_NAME "asf_hld"
 #endif
+#ifdef CONFIG_DPA
+#define DPA_WRITE_SKB_PTR(skb, skbh, addr, off) \
+	{ \
+		skbh = (struct sk_buff **)addr; \
+		*(skbh + (off)) = skb; \
+	}
+#endif
 
 char *periodic_errmsg[] = PERIODIC_ERRMSGS;
 char *asf_version = "asf-rel-0.2.0";
@@ -528,6 +535,99 @@ int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb)
 
 	return 0;
 }
+/*Refill bpool*/
+static int _asf_dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
+{
+	struct bm_buffer bmb[8];
+	void *new_buf;
+	dma_addr_t addr;
+	uint8_t i;
+	struct device *dev = dpa_bp->dev;
+	struct sk_buff *skb, **skbh;
+
+	for (i = 0; i < 8; i++) {
+		/* We'll prepend the skb back-pointer; can't use the DPA
+		 * priv space, because FMan will overwrite it (from offset 0)
+		 * if it ends up being the second, third, etc. fragment
+		 * in a S/G frame.
+		 *
+		 * We only need enough space to store a pointer, but allocate
+		 * an entire cacheline for performance reasons.
+		 */
+		new_buf = netdev_alloc_frag(SMP_CACHE_BYTES + DPA_BP_RAW_SIZE);
+		if (unlikely(!new_buf))
+			goto netdev_alloc_failed;
+		new_buf = PTR_ALIGN(new_buf + SMP_CACHE_BYTES, SMP_CACHE_BYTES);
+
+		skb = build_skb(new_buf, DPA_SKB_SIZE(dpa_bp->size) +
+			SKB_DATA_ALIGN(sizeof(struct skb_shared_info)));
+		if (unlikely(!skb)) {
+			put_page(virt_to_head_page(new_buf));
+			goto build_skb_failed;
+		}
+		DPA_WRITE_SKB_PTR(skb, skbh, new_buf, -1);
+
+		addr = dma_map_single(dev, new_buf,
+			dpa_bp->size, DMA_BIDIRECTIONAL);
+		if (unlikely(dma_mapping_error(dev, addr)))
+			goto dma_map_failed;
+
+		bm_buffer_set64(&bmb[i], addr);
+	}
+
+release_bufs:
+	/* Release the buffers. In case bman is busy, keep trying
+	* until successful. bman_release() is guaranteed to succeed
+	* in a reasonable amount of time
+	*/
+	while (unlikely(bman_release(dpa_bp->pool, bmb, i, 0)))
+		cpu_relax();
+	return i;
+
+dma_map_failed:
+	kfree_skb(skb);
+
+build_skb_failed:
+netdev_alloc_failed:
+	net_err_ratelimited("dpa_bp_add_8_bufs() failed\n");
+	WARN_ONCE(1, "Memory allocation failure on Rx\n");
+
+	bm_buffer_set64(&bmb[i], 0);
+	/* Avoid releasing a completely null buffer; bman_release() requires
+	* at least one buffer.
+	*/
+	if (likely(i))
+		goto release_bufs;
+
+	return 0;
+}
+
+int asf_dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp, int *countptr)
+{
+	int count = *countptr;
+	int new_bufs;
+
+	if (unlikely(count < CONFIG_FSL_DPAA_ETH_REFILL_THRESHOLD)) {
+		do {
+			new_bufs = _asf_dpa_bp_add_8_bufs(dpa_bp);
+			if (unlikely(!new_bufs)) {
+				/* Avoid looping forever if we've temporarily
+				* run out of memory. We'll try again at the
+				* next NAPI cycle.
+				*/
+				break;
+			}
+			count += new_bufs;
+		} while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT);
+
+		*countptr = count;
+		if (unlikely(count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT))
+			return -ENOMEM;
+	}
+
+	return 0;
+}
+
 /* deducts skb accounting from common pool */
 void asf_dec_skb_buf_count(struct sk_buff *skb)
 {
@@ -548,6 +648,7 @@ void asf_dec_skb_buf_count(struct sk_buff *skb)
 
 	PER_CPU_BP_COUNT(bp)--;
 	skb->cb[BPID_INDEX] = 0;
+	asf_dpaa_eth_refill_bpools(bp, &PER_CPU_BP_COUNT(bp));
 
 	for (skb_temp = skb_shinfo(skb)->frag_list;
 		skb_temp != NULL; skb_temp = skb_temp->next) {
