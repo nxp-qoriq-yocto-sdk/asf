@@ -511,7 +511,7 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 		pSG->addr_lo = (uint32_t) pInmap;
 		pSG->addr_hi = (uint32_t) (pInmap >> 32);
 		pSG->length = skb->len;
-		pSG[1].addr_lo = (uint32_t) pInmap + pSA->ctx.split_key_len;
+		pSG[1].addr_lo = (uint32_t) (pInmap + pSA->ctx.split_key_len);
 		pSG[1].addr_hi = (uint32_t)
 				((pInmap + pSA->ctx.split_key_len) >> 32);
 		pSG[1].length = skb->len;
@@ -602,8 +602,8 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 		pSG->addr_lo = (uint32_t) (pInmap);
 		pSG->addr_hi = (uint32_t) (pInmap >> 32);
 		pSG->length = skb->len;
-		pSG[1].addr_lo = (uint32_t) (pInmap) + pSA->ctx.split_key_len;
-		pSG[1].addr_lo = (uint32_t)
+		pSG[1].addr_lo = (uint32_t) ((pInmap) + pSA->ctx.split_key_len);
+		pSG[1].addr_hi = (uint32_t)
 				((pInmap + pSA->ctx.split_key_len) >> 32);
 	}
 
