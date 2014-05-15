@@ -1078,12 +1078,10 @@ void secfp_inAHComplete(struct device *dev,
 
 	ASFIPSEC_DEBUG("\n NextProto=%d", ucNextProto);
 #ifdef ASF_IPV6_FP_SUPPORT
-	if (ucNextProto == SECFP_PROTO_IP) {
+	if (iph->version == SECFP_PROTO_IP) {
 #endif
 		skb->data += SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + skb->cb[SECFP_ICV_LENGTH];
 		skb->len -= SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + skb->cb[SECFP_ICV_LENGTH];
-		inneriph = (struct iphdr *)(skb->data);
-		ip_decrease_ttl(inneriph);
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
 		skb->data += SECFP_IPV6_HDR_LEN + SECFP_AH_FIXED_HDR_LEN
@@ -1109,6 +1107,8 @@ void secfp_inAHComplete(struct device *dev,
 	/* Packet is ready to go */
 	/* Assuming ethernet as the receiving device of original packet */
 	if (ucNextProto == SECFP_PROTO_IP) {
+		inneriph = (struct iphdr *)(skb->data);
+		ip_decrease_ttl(inneriph);
 		secfp_inCompleteUpdateIpv4Pkt(skb);
 		skb->protocol = ETH_P_IP;
 
