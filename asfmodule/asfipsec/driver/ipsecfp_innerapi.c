@@ -2528,6 +2528,7 @@ unsigned int secfp_createOutSA(
 	SPDOutSALinkNode_t *pOutSALinkNode;
 	ASF_IPAddr_t daddr;
 	int bVal = in_interrupt();
+	uint32_t ulIpHdrLen = 0;
 
 	if (!bVal)
 		local_bh_disable();
@@ -2667,6 +2668,7 @@ unsigned int secfp_createOutSA(
 			+ pSA->SAParams.ulIvSize;
 
 		pSA->ulSecLenIncrease = SECFP_IPV4_HDR_LEN;
+		ulIpHdrLen = SECFP_IPV4_HDR_LEN;
 	} else { /* Handle IPv6 case */
 #ifdef ASF_IPV6_FP_SUPPORT
 		pSA->ipHdrInfo.hdrdata.iphv6.version = 6;
@@ -2684,6 +2686,7 @@ unsigned int secfp_createOutSA(
 			+ SECFP_ESP_HDR_LEN + SECFP_ESP_TRAILER_LEN
 			+ pSA->SAParams.ulIvSize;
 		pSA->ulSecLenIncrease = SECFP_IPV6_HDR_LEN;
+		ulIpHdrLen = SECFP_IPV6_HDR_LEN;
 #endif
 	}
 #ifdef ASF_SECFP_PROTO_OFFLOAD
@@ -2770,7 +2773,9 @@ unsigned int secfp_createOutSA(
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 			pSA->ulXmitHdrLen = pSA->ulSecHdrLen + pSA->usNatHdrSize;
 #else
-			pSA->ulXmitHdrLen = 0;
+			/* Saving Tunnel header length to ulXmitHdrLen*/
+			pSA->ulXmitHdrLen = pSA->ulSecHdrLen
+					+ pSA->usNatHdrSize + ulIpHdrLen;
 #endif
 	} else {
 #ifdef CONFIG_ASF_SEC4x

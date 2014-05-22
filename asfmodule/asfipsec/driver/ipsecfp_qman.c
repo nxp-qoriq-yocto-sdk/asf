@@ -586,8 +586,8 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 		DMA_BIDIRECTIONAL);
 
 	/* filling compound frame */
-	pSG->addr_lo = (uint32_t) (pInmap);
-	pSG->addr_hi = (uint32_t) (pInmap>>32);
+	pSG->addr_lo = (uint32_t) (pInmap - pSA->ulXmitHdrLen);
+	pSG->addr_hi = (uint32_t) ((pInmap - pSA->ulXmitHdrLen)>>32);
 	pSG->length = skb->len + pSA->ulCompleteOverHead;
 
 	pSG[1].addr_lo = (uint32_t) (pInmap);
@@ -665,17 +665,17 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 		err_val = dqrr->fd.status;
 		caam_jr_strstatus(err, dqrr->fd.status);
 		if ((err_val & 0xF00000FF) == 0x40000084) {
-			ASFIPSEC_DPERR("ANTI-REPLAY-ERR FD status = %#x "
+			ASFIPSEC_DEBUG("ANTI-REPLAY-ERR FD status = %#x "
 			"Err = %s\n", dqrr->fd.status, err);
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
 		} else if ((err_val & 0xF00000FF) == 0x40000083) {
-			ASFIPSEC_DPERR("LATE-PACKET-ERR FD status = %#x "
+			ASFIPSEC_DEBUG("LATE-PACKET-ERR FD status = %#x "
 			"Err = %s\n", dqrr->fd.status, err);
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT19]);
 		} else {
-			ASFIPSEC_DPERR("FD status = %#x Err = %s\n",
+			ASFIPSEC_DEBUG("FD status = %#x Err = %s\n",
 			err_val, err);
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
