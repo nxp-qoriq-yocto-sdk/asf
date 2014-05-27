@@ -17,6 +17,8 @@
 #ifndef _ASF_REASM_H
 #define _ASF_REASM_H
 
+#define REASM_IPv4	0
+#define REASM_IPv6	1
 
 int asfReasmInit(void);
 void asfReasmDeInit(void);

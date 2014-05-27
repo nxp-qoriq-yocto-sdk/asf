@@ -708,7 +708,7 @@ static inline struct asf_reasmCb_s *asfIPv4ReasmFindOrCreateCb(
 						asf_reasmCfg[pCb->ulVSGId].ulIpRsmTimeOutVal,
 						pCb->ulVSGId,
 						pCb->ulPtrArrayIndex,
-						pCb->ulMagicNum, 1, 0);
+						pCb->ulMagicNum, REASM_IPv4, 0);
 
 			if (!(pCb->ptmr)) {
 				asfRemCbFromHashList(hashVal, pCb);
@@ -812,7 +812,7 @@ static inline struct asf_reasmCb_s *asfIPv6ReasmFindOrCreateCb(
 						asf_reasmCfg[pCb->ulVSGId].ulIpRsmTimeOutVal,
 						pCb->ulVSGId,
 						pCb->ulPtrArrayIndex,
-						pCb->ulMagicNum, 0, 1);
+						pCb->ulMagicNum, REASM_IPv6, 1);
 
 			if (!(pCb->ptmr)) {
 				asfIPv6RemCbFromHashList(hashVal, pCb);
@@ -1350,7 +1350,7 @@ unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 	asf_reasm_debug("Timer Cb called: ulIndex = %d, ulMagicNum = %d\r\n", ulIndex, ulMagicNum);
 #endif
 #ifdef ASF_IPV6_FP_SUPPORT
-	if (pCbArg4 == 1) {
+	if (pCbArg4 == REASM_IPv6) {
 		mgnum = ptrIArray_getMagicNum(
 					       &(asfPerCpuPtr(asf_ipv6_ReasmCbPtrIndexArray,
 							      smp_processor_id())->ptrArrayInfo[ulVSGId].ptrArray),
@@ -1372,7 +1372,7 @@ unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 #endif
 
 #ifdef ASF_IPV6_FP_SUPPORT
-		if (pCbArg4 == 1) {
+		if (pCbArg4 == REASM_IPv6) {
 			pCb = ptrIArray_getData(&(asfPerCpuPtr(asf_ipv6_ReasmCbPtrIndexArray,
 						       smp_processor_id())->ptrArrayInfo[ulVSGId].ptrArray), ulIndex);
 		} else
