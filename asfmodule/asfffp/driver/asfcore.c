@@ -1434,6 +1434,14 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 	if (abuf.iph->frag_off & htons(IP_MF|IP_OFFSET)) {
 		int fragCnt;
 
+		if ((abuf.iph->protocol != IPPROTO_TCP) && (abuf.iph->protocol != IPPROTO_UDP)
+#ifdef ASF_IPSEC_FP_SUPPORT
+		 && (abuf.iph->protocol != IPPROTO_ESP) && (abuf.iph->protocol != IPPROTO_AH)
+#endif
+		) {
+			asf_debug("Non IP packet, giving back to linux protocol = %d\n", abuf.iph->protocol);
+			goto ret_pkt;
+		}
 		/* reassemble anyway */
 		XGSTATS_INC(IpFragPkts);
 		abuf.bbuffInDomain = ASF_TRUE;
