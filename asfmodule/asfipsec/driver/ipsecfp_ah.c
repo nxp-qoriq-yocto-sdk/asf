@@ -683,11 +683,13 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		ASFIPSEC_DEBUG("\n orig_pktlen %d =", orig_pktlen);
 		usNxtProto = SECFP_PROTO_IPV6;
 		ipv6_traffic_class(tos, org_ipv6hdr);
+		org_ipv6hdr->hop_limit--;
 	} else {
 #endif
 		orig_pktlen = org_iphdr->tot_len;
 		usNxtProto = SECFP_PROTO_IP;
 		tos = org_iphdr->tos;
+		ip_decrease_ttl(org_iphdr);
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
 #endif
@@ -877,7 +879,6 @@ void secfp_inAHComplete(struct device *dev,
 #else
 	struct ses_pkt_info *pInfo;
 #endif
-	struct iphdr *inneriph;
 	unsigned int ulFragCnt;
 
 	ASFIPSEC_FENTRY;
