@@ -1243,6 +1243,10 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	ASFIPSEC_FENTRY;
 	pSA = secfp_findOutSA(ulVSGId, pSecInfo, skb1, ipv6TClass,
 			&pContainer, &bRevalidate);
+	if (unlikely(pSA->odev == NULL)) {
+		ASFIPSEC_DEBUG("L2blob Not Resolved. Drop the packet");
+		goto l2blob_missing;
+	}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (skb_shinfo(skb1)->frag_list) {
 		struct sk_buff *pSkb;
@@ -1508,6 +1512,28 @@ no_sa:
 		}
 	}
 	return 1;
+
+l2blob_missing:
+	{
+		ASF_IPSecTunEndAddr_t TunAddress;
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
+
+		TunAddress.IP_Version = 6;
+		TunAddress.dstIP.bIPv4OrIPv6 = 1;
+		TunAddress.srcIP.bIPv4OrIPv6 = 1;
+		memcpy(TunAddress.dstIP.ipv6addr,
+				pSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
+		memcpy(TunAddress.srcIP.ipv6addr,
+				pSA->SAParams.tunnelInfo.addr.iphv6.saddr, 16);
+
+		if (ASFIPSecCbFn.pFnRefreshL2Blob)
+			ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId,
+					pSecInfo->outContainerInfo.ulTunnelId,
+					pSecInfo->outContainerInfo.ulSPDContainerId,
+					pSecInfo->outContainerInfo.ulSPDMagicNumber,
+					&TunAddress,
+					pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
+	}
 
 drop_skb_list:
 	ASFSkbFree(skb);

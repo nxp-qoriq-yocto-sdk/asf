@@ -640,6 +640,9 @@ void asf_dec_skb_buf_count(struct sk_buff *skb)
 	if (!(skb->cb[BPID_INDEX]))
 		return;
 
+	if(!skb->dev || !priv->dpa_bp)
+		return;
+
 	bp = priv->dpa_bp;
 	for (i = 0; (skb->cb[BPID_INDEX] == (&bp[i])->bpid); i++) {
 		bp = &bp[i];
