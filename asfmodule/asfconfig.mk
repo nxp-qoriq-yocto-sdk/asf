@@ -9,7 +9,9 @@ PWD=$(shell pwd)
 CC	= $(CROSS_COMPILE)gcc
 AR	= $(CROSS_COMPILE)ar
 LD	= $(CROSS_COMPILE)ld
+ifeq ($(ARCH),powerpc)
 EXTRA_CFLAGS := -mno-spe -mspe=no -mabi=no-spe
+endif
 
 ifneq ($(CONFIG_AS_FASTPATH),y)
 $(warning ASF is Disabled in Kernel.)

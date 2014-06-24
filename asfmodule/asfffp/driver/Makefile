@@ -28,7 +28,7 @@ asf-y += asfipv6core.o
 endif
 
 all:
-	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) modules
+	make ARCH=$(ARCH) -C $(KERNEL_PATH) M=$(PWD) modules
 
 clean:
-	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) clean
+	make ARCH=$(ARCH) -C $(KERNEL_PATH) M=$(PWD) clean
