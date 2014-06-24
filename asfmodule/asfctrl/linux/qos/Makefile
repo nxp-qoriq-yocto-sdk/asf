@@ -23,7 +23,7 @@ obj-m += asfctrl_qos.o
 asfctrl_qos-y := asfctrl_linux_qos.o
 
 all:
-	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) modules
+	make ARCH=$(ARCH) -C $(KERNEL_PATH) M=$(PWD) modules
 
 clean:
-	make ARCH=powerpc -C $(KERNEL_PATH) M=$(PWD) clean
+	make ARCH=$(ARCH) -C $(KERNEL_PATH) M=$(PWD) clean
