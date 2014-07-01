@@ -2906,6 +2906,11 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	ulZoneId = anDev->ulZoneId;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	vsgInfo = asf_ffp_get_vsg_info_node(ulVsgId);
+	if (unlikely(!vsgInfo)) {
+		asf_warn("VSG ID not valid= %d\n", ulVsgId);
+		goto drop_pkt;
+	}
 	vstats = asfPerCpuPtr(asf_vsg_stats, smp_processor_id()) + ulVsgId;
 	vstats->ulInPkts++;
 #endif
@@ -3937,6 +3942,8 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 			dev->ndev = ndev;
 			/* dev->usId = port_num; ?? */
 			asf_ifaces[dev->ulCommonInterfaceId] = dev;
+			asf_debug("mapped iface dev %s to asfdev %p ciid %d\n",
+					ndev->name, dev, ulCommonInterfaceId);
 		}
 		break;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -4032,6 +4039,8 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 				}
 			}
 
+			asf_debug("adding vlan %d to parent dev %s\n",
+					usVlanId, parent_dev->ndev->name);
 			/* Copy VLAN ID */
 			dev->usId = usVlanId;
 			dev->pParentDev = parent_dev;
@@ -5218,10 +5227,10 @@ int ASFFFPQueryVsgStats(ASF_uint32_t ulVsgId, ASFFFPVsgStats_t *pStats)
 	}
 
 	memset(pStats, 0, sizeof(*pStats));
-	for (cpu = 0; cpu < NR_CPUS; cpu++) {
+	for_each_possible_cpu(cpu) {
 		ASFFFPVsgStats_t	*vstats;
 
-		vstats = asfPerCpuPtr(asf_vsg_stats, smp_processor_id()) + ulVsgId;
+		vstats = asfPerCpuPtr(asf_vsg_stats, cpu) + ulVsgId;
 		pStats->ulInPkts += vstats->ulInPkts;
 		pStats->ulOutPkts += vstats->ulOutPkts;
 		pStats->ulOutBytes += vstats->ulOutBytes;

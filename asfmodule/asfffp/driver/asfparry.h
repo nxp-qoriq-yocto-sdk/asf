@@ -100,7 +100,9 @@ static inline unsigned int ptrIArray_add(ptrIArry_tbl_t *pTable,  void *pData)
 	}
 
 #ifdef ASF_PARRY_DEBUG
-	printk("ptrIArray_add : Index =%d, pNode = 0x%x, pTable->pBase = 0x%x\r\n", ulIndex, pNode, pTable->pBase);
+	if (ulIndex >= pTable->nr_entries)
+		printk("ptrIArray overflow : Index =%d, pNode = 0x%x,"
+		"pTable->pBase = 0x%x\n", ulIndex, pNode, pTable->pBase);
 #endif
 
 	return ulIndex;
@@ -110,6 +112,11 @@ static inline unsigned int ptrIArray_add(ptrIArry_tbl_t *pTable,  void *pData)
 static inline void *ptrIArray_getData(ptrIArry_tbl_t *pTable, unsigned int ulIndex)
 {
 	return pTable->pBase[ulIndex].pData;
+}
+static inline void ptrIArray_putData(ptrIArry_tbl_t *pTable,
+				unsigned int ulIndex, void *pData)
+{
+	pTable->pBase[ulIndex].pData = pData;
 }
 
 static inline unsigned int ptrIArray_getMagicNum(ptrIArry_tbl_t *pTable, unsigned int ulIndex)

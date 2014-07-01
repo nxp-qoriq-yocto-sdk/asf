@@ -33,22 +33,8 @@
 #include "asfreasm.h"
 #include "gplcode.h"
 #include "asf.h"
+#include "asfpvt.h"
 #include "asfcmn.h"
-
-/* #define ASF_REASM_DEBUG */
-
-extern ASFFFPGlobalStats_t *asf_gstats;
-#ifdef ASF_REASM_DEBUG
-#define asf_reasm_debug(fmt, args...) printk("[CPU %d line %d %s] " fmt, smp_processor_id(), __LINE__, __FUNCTION__, ##args)
-#else
-#define asf_reasm_debug(fmt, args...)
-#endif
-
-
-#ifndef CONFIG_DPA
-#define TRUE 1
-#define FALSE 0
-#endif
 
 
 #ifdef ASF_REASM_USE_L2SRAM
@@ -99,15 +85,11 @@ unsigned long asf_ipv6_reasm_hash_list_size = ASF_REASM_MAX_HASH_LIST_SIZE;
 #define ASF_EXTRA_TAIL_ROOM 128
 #endif
 
-/* Values taken from iGateway code */
-extern int asf_reasm_timeout;
-extern int asf_reasm_maxfrags;
-extern int asf_reasm_min_fragsize;
+
 #define ASF_MAX_FRAG_CNT	asf_reasm_maxfrags
 #define ASF_MIN_FRAG_SIZE	asf_reasm_min_fragsize
 #define ASF_MAX_REASM_TIMEOUT	asf_reasm_timeout
 
-extern int asf_max_vsgs;
 
 unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 			   unsigned int ulIndex, unsigned int ulMagicNum, unsigned int pCbArg4);
@@ -1040,7 +1022,7 @@ static inline struct sk_buff  *asfFragHandle(struct asf_reasmCb_s *pCb,
 			if (likely((*pOffset == pFrag->ulSegMap) &&
 				   (*pOffset == pFrag->ulLen))) {
 				/* We got it all */
-				*bReasmDone = TRUE;
+				*bReasmDone = ASF_TRUE;
 				*frag = pFrag;
 				*option = ASF_ADJUST_PREVFRAG;
 				pCb->ulTotLen = *pOffset + *pLen;
@@ -1056,7 +1038,7 @@ static inline struct sk_buff  *asfFragHandle(struct asf_reasmCb_s *pCb,
 				/* 2nd fragment came first */
 				/* but we got it all */
 				/* so let us go */
-				*bReasmDone = TRUE;
+				*bReasmDone = ASF_TRUE;
 				*frag = pFrag;
 				*option = ASF_ADJUST_NEXTFRAG;
 				return skb;
@@ -1131,9 +1113,9 @@ static inline struct sk_buff  *asfFragHandle(struct asf_reasmCb_s *pCb,
 		} else if (unlikely((*pOffset <= pFragPrev->ulFragOffset) &&
 				    (ulSegMap >= pFragPrev->ulSegMap) &&
 				    (pFragPrev->next
-				     ? pFragPrev->next->ulFragOffset > ulSegMap : TRUE) &&
+				     ? pFragPrev->next->ulFragOffset > ulSegMap : ASF_TRUE) &&
 				    (pFragPrev->prev ?
-				     pFragPrev->prev->ulSegMap < *pOffset : TRUE))) {
+				     pFragPrev->prev->ulSegMap < *pOffset : ASF_TRUE))) {
 			asf_reasm_debug("complete overlap over small packet\r\n");
 
 			/* Trim the buffer */
@@ -1176,22 +1158,22 @@ static inline struct sk_buff  *asfFragHandle(struct asf_reasmCb_s *pCb,
 			*option = ASF_ADJUST_PREVFRAG;
 		} else if (((*pOffset > pFragPrev->ulFragOffset) &&
 			     (*pOffset <= pFragPrev->ulSegMap) &&
-			     (pFrag ? ulSegMap >= pFrag->ulSegMap : FALSE))
+			     (pFrag ? ulSegMap >= pFrag->ulSegMap : ASF_FALSE))
 			    ||
 			    ((*pOffset < pFragPrev->ulFragOffset) &&
-			     (pFrag ? pFrag->ulFragOffset < ulSegMap : FALSE))
+			     (pFrag ? pFrag->ulFragOffset < ulSegMap : ASF_FALSE))
 			    ||
 			    ((*pOffset < pFragPrev->ulFragOffset) &&
 			     (pFrag ? pFrag->next ?
 			      (pFrag->next->ulSegMap < ulSegMap) :
-			      (pFrag->ulSegMap < ulSegMap) : FALSE))) {
+			      (pFrag->ulSegMap < ulSegMap) : ASF_FALSE))) {
 			asf_reasm_debug("Complete overlap over a set of fragments\r\n");
 			ASFSkbFree(skb);
 			return NULL;
 		}
 
 		if (pFrag ? (ulSegMap < pFrag->ulSegMap)
-		    && (ulSegMap >= pFrag->ulFragOffset) : FALSE) {
+		    && (ulSegMap >= pFrag->ulFragOffset) : ASF_FALSE) {
 			/* To be checked */
 			updateLen =  ulSegMap - pFrag->ulFragOffset;
 			if (updateLen) {
@@ -1305,12 +1287,12 @@ static inline struct sk_buff  *asfFragHandle(struct asf_reasmCb_s *pCb,
 		}
 	}
 	if ((pCb->ulTotLen != 0) && (pCb->ulRecvLen == pCb->ulTotLen)) {
-		*bReasmDone = TRUE;
+		*bReasmDone = ASF_TRUE;
 		asf_reasm_debug("Returning bReasmDone = TRUE \r\n");
 	} else {
-		*bReasmDone = FALSE;
+		*bReasmDone = ASF_FALSE;
 		pCb->ulLastPktTime = jiffies;
-		asf_reasm_debug("Returning bReasmDone = fALSE \r\n");
+		asf_reasm_debug("Returning bReasmDone = FALSE \r\n");
 	}
 
 	return skb;
@@ -1582,7 +1564,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 			   skb->len fields. */
 			if (ulOffset == 0) {
 				if (bFirstFragRcvd)
-					*bFirstFragRcvd = TRUE;
+					*bFirstFragRcvd = ASF_TRUE;
 				*(uintptr_t *)  &(skb->cb[0]) = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
 #ifdef ASF_IPV6_FP_SUPPORT
 				*(uintptr_t *)  &(skb->cb[8]) = skb_transport_header(skb) - skb_network_header(skb);
@@ -1621,7 +1603,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 				asf_reasm_debug("IPv4Frag Handle completed with skb returned bReasmDone=%d\r\n", bReasmDone);
 				if (ulOffset == 0) {
 					if (bFirstFragRcvd)
-						*bFirstFragRcvd = TRUE;
+						*bFirstFragRcvd = ASF_TRUE;
 					*(uintptr_t *)  &(skb->cb[0]) = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
 #ifdef ASF_IPV6_FP_SUPPORT
 					*(uintptr_t *)  &(skb->cb[8]) = skb_transport_header(skb) - skb_network_header(skb);
@@ -1876,7 +1858,8 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 		if (skb) { /* We need a flat buffer, if not return an error*/
 			if (skb_linearize(skb)) {
 				dev_kfree_skb_any(skb);
-				asf_reasm_debug("skb linearize failed ");
+				asf_reasm_debug("skb linearize failed %d",
+						ulTotalLen + ulExtraLen);
 				return 1;
 			}
 
@@ -1894,6 +1877,7 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 	ulBytesToCopy = ulTotalLen - skb->len;
 	ptr = skb->data + skb->len;
 	frag = skb_shinfo(pTempSkb)->frag_list;
+	asf_reasm_debug("frag =%x, bytes to copy =%d", frag, ulBytesToCopy);
 	while (1) {
 		if ((frag) && (ulBytesToCopy > 0)) {
 			memcpy(ptr, frag->data, frag->len);
@@ -1901,6 +1885,8 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 			ulBytesToCopy -= frag->len;
 			skb->len += frag->len;
 			frag = frag->next;
+			asf_reasm_debug("frag =%x, bytes to copy =%d",
+				frag, ulBytesToCopy);
 		} else {
 			if ((frag == NULL) && (ulBytesToCopy == 0)) {
 				asf_reasm_debug("Exiting routine, ulBytesToCopy = %d skb->len = %d\r\n", ulBytesToCopy, skb->len);
@@ -1922,7 +1908,7 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 			skb->dev = pTempSkb->dev;
 			asf_reasm_debug("Alloced new buffer, so freeing up the old one\r\n");
 			/* Ok we alloced a new skb */
-			/* Go ahead adn free the passed one in pTempSkb*/
+			/* Go ahead and free the passed one in pTempSkb*/
 			ASFSkbFree(pTempSkb);
 		} else {
 			/* Need to free the old skb's fraglist */

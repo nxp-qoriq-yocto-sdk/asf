@@ -58,14 +58,10 @@
 #include "asfpvt.h"
 #include "asftcp.h"
 
-#define _MIN(a, b) ((a) < (b) ? (a) : (b))
 
 
 
 
-extern int asf_tcp_oos_drop;
-extern int asf_tcp_fin_timeout;
-extern int asf_tcp_rst_timeout;
 
 
 static inline int asfTcpCheckForNormalOos(
@@ -84,10 +80,10 @@ static inline int asfTcpCheckForNormalOos(
 		ulOtherRcvNext += flow->tcpState.ulSeqDelta;
 
 	if (!asfTcpSeqWithin(ulSeqNum, ulOtherRcvNext -
-			     _MIN((oth_flow->tcpState.ulMaxRcvWin << oth_flow->tcpState.ucWinScaleFactor),
+		ASF_MIN((oth_flow->tcpState.ulMaxRcvWin << oth_flow->tcpState.ucWinScaleFactor),
 						vsgInfo->ulTcpSeqNumRange),
 			     ulOtherRcvNext +
-			     _MIN((oth_flow->tcpState.ulMaxRcvWin << oth_flow->tcpState.ucWinScaleFactor),
+		ASF_MIN((oth_flow->tcpState.ulMaxRcvWin << oth_flow->tcpState.ucWinScaleFactor),
 				vsgInfo->ulTcpSeqNumRange))) {
 		return ASF_LOG_ID_TCP_BAD_SEQ_NO;
 	}
@@ -99,11 +95,9 @@ static inline int asfTcpCheckForNormalOos(
 		ulSendNext -= oth_flow->tcpState.ulSeqDelta;
 	}
 
-	if (!asfTcpSeqWithin(ulAckNum,
-			     flow->tcpState.ulRcvNext -
-			     _MIN((flow->tcpState.ulMaxRcvWin <<  flow->tcpState.ucWinScaleFactor),
-				vsgInfo->ulTcpSeqNumRange),
-			     ulSendNext)) {
+	if (!asfTcpSeqWithin(ulAckNum, flow->tcpState.ulRcvNext -
+		ASF_MIN((flow->tcpState.ulMaxRcvWin <<  flow->tcpState.ucWinScaleFactor),
+			vsgInfo->ulTcpSeqNumRange), ulSendNext)) {
 		return ASF_LOG_ID_TCP_BAD_ACK_SEQ;
 	}
 	return ASF_LOG_ID_DUMMY;
@@ -133,12 +127,11 @@ static inline int asfTcpCheckForRstOos(
 		ulOtherRcvNext += flow->tcpState.ulSeqDelta;
 	}
 
-	if (!asfTcpSeqWithin(ulSeqNum,
-			     ulOtherRcvNext -
-			     _MIN((oth_flow->tcpState.ulRcvWin <<  oth_flow->tcpState.ucWinScaleFactor),
+	if (!asfTcpSeqWithin(ulSeqNum, ulOtherRcvNext -
+		ASF_MIN((oth_flow->tcpState.ulRcvWin <<  oth_flow->tcpState.ucWinScaleFactor),
 					vsgInfo->ulTcpRstSeqNumRange),
 			     ulOtherRcvNext +
-			     _MIN((oth_flow->tcpState.ulRcvWin <<  oth_flow->tcpState.ucWinScaleFactor),
+		ASF_MIN((oth_flow->tcpState.ulRcvWin <<  oth_flow->tcpState.ucWinScaleFactor),
 					vsgInfo->ulTcpRstSeqNumRange))) {
 		return ASF_LOG_ID_TCP_BAD_RST_SEQ;
 	}
@@ -153,7 +146,7 @@ static inline int asfTcpCheckForRstOos(
 
 		if (!asfTcpSeqWithin(ulAckNum,
 			     flow->tcpState.ulRcvNext -
-			     _MIN((flow->tcpState.ulMaxRcvWin << flow->tcpState.ucWinScaleFactor),
+			     ASF_MIN((flow->tcpState.ulMaxRcvWin << flow->tcpState.ucWinScaleFactor),
 					vsgInfo->ulTcpSeqNumRange),
 			     ulSendNext)) {
 			return ASF_LOG_ID_TCP_BAD_RST_ACK_SEQ;

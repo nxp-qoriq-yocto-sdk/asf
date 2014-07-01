@@ -519,4 +519,5 @@ extern int asf_process_ip_options(
 extern  unsigned int asfReasmPullBuf(struct sk_buff *skb,
 	unsigned int len,
 	unsigned int *fragCnt);
+extern void asf_ffp_cleanup_all_flows(void);
 #endif

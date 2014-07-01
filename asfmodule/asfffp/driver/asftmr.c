@@ -63,7 +63,6 @@
 
 #define ASF_TMR_NEXT_FEW_BUCKETS 4
 
-extern ASFFFPGlobalStats_t *asf_gstats;
 static void asfTimerProc(unsigned long data);
 
 struct asfTmrAppInstanceInfo_s {

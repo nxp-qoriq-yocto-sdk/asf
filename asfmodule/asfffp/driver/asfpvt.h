@@ -17,6 +17,7 @@
 #ifndef __ASF_PVT_H
 #define __ASF_PVT_H
 
+#include "asf.h"
 #include "asfdeps.h"
 #include "asfipsec.h"
 
@@ -142,9 +143,21 @@ typedef struct ASFFFPFlowId_s {
 
 
 extern char *asf_version;
-
+extern int asf_max_vsgs;
 extern int ffp_max_flows;
 extern int ffp_hash_buckets;
+extern bool asf_enable;
+extern int asf_l2blob_refresh_npkts;
+extern int asf_l2blob_refresh_interval;
+extern ASFFFPGlobalStats_t *asf_gstats;
+#ifdef ASF_FFP_XTRA_STATS
+extern ASFFFPXtraGlobalStats_t *asf_xgstats;
+#endif
+extern ASFFFPVsgStats_t *asf_vsg_stats;
+extern int asf_reasm_timeout;
+extern int asf_reasm_maxfrags;
+extern int asf_reasm_min_fragsize;
+extern unsigned int asf_vlan_magicnumber;
 extern int asf_tcp_fin_timeout;
 
 extern int asf_unregister_proc(void);
@@ -270,6 +283,7 @@ extern asf_vsg_info_t *asf_ffp_get_vsg_info_node(ASF_uint32_t ulVSGId);
 
 extern const struct	file_operations asf_interface_fops;
 extern spinlock_t	asf_app_lock;
+extern ffp_bucket_t *ffp_flow_table;
 
 #ifdef ASF_DEBUG
 #define SEARCH_MAX_PER_BUCKET	(1024)

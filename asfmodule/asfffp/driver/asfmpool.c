@@ -25,20 +25,22 @@
 #include "gplcode.h"
 #include "asfdeps.h"
 
+#ifdef ASF_MPOOL_DEBUG
+#define asf_mpool_debug(fmt, args...) \
+	printk(KERN_INFO"[CPU %d] asfmpool.c:%d %s] " fmt, smp_processor_id(), \
+		__LINE__, __func__, ##args)
+#else
+#define asf_mpool_debug(fmt, args...)
+#endif
 /* #define ASF_DUMMY_MPOOL */
 /* #define ASF_DUMMY_MPOOL_NOFREE */
 #ifdef ASF_DUMMY_MPOOL
 #define ASF_MPOOL_DEBUG
-extern int asf_enable;
+extern bool asf_enable;
 #define panic (fmt, args...) do { asf_mpool_debug("Forced Panic " fmt, ##args); asf_enable = 0; } while (0)
 #endif
 
 /* #define ASF_MPOOL_DEBUG */
-#ifdef ASF_MPOOL_DEBUG
-#define asf_mpool_debug(fmt, args...) printk("[CPU %d] asfmpool.c:%d %s] " fmt, smp_processor_id(), __LINE__, __FUNCTION__, ##args)
-#else
-#define asf_mpool_debug(fmt, args...)
-#endif
 
 
 #define ASF_MAX_POOLS 25
@@ -219,8 +221,8 @@ int asfCreatePool(char *name, unsigned int ulNumGlobalPoolEntries,
 	int ii, numPool = 0, jj, poolAlloced = 0;
 	unsigned char *cptr;
 
-	asf_mpool_debug("%s - name %s NumGbl %d NumMax %d PerCpu %d DataSize %d\n",
-			__FUNCTION__, name, ulNumGlobalPoolEntries, ulNumMaxEntries,
+	asf_mpool_debug("name %s NumGbl %d NumMax %d PerCpu %d DataSize %d\n",
+			name, ulNumGlobalPoolEntries, ulNumMaxEntries,
 			ulPerCoreEntries, ulDataSize);
 
 
@@ -238,7 +240,7 @@ int asfCreatePool(char *name, unsigned int ulNumGlobalPoolEntries,
 
 	for_each_possible_cpu(ii)
 	{
-		asf_mpool_debug("%s - ii = %d\n", __FUNCTION__, ii);
+		asf_mpool_debug("ii = %d\n", ii);
 		ptr = per_cpu_ptr(pools, ii);
 		if (poolAlloced == 0) {
 			for (numPool = 0, poolPtr = ptr->pHead+numPool; numPool < ASF_MAX_POOLS; numPool++, poolPtr++) {
@@ -505,24 +507,32 @@ void asfReleaseNode(unsigned int ulNumPoolId, void *data, char bHeap)
 	return;
 }
 
-void dump_mpool_counters(void);
-void dump_mpool_counters()
+void dump_mpool_counters(void)
 {
-	int ii, jj;
+	int ii, jj, out;
 	struct asf_pool_s *pool, *globalPool;
-	for (ii = 0; ii < 3; ii++) {
-		for (jj = 0; jj < NR_CPUS; jj++) {
+	printk(KERN_INFO"name    id    cpuwise alloc/free            "
+		"global alloc/free   outstanding\n");
+	for (ii = 0; ii < ASF_MAX_POOLS; ii++) {
+		pool = &(per_cpu_ptr(pools, 0)->pHead[ii]);
+		if (pool->bInUse) {
+			printk("%.10s %d:", pool->name, ii);
+			out = 0;
+			for_each_possible_cpu(jj) {
 			pool = &(per_cpu_ptr(pools, jj)->pHead[ii]);
-			asf_mpool_debug("Pool Id = %d, CPU Id = %d, Num Allocs = %d, Num Frees = %d\r\n", ii, jj, pool->ulNumAllocs, pool->ulNumFrees);
-		}
+				printk(" %d:%d/%d,", jj, pool->ulNumAllocs,
+					pool->ulNumFrees);
+				out += (pool->ulNumAllocs
+					- pool->ulNumFrees);
 	}
-	for (ii = 0; ii < 3; ii++) {
 
 		globalPool = global_pools[ii].pHead;
-		asf_mpool_debug("Pool Id = %d, CPU Id = %d, Num Allocs = %d, Num Frees = %d\r\n", ii, jj, globalPool->ulNumAllocs, globalPool->ulNumFrees);
+			out += (globalPool->ulNumAllocs - globalPool->ulNumFrees);
+			printk("  %d/%d, %d\n", globalPool->ulNumAllocs,
+				globalPool->ulNumFrees, out);
 	}
 }
-
+}
 #else
 /* Dummy Mpool Wrappers - For testing */
 static struct asf_pool_s pools[ASF_MAX_POOLS];
@@ -536,7 +546,7 @@ int asfInitPools(void)
 
 int asfDeInitPools(void)
 {
-	asf_mpool_debug(" %s -- dummy\n", , __FUNCTION__);
+	asf_mpool_debug("dummy\n");
 	return 0;
 }
 
