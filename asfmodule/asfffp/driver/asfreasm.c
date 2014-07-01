@@ -2095,18 +2095,17 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			   All the SKBs must be allocated from parent
 			   device pool only.
 			 */
-			if (skb->dev->priv_flags & IFF_802_1Q_VLAN) {
+			if (dev->priv_flags & IFF_802_1Q_VLAN) {
 
-				ndev = vlan_dev_priv(skb->dev)->real_dev;
+				ndev = vlan_dev_priv(dev)->real_dev;
 				/* Return Error if Parent device not found */
 				if (!ndev)
 					return 1;
 			} else
-				ndev = skb->dev;
+				ndev = dev;
 
 			ulMTU -= ihl;
-			asf_reasm_debug("Re-using incoming Skb"
-						" as first fragment.\r\n");
+
 			*pOutSkb = skb;
 			pLastSkb = skb;
 			/* adjust other skb pointers */
@@ -2241,7 +2240,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			skb->next = NULL;
 #ifdef CONFIG_DPA
 			if (skb->cb[BPID_INDEX])
-				asf_free_buf_skb(skb->dev, skb);
+				asf_free_buf_skb(dev, skb);
 			else
 #endif
 				ASFSkbFree(skb);
@@ -2255,7 +2254,7 @@ drop:
 		pLastSkb = skb2->next;
 #ifdef CONFIG_DPA
 		       if (skb2->cb[BPID_INDEX])
-				asf_free_buf_skb(skb2->dev, skb2);
+				asf_free_buf_skb(dev, skb2);
 			else
 #endif
 				ASFSkbFree(skb2);
