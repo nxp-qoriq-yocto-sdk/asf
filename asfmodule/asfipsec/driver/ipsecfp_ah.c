@@ -1107,8 +1107,6 @@ void secfp_inAHComplete(struct device *dev,
 	/* Packet is ready to go */
 	/* Assuming ethernet as the receiving device of original packet */
 	if (ucNextProto == SECFP_PROTO_IP) {
-		inneriph = (struct iphdr *)(skb->data);
-		ip_decrease_ttl(inneriph);
 		secfp_inCompleteUpdateIpv4Pkt(skb);
 		skb->protocol = ETH_P_IP;
 
