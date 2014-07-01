@@ -566,8 +566,6 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 	struct asfTmrWheelInstance_s *pWheel;
 	struct asfTmrWheelPerCore_s *pTmrWheel;
 	struct asfTmrRQ_s *pRq;
-	unsigned int ulDiff;
-	bool bInProcess;
 	bool bInInterrupt = in_softirq();
 
 	asf_timer_print("TimerStop: AppId %d InstId %d ptmr 0x%x\n",
@@ -586,19 +584,6 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 
 	pWheel = &(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
 	pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, ptmr->ulCoreId);
-
-	ulDiff = (ptmr->ulBucketIndex >= pTmrWheel->ulCurBucketIndex) ?
-		 (ptmr->ulBucketIndex - pTmrWheel->ulCurBucketIndex) :
-		 (pTmrWheel->ulMaxBuckets - pTmrWheel->ulCurBucketIndex) + ptmr->ulBucketIndex;
-
-	/* Following Check is not required as its creating memory leak issue.
-	While running Garbage collection , Flush or Aging, most of the time
-	this check don't allow the Timer memory to be freed which is no more
-	referenced by any existing pointer. */
-	bInProcess = ptmr->ulState & ASF_TMR_Q_IN_PROCESS;
-
-	if ((ulDiff < ASF_TMR_NEXT_FEW_BUCKETS) || (bInProcess))
-		asf_timer_print("Timer to expire soon\n");
 
 	/* Else check if the the bucket belongs to this CPU */
 	if (ptmr->ulCoreId == smp_processor_id()) {

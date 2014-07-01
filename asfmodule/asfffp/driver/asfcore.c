@@ -3628,10 +3628,8 @@ gen_indications:
 				switch (L2blobRefresh) {
 				case ASF_L2BLOB_REFRESH_RET_PKT_STK:
 						goto ret_pkt_to_stk;
-						break;
 				case ASF_L2BLOB_REFRESH_DROP_PKT:
 						goto drop_pkt;
-						break;
 				default:
 						break;
 				}

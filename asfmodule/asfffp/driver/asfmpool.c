@@ -326,6 +326,8 @@ int asfCreatePool(char *name, unsigned int ulNumGlobalPoolEntries,
 		ptr->pHead->pMemory = ptr->pHead->head;
 		ptr->pHead->ulNumEntries = ulNumGlobalPoolEntries;
 		ptr->pHead->ulDataSize = ulDataSize;
+		ptr->pHead->ulDataElemSize = sizeof(struct asf_poolLinkNode_s)
+			+ ulDataSize;
 		for (jj = 0,
 		     pLinkNode = (struct asf_poolLinkNode_s *)  (ptr->pHead->head) ;
 		    jj < (ulNumGlobalPoolEntries-2); jj++) {
