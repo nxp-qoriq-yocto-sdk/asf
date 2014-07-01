@@ -558,6 +558,8 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 		pSAData->ulSPI = ulSPI;
 		pSAData->ucChangeType = 2;
 		pSAData->u.ulMtu  = skb->dev->mtu;
+		ASFCTRL_DBG("MTU is %d", skb->dev->mtu);
+
 		asfctrl_skb_mark_dummy(skb);
 		asf_ip_send(skb);
 	}
@@ -710,12 +712,12 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 
 	pSAData = (ASFIPSecRuntimeModOutSAArgs_t *)((ASF_uchar8_t *)pData + 4);
 
-	if (pSAData->ucChangeType == 2) {
+	if (pSAData->ucChangeType == ASFIPSEC_UPDATE_MTU) {
 		ASFIPSecRuntime(ulVSGId, ASF_IPSEC_RUNTIME_MOD_OUTSA, pSAData,
 			sizeof(ASFIPSecRuntimeModOutSAArgs_t), NULL, 0);
 	}
 
-	pSAData->ucChangeType = 3;
+	pSAData->ucChangeType = ASFIPSEC_UPDATE_L2BLOB;
 	pSAData->u.l2blob.ulDeviceID = ulDeviceID;
 	pSAData->u.l2blob.ulL2BlobLen =  hh_len;
 	memcpy(&pSAData->u.l2blob.l2blob, skb->data,

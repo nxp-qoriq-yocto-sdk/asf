@@ -487,6 +487,20 @@ static int asfctrl_dev_notifier_fn(struct notifier_block *this,
 			asfctrl_create_dev_map(dev, 1);
 		break;
 #endif
+	case NETDEV_CHANGEMTU:
+#ifdef CONFIG_PPPOE
+		if ((dev->type == ARPHRD_ETHER) || (dev->type == ARPHRD_PPP)) {
+#else
+		if (dev->type == ARPHRD_ETHER) {
+#endif
+			if (asfctrl_dev_get_cii(dev) < 0) {
+				ASFCTRL_WARN("Not offloaded device %s",
+					dev->name);
+				return NOTIFY_BAD;
+			}
+			asfctrl_invalidate_l2blob();
+		}
+		break;
 	}
 	ASFCTRL_FUNC_EXIT;
 	return NOTIFY_DONE;
