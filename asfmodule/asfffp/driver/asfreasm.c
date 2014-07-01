@@ -84,7 +84,7 @@ unsigned long asf_ipv6_reasm_hash_list_size = ASF_REASM_MAX_HASH_LIST_SIZE;
 #define ASF_REASM_TIMER_POOL_ID_INDEX 2
 #define ASF_REASM_IP_HDR_LEN 20
 
-#define ASF_REASM_TIME_INTERVAL	10 /* 10 seconds */
+#define ASF_REASM_TIME_INTERVAL	1 /* 1 seconds interval*/
 #define ASF_REASM_NUM_RQ_ENTRIES 256  /* 256 per core */
 
 #define ASF_REASM_IP_MAX_PKT_LEN 65535
@@ -434,7 +434,58 @@ int asfReasmInit(void)
 
 void asfReasmDeInit(void)
 {
+	struct asf_reasmHashList_s *ptr;
+	struct asf_reasmCbPtrArray_s *ptr1;
+	int ii, numVSG;
+
 	asfTimerWheelDeInit(ASF_REASM_TMR_ID, 0);
+
+	if (asf_ReasmCbHashList) {
+		for_each_possible_cpu(ii)
+		{
+			ptr = asfPerCpuPtr(asf_ReasmCbHashList , ii);
+#ifndef ASF_REASM_USE_L2SRAM
+			kfree(ptr->vaddr);
+#endif
+		}
+	}
+	if (asf_ReasmCbPtrIndexArray) {
+		for_each_possible_cpu(ii)
+		{
+			ptr1 = asfPerCpuPtr(asf_ReasmCbPtrIndexArray, ii);
+			for (numVSG = 0; numVSG < asf_max_vsgs; numVSG++)
+				kfree(ptr1->ptrArrayInfo[numVSG].vaddr);
+		}
+	}
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (asf_ipv6_ReasmCbHashList) {
+		for_each_possible_cpu(ii)
+		{
+			ptr = asfPerCpuPtr(asf_ipv6_ReasmCbHashList , ii);
+			kfree(ptr->vaddr);
+		}
+	}
+	if (asf_ipv6_ReasmCbPtrIndexArray) {
+		for_each_possible_cpu(ii)
+		{
+			ptr1 = asfPerCpuPtr(asf_ipv6_ReasmCbPtrIndexArray, ii);
+			for (numVSG = 0; numVSG < asf_max_vsgs; numVSG++)
+				kfree(ptr1->ptrArrayInfo[numVSG].vaddr);
+		}
+	}
+#endif
+
+	if (asf_reasmPools[ASF_REASM_CB_POOL_ID_INDEX] &&
+		asfDestroyPool(asf_reasmPools[ASF_REASM_CB_POOL_ID_INDEX]) != 0)
+		asf_reasm_debug("failed to destroy frag pool\n");
+	if (asf_reasmPools[ASF_REASM_TIMER_POOL_ID_INDEX] &&
+		asfDestroyPool(asf_reasmPools[ASF_REASM_TIMER_POOL_ID_INDEX]) != 0)
+		asf_reasm_debug("failed to destroy frag pool\n");
+	if (asf_reasmPools[ASF_REASM_FRAG_POOL_ID_INDEX] &&
+		asfDestroyPool(asf_reasmPools[ASF_REASM_FRAG_POOL_ID_INDEX]) != 0)
+		asf_reasm_debug("failed to destroy frag pool\n");
+
 	asf_reasm_debug("Not implemented!\n");
 }
 
@@ -865,7 +916,7 @@ static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 	iph = ip_hdr(skb);
 	*pIhl = ihl = iph->ihl * 4;
 
-	if (unlikely((iph->ihl < 5) || (ihl >= skb->len)))
+	if (unlikely((iph->ihl < 5) || (ihl >= iph->tot_len)))
 	{
 		asf_reasm_debug("IP Header length is invalid \r\n");
 		gstats->ulErrIpHdr++;
@@ -889,19 +940,9 @@ static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 		asf_reasm_debug(" Length is invalid\r\n");
 		gstats->ulErrIpHdr++;
 		return 1;
-	}
+	} else
+		skb->len = iph->tot_len;
 
-	if (unlikely((iph->tot_len - ihl) == 0)) {
-		asf_reasm_debug("Invalid data length \r\n");
-		gstats->ulErrIpHdr++;
-		return 1;
-	}
-
-	if (unlikely((iph->tot_len - ihl) > (skb->len  - ihl))) {
-		asf_reasm_debug("Length is invalid \r\n");
-		gstats->ulErrIpHdr++;
-		return 1;
-	}
 
 	*offset = (ip_hdr(skb)->frag_off);
 	*flags = *offset & ~IP_OFFSET;
@@ -1049,6 +1090,15 @@ static inline struct sk_buff  *asfFragHandle(struct asf_reasmCb_s *pCb,
 		} else {
 			pCb->ulTotLen = *pOffset + *pLen;
 		}
+	}
+
+	/*    Avoid accepting any fragments beyond expected total length */
+	else if ((pCb->ulTotLen) && ((*pOffset + *pLen) >= pCb->ulTotLen)) {
+		asf_reasm_debug("Fragment segmap (%d) is beyond permissible"
+			"length (%d)\n", (*pOffset + *pLen), pCb->ulTotLen);
+		ASFSkbFree(skb);
+		gstats->ulErrIpHdr++;
+		return NULL;
 	}
 
 	/* Find the next fragment */
@@ -1211,6 +1261,8 @@ static inline struct sk_buff  *asfFragHandle(struct asf_reasmCb_s *pCb,
 		/* Not required when handling Next Fragment
 		   as it already have updated SegMap*/
 		/* pFrag->ulSegMap += *pLen; */
+		/*  Fix for bad updation of SegMap */
+		pFrag->ulSegMap = pFrag->ulFragOffset + pFrag->ulLen;
 		*frag = pFrag;
 	} else {
 		newFrag = asfGetNode(
@@ -1380,6 +1432,10 @@ unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 		{
 			pCb = ptrIArray_getData(&(asfPerCpuPtr(asf_ReasmCbPtrIndexArray,
 						       smp_processor_id())->ptrArrayInfo[ulVSGId].ptrArray), ulIndex);
+		if (unlikely(!pCb)) {
+				asf_reasm_debug("\n unable to allocate pCb");
+				goto not_found;
+			}
 		}
 
 		asf_reasm_debug("pCb = 0x%x\r\n", pCb);
@@ -1410,6 +1466,7 @@ unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 			return 0;
 		}
 	}
+not_found:
 	return 1;
 }
 
@@ -2132,9 +2189,8 @@ int asfIpv4Fragment(struct sk_buff *skb,
 					iph = ip_hdr(skb2);
 					iph->frag_off = htons((offset >> 3));
 					iph->tot_len = htons(len + ihl);
-					iph->frag_off |= htons(IP_MF);
-					if (bytesLeft == 0 && !flags)
-						iph->frag_off &= htons(~IP_MF);
+					if (bytesLeft > 0 || flags)
+						iph->frag_off |= htons(IP_MF);
 
 					ip_send_check(iph);
 					skb2->ip_summed =
@@ -2145,13 +2201,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				} else {
 					asf_reasm_debug("Skb allocation"
 						" failed in fragmenation\r\n");
-					skb2 = skb;
-					while (skb2) {
-						pLastSkb = skb2->next;
-						ASFSkbFree(skb2);
-						skb2 = pLastSkb;
-					}
-					return 1;
+					goto drop;
 				}
 			}
 #ifdef CONFIG_DPA
@@ -2167,6 +2217,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 					dev->needed_headroom);
 			skb2->protocol = ETH_P_IP;
 #endif
+			skb2->protocol = skb->protocol;
 			skb_reset_network_header(skb2);
 			skb2->transport_header =
 				skb2->network_header + ihl;
