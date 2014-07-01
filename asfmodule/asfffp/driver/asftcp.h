@@ -152,8 +152,6 @@ static inline void asfTcpUpdateState(
 				    unsigned long   data_len)
 {
 	unsigned short usWindow;
-	ulOrgSeqNum = ntohl(ulOrgSeqNum);
-	ulOrgAckNum = ntohl(ulOrgAckNum);
 
 	usWindow = ntohs(tcph->window);
 	if (!asfTcpSeqGt(flow->tcpState.ulHighSeqNum, (ulOrgSeqNum + data_len))) {
