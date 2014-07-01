@@ -106,6 +106,11 @@ endif
 ifeq ($(CONFIG_DPA), y)
 	EXTRA_CFLAGS += -DASF_QMAN_IPSEC
 endif
+
+ifeq ($(ARCH), arm)
+EXTRA_CFLAGS += -DASF_ARM
+endif
+
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/net/bridge
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/drivers/net/ethernet/freescale
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/net

@@ -43,6 +43,18 @@
 #define PERR_DUP_FLOW_PUSH     9
 #define MAX_PERIODIC_ERRS      10
 
+#ifdef ASF_ARM
+#define ASF_NTOHS ntohs
+#define ASF_NTOHL ntohl
+#define ASF_HTONS htons
+#define ASF_HTONL htonl
+#else
+#define ASF_NTOHS
+#define ASF_NTOHL
+#define ASF_HTONS
+#define ASF_HTONL
+#endif
+
 extern char *periodic_errmsg[];
 
 #define asf_err(fmt, arg...)  \
