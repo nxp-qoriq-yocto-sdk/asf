@@ -21,7 +21,8 @@ asf-y := asfproc.o \
 	    asftmr.o \
 	    asftcp.o \
 	    asfreasm.o \
-	    asfcore.o
+	    asfcore.o \
+	    gplcode.o
 
 ifeq ($(CONFIG_ASF_IPV6), y)
 asf-y += asfipv6core.o
