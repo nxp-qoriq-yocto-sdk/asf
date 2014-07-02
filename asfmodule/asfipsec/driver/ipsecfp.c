@@ -767,7 +767,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 		unsigned int **pOuterIpHdr)
 {
 	struct iphdr *iph, *org_iphdr;
-	int ii;
+	int ii, jj;
 	unsigned short usPadLen, usLastByte, usNxtProto;
 	unsigned short orig_pktlen;
 	unsigned int ulLoSeqNum, ulHiSeqNum;
@@ -820,14 +820,16 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 		pad length, if pad length is non-zero, write block
 		size worth of words i.e. either 8/4 or 16/4 starting at tail
 		*/
-		if (skb_shinfo(skb1)->nr_frags) {
-			for (ii = 0;
-				ii < (pSA->SAParams.ulBlockSize >> 2); ii++)
+		if (skb_shinfo(skb1)->nr_frags)
+			for (ii = 0, jj = 0;
+				ii < usPadlen; ii += 4, jj++)
 				*(unsigned int *)&(charp[frag->size + ii])
-								= pad_words[ii];
-		} else
-			for (ii = 0; ii < (pSA->SAParams.ulBlockSize >> 2); ii++)
-				*(unsigned int *) &(pTailSkb->data[pTailSkb->len+ii]) = pad_words[ii];
+								= pad_words[jj];
+		else
+			for (ii = 0, jj = 0;
+				ii < usPadLen; ii += 4, jj++)
+			*(unsigned int *) &(pTailSkb->data[pTailSkb->len+ii])
+								= pad_words[jj];
 	} else {
 		usPadLen = 0;
 	}
