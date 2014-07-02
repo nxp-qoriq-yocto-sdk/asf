@@ -748,29 +748,38 @@ static inline void ffp_flow_free(ffp_flow_t *flow)
 	gstats->ulFlowFrees++;
 }
 
-static inline void __asf_ffp_flow_insert(ffp_flow_t *flow, ffp_bucket_t *bkt)
-{
-	ffp_flow_t *head, *temp;
-
-	head = (ffp_flow_t *) bkt;
-	temp = flow->pNext = head->pNext;
-	flow->pPrev = head;
-	rcu_assign_pointer(head->pNext, flow);
-	temp->pPrev = flow;
-}
-
-
-static inline void asf_ffp_flow_insert(ffp_flow_t *flow, ffp_bucket_t *bkt)
+static inline int __asf_ffp_flow_insert(ffp_flow_t *flow, ffp_bucket_t *bkt,
+		bool bIPv6)
 {
 	ffp_flow_t *head, *temp;
 
 	head = (ffp_flow_t *) bkt;
 	spin_lock_bh(&bkt->lock);
+	/* make sure that this flow does not exist already */
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6)
+		temp = asf_ffp_ipv6_flow_lookup_in_bkt(&flow->ipv6SrcIp,
+			&flow->ipv6DestIp, flow->ulPorts, flow->ucProtocol,
+			flow->ulVsgId, flow->ulZoneId, head);
+	else
+#endif /*ASF_IPV6_FP_SUPPORT*/
+		temp = asf_ffp_flow_lookup_in_bkt(flow->ulSrcIp, flow->ulDestIp,
+			flow->ulPorts, flow->ucProtocol,
+			flow->ulVsgId, flow->ulZoneId, head);
+	if (temp) {
+		spin_unlock_bh(&bkt->lock);
+		asf_err("\n Flow was existing earlier");
+		return ASF_FAILURE;
+	}
+
+
+
 	temp = flow->pNext = head->pNext;
 	flow->pPrev = head;
 	rcu_assign_pointer(head->pNext, flow);
 	temp->pPrev = flow;
 	spin_unlock_bh(&bkt->lock);
+	return ASF_SUCCESS;
 }
 
 static void ffp_flow_free_rcu(struct rcu_head *rcu)
@@ -4811,7 +4820,8 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 		else
 #endif
 			bkt = asf_ffp_bucket_by_hash(hash1);
-		asf_ffp_flow_insert(flow1, bkt);
+		if (__asf_ffp_flow_insert(flow1, bkt, bIPv6_flow1))
+			goto down2;
 		if (pHashVal)
 			*pHashVal = hash1;
 
@@ -4822,8 +4832,8 @@ static int ffp_cmd_create_flows(ASF_uint32_t  ulVsgId, ASFFFPCreateFlowsInfo_t *
 #endif
 			bkt = asf_ffp_bucket_by_hash(hash2);
 
-		asf_ffp_flow_insert(flow2, bkt);
-
+		if (__asf_ffp_flow_insert(flow2, bkt, bIPv6_flow2))
+			goto down3;
 		if (pFlow1)
 			*pFlow1 = flow1;
 		if (pFlow2)
@@ -4877,11 +4887,22 @@ down1:
 	if (pFlow2)
 		*pFlow2 = NULL;
 	return ASFFFP_RESPONSE_FAILURE;
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-down2:
+down3:
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv6_flow1 == true)
+		bkt = asf_ffp_ipv6_bucket_by_hash(hash1);
+	else
 #endif
+		bkt = asf_ffp_bucket_by_hash(hash1);
+	spin_lock_bh(&bkt->lock);
+	__asf_ffp_flow_remove(flow1, bkt);
+	flow1->bDeleted = 1;
+	spin_unlock_bh(&bkt->lock);
+down2:
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	XGSTATS_INC(CreateFlowsCmdErrDown2);
 	asf_debug("timer allocation failed!\n");
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	if (flow1->pL2blobTmr)
 		asfTimerStop(ASF_FFP_BLOB_TMR_ID, 0, flow1->pL2blobTmr);
 	if (flow1->pInacRefreshTmr)
@@ -4901,7 +4922,7 @@ down2:
 		ptrIArray_delete(&ffp_ipv6_ptrary, index2, ffp_ipv6_flow_free_rcu);
 	else
 #endif
-		ptrIArray_delete(&ffp_ptrary, index1, ffp_flow_free_rcu);
+		ptrIArray_delete(&ffp_ptrary, index2, ffp_flow_free_rcu);
 	return ASFFFP_RESPONSE_FAILURE;
 }
 

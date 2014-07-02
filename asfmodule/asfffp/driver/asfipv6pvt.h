@@ -125,6 +125,11 @@ ffp_flow_t *asf_ffp_ipv6_flow_lookup_in_bkt_ex(ASFFFPFlowTuple_t *tuple,
 				unsigned long ulZoneId,
 				ffp_flow_t *pHead);
 
+ffp_flow_t *asf_ffp_ipv6_flow_lookup_in_bkt(
+				ASF_IPv6Addr_t *sip, ASF_IPv6Addr_t *dip,
+				unsigned long ports, unsigned char protocol,
+				unsigned long vsg, unsigned long szone,
+				ffp_flow_t *pHead);
 #ifdef CONFIG_DPA
 ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			ASFNetDevEntry_t *anDev,

@@ -96,10 +96,10 @@ void ffp_ipv6_flow_free(ffp_flow_t *flow)
 }
 
 #define flow_list_for_each(pos, head) \
-	for (pos = (head)->pNext; prefetch(pos->pNext), pos != (head); \
-					pos = pos->pNext)
+for (pos = (head)->pNext; prefetch(pos->pNext), pos != (head); \
+			pos = pos->pNext)
 
-static inline ffp_flow_t *asf_ffp_ipv6_flow_lookup_in_bkt(
+inline ffp_flow_t *asf_ffp_ipv6_flow_lookup_in_bkt(
 				ASF_IPv6Addr_t *sip, ASF_IPv6Addr_t *dip,
 				unsigned long ports, unsigned char protocol,
 				unsigned long vsg, unsigned long szone,
