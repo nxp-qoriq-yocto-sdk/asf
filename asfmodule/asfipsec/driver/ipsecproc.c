@@ -137,6 +137,7 @@ static struct proc_dir_entry *secfp_dir;
 #define SECFP_PROC_IN_SPD		"in_spd"
 #define SECFP_PROC_OUT_SA		"out_sa"
 #define SECFP_PROC_IN_SA		"in_sa"
+#define SECFP_PROC_SA_LIST		"sa_list"
 
 #define GSTATS_SUM(a) (total.ul##a += gstats->ul##a)
 #define GSTATS_TOTAL(a) (unsigned long) total.ul##a
@@ -613,6 +614,139 @@ static int display_secfp_proc_in_sa(struct seq_file *f, void *v)
 		local_bh_enable();
 	return 0;
 }
+static int display_secfp_proc_sa_list(struct seq_file *f, void *v)
+{
+	ASF_uint32_t ulVSGId = 0;
+	ASF_uint32_t ulTunnelId = 0;
+	struct SPDCILinkNode_s *pCINode;
+	SPDOutContainer_t *pOutContainer = NULL;
+	SPDOutSALinkNode_t *pOutSALinkNode;
+	outSA_t *pOutSA = NULL;
+	SPDInContainer_t *pInContainer = NULL;
+	SPDInSPIValLinkNode_t *pSPILinkNode;
+	inSA_t *pInSA = NULL;
+	int out_pol = 0, out_num = 0, in_num = 0;
+	unsigned int ulHashVal, ulSAIndex;
+	int bVal = in_softirq();
+	if (!bVal)
+		local_bh_disable();
+	for (ulTunnelId = 0; ulTunnelId < ulMaxTunnels_g; ulTunnelId++) {
+		seq_printf(f, "\nVSGID= %d TUNNELID= %d, MAGIC NUM = %d",
+			ulVSGId, ulTunnelId,
+			secFP_TunnelIfaces[ulVSGId][ulTunnelId].ulTunnelMagicNumber);
+		if (secFP_TunnelIfaces[ulVSGId][ulTunnelId].bInUse == 0)
+			continue;
+		seq_printf(f, "=========OUT Table==================\n");
+		pCINode = secFP_TunnelIfaces[ulVSGId][ulTunnelId].pSPDCIOutList;
+		for (; pCINode != NULL; pCINode = pCINode->pNext) {
+			pOutContainer = (SPDOutContainer_t *)(ptrIArray_getData(
+						&(secfp_OutDB),
+						pCINode->ulIndex));
+			if (!pOutContainer)
+				continue;
+			out_pol++;
+			for (pOutSALinkNode = pOutContainer->SAHolder.pSAList;
+				pOutSALinkNode != NULL;
+				pOutSALinkNode = pOutSALinkNode->pNext) {
+				pOutSA = (outSA_t *) ptrIArray_getData(
+						&secFP_OutSATable,
+						pOutSALinkNode->ulSAIndex);
+				if (!pOutSA) {
+					seq_printf(f, "\n Pol-ID=%d SAID= %d SA=NULL",
+					pCINode->ulIndex, pOutSALinkNode->ulSAIndex);
+					continue;
+				}
+				if (!pOutSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+					seq_printf(f,
+					"\nPol-ID=%03d SA-ID=%03d CId:%03d SPI:0x%x\t"
+					"src:0x%x,dst:0x%x Auth: %s Ciph: %s L2-blob=%d",
+					pCINode->ulIndex,
+					pOutSALinkNode->ulSAIndex,
+					pOutSA->SAParams.ulCId,
+					pOutSA->SAParams.ulSPI,
+					pOutSA->SAParams.tunnelInfo.addr.iphv4.saddr,
+					pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr,
+					algo_getname(1, pOutSA->SAParams.ucAuthAlgo),
+					algo_getname(0, pOutSA->SAParams.ucCipherAlgo),
+					pOutSA->ulL2BlobLen);
+				else
+					seq_printf(f,
+					"\nPol-ID=%03d SA-ID=%03d CId:%03d SPI:0x%x\t"
+					"src:%x:%x:%x:%x, dst:%x:%x:%x:%x"
+					"Auth: %s Ciph: %s L2-blob=%d",
+					pCINode->ulIndex,
+					pOutSALinkNode->ulSAIndex,
+					pOutSA->SAParams.ulCId,
+					pOutSA->SAParams.ulSPI,
+					pOutSA->SAParams.tunnelInfo.addr.iphv6.saddr[0],
+					pOutSA->SAParams.tunnelInfo.addr.iphv6.saddr[1],
+					pOutSA->SAParams.tunnelInfo.addr.iphv6.saddr[2],
+					pOutSA->SAParams.tunnelInfo.addr.iphv6.saddr[3],
+					pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr[0],
+					pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr[1],
+					pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr[2],
+					pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr[3],
+					algo_getname(1, pOutSA->SAParams.ucAuthAlgo),
+					algo_getname(0, pOutSA->SAParams.ucCipherAlgo),
+					pOutSA->ulL2BlobLen);
+				out_num++;
+			}
+		}
+		seq_printf(f, "=========IN Table==================\n");
+		pCINode = secFP_TunnelIfaces[ulVSGId][ulTunnelId].pSPDCIInList;
+		for (; pCINode != NULL; pCINode = pCINode->pNext) {
+			pInContainer = (SPDInContainer_t *)(ptrIArray_getData(
+						&(secfp_InDB),
+						pCINode->ulIndex));
+			if (!pInContainer)
+				continue;
+			for (pSPILinkNode = pInContainer->pSPIValList,
+				ulSAIndex = 0;
+				pSPILinkNode != NULL;
+				pSPILinkNode = pSPILinkNode->pNext, ulSAIndex++) {
+				ulHashVal = secfp_compute_hash(pSPILinkNode->ulSPIVal);
+				for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
+					pInSA != NULL; pInSA = pInSA->pNext) {
+					if (!pInSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+						seq_printf(f,
+						"\nPol-ID=%03d CId:%03d SPI:0x%x\t"
+						"src:0x%x,dst:0x%x Auth:%s Ciph: %s",
+						pInSA->ulSPDInContainerIndex,
+						pInSA->SAParams.ulCId,
+						pSPILinkNode->ulSPIVal,
+						pInSA->SAParams.tunnelInfo.addr.iphv4.saddr,
+						pInSA->SAParams.tunnelInfo.addr.iphv4.daddr,
+						algo_getname(1, pInSA->SAParams.ucAuthAlgo),
+						algo_getname(0, pInSA->SAParams.ucCipherAlgo));
+					else
+						seq_printf(f,
+						"\nPol-ID=%03d CId:%03d SPI:0x%x\t"
+						"src:%x:%x:%x:%x, dst:%x:%x:%x:%x"
+						"Auth: %s Ciph: %s",
+						pInSA->ulSPDInContainerIndex,
+						pInSA->SAParams.ulCId,
+						pSPILinkNode->ulSPIVal,
+						pInSA->SAParams.tunnelInfo.addr.iphv6.saddr[0],
+						pInSA->SAParams.tunnelInfo.addr.iphv6.saddr[1],
+						pInSA->SAParams.tunnelInfo.addr.iphv6.saddr[2],
+						pInSA->SAParams.tunnelInfo.addr.iphv6.saddr[3],
+						pInSA->SAParams.tunnelInfo.addr.iphv6.daddr[0],
+						pInSA->SAParams.tunnelInfo.addr.iphv6.daddr[1],
+						pInSA->SAParams.tunnelInfo.addr.iphv6.daddr[2],
+						pInSA->SAParams.tunnelInfo.addr.iphv6.daddr[3],
+						algo_getname(1, pInSA->SAParams.ucAuthAlgo),
+						algo_getname(0, pInSA->SAParams.ucCipherAlgo));
+					in_num++;
+				}
+			}
+		}
+	}
+	if (!bVal)
+		local_bh_enable();
+	seq_printf(f, "\n Total IPSEC OUT Policy =%d OUTSA =%d, INSA = %d\n",
+		out_pol, out_num, in_num);
+	return 0;
+}
 static void *int_seq_start(struct seq_file *f, loff_t *pos)
 {
 		return (*pos < 1) ? pos : NULL;
@@ -672,6 +806,10 @@ static const struct seq_operations int_seq_ops[] = {
 		.show  = display_secfp_proc_in_sa
 	},
 	{
+		.start = int_seq_start,
+		.next  = int_seq_next,
+		.stop  = int_seq_stop,
+		.show  = display_secfp_proc_sa_list
 	}
 };
 
@@ -800,6 +938,9 @@ int secfp_register_proc(void)
 	proc_create(SECFP_PROC_IN_SA,
 					0444, secfp_dir,
 					&proc_asfipsec_stats_operations[6]);
+	proc_create(SECFP_PROC_SA_LIST,
+					0444, secfp_dir,
+					&proc_asfipsec_stats_operations[7]);
 	return 0;
 }
 
@@ -816,6 +957,7 @@ int secfp_unregister_proc(void)
 	remove_proc_entry(SECFP_PROC_IN_SPD, secfp_dir);
 	remove_proc_entry(SECFP_PROC_OUT_SA, secfp_dir);
 	remove_proc_entry(SECFP_PROC_IN_SA, secfp_dir);
+	remove_proc_entry(SECFP_PROC_SA_LIST, secfp_dir);
 	remove_proc_entry("asfipsec", NULL);
 
 	return 0;
