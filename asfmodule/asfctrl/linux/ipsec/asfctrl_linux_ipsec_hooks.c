@@ -1802,7 +1802,7 @@ void asfctrl_xfrm_dump_state(struct xfrm_state *xfrm)
 				xfrm->aalg->alg_name, xfrm->aalg->alg_key_len);
 #ifdef ASFCTRL_IPSEC_DEBUG2
 		for (i = 0; i < xfrm->aalg->alg_key_len/8; i++)
-			printk(KERN_INFO "%x", xfrm->aalg->alg_key[i]);
+			pr_info("%x", xfrm->aalg->alg_key[i]);
 #endif
 	}
 
@@ -1811,7 +1811,7 @@ void asfctrl_xfrm_dump_state(struct xfrm_state *xfrm)
 				xfrm->ealg->alg_name, xfrm->ealg->alg_key_len);
 #ifdef ASFCTRL_IPSEC_DEBUG2
 		for (i = 0; i < xfrm->ealg->alg_key_len/8; i++)
-			printk(KERN_INFO "%x", xfrm->ealg->alg_key[i]);
+			pr_info("%x", xfrm->ealg->alg_key[i]);
 #endif
 	}
 

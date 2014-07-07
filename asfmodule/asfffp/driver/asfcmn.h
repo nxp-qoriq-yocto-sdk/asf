@@ -46,26 +46,26 @@
 extern char *periodic_errmsg[];
 
 #define asf_err(fmt, arg...)  \
-	printk(KERN_ERR"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
+	pr_err("[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
 	__LINE__, __func__, ##arg)
 
 #define asf_dperr(fmt, arg...) do { \
 	if (net_ratelimit()) \
-		printk(KERN_ERR"[CPU %d ln %d fn %s] - " fmt,\
+		pr_err("[CPU %d ln %d fn %s] - " fmt,\
 		smp_processor_id(), __LINE__, __func__, ##arg); \
 	} while (0)
 
 #ifdef ASF_DEBUG
 #define asf_warn(fmt, arg...)  \
-	printk(KERN_WARNING"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
+	pr_warning("[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
 	__LINE__, __func__, ##arg)
 
 #define asf_print(fmt, arg...) \
-	printk(KERN_INFO"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
+	pr_info("[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
 	__LINE__, __func__, ##arg)
 
 #define asf_debug(fmt, arg...)  \
-	printk(KERN_INFO"[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
+	pr_info("[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
 	__LINE__, __func__, ##arg)
 #define asf_trace	asf_debug(" trace\n")
 #define asf_fentry	asf_debug(" ENTRY\n")
@@ -111,7 +111,7 @@ static inline void hexdump(const unsigned char *buf, unsigned short len)
 			str[l++] = isprint(buf[ofs + i]) ? buf[ofs + i] : '.';
 
 		str[l] = '\0';
-		printk(KERN_INFO "%s\n", str);
+		pr_info("%s\n", str);
 	}
 }
 

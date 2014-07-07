@@ -68,7 +68,7 @@ static ssize_t asfctrl_vsg_mode_show(struct kobject *kobj,
 		ret = ASFGetVSGFunctions(vsg, &funcs);
 		if (ASF_SUCCESS != ret)
 			continue;
-		printk(KERN_INFO"vsg=%d, mode=%d, funcs=%d\n",
+		pr_info("vsg=%d, mode=%d, funcs=%d\n",
 			vsg, mode , funcs.bIPsec);
 	}
 	return 1;

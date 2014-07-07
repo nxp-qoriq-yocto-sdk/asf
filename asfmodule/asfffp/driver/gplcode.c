@@ -32,7 +32,7 @@ void asf_ip_options_fragment(struct sk_buff *skb)
 	int  optlen;
 
 	if (l > 40) {
-		printk(KERN_INFO "INVALID OPT-LEN (%d).. SKB->CB CORRUPTED!!!"
+		pr_info("INVALID OPT-LEN (%d).. SKB->CB CORRUPTED!!!"
 				" MIGHT OVERWRITE MEMORY ... RETURN\n", l);
 		return;
 	}

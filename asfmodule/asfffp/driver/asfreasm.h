@@ -25,7 +25,7 @@ void asfReasmDeInit(void);
 
 #ifdef ASF_REASM_DEBUG
 #define asf_reasm_debug(fmt, args...)\
-	printk(KERN_INFO"[CPU %d line %d %s] " fmt, smp_processor_id(),\
+	pr_info("[CPU %d line %d %s] " fmt, smp_processor_id(),\
 	__LINE__, __func__, ##args)
 #else
 #define asf_reasm_debug(fmt, args...)

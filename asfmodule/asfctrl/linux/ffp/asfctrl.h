@@ -216,7 +216,9 @@ extern int ipv6_chk_addr(struct net *net, struct in6_addr *addr,
 			struct net_device *dev, int strict);
 extern void asfctrl_linux_unregister_ffp(void);
 extern void asfctrl_linux_register_ffp(void);
-#define PRINT_IPV6(a) printk(KERN_INFO"%x:%x:%x:%x:%x:%x:%x:%x\n", a.s6_addr16[0], a.s6_addr16[1], a.s6_addr16[2], a.s6_addr16[3], a.s6_addr16[4], a.s6_addr16[5], a.s6_addr16[6], a.s6_addr16[7])
+#define PRINT_IPV6(a) pr_info("%x:%x:%x:%x:%x:%x:%x:%x\n", a.s6_addr16[0], \
+	a.s6_addr16[1], a.s6_addr16[2], a.s6_addr16[3], a.s6_addr16[4],\
+	a.s6_addr16[5], a.s6_addr16[6], a.s6_addr16[7])
 
 /* ********** Debugging Stuff *****************/
 
@@ -238,42 +240,40 @@ extern void asfctrl_linux_register_ffp(void);
 #endif
 
 #define ASFCTRL_FATAL(fmt, arg...) \
-	printk(KERN_ERR"\n %s-%d:FATAL:" fmt, __func__, __LINE__, ##arg)
+	pr_err("\n %s-%d:FATAL:" fmt, __func__, __LINE__, ##arg)
 
 #if (ASFCTRL_DEBUG_LEVEL >= ERROR)
 	#define ASFCTRL_ERR(fmt, arg...) \
-	printk(KERN_ERR"\n %s-%d:ERROR:" fmt, __func__, __LINE__, ##arg)
+	pr_err("\n %s-%d:ERROR:" fmt, __func__, __LINE__, ##arg)
 #else
 	#define ASFCTRL_ERR(fmt, arg...)
 #endif
 
 #if (ASFCTRL_DEBUG_LEVEL >= WARNING)
 	#define ASFCTRL_WARN(fmt, arg...) \
-	printk(KERN_WARNING"\n %s-%d:WARNING:" fmt, \
-	__func__, __LINE__, ##arg)
+	pr_warning("\n %s-%d:WARNING:" fmt, __func__, __LINE__, ##arg)
 #else
 	#define ASFCTRL_WARN(fmt, arg...)
 #endif
 
 #if (ASFCTRL_DEBUG_LEVEL >= INFO)
 	#define ASFCTRL_INFO(fmt, arg...) \
-	printk(KERN_INFO"\n %s-%d:INFO:" fmt, __func__, __LINE__, ##arg)
+	pr_info("\n %s-%d:INFO:" fmt, __func__, __LINE__, ##arg)
 #else
 	#define ASFCTRL_INFO(fmt, arg...)
 #endif
 
 #if (ASFCTRL_DEBUG_LEVEL >= TRACE)
 	#define ASFCTRL_TRACE(fmt, arg...) \
-	printk(KERN_INFO"\n%s-%d:DBG:"fmt, \
-		__func__, __LINE__, ##arg)
+	pr_info("\n%s-%d:DBG:"fmt, __func__, __LINE__, ##arg)
 	#define ASFCTRL_FUNC_ENTRY \
-	printk(KERN_INFO"%s-ENTRY", __func__)
+	pr_info("%s-ENTRY", __func__)
 
 	#define ASFCTRL_FUNC_EXIT \
-	printk(KERN_INFO"%s-EXIT", __func__)
+	pr_info("%s-EXIT", __func__)
 
 	#define ASFCTRL_FUNC_TRACE \
-	printk(KERN_INFO"%s-%d-TRACE", __func__, __LINE__)
+	pr_info("%s-%d-TRACE", __func__, __LINE__)
 
 #else
 	#define ASFCTRL_TRACE(fmt, arg...)
@@ -284,8 +284,7 @@ extern void asfctrl_linux_register_ffp(void);
 
 #if (ASFCTRL_DEBUG_LEVEL >= LOGS)
 	#define ASFCTRL_DBG(fmt, arg...) \
-	printk(KERN_INFO"\n%s-%d:DBGL2:"fmt, \
-	__func__, __LINE__, ##arg)
+	pr_info("\n%s-%d:DBGL2:"fmt, __func__, __LINE__, ##arg)
 
 #else
 	#define ASFCTRL_DBG(fmt, arg...)

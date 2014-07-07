@@ -3463,7 +3463,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 					flow_stats->ulOutPkts += ulFrags;
 #endif
 				} else {
-					printk("asfcore.c:%d - asfIpv4Fragment returned NULL!!\n", __LINE__);
+					asf_warn(" asfIpv4Fragment returned NULL!!\n");
 				}
 				goto gen_indications;
 #else /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */

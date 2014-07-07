@@ -27,7 +27,7 @@
 
 #ifdef ASF_MPOOL_DEBUG
 #define asf_mpool_debug(fmt, args...) \
-	printk(KERN_INFO"[CPU %d] asfmpool.c:%d %s] " fmt, smp_processor_id(), \
+	pr_info("[CPU %d] asfmpool.c:%d %s] " fmt, smp_processor_id(), \
 		__LINE__, __func__, ##args)
 #else
 #define asf_mpool_debug(fmt, args...)
@@ -511,16 +511,16 @@ void dump_mpool_counters(void)
 {
 	int ii, jj, out;
 	struct asf_pool_s *pool, *globalPool;
-	printk(KERN_INFO"name    id    cpuwise alloc/free            "
+	pr_info("name    id    cpuwise alloc/free            "
 		"global alloc/free   outstanding\n");
 	for (ii = 0; ii < ASF_MAX_POOLS; ii++) {
 		pool = &(per_cpu_ptr(pools, 0)->pHead[ii]);
 		if (pool->bInUse) {
-			printk("%.10s %d:", pool->name, ii);
+			pr_info("%.10s %d:", pool->name, ii);
 			out = 0;
 			for_each_possible_cpu(jj) {
 			pool = &(per_cpu_ptr(pools, jj)->pHead[ii]);
-				printk(" %d:%d/%d,", jj, pool->ulNumAllocs,
+				pr_info(" %d:%d/%d,", jj, pool->ulNumAllocs,
 					pool->ulNumFrees);
 				out += (pool->ulNumAllocs
 					- pool->ulNumFrees);
@@ -528,7 +528,7 @@ void dump_mpool_counters(void)
 
 		globalPool = global_pools[ii].pHead;
 			out += (globalPool->ulNumAllocs - globalPool->ulNumFrees);
-			printk("  %d/%d, %d\n", globalPool->ulNumAllocs,
+			pr_info("  %d/%d, %d\n", globalPool->ulNumAllocs,
 				globalPool->ulNumFrees, out);
 	}
 }

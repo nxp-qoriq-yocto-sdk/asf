@@ -132,13 +132,13 @@ unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 			LDST_CLASS_2_CCB | FIFOST_TYPE_SPLIT_KEK);
 
 #ifdef ASFIPSEC_DEBUG_FRAME
-	printk(KERN_ERR "\nDMA_ADDR_IN: %x authkeylen %d flags %x",
+	pr_err("\nDMA_ADDR_IN: %x authkeylen %d flags %x",
 			dma_addr_in, authkeylen, CLASS_2 | KEY_DEST_CLASS_REG);
-	printk(KERN_ERR "\nCTX ALG OP %x",
+	pr_err("\nCTX ALG OP %x",
 				ctx->alg_op | OP_ALG_DECRYPT | OP_ALG_AS_INIT);
-	printk(KERN_ERR "\nDMA_ADDR_OUT: %x flags %x", dma_addr_out,
+	pr_err("\nDMA_ADDR_OUT: %x flags %x", dma_addr_out,
 				LDST_CLASS_2_CCB | FIFOST_TYPE_SPLIT_KEK);
-	printk(KERN_ERR "\nsplit_key_len %d split_key_pad_len %d",
+	pr_err("\nsplit_key_len %d split_key_pad_len %d",
 				ctx->split_key_len, ctx->split_key_pad_len);
 	print_hex_dump(KERN_ERR, "ctx.key@"xstr(__LINE__)": ",
 			DUMP_PREFIX_ADDRESS, 16, 4, key_in, authkeylen, 1);
@@ -411,7 +411,7 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	}
 
 #ifdef ASFIPSEC_DEBUG_FRAME
-	printk(KERN_ERR "\n");
+	pr_err("\n");
 	print_hex_dump(KERN_ERR, "shrdesc@"xstr(__LINE__)": ",
 			DUMP_PREFIX_ADDRESS, 16, 4, sh_desc,
 			desc_bytes(sh_desc), 1);
@@ -689,7 +689,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	}
 
 #ifdef ASFIPSEC_DEBUG_FRAME
-	printk(KERN_ERR "\n");
+	pr_err("\n");
 	print_hex_dump(KERN_ERR, "shrdesc@"xstr(__LINE__)": ",
 			DUMP_PREFIX_ADDRESS, 16, 4, sh_desc,
 			desc_bytes(sh_desc), 1);
@@ -1036,8 +1036,8 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 	append_seq_store(desc, authsize, LDST_CLASS_2_CCB |
 				LDST_SRCDST_BYTE_CONTEXT);
 #ifdef ASFIPSEC_DEBUG_FRAME
-	printk(KERN_INFO "job_desc_len %d\n", desc_len(desc));
-	printk(KERN_ERR "\n Data In Len %d Data Out Len %d Auth Size: %d\n",
+	pr_info("job_desc_len %d\n", desc_len(desc));
+	pr_err("\n Data In Len %d Data Out Len %d Auth Size: %d\n",
 				data_in_len, data_out_len, authsize);
 	print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
 					DUMP_PREFIX_ADDRESS, 16, 4, desc,
@@ -1289,7 +1289,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 			authsize, LDST_CLASS_2_CCB |
 			LDST_SRCDST_BYTE_CONTEXT);
 #ifdef ASFIPSEC_DEBUG_FRAME
-	printk(KERN_INFO "\nData In Len %d Data Out Len %d Auth Size: %d\n",
+	pr_info("\nData In Len %d Data Out Len %d Auth Size: %d\n",
 			len_to_caam + 12, len_to_caam, authsize);
 	print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
 				DUMP_PREFIX_ADDRESS, 16, 4, desc,
@@ -1402,7 +1402,7 @@ static void secfp_prepareInCaamJobDescriptor(struct aead_edesc *edesc,
 	append_seq_fifo_load(desc, authsize, FIFOLD_CLASS_CLASS2 |
 			FIFOLD_TYPE_LAST2 | FIFOLD_TYPE_ICV);
 #ifdef ASFIPSEC_DEBUG_FRAME
-	printk(KERN_ERR "\n Data In Len %d Data Out Len %d Auth Size: %d\n",
+	pr_err("\n Data In Len %d Data Out Len %d Auth Size: %d\n",
 					data_in_len, data_out_len, authsize);
 	print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
 			DUMP_PREFIX_ADDRESS, 16, 4, desc, desc_bytes(desc), 1);

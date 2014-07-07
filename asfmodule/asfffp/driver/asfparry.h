@@ -101,7 +101,7 @@ static inline unsigned int ptrIArray_add(ptrIArry_tbl_t *pTable,  void *pData)
 
 #ifdef ASF_PARRY_DEBUG
 	if (ulIndex >= pTable->nr_entries)
-		printk("ptrIArray overflow : Index =%d, pNode = 0x%x,"
+		pr_info("ptrIArray overflow : Index =%d, pNode = 0x%x,"
 		"pTable->pBase = 0x%x\n", ulIndex, pNode, pTable->pBase);
 #endif
 

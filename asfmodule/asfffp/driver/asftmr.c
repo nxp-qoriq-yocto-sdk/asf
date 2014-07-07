@@ -51,7 +51,9 @@
 #define asf_timer_warn		asf_warn
 
 #ifdef ASF_TIMER_DEBUG
-#define asf_timer_debug(fmt, args...) printk("[CPU %d line %d %s] " fmt, smp_processor_id(), __LINE__, __FUNCTION__, ##args)
+#define asf_timer_debug(fmt, args...) \
+	pr_info("[CPU %d line %d %s] " fmt, smp_processor_id(),\
+	__LINE__, __func__, ##args)
 #else
 #define asf_timer_debug(fmt, args...)
 #endif
