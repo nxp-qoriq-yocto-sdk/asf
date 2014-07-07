@@ -500,6 +500,7 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 	char bHeap;
 	bool bInInterrupt = in_softirq();
 	ASFFFPGlobalStats_t     *gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
+	ACCESS_XGSTATS();
 
 	asf_timer_print("TimerStart AppId %d InstId %d TOut %d carg1 %d carg2 %d\n",
 			ulAppId, ulInstanceId, ulTmOutVal, ulCbArg1, ulCbArg2);
@@ -548,6 +549,7 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 
 	/* Add timer to the bucket  */
 	asfAddTmrToBucket(pTmrWheel, ptmr);
+	XGSTATS_INC(TmrStarts);
 	if (!bInInterrupt)
 		local_bh_enable();
 	return ptmr;
@@ -568,6 +570,7 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 	struct asfTmrWheelPerCore_s *pTmrWheel;
 	struct asfTmrRQ_s *pRq;
 	bool bInInterrupt = in_softirq();
+	ACCESS_XGSTATS();
 
 	asf_timer_print("TimerStop: AppId %d InstId %d ptmr 0x%x\n",
 				 ulAppId, ulInstanceId, ptmr);
@@ -592,8 +595,10 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 		asfRemoveTmrFromBucket(pTmrWheel,  ptmr);
 		asf_timer_print("Removed timer from bucket... Calling asfReleaseNode\n");
 		asfReleaseNode(pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].ulTmrPoolId, ptmr, ptmr->bHeap);
+		XGSTATS_INC(TmrStopSameCore);
 
 	} else {
+		XGSTATS_INC(TmrStopOtherCore);
 		/* Push into the reclaim queue if there is space */
 		/* Find my core's Rq in the pTmrWheel pTmWheel is already the wheel used
 		   by core that owns this timer */
@@ -652,6 +657,9 @@ static void asfTimerProc(unsigned long data)
 	unsigned long old_state, new_state;
 	asfTmr_t *pNextTmr, *ptmr;
 	int ii;
+
+	ACCESS_XGSTATS();
+	XGSTATS_INC(TmrProcCalls);
 
 	asf_timer_debug("Entering CPU %d ulAppId=%d, ulInstanceId =%d data=%d",
 			smp_processor_id(), ulAppId, ulInstanceId, data);
@@ -716,6 +724,7 @@ static void asfTimerProc(unsigned long data)
 				(pTmrWheel->ulCurBucketIndex + ptmr->ulTmOutVal)
 				& (pTmrWheel->ulMaxBuckets - 1);
 			asfAddTmrToBucket(pTmrWheel, ptmr);
+			XGSTATS_INC(TmrProcTimerRestart);
 
 			while (1) {
 				old_state = ptmr->ulState;
@@ -730,6 +739,7 @@ static void asfTimerProc(unsigned long data)
 			asf_timer_print("ptmr 0x%x free: either tmr cbk asked for "\
 				"deletion or deletion occurred on another cpu (stop %d)",
 				ptmr, ptmr->bStopPeriodic);
+			XGSTATS_INC(TmrProcTimerDelete);
 			/* Release to the memory pool */
 			/* invoke call_rcu, it can be released later */
 			if (ptmr->bStopPeriodic)
@@ -741,6 +751,7 @@ static void asfTimerProc(unsigned long data)
 	/* Process the reclamation queue */
 	for_each_possible_cpu(ii)
 	{
+		XGSTATS_INC(TmrProcReclCalls);
 		pRq = per_cpu_ptr(pTmrWheel->pQs, ii);
 
 		while (1) {

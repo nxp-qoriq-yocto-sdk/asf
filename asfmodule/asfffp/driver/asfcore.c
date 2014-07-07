@@ -1740,6 +1740,7 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	ASF_uint16_t		usEthType;
 	struct iphdr		*iph;
 	ASFBuffer_t		abuf;
+	ACCESS_XGSTATS();
 
 	if (0 == asf_enable)
 		return AS_FP_PROCEED;
@@ -1748,7 +1749,6 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
-	ACCESS_XGSTATS();
 
 	gstats->ulInPkts++;
 #endif
@@ -5034,6 +5034,7 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 	ffp_flow_t *flow;
 	unsigned long   hash;
 	bool		bIPv6;
+	ACCESS_XGSTATS();
 
 	bIPv6 = p->tuple.bIPv4OrIPv6 ? true : false;
 

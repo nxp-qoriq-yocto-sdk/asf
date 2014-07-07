@@ -121,6 +121,37 @@ typedef struct ASFFFPXtraGlobalStats_s {
 	unsigned long   ulPktCmdTxAutoDelFlows;
 	unsigned long   ulPktCmdTxAutoFlowCreateErr;
 
+	unsigned long	ulTmrProcCalls;
+	unsigned long	ulTmrProcReclCalls;
+	unsigned long	ulTmrStarts;
+	unsigned long	ulTmrStopExpireSoon;
+	unsigned long	ulTmrStopSameCore;
+	unsigned long	ulTmrStopOtherCore;
+	unsigned long	ulTmrStopOtherCoreReclaimQFull;
+	unsigned long	ulTmrProcTimerRestart;
+	unsigned long	ulTmrProcTimerDelete;
+	unsigned long	ulTmrProcReclaimQTimerDelete;
+	unsigned long	ulDefragCalls;
+	unsigned long	ulDefragCallsTcp;
+	unsigned long	ulDefragCallsUdp;
+	unsigned long	ulDefragCallsOther;
+	unsigned long	ulDefragIntegrityErr;
+	unsigned long	ulDefragTotLenExceedErr;
+	unsigned long	ulDefragCompleted;
+	unsigned long	ulDefragFragHandleErr;
+	unsigned long	ulDefragCbAllocErr;
+	unsigned long	ulDefragCbMatches;
+	unsigned long	ulDefragCbAllocs;
+	unsigned long	ulDefragCbDeletes;
+	unsigned long	ulDefragCbTimerStart;
+	unsigned long	ulDefragCbTimerStartErr;
+	unsigned long	ulDefragCbAllocIndexArrayErr;
+	unsigned long	ulDefragCbTimerCalls;
+	unsigned long	ulDefragCbTimerMagicMatched;
+	unsigned long	ulDefragCbTimerTimeout;
+	unsigned long	ulDefragCbTimerWillRestart;
+	unsigned long	ulDefragCbTimerMagicMatchErr;
+	unsigned long	ulFragHandleCalls;
 
 } ASFFFPXtraGlobalStats_t;
 
