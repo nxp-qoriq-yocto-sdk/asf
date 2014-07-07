@@ -139,6 +139,8 @@ EXPORT_SYMBOL(asf_qos_enable);
 module_param(asf_qos_enable, int, 0644);
 MODULE_PARM_DESC(asf_qos_enable, "Enable or disable ASF QoS Functionality");
 #endif
+int asf_l2blob_grace_timeout = ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT/HZ;
+EXPORT_SYMBOL(asf_l2blob_grace_timeout);
 module_param(asf_enable, bool, 0644);
 MODULE_PARM_DESC(asf_enable, "Enable or disable ASF upon loading");
 module_param(ffp_max_flows, int, 0444);
@@ -160,6 +162,9 @@ MODULE_PARM_DESC(asf_reasm_hash_list_size, "Size of reassembly hash table");
 module_param(asf_reasm_num_cbs, ulong, 0444);
 MODULE_PARM_DESC(asf_reasm_num_cbs,
 				"Maximum number of Reassembly context blocks per VSG");
+module_param(asf_l2blob_grace_timeout, int, 0644);
+MODULE_PARM_DESC(asf_l2blob_grace_timeout,
+	"Periodic interval after which if L2 blob is not refreshed start dropping packets");
 #ifdef ASF_IPV6_FP_SUPPORT
 module_param(asf_ipv6_reasm_num_cbs, ulong, 0444);
 MODULE_PARM_DESC(asf_reasm_num_cbs,
@@ -3204,7 +3209,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 
 				if (time_after(jiffies ,
 					flow->configIdentity.l2blobConfig.ulOldL2blobJiffies +
-					ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT)) {
+					asf_l2blob_grace_timeout*HZ)) {
 					L2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
 					goto gen_indications;
 				}

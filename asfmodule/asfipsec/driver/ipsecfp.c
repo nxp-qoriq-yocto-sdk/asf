@@ -57,6 +57,7 @@ unsigned int pad_words[] = {
 	0x0d0e0f10
 };
 
+extern unsigned int asf_l2blob_grace_timeout;
 #ifdef ASF_TERM_FP_SUPPORT
 extern ASFTERMProcessPkt_f	pTermProcessPkt;
 #endif
@@ -602,7 +603,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		}
 		if (time_after(jiffies,
 			pSA->l2blobConfig.ulOldL2blobJiffies +
-			ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT)) {
+			asf_l2blob_grace_timeout*HZ)) {
 			bl2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
 			goto send_l2blob;
 		}
@@ -1036,7 +1037,7 @@ secfp_finishOffloadOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		}
 		if (time_after(jiffies,
 			pSA->l2blobConfig.ulOldL2blobJiffies +
-			ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT)) {
+			asf_l2blob_grace_timeout*HZ)) {
 			bl2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
 			goto send_l2blob;
 		}
