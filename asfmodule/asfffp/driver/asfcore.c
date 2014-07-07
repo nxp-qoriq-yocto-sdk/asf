@@ -40,6 +40,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
+#include <linux/icmp.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -113,6 +114,7 @@ int asf_reasm_timeout = ASF_REASM_REASM_TIMEOUT; /* in seconds ? */
 int asf_reasm_maxfrags = ASF_REASM_MAX_NUM_FRAGS;
 int asf_reasm_min_fragsize = ASF_REASM_MIN_FRAGSIZE;
 bool asf_tcp_drop_oos;
+int pktdump;
 #ifdef ASF_TERM_FP_SUPPORT
 int asf_default_mode = fwMode | termMode;
 #else
@@ -168,6 +170,8 @@ module_param(ffp_ipv6_hash_buckets, int, 0444);
 MODULE_PARM_DESC(ffp_ipv6_hash_buckets,
 			"Number of hash buckets in FFP IPv6 flow hash table");
 #endif
+module_param(pktdump, int, 0644);
+MODULE_PARM_DESC(pktdump, "Enable ASF Pktdump, If pktdump > 1, packet data will be printed");
 
 #define ASF_DO_INC_CHECKSUM
 
@@ -1076,6 +1080,96 @@ void asf_display_skb_list(struct sk_buff *skb, char *msg)
 #define asf_display_skb_list(skb, msg) do {} while (0)
 #define asf_display_one_frag(skb) do {} while (0)
 #endif
+static void asf_pktdump(struct sk_buff *skb)
+{
+	char *data = skb->data;
+	char pbuf[900];
+	char *p = pbuf;
+	struct iphdr *iph = (struct iphdr *)data;
+	int proto = 0;
+
+	p += sprintf(p, "%s EthType=0x%x", skb->dev->name, skb->protocol);
+
+	if (iph->version == 4) {
+		p += sprintf(p, " V4 %d.%d.%d.%d-%d.%d.%d.%d"
+			"(Len=%d proto=%x frag=%x)",
+			NIPQUAD(iph->saddr), NIPQUAD(iph->daddr),
+			iph->tot_len, iph->protocol, iph->frag_off);
+		proto = iph->protocol;
+		data += sizeof(struct iphdr);
+	} else if (iph->version == 6) {
+		struct ipv6hdr *ip6h = (struct ipv6hdr *)data;
+		p += sprintf(p, " V6 %x:%x:%x:%x:%x:%x:%x:%x-"
+			"%x:%x:%x:%x:%x:%x:%x:%x (Len=%d nexthdr=%d)",
+			PRINT_IPV6_OTH(ip6h->saddr),
+			PRINT_IPV6_OTH(ip6h->daddr),
+			ip6h->payload_len + sizeof(struct ipv6hdr),
+			ip6h->nexthdr);
+		proto = ip6h->nexthdr;
+		data += sizeof(struct ipv6hdr);
+		if (proto == NEXTHDR_IPV6) {
+			p += sprintf(p, " v6-in-v6");
+			data += sizeof(struct ipv6hdr);
+		} else if (proto == IPPROTO_IPIP) {
+			p += sprintf(p, " v4-in-v6");
+			data += sizeof(struct iphdr);
+		}
+	} else {
+		p += sprintf(p, " NON IP pkt");
+		return;
+	}
+	switch (proto) {
+	case IPPROTO_TCP:
+		{
+		struct tcphdr *tcph = (struct tcphdr *)data;
+		p += sprintf(p, " TCP %d:%d", tcph->source, tcph->dest);
+		}
+		break;
+	case IPPROTO_UDP:
+		{
+		struct udphdr *udph = (struct udphdr *)data;
+		p += sprintf(p, " UDP %d:%d", udph->source, udph->dest);
+		}
+		break;
+	case IPPROTO_ESP:
+		{
+		struct ip_esp_hdr *eh = (struct ip_esp_hdr *)data;
+		p += sprintf(p, " ESP spi-0x%x seq=%d", eh->spi, eh->seq_no);
+		}
+		break;
+	case IPPROTO_AH:
+		{
+		struct ip_auth_hdr *ahh = (struct ip_auth_hdr *)data;
+		p += sprintf(p, " AH spi-0x%x seq-%d", ahh->spi, ahh->seq_no);
+		}
+		break;
+	case IPPROTO_ICMP:
+		{
+		struct icmphdr *icmph = (struct icmphdr *)data;
+		p += sprintf(p, " ICMP type=%d", icmph->type);
+		}
+		break;
+	case NEXTHDR_ICMP:
+		{
+		struct icmp6hdr *icmph = (struct icmp6hdr *)data;
+		p += sprintf(p, " ICMP type=%d code=%x", icmph->icmp6_type,
+			icmph->icmp6_code);
+		}
+		break;
+	case NEXTHDR_HOP:
+	case NEXTHDR_ROUTING:
+	case NEXTHDR_FRAGMENT:
+	case NEXTHDR_NONE:
+	case NEXTHDR_DEST:
+		p += sprintf(p, "EXTN HDR=%x", proto);
+		break;
+	}
+	pr_info("%s", pbuf);
+
+	if (pktdump > 1)
+		hexdump((unsigned char *)skb->data, skb->len);
+	return;
+}
 
 #ifdef CONFIG_DPA
 /* do all skb setup that happens in DPAA ethernet driver after
@@ -1864,6 +1958,8 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	skb->mac_len += x_hh_len;
 	skb_set_network_header(skb, x_hh_len);
 
+	if (pktdump)
+		asf_pktdump(skb);
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (usEthType == __constant_htons(ETH_P_IPV6)) {
 		ASF_uint32_t	ret;
