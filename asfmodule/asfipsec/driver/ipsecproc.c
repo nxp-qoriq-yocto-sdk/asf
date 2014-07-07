@@ -396,11 +396,27 @@ static int display_secfp_proc_in_spd(struct seq_file *f,  void *v)
 
 static void print_SAParams(struct seq_file *f,  SAParams_t *SAParams)
 {
-	seq_printf(f, "CId = %d TunnelInfo src = 0x%x,dst = 0x%x SPI=0x%x",
+	if (!SAParams->tunnelInfo.bIPv4OrIPv6) {
+		seq_printf(f, "\nCId = %d TunnelInfo src = 0x%x,"
+			"dst = 0x%x SPI=0x%x\n",
 		SAParams->ulCId,
 		SAParams->tunnelInfo.addr.iphv4.saddr,
 		SAParams->tunnelInfo.addr.iphv4.daddr,
 		SAParams->ulSPI);
+	} else {
+		seq_printf(f, "\nCId = %d TunnelInfo  src = %x:%x:%x:%x,"
+			"dst = %x:%x:%x:%x SPI=0x%x\n",
+			SAParams->ulCId,
+			SAParams->tunnelInfo.addr.iphv6.saddr[0],
+			SAParams->tunnelInfo.addr.iphv6.saddr[1],
+			SAParams->tunnelInfo.addr.iphv6.saddr[2],
+			SAParams->tunnelInfo.addr.iphv6.saddr[3],
+			SAParams->tunnelInfo.addr.iphv6.daddr[0],
+			SAParams->tunnelInfo.addr.iphv6.daddr[1],
+			SAParams->tunnelInfo.addr.iphv6.daddr[2],
+			SAParams->tunnelInfo.addr.iphv6.daddr[3],
+			SAParams->ulSPI);
+	}
 
 	seq_printf(f, "\nProtocol = 0x%x, Dscp = 0x%x,"\
 		"AuthAlgo =%s(%d)(Len=%d), CipherAlgo = %s(%d) (Len=%d) ",

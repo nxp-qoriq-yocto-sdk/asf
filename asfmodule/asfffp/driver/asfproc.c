@@ -277,7 +277,10 @@ static int show_globalstats(struct seq_file *f, void *v)
 #ifdef ASF_FFP_XTRA_STATS
 #define XGSTATS_SUM(a) (total.ul##a += xgstats->ul##a)
 #define XGSTATS_TOTAL(a) total.ul##a
-#define XGSTATS_DISP(a) seq_printf(f, " " #a " = %lu\n", total.ul##a)
+#define XGSTATS_DISP(a) do {\
+	if (total.ul##a)\
+		seq_printf(f, " " #a " = %lu\n", total.ul##a);\
+	} while (0)
 
 static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 {
@@ -558,7 +561,7 @@ static int display_asf_proc_flow_stats(struct seq_file *f, void *v)
 				continue;
 			seq_printf(f, "%d {%u, %u}\t%s\t%u/%u/%s\t"
 			"%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t"
-			"%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%u\n",
+			"%d.%d.%d.%d:%d\t%d.%d.%d.%d:%d\t%lu-%lu\n",
 			i,
 			flow->id.ulArg1, flow->id.ulArg2,
 			flow->odev ? flow->odev->name : "UNK",
@@ -574,7 +577,8 @@ static int display_asf_proc_flow_stats(struct seq_file *f, void *v)
 			ntohs((flow->ulNATPorts&0xffff0000) >> 16),
 			NIPQUAD(flow->ulDestNATIp),
 			ntohs(flow->ulNATPorts&0xffff),
-			flow->stats.ulOutPkts);
+			(unsigned long)flow->stats.ulInPkts,
+			(unsigned long)flow->stats.ulOutPkts);
 			disp_cnt++;
 			if (disp_cnt >= ffp_debug_show_count) {
 				display = 0;

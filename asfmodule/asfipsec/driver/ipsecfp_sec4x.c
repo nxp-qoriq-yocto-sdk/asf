@@ -1037,8 +1037,8 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 				LDST_SRCDST_BYTE_CONTEXT);
 #ifdef ASFIPSEC_DEBUG_FRAME
 	pr_info("job_desc_len %d\n", desc_len(desc));
-	pr_err("\n Data In Len %d Data Out Len %d Auth Size: %d\n",
-				data_in_len, data_out_len, authsize);
+	pr_err("\nData In Len %d Data Out Len %d\n",
+				data_in_len, data_out_len);
 	print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
 					DUMP_PREFIX_ADDRESS, 16, 4, desc,
 					desc_bytes(desc), 1);
@@ -1402,8 +1402,8 @@ static void secfp_prepareInCaamJobDescriptor(struct aead_edesc *edesc,
 	append_seq_fifo_load(desc, authsize, FIFOLD_CLASS_CLASS2 |
 			FIFOLD_TYPE_LAST2 | FIFOLD_TYPE_ICV);
 #ifdef ASFIPSEC_DEBUG_FRAME
-	pr_err("\n Data In Len %d Data Out Len %d Auth Size: %d\n",
-					data_in_len, data_out_len, authsize);
+	pr_err("\nData In Len %d Data Out Len %d\n",
+				data_in_len, data_out_len);
 	print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
 			DUMP_PREFIX_ADDRESS, 16, 4, desc, desc_bytes(desc), 1);
 #endif
