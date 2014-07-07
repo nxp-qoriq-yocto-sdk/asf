@@ -38,8 +38,6 @@
 #include <linux/inetdevice.h>
 #include "ipseccmn.h"
 
-#define ASF_SECFP_BLOB_TIME_INTERVAL	1
-#define ASF_SECFP_NUM_RQ_ENTRIES	256
 
 /* Data Structure initialization */
 /* Inbound SA SPI Table */
@@ -355,9 +353,9 @@ static int secfp_InitMemPools(void)
 	}
 
 	if (asfTimerWheelInit(ASF_SECFP_BLOB_TMR_ID, 0,
-				1024, ASF_TMR_TYPE_SEC_TMR,
-				ASF_SECFP_BLOB_TIME_INTERVAL,
-				ASF_SECFP_NUM_RQ_ENTRIES) == 1) {
+			ASF_L2_BLOB_TIMER_BUCKET, ASF_TMR_TYPE_SEC_TMR,
+			ASF_L2_BLOB_TIME_INTERVAL,
+			ASF_DEF_TIMER_RQ_ENTRIES) == 1) {
 		ASFIPSEC_ERR("Error in initializing L2blob Timer wheel\n");
 		return 1;
 	}

@@ -71,7 +71,6 @@ unsigned long asf_ipv6_reasm_hash_list_size = ASF_REASM_MAX_HASH_LIST_SIZE;
 #define ASF_REASM_IP_HDR_LEN 20
 
 #define ASF_REASM_TIME_INTERVAL	1 /* 1 seconds interval*/
-#define ASF_REASM_NUM_RQ_ENTRIES 256  /* 256 per core */
 
 #define ASF_REASM_IP_MAX_PKT_LEN 65535
 
@@ -388,7 +387,8 @@ int asfReasmInit(void)
 
 	if (asfTimerWheelInit(ASF_REASM_TMR_ID, 0,
 			      ASF_REASM_NUM_TMR_BUCKETS, ASF_TMR_TYPE_SEC_TMR,
-			      ASF_REASM_TIME_INTERVAL, ASF_REASM_NUM_RQ_ENTRIES) == 1) {
+			ASF_REASM_TIME_INTERVAL,
+			ASF_DEF_TIMER_RQ_ENTRIES) == 1) {
 		asf_reasm_debug("Error in initializing Timer wheel \r\n");
 		asfReasmDeInit();
 		return 1;
