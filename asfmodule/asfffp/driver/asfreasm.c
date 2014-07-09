@@ -2087,7 +2087,8 @@ int asfIpv4Fragment(struct sk_buff *skb,
 						}
 						iph = ip_hdr(frag);
 						iph->tot_len = htons(frag->len);
-						if (offset == 0)
+					if (ip_hdr(frag)->ihl > 5 &&
+							offset == 0)
 							asf_ip_options_fragment(frag);
 						iph->frag_off = htons(offset >> 3);
 						if (frag->next != NULL)
@@ -2247,7 +2248,8 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			ip_hdr(skb2)->frag_off |= htons(IP_MF);
 			ip_hdr(skb2)->tot_len = htons(tot_len);
 
-			asf_ip_options_fragment(skb2);
+			if (ip_hdr(skb2)->ihl > 5)
+				asf_ip_options_fragment(skb2);
 
 			ip_send_check(ip_hdr(skb2));
 			skb2->ip_summed = CHECKSUM_UNNECESSARY;
