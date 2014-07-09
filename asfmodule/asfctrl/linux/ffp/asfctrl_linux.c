@@ -302,6 +302,7 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 	}
 
 	cii = asfctrl_dev_get_free_cii(dev);
+	dev->cii = cii;
 	if (cii < 0) {
 		ASFCTRL_DBG("Failed to allocate free cii for device %s\n",
 			dev->name);

@@ -340,7 +340,7 @@ static inline void asf_proto_csum_replace4(__sum16 *sum,
 /* Always use interface index as CII for ethernet interfaces */
 #define asf_cii_set_cache(dev, cii) do {} while (0)
 #define asf_cii_reset_cache(dev) do {} while (0)
-#define asf_cii_cache(dev)   (dev->ifindex)
+#define asf_cii_cache(dev)   (dev->cii)
 
 static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 {
