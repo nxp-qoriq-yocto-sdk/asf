@@ -83,6 +83,7 @@ struct asfTmrRQ_s {
 } ;
 
 struct asfTmrWheelPerCore_s {
+	spinlock_t TmrWheelLock;
 	unsigned int ulCurBucketIndex;
 	unsigned int ulLastTimerExpiry;
 	unsigned int ulMaxBuckets;
@@ -373,6 +374,7 @@ unsigned int asfTimerWheelInit(unsigned short int ulAppId,
 		{
 			asf_timer_debug("Initializing pTmrWheel\r\n");
 			pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, ii);
+			spin_lock_init(&(pTmrWheel->TmrWheelLock));
 			pTmrWheel->ulMaxBuckets = ulNumBuckets;
 			pTmrWheel->pBuckets = (struct asfTmr_s **)(pTmrWheel + 1);
 			asf_timer_print("Initialized pBuckets Max Bucket =%d\n",
@@ -535,6 +537,7 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 	pWheel = &(pAsfTmrWheelInstances[ulAppId].pWheel[ulInstanceId]);
 	pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, smp_processor_id());
 
+	spin_lock(&(pTmrWheel->TmrWheelLock));
 	ptmr->ulTmOutVal = (ptmr->ulTmOutVal + pWheel->ulHalfInterBucketGap)/pWheel->ulInterBucketGap;
 	asf_timer_print("ptmr->ulTmOutVal = %d\r\n", ptmr->ulTmOutVal);
 	if (ptmr->ulTmOutVal >= pTmrWheel->ulMaxBuckets) {
@@ -549,6 +552,7 @@ asfTmr_t *asfTimerStart(unsigned short int ulAppId, unsigned short int ulInstanc
 
 	/* Add timer to the bucket  */
 	asfAddTmrToBucket(pTmrWheel, ptmr);
+	spin_unlock(&(pTmrWheel->TmrWheelLock));
 	XGSTATS_INC(TmrStarts);
 	if (!bInInterrupt)
 		local_bh_enable();
@@ -591,8 +595,10 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 
 	/* Else check if the the bucket belongs to this CPU */
 	if (ptmr->ulCoreId == smp_processor_id()) {
+		spin_lock(&(pTmrWheel->TmrWheelLock));
 		/* Feel free to fix the list */
 		asfRemoveTmrFromBucket(pTmrWheel,  ptmr);
+		spin_unlock(&(pTmrWheel->TmrWheelLock));
 		asf_timer_print("Removed timer from bucket... Calling asfReleaseNode\n");
 		asfReleaseNode(pAsfTmrAppInfo[ulAppId].pInstance[ulInstanceId].ulTmrPoolId, ptmr, ptmr->bHeap);
 		XGSTATS_INC(TmrStopSameCore);
@@ -602,17 +608,20 @@ unsigned int asfTimerStop(unsigned int ulAppId, unsigned int ulInstanceId,
 		/* Push into the reclaim queue if there is space */
 		/* Find my core's Rq in the pTmrWheel pTmWheel is already the wheel used
 		   by core that owns this timer */
+		spin_lock(&(pTmrWheel->TmrWheelLock));
 		pRq = per_cpu_ptr(pTmrWheel->pQs, smp_processor_id());
 
 		if (unlikely(pRq->pQueue[pRq->ulWrIndex] != NULL)) {
 			asf_timer_warn("******* No space in reclaim queue; letting timer expire by itself\r\n");
 			ptmr->bStopPeriodic = 1; /* avoid callback function call upon expiry */
+			spin_unlock(&(pTmrWheel->TmrWheelLock));
 			if (!bInInterrupt)
 				local_bh_enable();
 			return ASF_TMR_FAILURE;
 		}
 		pRq->pQueue[pRq->ulWrIndex] = ptmr;
 		pRq->ulWrIndex = (pRq->ulWrIndex + 1) & (pTmrWheel->ulMaxRqEntries - 1);
+		spin_unlock(&(pTmrWheel->TmrWheelLock));
 	}
 	if (!bInInterrupt)
 		local_bh_enable();
@@ -665,6 +674,7 @@ static void asfTimerProc(unsigned long data)
 			smp_processor_id(), ulAppId, ulInstanceId, data);
 
 	pTmrWheel = per_cpu_ptr(pWheel->pTmrWheel, smp_processor_id());
+	spin_lock(&(pTmrWheel->TmrWheelLock));
 
 	pTmrWheel->ulCurBucketIndex =
 		(pTmrWheel->ulCurBucketIndex + 1) & (pTmrWheel->ulMaxBuckets - 1);
@@ -780,6 +790,7 @@ static void asfTimerProc(unsigned long data)
 		asf_timer_print("Not rescheduling timer. cpu=%d, appId %d instId %d",
 		smp_processor_id(), ulAppId, ulInstanceId);
 	}
+	spin_unlock(&(pTmrWheel->TmrWheelLock));
 }
 
 
