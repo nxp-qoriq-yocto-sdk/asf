@@ -401,16 +401,19 @@ void *asfGetNode(unsigned int ulNumPoolId,  char *bHeap)
 	asf_mpool_debug("asfGetNode: CPU %d id %d pool 0x%x extd 0x%x\n", smp_processor_id(), ulNumPoolId,
 			pool, per_cpu_ptr(pools, smp_processor_id()));
 
+	spin_lock_bh(&(pool->lock));
 	node = (struct asf_poolLinkNode_s *)  pool->head;
 	if (node) {
 		asf_mpool_debug("Allocating from static per CPU pool\r\n");
 		pool->head = pool->head->pNext;
 		pool->ulNumAllocs++;
 		pool->ulNumEntries--;
+		spin_unlock_bh(&(pool->lock));
 		*bHeap = 0;
 		node->pNext = NULL;
 		return node;
 	} else {
+		spin_unlock_bh(&(pool->lock));
 		asf_mpool_debug("Allocating from Global pool\r\n");
 		gl_pool = global_pools[ulNumPoolId].pHead;
 		if ((gl_pool->head) &&
@@ -428,10 +431,12 @@ void *asfGetNode(unsigned int ulNumPoolId,  char *bHeap)
 			spin_unlock(&(gl_pool->lock));
 		}
 		if (node) {
+			spin_lock_bh(&(pool->lock));
 			pool->head = node->pNext;
 			pool->ulNumEntries += ((ii > 2) ? (ii-2) : 0) ;
 			node->pNext = NULL;
 			pool->ulNumAllocs++;
+			spin_unlock_bh(&(pool->lock));
 			*bHeap = 0;
 			return node;
 		} else {
@@ -439,7 +444,9 @@ void *asfGetNode(unsigned int ulNumPoolId,  char *bHeap)
 			node = kzalloc((pool->ulDataSize), GFP_ATOMIC);
 			if (node) {
 				*bHeap = 1;
+				spin_lock_bh(&(pool->lock));
 				pool->ulNumHeapAllocs++;
+				spin_unlock_bh(&(pool->lock));
 			}
 			return node;
 		}
@@ -472,6 +479,7 @@ void asfReleaseNode(unsigned int ulNumPoolId, void *data, char bHeap)
 
 	asf_mpool_debug("PoolID = %d: bHeap = %d asfReleaseNode called\r\n", ulNumPoolId, bHeap);
 	if (!bHeap) {
+		spin_lock_bh(&(pool->lock));
 		asf_mpool_debug("pool: num %u  pc-max %u\n", pool->ulNumEntries, pool->ulNumPerCoreMaxEntries);
 		if ((pool->ulNumEntries + 1) <= (pool->ulNumPerCoreMaxEntries)) {
 			asf_mpool_debug("Returning to per cpu pool\r\n");
@@ -484,26 +492,30 @@ void asfReleaseNode(unsigned int ulNumPoolId, void *data, char bHeap)
 			pool->ulNumEntries++;
 			pool->ulNumFrees++;
 			asf_mpool_debug("Pool Stats: NumAlloced = %d, NumFree = %d\r\n", pool->ulNumAllocs, pool->ulNumFrees);
+			spin_unlock_bh(&(pool->lock));
 		} else {
+			spin_unlock_bh(&(pool->lock));
 			/* try to release to global pool */
 			globalPool = global_pools[ulNumPoolId].pHead;
 
 			asf_mpool_debug("gpool: num %u\n", globalPool->ulNumEntries);
 
 			memset(pNode, 0, pool->ulDataElemSize);
-			spin_lock(&(globalPool->lock));
+			spin_lock_bh(&(globalPool->lock));
 			pNode->pNext = globalPool->head;
 			globalPool->head = pNode;
 			globalPool->ulNumEntries++;
 			globalPool->ulNumFrees++;
-			spin_unlock(&(globalPool->lock));
+			spin_unlock_bh(&(globalPool->lock));
 			asf_mpool_debug("Returned to global pool\r\n");
 		}
 		return;
 	}
 	kfree(data);
 	asf_mpool_debug("Returning to heap\r\n");
+	spin_lock_bh(&(pool->lock));
 	pool->ulNumFrees++;
+	spin_unlock_bh(&(pool->lock));
 	return;
 }
 
