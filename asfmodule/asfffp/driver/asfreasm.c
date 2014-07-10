@@ -968,7 +968,7 @@ static inline int asfIPv6CheckFragInfo(struct sk_buff *skb,
 		gstats->ulErrIpHdr++;
 		return 1;
 	}
-	if (((fhdr->frag_off & (htons(IP_MF))))) {
+	if (((fhdr->frag_off & (htons(IP6_MF))))) {
 		if (unlikely(frag_len & 7)) {
 			asf_reasm_debug("Invalid data length\r\n");
 			gstats->ulErrIpHdr++;
