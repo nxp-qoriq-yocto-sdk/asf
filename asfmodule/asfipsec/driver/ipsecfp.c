@@ -1615,7 +1615,7 @@ static inline int secfp_try_fastPathOutv4(
 
 	ASFIPSEC_FPRINT("*****secfp_out: Pkt received skb->len = %d,"\
 		"iph->tot_len = %d", skb1->len, iph->tot_len);
-	ASFIPSEC_HEXDUMP(skb->data - 14, skb1->len + 14);
+	ASFIPSEC_HEXDUMP(skb1->data - 14, skb1->len + 14);
 
 	pSA = secfp_findOutSA(ulVSGId, pSecInfo, skb1, iph->tos,
 			&pContainer, &bRevalidate);
@@ -2551,9 +2551,12 @@ static inline unsigned int secfp_inHandleICVCheck(void *dsc, struct sk_buff *skb
 		skb_frag_t *frag;
 		total_frag = skb_shinfo(skb)->nr_frags;
 		frag = &skb_shinfo(skb)->frags[total_frag - 1];
-		frag->size -= skb->cb[SECFP_ICV_LENGTH];
-		skb->data_len -= skb->cb[SECFP_ICV_LENGTH];
-		skb->len -= skb->cb[SECFP_ICV_LENGTH];
+		if (likely(frag->size > skb->cb[SECFP_ICV_LENGTH])) {
+			frag->size -= skb->cb[SECFP_ICV_LENGTH];
+			skb->data_len -= skb->cb[SECFP_ICV_LENGTH];
+			skb->len -= skb->cb[SECFP_ICV_LENGTH];
+		} else
+			__pskb_trim(skb, skb->cb[SECFP_ICV_LENGTH]);
 		ASFIPSEC_PRINT("\nskb->data_len %d", skb->data_len);
 	} else
 		skb->len -= skb->cb[SECFP_ICV_LENGTH];
@@ -2709,33 +2712,24 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	/* Look at the padding length and verify length of packet */
 	if (total_frag > 0) {
-		unsigned int ulPadLen = 0;
-		if (*pTotLen <= 2 + charp[frag->size - 2]) {
-			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
-			rcu_read_lock();
-			pSA = secfp_findInSA(*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]),
-				SECFP_PROTO_ESP,
-				*(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]),
-				*daddr,
-				(unsigned int *)&(pHeadSkb->cb[SECFP_HASH_VALUE_INDEX]));
-			if (pSA) {
-				pSA->ulBytes[smp_processor_id()] -= pHeadSkb->len;
-				pSA->ulPkts[smp_processor_id()]--;
-				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA,
-						ASF_IPSEC_PP_POL_CNT12);
-			}
-			rcu_read_unlock();
-			return 1;
-		}
-		/* Padding length is is in skb->len-2 */
-		ulPadLen = 2 + charp[frag->size - 2];
-		frag->size -= ulPadLen;
-		pTailSkb->data_len -= ulPadLen;
-		*pTotLen -= ulPadLen;
-		pTailSkb->len -= ulPadLen;
+#ifndef ASF_SECFP_PROTO_OFFLOAD
+		/* Padding Length */
+		ulStripLen = 2 + charp[frag->size - 2];
+#endif
+		if (likely(frag->size > ulStripLen)) {
+			frag->size -= ulStripLen;
+			pTailSkb->data_len -= ulStripLen;
+			pTailSkb->len -= ulStripLen;
+		} else
+			__pskb_trim(pTailSkb, ulStripLen);
+
+		*pTotLen -= ulStripLen;
 	} else {
-		unsigned int ulPadLen = 0;
-		if (*pTotLen <= 2 + pTailSkb->data[pTailSkb->len - 2]) {
+#ifndef ASF_SECFP_PROTO_OFFLOAD
+		/* Padding Length */
+		ulStripLen = 2 + charp[frag->size - 2];
+#endif
+		if (unlikely(*pTotLen <= ulStripLen)) {
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
 			rcu_read_lock();
 			pSA = secfp_findInSA(*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]),
@@ -2753,9 +2747,8 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 			return 1;
 		}
 		/* Padding length is is in skb->len-2 */
-		ulPadLen = 2 + pTailSkb->data[pTailSkb->len-2];
-		pTailSkb->len -= ulPadLen;
-		*pTotLen -= ulPadLen;
+		pTailSkb->len -= ulStripLen;
+		*pTotLen -= ulStripLen;
 	}
 #endif
 #ifdef ASF_SECFP_PROTO_OFFLOAD
@@ -2789,8 +2782,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 					ASFIPSecOpqueInfo_t *pIPSecOpaque,
 					unsigned char ucProto,
-					unsigned int *pulCommonInterfaceId,
-					unsigned int ulBeforeTrimLen) {
+					unsigned int *pulCommonInterfaceId) {
 	ASFLogInfo_t AsfLogInfo;
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	unsigned int  fragCnt = 0;
@@ -3063,7 +3055,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFLogInfo_t AsfLogInfo;
 	ASFIPSecOpqueInfo_t IPSecOpque = {};
-	unsigned int ulCommonInterfaceId, ulBeforeTrimLen;
+	unsigned int ulCommonInterfaceId;
 	int transport_hdr_len;
 #if defined(CONFIG_ASF_SEC4x) && !defined(ASF_QMAN_IPSEC)
 	struct aead_edesc *desc;
@@ -3247,7 +3239,6 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 				skb_end_pointer(pHeadSkb) - pHeadSkb->head);
 		secfp_unmap_descs(pHeadSkb);
 #endif
-		ulBeforeTrimLen = pHeadSkb->data_len;
 		if (secfp_inCompleteCheckAndTrimPkt(pHeadSkb, pTailSkb,
 			&ulTotLen, &ucNextProto, &IPSecOpque.DestAddr)) {
 			ASFIPSEC_WARN("Packet check failed");
@@ -3264,7 +3255,7 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 		}
 
 		iRetVal = secfp_inCompleteSAProcess(&pHeadSkb, &IPSecOpque,
-				SECFP_PROTO_ESP, &ulCommonInterfaceId, ulBeforeTrimLen);
+				SECFP_PROTO_ESP, &ulCommonInterfaceId);
 		if (iRetVal == 1) {
 			ASFIPSEC_WARN("secfp_inCompleteSAProcess failed");
 			ASFSkbFree(pHeadSkb);
@@ -3392,7 +3383,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFIPSecOpqueInfo_t IPSecOpque = {};
 	ASFBuffer_t Buffer;
-	unsigned int ulCommonInterfaceId, ulBeforeTrimLen;
+	unsigned int ulCommonInterfaceId;
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	struct iphdr *inneriph = (struct iphdr *)(skb->data);
 #endif
@@ -3571,7 +3562,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 	skb->next = NULL;
 
 	/* Look at the Next protocol field */
-	ulTempLen = ulBeforeTrimLen = skb_headlen(skb);
+	ulTempLen = skb_headlen(skb);
 	if (secfp_inCompleteCheckAndTrimPkt(skb, skb, &ulTempLen,
 			&ucNextProto, &IPSecOpque.DestAddr)) {
 		ASFIPSEC_WARN("secfp_incompleteCheckAndTrimPkt failed");
@@ -3579,7 +3570,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 		return;
 	}
 	iRetVal = secfp_inCompleteSAProcess(&skb, &IPSecOpque,
-		SECFP_PROTO_ESP, &ulCommonInterfaceId, ulBeforeTrimLen);
+		SECFP_PROTO_ESP, &ulCommonInterfaceId);
 	ASFIPSEC_DEBUG("\nUL Common IFACE ID is %d\n",
 				ulCommonInterfaceId);
 	if (iRetVal == 1) {
