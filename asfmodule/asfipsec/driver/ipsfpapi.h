@@ -433,7 +433,6 @@ typedef  struct {
 
 typedef struct {
 	ASF_uint32_t  spi;
-	ASF_uint8_t   qos;
 	ASF_uint32_t  flags;
 	ASF_uint32_t  reserved:4,
 	bRedSideFragment:1,
@@ -448,8 +447,8 @@ typedef struct {
 	handleToSOrDSCPAndFlowLabel:8,
 	handleDFBit:2,
 	protocol:8;
-	int   authAlgo;
-	int  encAlgo;
+	ASF_int32_t authAlgo;
+	ASF_int32_t encAlgo;
 	ASF_uint64_t softKbyteLimit;
 	ASF_uint64_t hardKbyteLimit;
 	ASF_uint64_t softPacketLimit;
@@ -457,14 +456,15 @@ typedef struct {
 	ASF_uint64_t softSecsLimit;
 	ASF_uint64_t hardSecsLimit;
 	ASF_IPSecTunEndAddr_t TE_Addr;
+	ASF_uint8_t   qos;
 	ASF_uint8_t   *authKey;
 	ASF_uint32_t   authKeyLenBits;
 	ASF_uint8_t   *encDecKey;
 	ASF_uint32_t   encDecKeyLenBits;
 	ASF_uint32_t    replayWindowSize;
 	ASF_uint8_t    compAlgo;
-	ASF_uint16_t   aesCtrBlkLenBits;
 	ASF_uint8_t   *aesCtrCounterBlock;
+	ASF_uint16_t   aesCtrBlkLenBits;
 	ASF_uint32_t   ulMtu;
 	ASF_IPSec_Nat_Info_t IPsecNatInfo;
 	ASF_uint32_t ulCommonInterfaceId;

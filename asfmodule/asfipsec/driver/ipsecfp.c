@@ -647,10 +647,8 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 send_l2blob:
 	if (ASFIPSecCbFn.pFnRefreshL2Blob) {
-		if (bl2blobRefresh ||
-			(ulL2BlobRefreshPktCnt_g &&
-			((pSA->ulPkts[0] + pSA->ulPkts[1])
-				% ulL2BlobRefreshPktCnt_g == 0))) {
+		if (bl2blobRefresh) {
+send_l2blob_2:
 		ASFIPSEC_PRINT("Sending L2blob Refresh");
 #ifdef ASF_IPV6_FP_SUPPORT
 		if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
@@ -678,6 +676,12 @@ send_l2blob:
 			ptrIArray_getMagicNum(&(secfp_OutDB),
 				ulSPDContainerIndex), &TunAddress,
 			pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
+		} else if (ulL2BlobRefreshPktCnt_g) {
+			for_each_possible_cpu(cpu) {
+				uPacket += pSA->ulPkts[cpu];
+			}
+			if (uPacket % ulL2BlobRefreshPktCnt_g == 0)
+				goto send_l2blob_2;
 		}
 	}
 	if (bl2blobRefresh == ASF_L2BLOB_REFRESH_DROP_PKT)
