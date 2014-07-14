@@ -376,15 +376,22 @@ static inline int is_sa_offloadable(struct xfrm_state *xfrm)
 	return 0;
 }
 
+ASF_uint32_t asfctrl_get_ipsec_pol_vsgid(struct xfrm_policy *xp)
+{
+	/* TODO: Get proper VSG ID */
+	return ASF_DEF_VSG;
+}
 int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 {
 	int i;
 	uintptr_t handle;
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 
 	if (is_policy_offloadable(xp))
 		return -EINVAL;
+	ulVSGId = asfctrl_get_ipsec_pol_vsgid(xp);
 
 	if (dir == XFRM_POLICY_OUT) {
 		ASFIPSecConfigAddOutSPDContainerArgs_t outSPDContainer;
@@ -414,7 +421,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 		handle = (uintptr_t)(xp);
 		outSPDContainer.pSPDParams = &spdParams;
 
-		ASFIPSecConfig(ASF_DEF_VSG,
+		ASFIPSecConfig(ulVSGId,
 			ASF_IPSEC_CONFIG_ADD_OUTSPDCONTAINER,
 			&outSPDContainer,
 			sizeof(ASFIPSecConfigAddOutSPDContainerArgs_t)
@@ -422,7 +429,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 			&handle,
 			sizeof(uint32_t));
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions();
+		asfctrl_invalidate_sessions(ulVSGId);
 	} else if (dir == XFRM_POLICY_IN) {
 		ASFIPSecConfigAddInSPDContainerArgs_t	inSPDContainer;
 		ASF_IPSecPolicy_t			spdParams;
@@ -452,7 +459,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 
 		inSPDContainer.pSPDParams = &spdParams;
 		handle = (uintptr_t)(xp);
-		ASFIPSecConfig(ASF_DEF_VSG,
+		ASFIPSecConfig(ulVSGId,
 			ASF_IPSEC_CONFIG_ADD_INSPDCONTAINER,
 			&inSPDContainer,
 			sizeof(ASFIPSecConfigAddInSPDContainerArgs_t)
@@ -461,7 +468,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 			sizeof(uint32_t));
 
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions();
+		asfctrl_invalidate_sessions(ulVSGId);
 	} else {
 		ASFCTRL_DBG("\nPOLICY is FWD");
 	}
@@ -480,6 +487,7 @@ err:
 int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 {
 	uintptr_t handle;
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -488,6 +496,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 				xp->asf_cookie, xp->index);
 		return -EINVAL;
 	}
+	ulVSGId = asfctrl_get_ipsec_pol_vsgid(xp);
 	if (dir == XFRM_POLICY_OUT) {
 		ASFIPSecConfigDelOutSPDContainerArgs_t outSPDContainer;
 
@@ -496,7 +505,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 		outSPDContainer.ulContainerIndex =
 			free_container_index(xp, ASF_OUT_CONTANER_ID);
 
-		ASFIPSecConfig(ASF_DEF_VSG,
+		ASFIPSecConfig(ulVSGId,
 			ASF_IPSEC_CONFIG_DEL_OUTSPDCONTAINER,
 			&outSPDContainer,
 			sizeof(ASFIPSecConfigDelOutSPDContainerArgs_t),
@@ -504,7 +513,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 			sizeof(uint32_t));
 
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions();
+		asfctrl_invalidate_sessions(ulVSGId);
 
 	} else if (dir == XFRM_POLICY_IN) {
 		ASFIPSecConfigDelInSPDContainerArgs_t	inSPDContainer;
@@ -514,7 +523,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 		inSPDContainer.ulContainerIndex =
 			free_container_index(xp, ASF_IN_CONTANER_ID);
 
-		ASFIPSecConfig(ASF_DEF_VSG,
+		ASFIPSecConfig(ulVSGId,
 			ASF_IPSEC_CONFIG_DEL_INSPDCONTAINER,
 			&inSPDContainer,
 			sizeof(ASFIPSecConfigDelInSPDContainerArgs_t),
@@ -522,7 +531,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 			sizeof(uint32_t));
 
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions();
+		asfctrl_invalidate_sessions(ulVSGId);
 	}
 	ASFCTRL_DBG("COKKIE %d id =%d", xp->asf_cookie, xp->index);
 
@@ -541,7 +550,7 @@ int asfctrl_xfrm_update_policy(struct xfrm_policy *xp, int dir)
 	return 0;
 }
 
-int asfctrl_xfrm_flush(void)
+int asfctrl_xfrm_flush(ASF_uint32_t ulVSGId)
 {
 	int err = 0;
 	ASFCTRL_FUNC_TRACE;
@@ -549,9 +558,9 @@ int asfctrl_xfrm_flush(void)
 	asfctrl_vsg_ipsec_cont_magic_id++;
 
 	/* Changing the VSG Magic Number of Policy Delete */
-	asfctrl_invalidate_sessions();
+	asfctrl_invalidate_sessions(ulVSGId);
 
-	err = ASFIPSecFlushContainers(ASF_DEF_VSG, ASF_DEF_IPSEC_TUNNEL_ID);
+	err = ASFIPSecFlushContainers(ulVSGId, ASF_DEF_IPSEC_TUNNEL_ID);
 
 	init_container_indexes(0);
 	return err;
@@ -573,6 +582,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASF_IPSecSA_t SAParams;
 	struct xfrm_algo_aead *aead = xfrm->aead;
 	struct esp_data *esp = xfrm->data;
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -823,7 +833,8 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	outSA.pSASelector = &outSASel;
 	outSA.pSAParams = &SAParams;
 	handle = (uintptr_t)xfrm;
-	ASFIPSecRuntime(ASF_DEF_VSG,
+	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+	ASFIPSecRuntime(ulVSGId,
 			ASF_IPSEC_RUNTIME_ADD_OUTSA,
 			&outSA,
 			sizeof(ASFIPSecRuntimeAddOutSAArgs_t),
@@ -876,6 +887,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASF_IPSecSA_t SAParams;
 	struct xfrm_algo_aead *aead = xfrm->aead;
 	struct esp_data *esp = xfrm->data;
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -1130,7 +1142,8 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	inSA.pSASelector = &inSASel;
 	inSA.pSAParams = &SAParams;
 	handle = (uintptr_t)xfrm;
-	ASFIPSecRuntime(ASF_DEF_VSG,
+	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+	ASFIPSecRuntime(ulVSGId,
 			ASF_IPSEC_RUNTIME_ADD_INSA,
 			&inSA,
 			sizeof(ASFIPSecRuntimeAddInSAArgs_t),
@@ -1205,6 +1218,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 	int cont_id, dir;
 	int handle;
 	bool bLockFlag;
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -1248,7 +1262,8 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 		delSA.usDscpStart = 0;
 		delSA.usDscpEnd = 0;
 
-		ASFIPSecRuntime(ASF_DEF_VSG,
+		ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+		ASFIPSecRuntime(ulVSGId,
 			ASF_IPSEC_RUNTIME_DEL_OUTSA,
 			&delSA,
 			sizeof(ASFIPSecRuntimeDelOutSAArgs_t),
@@ -1277,7 +1292,8 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 		delSA.ucProtocol = xfrm->id.proto;
 		delSA.ulSPI = xfrm->id.spi;
 
-		ASFIPSecRuntime(ASF_DEF_VSG,
+		ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+		ASFIPSecRuntime(ulVSGId,
 			ASF_IPSEC_RUNTIME_DEL_INSA,
 			&delSA,
 			sizeof(ASFIPSecRuntimeDelInSAArgs_t),
@@ -1290,12 +1306,12 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 	return 0;
 }
 
-int asfctrl_xfrm_flush_sa(void)
+int asfctrl_xfrm_flush_sa(ASF_uint32_t ulVSGId)
 {
 	ASFCTRL_FUNC_TRACE;
 	init_sa_indexes(0);
 
-	if (ASFIPSecFlushAllSA(ASF_DEF_VSG,
+	if (ASFIPSecFlushAllSA(ulVSGId,
 		ASF_DEF_IPSEC_TUNNEL_ID)) {
 		ASFCTRL_WARN(" Failure in Flushing the SAs");
 	}
@@ -1309,6 +1325,7 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 {
 	int i;
 	int 	handle;
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -1352,7 +1369,8 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 		spdParams.policyAction = ASF_IPSEC_POLICY_ACTION_IPSEC;
 		outSPDContainer.pSPDParams = &spdParams;
 
-		ASFIPSecConfig(ASF_DEF_VSG,
+		ulVSGId = asfctrl_get_ipsec_pol_vsgid(xp);
+		ASFIPSecConfig(ulVSGId,
 			ASF_IPSEC_CONFIG_ADD_OUTSPDCONTAINER,
 			&outSPDContainer,
 			sizeof(ASFIPSecConfigAddOutSPDContainerArgs_t)
@@ -1360,7 +1378,7 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 			&handle,
 			sizeof(uint32_t));
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions();
+		asfctrl_invalidate_sessions(ulVSGId);
 	}
 
 sa_check:
@@ -1381,6 +1399,7 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 	int i;
 	int 	handle;
 	struct xfrm_policy *xp = pol;
+	ASF_uint32_t ulVSGId;
 
 	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
@@ -1422,7 +1441,8 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 		spdParams.policyAction = ASF_IPSEC_POLICY_ACTION_IPSEC;
 		inSPDContainer.pSPDParams = &spdParams;
 
-		ASFIPSecConfig(ASF_DEF_VSG,
+		ulVSGId = asfctrl_get_ipsec_pol_vsgid(pol);
+		ASFIPSecConfig(ulVSGId,
 			ASF_IPSEC_CONFIG_ADD_INSPDCONTAINER,
 			&inSPDContainer,
 			sizeof(ASFIPSecConfigAddInSPDContainerArgs_t)
@@ -1430,7 +1450,7 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 			&handle,
 			sizeof(uint32_t));
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions();
+		asfctrl_invalidate_sessions(ulVSGId);
 	}
 sa_check:
 	if (asfctrl_xfrm_add_insa(xfrm, xp)) {
@@ -1451,6 +1471,7 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 	int sa_id, cont_id;
 	bool bLockFlag;
 	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -1497,7 +1518,8 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 		}
 	}
 
-	ASFIPSecEncryptAndSendPkt(ASF_DEF_VSG,
+	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+	ASFIPSecEncryptAndSendPkt(ulVSGId,
 			ASF_DEF_IPSEC_TUNNEL_ID,
 			cont_id,
 			asfctrl_vsg_ipsec_cont_magic_id,
@@ -1522,6 +1544,7 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 #ifdef ASF_IPV6_FP_SUPPORT
 	struct iphdr *iph = ip_hdr(skb);
 #endif
+	ASF_uint32_t ulVSGId;
 	ASFCTRL_FUNC_ENTRY;
 
 	ASFCTRL_WARN("Packet received spi =0x%x", xfrm->id.spi);
@@ -1554,7 +1577,8 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 	}
 #endif
 	skb_dst_drop(skb);
-	ASFIPSecDecryptAndSendPkt(ASF_DEF_VSG,
+	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+	ASFIPSecDecryptAndSendPkt(ulVSGId,
 			Buffer,
 			asfctrl_generic_free,
 			skb,
@@ -1564,8 +1588,14 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 	return 0;
 }
 
+ASF_uint32_t asfctrl_get_ipsec_sa_vsgid(struct xfrm_state *x)
+{
+	/* TODO: Get proper VSG ID */
+	return ASF_DEF_VSG;
+}
 static int fsl_send_notify(struct xfrm_state *x, const struct km_event *c)
 {
+	ASF_uint32_t ulVSGId;
 	ASFCTRL_FUNC_TRACE;
 
 	if (!x && (c->event != XFRM_MSG_FLUSHSA)) {
@@ -1597,7 +1627,8 @@ static int fsl_send_notify(struct xfrm_state *x, const struct km_event *c)
 		break;
 	case XFRM_MSG_FLUSHSA:
 		ASFCTRL_INFO("XFRM_MSG_FLUSHSA");
-		asfctrl_xfrm_flush_sa();
+		ulVSGId = asfctrl_get_ipsec_sa_vsgid(x);
+		asfctrl_xfrm_flush_sa(ulVSGId);
 		break;
 	case XFRM_MSG_NEWAE: /* not yet supported */
 		break;
@@ -1613,6 +1644,7 @@ static int fsl_send_notify(struct xfrm_state *x, const struct km_event *c)
 static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 				const struct km_event *c)
 {
+	ASF_uint32_t ulVSGId;
 	ASFCTRL_FUNC_ENTRY;
 	ASFCTRL_INFO("EVENT = %d xp=%x", c->event, (unsigned int) xp);
 
@@ -1648,7 +1680,8 @@ static int fsl_send_policy_notify(struct xfrm_policy *xp, int dir,
 		break;
 	case XFRM_MSG_FLUSHPOLICY:
 		ASFCTRL_INFO("XFRM_MSG_FLUSHPOLICY");
-		asfctrl_xfrm_flush();
+		ulVSGId = asfctrl_get_ipsec_pol_vsgid(xp);
+		asfctrl_xfrm_flush(ulVSGId);
 		break;
 	default:
 		ASFCTRL_WARN("Unknown policy event %d\n", c->event);

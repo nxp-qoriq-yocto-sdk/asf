@@ -731,25 +731,27 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 #endif
 		pSAData->u.l2blob.bTxVlan = 0;
 	pSAData->u.l2blob.bUpdatePPPoELen = 0;
-	pSAData->u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
+	pSAData->u.l2blob.ulL2blobMagicNumber =
+		asfctrl_vsg_l2blobconfig_id[ulVSGId];
 	ASFIPSecRuntime(ulVSGId, ASF_IPSEC_RUNTIME_MOD_OUTSA, pSAData,
 			sizeof(ASFIPSecRuntimeModOutSAArgs_t), NULL, 0);
 	return;
 }
 
 
-void asfctrl_ipsec_update_vsg_magic_number(void)
+void asfctrl_ipsec_update_vsg_magic_number(ASF_uint32_t ulVSGId)
 {
 	ASFIPSecUpdateVSGMagicNumber_t VSGMagicInfo;
 	ASFCTRL_FUNC_TRACE;
-	VSGMagicInfo.ulVSGId = ASF_DEF_VSG;
-	VSGMagicInfo.ulVSGMagicNumber = asfctrl_vsg_config_id;
-	VSGMagicInfo.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
+	VSGMagicInfo.ulVSGId = ulVSGId;
+	VSGMagicInfo.ulVSGMagicNumber = asfctrl_vsg_config_id[ulVSGId];
+	VSGMagicInfo.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id[ulVSGId];
 	ASFIPSecUpdateVSGMagicNumber(&VSGMagicInfo);
 	return ;
 }
 
-int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
+int asfctrl_ipsec_get_flow_info_fn(uint32_t ulVSGId, bool *ipsec_in,
+				bool *ipsec_out,
 				ASFFFPIpsecInfo_t *ipsecInInfo,
 				struct net *net,
 				struct flowi fl, bool bIsIpv6)
@@ -786,7 +788,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 		outInfo->ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		outInfo->ulSPDContainerId = pol_out->asf_cookie;
 		outInfo->configIdentity.ulVSGConfigMagicNumber =
-					asfctrl_vsg_config_id;
+					asfctrl_vsg_config_id[ulVSGId];
 		outInfo->configIdentity.ulTunnelConfigMagicNumber =
 					ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM;
 		outInfo->bControlPathPkt = ASF_FALSE;
@@ -808,7 +810,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 		inInfo->ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		inInfo->ulSPDContainerId = pol_in->asf_cookie;
 		inInfo->configIdentity.ulVSGConfigMagicNumber =
-					asfctrl_vsg_config_id;
+					asfctrl_vsg_config_id[ulVSGId];
 		inInfo->configIdentity.ulTunnelConfigMagicNumber =
 					ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM;
 		inInfo->bControlPathPkt = ASF_FALSE;
@@ -848,13 +850,13 @@ static int __init asfctrl_linux_ipsec_init(void)
 		ASFCTRL_ERR("Hetrogeneous buffers not supported\r\n");
 		return -EINVAL;
 	}
-	ulVSGMagicNumber = kzalloc(sizeof(unsigned int *) * ASF_MAX_NUM_VSG,
+	ulVSGMagicNumber = kzalloc(sizeof(unsigned int *) * ASF_MAX_VSGS,
 				GFP_KERNEL);
 	ulVSGL2blobMagicNumber =
-		kzalloc(sizeof(unsigned int *) * ASF_MAX_NUM_VSG, GFP_KERNEL);
-	ulTunnelMagicNumber = kzalloc(sizeof(unsigned int *) * ASF_MAX_NUM_VSG,
+		kzalloc(sizeof(unsigned int *) * ASF_MAX_VSGS, GFP_KERNEL);
+	ulTunnelMagicNumber = kzalloc(sizeof(unsigned int *) * ASF_MAX_VSGS,
 				GFP_KERNEL);
-	for (i = 0; i < ASF_MAX_NUM_VSG; i++)
+	for (i = 0; i < ASF_MAX_VSGS; i++)
 		ulTunnelMagicNumber[i] = kzalloc(sizeof(unsigned int) *
 			ASF_MAX_TUNNEL, GFP_KERNEL);
 	/* If ASF supports less than what our arrays are designed for */
@@ -866,11 +868,11 @@ static int __init asfctrl_linux_ipsec_init(void)
 
 	asfctrl_vsg_ipsec_cont_magic_id = jiffies;
 	/* Updating the existing Config ID in ASF IPSEC */
-	confId.ulMaxVSGs = ASF_MAX_NUM_VSG;
+	confId.ulMaxVSGs = ASF_MAX_VSGS;
 	confId.ulMaxTunnels = ASF_MAX_TUNNEL;
-	for (i = 0; i < ASF_MAX_NUM_VSG; i++) {
-		ulVSGMagicNumber[i] = asfctrl_vsg_config_id;
-		ulVSGL2blobMagicNumber[i] = asfctrl_vsg_l2blobconfig_id;
+	for (i = 0; i < ASF_MAX_VSGS; i++) {
+		ulVSGMagicNumber[i] = asfctrl_vsg_config_id[i];
+		ulVSGL2blobMagicNumber[i] = asfctrl_vsg_l2blobconfig_id[i];
 		for (j = 0; j < ASF_MAX_TUNNEL; j++)
 			ulTunnelMagicNumber[i][j] =
 				ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM;
@@ -883,7 +885,7 @@ static int __init asfctrl_linux_ipsec_init(void)
 
 	kfree(ulVSGMagicNumber);
 	kfree(ulVSGL2blobMagicNumber);
-	for (i = 0; i < ASF_MAX_NUM_VSG; i++)
+	for (i = 0; i < ASF_MAX_VSGS; i++)
 		kfree(ulTunnelMagicNumber[i]);
 	kfree(ulTunnelMagicNumber);
 

@@ -104,7 +104,6 @@ char *asf_version = "asf-rel-0.2.0";
 /* Initilization Parameters */
 bool asf_enable;
 int ffp_max_flows = ASF_FFP_MAX_FLOWS;
-int asf_max_vsgs = ASF_MAX_VSGS;
 int asf_max_ifaces = ASF_MAX_IFACES;
 int ffp_hash_buckets = ASF_FFP_MAX_HASH_BKT;
 int asf_inac_divisor = ASF_FFP_FLOW_INAC_DIVISOR;
@@ -132,6 +131,8 @@ extern int ffp_ipv6_max_flows;
 extern int ffp_ipv6_hash_buckets;
 
 #endif
+int asf_max_vsgs = ASF_MAX_VSGS;
+EXPORT_SYMBOL(asf_max_vsgs);
 #ifdef ASF_QOS
 int asf_qos_enable;
 EXPORT_SYMBOL(asf_qos_enable);

@@ -111,7 +111,7 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	pData = (asf_linux_L2blobPktData_t *)skb_put(skb,
 				sizeof(asf_linux_L2blobPktData_t));
 	pData->ulZoneId = 0;
-	pData->ulVsgId = 0;
+	pData->ulVsgId = ulVsgId;
 	memcpy(&pData->tuple, tpl, sizeof(ASFFFPFlowTuple_t));
 
 	pData->ulPathMTU = skb->dev->mtu;
@@ -172,7 +172,7 @@ static ASF_int32_t asf_linux_IPv6XmitL2blobDummyPkt(
 	pData = (asf_linux_L2blobPktData_t *)skb_put(skb,
 				sizeof(asf_linux_L2blobPktData_t));
 	pData->ulZoneId = 0;
-	pData->ulVsgId = 0;
+	pData->ulVsgId = ulVsgId;
 	memcpy(&pData->tuple, tpl, sizeof(ASFFFPFlowTuple_t));
 
 	pData->ulPathMTU = skb->dev->mtu;
@@ -498,7 +498,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		cmd.bDrop = 0;
 
 		cmd.u.fwConfigIdentity.ulConfigMagicNumber =
-				asfctrl_vsg_config_id;
+				asfctrl_vsg_config_id[ulVSGId];
 
 #ifdef ASF_INGRESS_MARKER
 		if (pASFCbFnQosMarker_p) {
@@ -521,7 +521,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		} else
 			cmd.mkinfo.uciDscp = ASF_QM_NULL_DSCP;
 #endif
-		if (ASFFFPRuntime(ASF_DEF_VSG,
+		if (ASFFFPRuntime(ulVSGId,
 			ASF_FFP_MODIFY_FLOWS,
 			&cmd, sizeof(cmd), NULL, 0) ==
 			ASFFFP_RESPONSE_SUCCESS) {
@@ -563,8 +563,9 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			}
 			fl_out.flowi_tos = 0;
 		#endif
-			result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
-				&ipsecInInfo, net, fl_out, bIPv6);
+			result = fn_ipsec_get_flow4(ulVSGId, &bIPsecIn,
+				&bIPsecOut, &ipsecInInfo, net,
+				fl_out, bIPv6);
 			if (result) {
 				ASFCTRL_INFO("IPSEC Not Offloadable for flow");
 				goto delete_flow;
@@ -593,7 +594,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 
 			ASFCTRL_INFO("Configured tunnel ID is %d ",
 				ipsecInInfo.outContainerInfo.ulTunnelId);
-			if (ASFFFPRuntime(ASF_DEF_VSG,
+			if (ASFFFPRuntime(ulVSGId,
 				ASF_FFP_MODIFY_FLOWS,
 				&cmd, sizeof(cmd), NULL, 0) ==
 				ASFFFP_RESPONSE_SUCCESS) {
@@ -630,9 +631,9 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			cmd.bDrop = 1;
 
 			cmd.u.fwConfigIdentity.ulConfigMagicNumber =
-				asfctrl_vsg_config_id;
+				asfctrl_vsg_config_id[ulVSGId];
 
-			if (ASFFFPRuntime(ASF_DEF_VSG,
+			if (ASFFFPRuntime(ulVSGId,
 						ASF_FFP_MODIFY_FLOWS,
 						&cmd, sizeof(cmd), NULL, 0) ==
 					ASFFFP_RESPONSE_SUCCESS) {
@@ -664,7 +665,7 @@ delete_flow:
 
 		cmd.ulZoneId = ASF_DEF_ZN_ID;
 
-		if (ASFFFPRuntime(ASF_DEF_VSG,
+		if (ASFFFPRuntime(ulVSGId,
 			ASF_FFP_DELETE_FLOWS,
 			&cmd, sizeof(cmd), NULL, 0) ==
 			ASFFFP_RESPONSE_SUCCESS) {
@@ -683,11 +684,17 @@ ASF_void_t asfctrl_fnAuditLog(ASFLogInfo_t  *pLogInfo)
 	ASFCTRL_FUNC_EXIT;
 }
 
+ASF_uint32_t asfctrl_get_nf_conn_vsgid(struct nf_conn *nf_conn)
+{
+	/* TODO: Get proper VSG ID */
+	return ASF_DEF_VSG;
+}
 static int32_t asfctrl_destroy_session(struct nf_conn *ct_event)
 {
 	struct nf_conntrack_tuple *ct_tuple_orig, *ct_tuple_reply;
 	ASFFFPDeleteFlowsInfo_t cmd;
 	bool pf_ipv6 = 0;
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -738,9 +745,8 @@ static int32_t asfctrl_destroy_session(struct nf_conn *ct_event)
 	cmd.ulZoneId = ASF_DEF_ZN_ID;
 
 
-
-	if (ASFFFPRuntime(ASF_DEF_VSG,
-			 ASF_FFP_DELETE_FLOWS,
+	ulVSGId = asfctrl_get_nf_conn_vsgid(ct_event);
+	if (ASFFFPRuntime(ulVSGId, ASF_FFP_DELETE_FLOWS,
 			 &cmd, sizeof(cmd), NULL, 0) ==
 					ASFFFP_RESPONSE_SUCCESS) {
 		ASFCTRL_INFO("Flow deleted successfully");
@@ -897,6 +903,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	uint8_t reply_prot = ct_tuple_reply->dst.protonum;
 	uint8_t ulCommonInterfaceId = 0;
 
+	ASF_uint32_t ulVSGId;
 
 	if (pf_ipv6 == true) {
 		ipv6_addr_copy((struct in6_addr *)&ip6_orig_sip, (struct in6_addr *)&(ct_tuple_orig->src.u3.in6));
@@ -1007,10 +1014,11 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		flow validation */
 	cmd.ASFWInfo = (ASF_uint8_t *)ct_event;
 
-	cmd.configIdentity.ulConfigMagicNumber = asfctrl_vsg_config_id;
+	ulVSGId = asfctrl_get_nf_conn_vsgid(ct_event);
+	cmd.configIdentity.ulConfigMagicNumber = asfctrl_vsg_config_id[ulVSGId];
 
 	cmd.configIdentity.l2blobConfig.ulL2blobMagicNumber =
-			asfctrl_vsg_l2blobconfig_id;
+			asfctrl_vsg_l2blobconfig_id[ulVSGId];
 
 	cmd.flow1.ulZoneId = ASF_DEF_ZN_ID;
 
@@ -1077,7 +1085,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 		dev = dev_get_by_name(&init_net, "lo");
 		net = dev_net(dev);
-		result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
+		result = fn_ipsec_get_flow4(ulVSGId, &bIPsecIn, &bIPsecOut,
 			&(cmd.flow1.ipsecInInfo), net, fl_out, pf_ipv6);
 		if (result) {
 			ASFCTRL_INFO("IPSEC Not Offloadable for flow 1");
@@ -1151,7 +1159,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		fl_in.flowi_tos = 0;
 	#endif
 
-		result = fn_ipsec_get_flow4(&bIPsecIn, &bIPsecOut,
+		result = fn_ipsec_get_flow4(ulVSGId, &bIPsecIn, &bIPsecOut,
 			&(cmd.flow2.ipsecInInfo), net, fl_in, pf_ipv6);
 		dev_put(dev);
 		if (result) {
@@ -1176,7 +1184,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		cmd.flow2.natInfo.usSrcNATPort = orig_dport;
 	}
 
-	if (ASFFFPRuntime(ASF_DEF_VSG,
+	if (ASFFFPRuntime(ulVSGId,
 			 ASF_FFP_CREATE_FLOWS,
 			 &cmd, sizeof(cmd), NULL, 0) ==
 					ASFFFP_RESPONSE_SUCCESS) {

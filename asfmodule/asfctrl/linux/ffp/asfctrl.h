@@ -18,6 +18,7 @@
 #ifndef __ASFCTRL_H__
 #define __ASFCTRL_H__
 
+#include <net/xfrm.h>
 #define ASFCTRL_TRUE	((ASF_boolean_t)1)
 #define ASFCTRL_FALSE	((ASF_boolean_t)0)
 
@@ -26,7 +27,6 @@
 
 #define ASF_DEF_VSG 		0
 #define ASF_DEF_ZN_ID 		0
-#define ASF_MAX_NUM_VSG	2
 
 #define ASFCTRL_MAX_IFACES	(16)
 
@@ -143,8 +143,8 @@ static inline int asfctrl_skb_is_dummy(struct sk_buff *skb)
 	return 0;
 }
 
-extern uint32_t asfctrl_vsg_config_id;
-extern uint32_t asfctrl_vsg_l2blobconfig_id;
+extern uint32_t asfctrl_vsg_config_id[ASF_MAX_VSGS];
+extern uint32_t asfctrl_vsg_l2blobconfig_id[ASF_MAX_VSGS];
 
 extern int asf_ip_send(struct sk_buff *skb);
 extern ASF_int32_t asfctrl_create_dev_map(struct net_device *dev,
@@ -159,7 +159,8 @@ extern struct kobject *asfctrl_kobj;
 
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
 
-typedef int (*asfctrl_ipsec_get_flow_info)(bool *ipsec_in, bool *ipsec_out,
+typedef int (*asfctrl_ipsec_get_flow_info)(uint32_t ulVSGId,
+					bool *ipsec_in, bool *ipsec_out,
 					ASFFFPIpsecInfo_t *ipsec_info,
 					struct net *net,
 					struct flowi flow, bool bIsIpv6);
@@ -168,7 +169,7 @@ typedef void (*asfctrl_ipsec_l2blob_update)(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
 					ASF_uint16_t ulDeviceID);
 
-typedef void (*asfctrl_ipsec_vsg_magicnum_update)(void);
+typedef void (*asfctrl_ipsec_vsg_magicnum_update)(ASF_uint32_t ulVSGId);
 
 extern void asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info   p_flow,
 					asfctrl_ipsec_l2blob_update  p_l2blob,
@@ -178,7 +179,9 @@ extern asfctrl_ipsec_get_flow_info fn_ipsec_get_flow4;
 
 #endif
 
-extern void asfctrl_invalidate_sessions(void);
+extern ASF_uint32_t asfctrl_get_ipsec_pol_vsgid(struct xfrm_policy *);
+extern ASF_uint32_t asfctrl_get_ipsec_sa_vsgid(struct xfrm_state *);
+extern void asfctrl_invalidate_sessions(ASF_uint32_t ulVSGId);
 #ifdef CONFIG_PPPOE
 extern struct net_device *ppp_get_parent_dev(struct net_device *pDev,
 							ASF_uint16_t *pSessId);
@@ -207,7 +210,7 @@ extern void  asfctrl_register_fwd_func(asfctrl_fwd_l2blob_update  p_l2blob,
 typedef void (*asfctrl_term_l2blob_update)(struct sk_buff *skb,
 					ASF_uint32_t hh_len,
 					ASF_uint32_t ulDeviceID);
-typedef void (*asfctrl_term_cache_flush_t)(void);
+typedef void (*asfctrl_term_cache_flush_t)(ASF_uint32_t ulVSGId);
 
 extern void  asfctrl_register_term_func(asfctrl_term_l2blob_update p_l2blob,
 					asfctrl_term_cache_flush_t cache_flush);

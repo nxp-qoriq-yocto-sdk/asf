@@ -76,10 +76,10 @@ struct net_device *p_asfctrl_netdev_cii[ASFCTRL_MAX_IFACES];
 
 ASFCap_t  	g_cap;
 
-uint32_t asfctrl_vsg_config_id;
+uint32_t asfctrl_vsg_config_id[ASF_MAX_VSGS];
 EXPORT_SYMBOL(asfctrl_vsg_config_id);
 
-uint32_t asfctrl_vsg_l2blobconfig_id;
+uint32_t asfctrl_vsg_l2blobconfig_id[ASF_MAX_VSGS];
 EXPORT_SYMBOL(asfctrl_vsg_l2blobconfig_id);
 
 #ifdef CONFIG_VLAN_8021Q
@@ -127,55 +127,61 @@ asfctrl_ipsec_get_flow_info fn_ipsec_get_flow4;
 EXPORT_SYMBOL(fn_ipsec_get_flow4);
 asfctrl_ipsec_l2blob_update fn_ipsec_l2blob_update;
 asfctrl_ipsec_vsg_magicnum_update fn_ipsec_vsg_magic_update;
+extern int asf_max_vsgs;
 void asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info   p_flow,
 				asfctrl_ipsec_l2blob_update  p_l2blob,
 				asfctrl_ipsec_vsg_magicnum_update p_vsgmagic)
 {
+	uint32_t vsg;
 	ASFCTRL_FUNC_ENTRY;
 	fn_ipsec_get_flow4 = p_flow;
 	fn_ipsec_l2blob_update = p_l2blob;
 	fn_ipsec_vsg_magic_update = p_vsgmagic;
 
-	asfctrl_invalidate_sessions();
+	for (vsg = 0; vsg < asf_max_vsgs; vsg++)
+		asfctrl_invalidate_sessions(vsg);
 	ASFCTRL_FUNC_EXIT;
 }
 EXPORT_SYMBOL(asfctrl_register_ipsec_func);
 #endif
 
-ASF_void_t  asfctrl_invalidate_sessions(void)
+ASF_void_t  asfctrl_invalidate_sessions(ASF_uint32_t ulVSGId)
 {
 	ASFFFPConfigIdentity_t cmd;
 	ASFCTRL_FUNC_ENTRY;
-	asfctrl_vsg_config_id += 1;
+	asfctrl_vsg_config_id[ulVSGId] += 1;
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.ulConfigMagicNumber = asfctrl_vsg_config_id;
-	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
+	cmd.ulConfigMagicNumber = asfctrl_vsg_config_id[ulVSGId];
+	ASFFFPUpdateConfigIdentity(ulVSGId, cmd);
 
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
 	if (fn_ipsec_vsg_magic_update)
-		fn_ipsec_vsg_magic_update();
+		fn_ipsec_vsg_magic_update(ulVSGId);
 #endif
-	ASFCTRL_DBG("Exit:ulConfigMagicNumber =%d", asfctrl_vsg_config_id);
+	ASFCTRL_DBG("Exit:ulConfigMagicNumber =%d",
+		asfctrl_vsg_config_id[ulVSGId]);
 	ASFCTRL_FUNC_EXIT;
 }
 EXPORT_SYMBOL(asfctrl_invalidate_sessions);
 
-ASF_void_t  asfctrl_invalidate_l2blob(void)
+ASF_void_t  asfctrl_invalidate_l2blob(ASF_uint32_t ulVSGId)
 {
 	ASFFFPConfigIdentity_t cmd;
 	ASFCTRL_FUNC_ENTRY;
 
-	asfctrl_vsg_l2blobconfig_id += 1;
+	asfctrl_vsg_l2blobconfig_id[ulVSGId] += 1;
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.l2blobConfig.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
+	cmd.l2blobConfig.ulL2blobMagicNumber =
+		asfctrl_vsg_l2blobconfig_id[ulVSGId];
 	cmd.bL2blobMagicNumber = 1;
-	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
+	ASFFFPUpdateConfigIdentity(ulVSGId, cmd);
 
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
 	if (fn_ipsec_vsg_magic_update)
-		fn_ipsec_vsg_magic_update();
+		fn_ipsec_vsg_magic_update(ulVSGId);
 #endif
-	ASFCTRL_DBG("Exit:ulL2blobMagic =%d", asfctrl_vsg_l2blobconfig_id);
+	ASFCTRL_DBG("Exit:ulL2blobMagic =%d",
+		asfctrl_vsg_l2blobconfig_id[ulVSGId]);
 }
 
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -183,7 +189,9 @@ ASF_void_t asfctrl_l3_ipv6_route_flush(void)
 {
 	ASFCTRL_FUNC_ENTRY;
 
-	asfctrl_invalidate_l2blob();
+	/* TODO: passing Default vsg but we need to get vsg
+	for the route from kernel */
+	asfctrl_invalidate_l2blob(ASF_DEF_VSG);
 
 	ASFCTRL_FUNC_EXIT;
 }
@@ -192,7 +200,9 @@ ASF_void_t asfctrl_l3_route_flush(void)
 {
 	ASFCTRL_FUNC_ENTRY;
 
-	asfctrl_invalidate_l2blob();
+	/* TODO: passing Default vsg but we need to get vsg
+	for the route from kernel */
+	asfctrl_invalidate_l2blob(ASF_DEF_VSG);
 
 #ifdef ASFCTRL_FWD_FP_SUPPORT
 	if (fn_fwd_l3_route_flush)
@@ -273,6 +283,11 @@ int asfctrl_dev_get_free_cii(struct net_device *dev)
 }
 EXPORT_SYMBOL(asfctrl_dev_get_free_cii);
 
+ASF_uint32_t asfctrl_get_dev_vsgid(struct net_device *dev)
+{
+	/* TODO: Get proper VSG ID */
+	return ASF_DEF_VSG;
+}
 ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 {
 	ASF_int32_t cii;
@@ -286,6 +301,7 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 #ifdef CONFIG_PPPOE
 	ASF_uint16_t usPPPoESessId;
 #endif
+	ASF_uint32_t ulVSGId;
 
 
 	ASFCTRL_FUNC_ENTRY;
@@ -385,9 +401,9 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 		ASFCTRL_DBG("MAP interface %s with cii %d failed\n",
 				dev->name, cii);
 
-	/* Assign Default VSG and ZoneID */
-	ASFBindDeviceToVSG(ASF_DEF_VSG, cii);
-	ASFFFPBindInterfaceToZone(ASF_DEF_VSG, cii, ASF_DEF_ZN_ID);
+	ulVSGId = asfctrl_get_dev_vsgid(dev);
+	ASFBindDeviceToVSG(ulVSGId, cii);
+	ASFFFPBindInterfaceToZone(ulVSGId, cii, ASF_DEF_ZN_ID);
 
 	ASFCTRL_FUNC_EXIT;
 	return T_SUCCESS;
@@ -457,6 +473,7 @@ static int asfctrl_dev_notifier_fn(struct notifier_block *this,
 				unsigned long event, void *ptr)
 {
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
+	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
 	ASFCTRL_DBG("%s - event %ld (%s)\n",
@@ -499,7 +516,8 @@ static int asfctrl_dev_notifier_fn(struct notifier_block *this,
 					dev->name);
 				return NOTIFY_BAD;
 			}
-			asfctrl_invalidate_l2blob();
+			ulVSGId = asfctrl_get_dev_vsgid(dev);
+			asfctrl_invalidate_l2blob(ulVSGId);
 		}
 		break;
 	}
@@ -619,7 +637,8 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 		cmd.u.l2blob.ulDeviceId = asfctrl_dev_get_cii(dev);
 		cmd.u.l2blob.ulPathMTU = pData->ulPathMTU;
 
-		cmd.u.l2blob.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
+		cmd.u.l2blob.ulL2blobMagicNumber =
+			asfctrl_vsg_l2blobconfig_id[pData->ulVsgId];
 
 		/* need to include PPPOE+PPP header if any */
 		cmd.u.l2blob.l2blobLen = hh_len + tun_hdr;
@@ -739,6 +758,7 @@ static int __init asfctrl_init(void)
 		asfctrl_fnFlowValidate,
 		asfctrl_fnAuditLog
 	};
+	int i;
 
 	ASFCTRL_FUNC_ENTRY;
 
@@ -750,16 +770,18 @@ static int __init asfctrl_init(void)
 		ASFCTRL_ERR("ASF capabilities: Non homogenous buffer");
 		return -1;
 	}
-	asfctrl_vsg_config_id = jiffies;
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.ulConfigMagicNumber = asfctrl_vsg_config_id;
-	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
+	for (i = 0; i < ASF_MAX_VSGS; i++) {
+		asfctrl_vsg_config_id[i] = jiffies;
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.ulConfigMagicNumber = asfctrl_vsg_config_id[i];
+		ASFFFPUpdateConfigIdentity(i, cmd);
 
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.bL2blobMagicNumber = 1;
-	cmd.l2blobConfig.ulL2blobMagicNumber = asfctrl_vsg_l2blobconfig_id;
-	ASFFFPUpdateConfigIdentity(ASF_DEF_VSG, cmd);
-
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.bL2blobMagicNumber = 1;
+		cmd.l2blobConfig.ulL2blobMagicNumber =
+			asfctrl_vsg_l2blobconfig_id[i];
+		ASFFFPUpdateConfigIdentity(i, cmd);
+	}
 
 	ASFFFPRegisterCallbackFns(&asfctrl_Cbs);
 

@@ -518,7 +518,7 @@ int asfctrl_qos_tbf_del(
 }
 #endif
 
-extern void asfctrl_invalidate_sessions(void);
+extern void asfctrl_invalidate_sessions(ASF_uint32_t ulVSGId);
 
 static int __init asfctrl_linux_qos_init(void)
 {

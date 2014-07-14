@@ -3209,6 +3209,7 @@ unsigned int secfp_CreateInSA(
 					&secfp_OutDB, ulSPDOutContainerIndex);
 		pSA->ulOutSPI = ulOutSPI;
 		pSA->ulTunnelId = ulTunnelId;
+		pSA->ulVSGId = ulVSGId;
 
 		memcpy(&(pSA->SPDParams), &(pContainer->SPDParams),
 						sizeof(SPDInParams_t));
