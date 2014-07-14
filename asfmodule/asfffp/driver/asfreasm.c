@@ -2414,6 +2414,8 @@ int asfIpv6MakeFragment(struct sk_buff *skb,
 	unsigned int hdrtocpy = 0;
 	unsigned int ident = asfReasmGetNextId();
 
+	/*Converting Linux Fraglist to ASF frag list*/
+	asfCnvFgLLinuxToAsf(skb);
 	hdrtocpy = (uintptr_t)(skb_transport_header(skb)) - (uintptr_t)(skb_network_header(skb));
 
 	skb->data -= sizeof(struct frag_hdr);

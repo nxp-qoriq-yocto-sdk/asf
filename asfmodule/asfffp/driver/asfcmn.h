@@ -362,6 +362,24 @@ static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 	}
 }
 
+static inline void asfCnvFgLAsfToLinux(struct sk_buff *skb)
+{
+	struct sk_buff *tmp_skb;
+
+	tmp_skb = skb_shinfo(skb)->frag_list;
+	while (tmp_skb) {
+		skb->len += tmp_skb->len;
+		skb->data_len +=  tmp_skb->len;
+		tmp_skb = tmp_skb->next;
+	}
+}
+
+static inline void asfCnvFgLLinuxToAsf(struct sk_buff *skb)
+{
+	skb->len -= skb->data_len;
+	skb->data_len = 0;
+}
+
 #ifdef ASF_IPV6_FP_SUPPORT
 static inline int _ipv6_addr_cmp(const struct in6_addr *a1, const struct in6_addr *a2)
 {
