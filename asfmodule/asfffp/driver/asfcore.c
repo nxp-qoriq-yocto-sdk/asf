@@ -2579,6 +2579,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		if (iph->frag_off & IP_DF)
 			goto ret_pkt_to_stk;
 
+		abuf.bbuffInDomain = ASF_TRUE;
 		skb = (struct sk_buff *)asf_abuf_to_skb(&abuf);
 
 		/* Need to call fragmentation routine */

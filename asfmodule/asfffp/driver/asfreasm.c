@@ -2035,7 +2035,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 	unsigned int *pSrc, *pTgt;
 	unsigned int offset = (iph->frag_off & IP_OFFSET) << 3;
 	unsigned int flags = iph->frag_off & IP_MF;
-	unsigned int tot_len;
+	unsigned int first_frag_len;
 	bool bNewSkb = 1;
 	struct sk_buff *pSkb, *frag;
 
@@ -2043,10 +2043,12 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			ulMTU, ulDevXmitHdrLen, iph->tot_len);
 	if ((likely(iph->tot_len > ulMTU)) || (skb_shinfo(skb)->frag_list)) {
 		/* Fragmentation */
-		if (((skb->len <= ulMTU) && (skb_headroom(skb) > ulDevXmitHdrLen))
-			&& (!((skb->len - ihl) & 7))) {
+		if (((skb_pagelen(skb) <= ulMTU)
+			&& (skb_headroom(skb) > ulDevXmitHdrLen))
+			&& (!((skb_pagelen(skb) - ihl) & 7))) {
 			bNewSkb = 0;
-			for (pSkb = skb->next;  pSkb != NULL; pSkb = pSkb->next) {
+			for (pSkb = skb_shinfo(skb)->frag_list;	pSkb != NULL;
+			    pSkb = pSkb->next) {
 				if ((pSkb->len + ASF_REASM_IP_HDR_LEN > ulMTU) ||
 				    ((pSkb->len & 7) && (pSkb->next)) ||
 				    (skb_headroom(pSkb) < ulReqHeadRoom)) {
@@ -2063,7 +2065,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				asf_reasm_debug("skb_shinfo(skb)->frag_list = 0x%x\r\n", frag);
 
 
-				iph->tot_len = htons(skb->len);
+				iph->tot_len = htons(skb_pagelen(skb));
 				iph->frag_off = htons(IP_MF);
 
 				ip_send_check(iph);
@@ -2072,34 +2074,31 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				skb_set_transport_header(skb, ihl);
 				skb_reset_network_header(skb);
 
-				offset += skb->len - ihl;
+				offset += skb_pagelen(skb) - ihl;
 				for (; frag != NULL; frag = frag->next) {
-					if (frag) {
+					__skb_push(frag, ihl);
+					skb_reset_network_header(frag);
 
-						__skb_push(frag, ihl);
-						skb_reset_network_header(frag);
+					for (pSrc = (unsigned int *)  iph,
+					     pTgt = (unsigned int *)
+					     (skb_network_header(frag)),
+					     ii = 0; ii < 5; ii++)
+						pTgt[ii] = pSrc[ii];
 
-
-						for (pSrc = (unsigned int *)  iph,
-						     pTgt = (unsigned int *)  (skb_network_header(frag)),
-						     ii = 0; ii < 5; ii++) {
-							pTgt[ii] = pSrc[ii];
-						}
-						iph = ip_hdr(frag);
-						iph->tot_len = htons(frag->len);
-					if (ip_hdr(frag)->ihl > 5 &&
-							offset == 0)
-							asf_ip_options_fragment(frag);
-						iph->frag_off = htons(offset >> 3);
-						if (frag->next != NULL)
-							iph->frag_off |= htons(IP_MF);
+					iph = ip_hdr(frag);
+					iph->tot_len = htons(frag->len);
+					if (ip_hdr(frag)->ihl > 5
+						&& offset == 0)
+						asf_ip_options_fragment(frag);
+					iph->frag_off = htons(offset >> 3);
+					if (frag->next != NULL)
+						iph->frag_off |= htons(IP_MF);
 
 						ip_send_check(iph);
 						frag->ip_summed =
 							CHECKSUM_UNNECESSARY;
 
 						offset += frag->len - ihl;
-					}
 				}
 				skb->next = skb_shinfo(skb)->frag_list;
 				skb_shinfo(skb)->frag_list = NULL;
@@ -2129,30 +2128,13 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			pLastSkb = skb;
 			/* adjust other skb pointers */
 			len = (ulMTU & ~7);
-			bytesLeft = (iph->tot_len - ihl - len);
+			first_frag_len = len + ihl;
+			bytesLeft = iph->tot_len - first_frag_len;
 
-			tot_len = len+ihl;
 			/* The first fragment will be created at the end */
 
-#if 0
-			/* Skb->len will be set at last as will be used
-			  asfSkbCopyBits() */
-			skb->tail = skb->data;
-			skb->tail += tot_len;
-			iph->frag_off |= htons(IP_MF);
-			iph->tot_len = htons(len+ihl);
-
-			if (!bDoChecksum)
-				skb->ip_summed = CHECKSUM_PARTIAL;
-			else {
-				ip_send_check(iph);
-				skb->ip_summed = CHECKSUM_UNNECESSARY;
-			}
-			asf_ip_options_fragment(skb);
-#endif
-
 			offset += len;
-			ptr += (ihl + len);
+			ptr += first_frag_len;
 			asf_reasm_debug("bytesLeft %d, Offset %d, len %d \r\n",
 					bytesLeft, offset, len);
 			/* continue more more fragments with new allocations. */
@@ -2223,30 +2205,42 @@ int asfIpv4Fragment(struct sk_buff *skb,
 					goto drop;
 				}
 			}
+			if (skb_headroom(skb) < ulReqHeadRoom) {
 #ifdef CONFIG_DPA
-			skb2 = asf_alloc_buf_skb(ndev);
+				skb2 = asf_alloc_buf_skb(ndev);
 #else
-			skb2 = gfar_new_skb(ndev);
+				skb2 = gfar_new_skb(ndev);
 #endif
-			if (!skb2)
-				goto drop;
+				if (!skb2)
+					goto drop;
 
 #ifdef CONFIG_DPA
-			skb_reserve(skb2, ulDevXmitHdrLen +
-					dev->needed_headroom);
-			skb2->protocol = ETH_P_IP;
+				skb_reserve(skb2, ulDevXmitHdrLen +
+						dev->needed_headroom);
+				skb2->protocol = ETH_P_IP;
 #endif
-			skb2->protocol = skb->protocol;
-			skb_reset_network_header(skb2);
-			skb2->transport_header =
+				skb2->protocol = skb->protocol;
+				skb_reset_network_header(skb2);
+				skb2->transport_header =
 				skb2->network_header + ihl;
 
-			asfSkbCopyBits(skb, 0,
-					skb_put(skb2, tot_len),
-					tot_len);
+				asfSkbCopyBits(skb, 0, skb_put(skb2,
+					first_frag_len), first_frag_len);
+				skb2->next = skb->next;
+				skb->next = NULL;
+#ifdef CONFIG_DPA
+				if (skb->cb[BPID_INDEX])
+					asf_free_buf_skb(skb->dev, skb);
+				else
+#endif
+				ASFSkbFree(skb);
+			} else {
+				___pskb_trim(skb, first_frag_len);
+				skb2 = skb;
+			}
 
 			ip_hdr(skb2)->frag_off |= htons(IP_MF);
-			ip_hdr(skb2)->tot_len = htons(tot_len);
+			ip_hdr(skb2)->tot_len = htons(first_frag_len);
 
 			if (ip_hdr(skb2)->ihl > 5)
 				asf_ip_options_fragment(skb2);
@@ -2256,16 +2250,11 @@ int asfIpv4Fragment(struct sk_buff *skb,
 
 
 			*pOutSkb = skb2;
-			skb2->next = skb->next;
-			skb->next = NULL;
-#ifdef CONFIG_DPA
-			if (skb->cb[BPID_INDEX])
-				asf_free_buf_skb(dev, skb);
-			else
-#endif
-				ASFSkbFree(skb);
 			return 0;
 		}
+	} else {
+		*pOutSkb = skb;
+		return 0;
 	}
 drop:
 	asf_reasm_debug("default error case!\n");
