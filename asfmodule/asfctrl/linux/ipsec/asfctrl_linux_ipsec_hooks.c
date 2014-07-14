@@ -429,7 +429,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 			&handle,
 			sizeof(uint32_t));
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions(ulVSGId);
+		asfctrl_invalidate_vsg_sessions(ulVSGId);
 	} else if (dir == XFRM_POLICY_IN) {
 		ASFIPSecConfigAddInSPDContainerArgs_t	inSPDContainer;
 		ASF_IPSecPolicy_t			spdParams;
@@ -468,7 +468,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 			sizeof(uint32_t));
 
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions(ulVSGId);
+		asfctrl_invalidate_vsg_sessions(ulVSGId);
 	} else {
 		ASFCTRL_DBG("\nPOLICY is FWD");
 	}
@@ -513,7 +513,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 			sizeof(uint32_t));
 
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions(ulVSGId);
+		asfctrl_invalidate_vsg_sessions(ulVSGId);
 
 	} else if (dir == XFRM_POLICY_IN) {
 		ASFIPSecConfigDelInSPDContainerArgs_t	inSPDContainer;
@@ -531,7 +531,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 			sizeof(uint32_t));
 
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions(ulVSGId);
+		asfctrl_invalidate_vsg_sessions(ulVSGId);
 	}
 	ASFCTRL_DBG("COKKIE %d id =%d", xp->asf_cookie, xp->index);
 
@@ -558,7 +558,7 @@ int asfctrl_xfrm_flush(ASF_uint32_t ulVSGId)
 	asfctrl_vsg_ipsec_cont_magic_id++;
 
 	/* Changing the VSG Magic Number of Policy Delete */
-	asfctrl_invalidate_sessions(ulVSGId);
+	asfctrl_invalidate_vsg_sessions(ulVSGId);
 
 	err = ASFIPSecFlushContainers(ulVSGId, ASF_DEF_IPSEC_TUNNEL_ID);
 
@@ -1378,7 +1378,7 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 			&handle,
 			sizeof(uint32_t));
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions(ulVSGId);
+		asfctrl_invalidate_vsg_sessions(ulVSGId);
 	}
 
 sa_check:
@@ -1450,7 +1450,7 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 			&handle,
 			sizeof(uint32_t));
 		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_sessions(ulVSGId);
+		asfctrl_invalidate_vsg_sessions(ulVSGId);
 	}
 sa_check:
 	if (asfctrl_xfrm_add_insa(xfrm, xp)) {

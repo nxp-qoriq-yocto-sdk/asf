@@ -139,13 +139,32 @@ void asfctrl_register_ipsec_func(asfctrl_ipsec_get_flow_info   p_flow,
 	fn_ipsec_vsg_magic_update = p_vsgmagic;
 
 	for (vsg = 0; vsg < asf_max_vsgs; vsg++)
-		asfctrl_invalidate_sessions(vsg);
+		asfctrl_invalidate_vsg_sessions(vsg);
 	ASFCTRL_FUNC_EXIT;
 }
 EXPORT_SYMBOL(asfctrl_register_ipsec_func);
 #endif
 
-ASF_void_t  asfctrl_invalidate_sessions(ASF_uint32_t ulVSGId)
+ASF_void_t  asfctrl_invalidate_sessions(void)
+{
+	ASFFFPConfigIdentity_t cmd;
+	int i;
+	ASFCTRL_FUNC_ENTRY;
+	for (i = 0; i < ASF_MAX_VSGS; i++) {
+		asfctrl_vsg_config_id[i] += 1;
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.ulConfigMagicNumber = asfctrl_vsg_config_id[i];
+		ASFFFPUpdateConfigIdentity(i, cmd);
+#ifdef ASFCTRL_IPSEC_FP_SUPPORT
+	if (fn_ipsec_vsg_magic_update)
+		fn_ipsec_vsg_magic_update(i);
+#endif
+		ASFCTRL_DBG("Exit:ulConfigMagicNumber =%d", asfctrl_vsg_config_id[i]);
+	}
+	ASFCTRL_FUNC_EXIT;
+}
+EXPORT_SYMBOL(asfctrl_invalidate_sessions);
+ASF_void_t  asfctrl_invalidate_vsg_sessions(ASF_uint32_t ulVSGId)
 {
 	ASFFFPConfigIdentity_t cmd;
 	ASFCTRL_FUNC_ENTRY;
@@ -162,7 +181,7 @@ ASF_void_t  asfctrl_invalidate_sessions(ASF_uint32_t ulVSGId)
 		asfctrl_vsg_config_id[ulVSGId]);
 	ASFCTRL_FUNC_EXIT;
 }
-EXPORT_SYMBOL(asfctrl_invalidate_sessions);
+EXPORT_SYMBOL(asfctrl_invalidate_vsg_sessions);
 
 ASF_void_t  asfctrl_invalidate_l2blob(ASF_uint32_t ulVSGId)
 {

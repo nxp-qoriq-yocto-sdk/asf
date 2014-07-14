@@ -181,7 +181,8 @@ extern asfctrl_ipsec_get_flow_info fn_ipsec_get_flow4;
 
 extern ASF_uint32_t asfctrl_get_ipsec_pol_vsgid(struct xfrm_policy *);
 extern ASF_uint32_t asfctrl_get_ipsec_sa_vsgid(struct xfrm_state *);
-extern void asfctrl_invalidate_sessions(ASF_uint32_t ulVSGId);
+extern void asfctrl_invalidate_sessions(void);
+extern void asfctrl_invalidate_vsg_sessions(ASF_uint32_t ulVSGId);
 #ifdef CONFIG_PPPOE
 extern struct net_device *ppp_get_parent_dev(struct net_device *pDev,
 							ASF_uint16_t *pSessId);
