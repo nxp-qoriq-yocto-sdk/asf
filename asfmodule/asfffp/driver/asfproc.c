@@ -629,7 +629,8 @@ static int display_asf_proc_flow_stats(struct seq_file *f, void *v)
 			flow->odev ? flow->odev->name : "UNK",
 			flow->ulVsgId,
 			flow->ulZoneId,
-			(flow->ucProtocol == 6) ? "TCP" : "UDP",
+				(flow->ucProtocol == 6) ? "TCP" :
+				(flow->ucProtocol == 17) ? "UDP" : "SCTP",
 
 			NIPQUAD(flow->ulSrcIp),
 			ntohs((flow->ulPorts&0xffff0000) >> 16),

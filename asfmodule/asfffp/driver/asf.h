@@ -659,7 +659,9 @@ enum {
 	ASF_LOG_ID_TCP_BAD_URG_PTR,
 	ASF_LOG_ID_TCP_BAD_URG_PTR_BUT_NO_DATA,
 	ASF_LOG_ID_TCP_NO_URG_BIT,
-
+#ifdef ASF_SCTP_SUPPORT
+	ASF_LOG_ID_INVALID_SCTP_HDRLEN,
+#endif
 	ASF_LOG_ID_MAX
 } ;
 
@@ -1163,7 +1165,7 @@ typedef struct ASFFFPGlobalStats_s {
 
 	ASF_uint32_t    ulErrCsum;	/* checksum verification errors */
 	ASF_uint32_t    ulErrIpHdr;		/* IP header validation  errors */
-	ASF_uint32_t    ulErrIpProtoHdr;	/* TCP/UDP header errors */
+	ASF_uint32_t    ulErrIpProtoHdr;	/* TCP/UDP/SCTP header errors */
 	ASF_uint32_t    ulErrTTL;	/* Packet drops due to TTL */
 	ASF_uint32_t    ulErrAllocFailures;
 	ASF_uint32_t    ulMiscFailures;

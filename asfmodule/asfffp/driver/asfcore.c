@@ -40,6 +40,9 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
+#ifdef ASF_SCTP_SUPPORT
+#include <linux/sctp.h>
+#endif
 #include <linux/icmp.h>
 
 #include <asm/io.h>
@@ -690,6 +693,10 @@ static inline ffp_flow_t  *asf_ffp_flow_lookup(
 #ifdef ASF_DEBUG
 	unsigned long ulCount = 0;
 #endif
+#if defined(ASF_SCTP_SUPPORT) && !defined(ASF_SCTP_5TUPLE_SUPPORT)
+	if (protocol == IPPROTO_SCTP)
+			ports = 0;
+#endif
 
 	*pHashVal = ASFFFPComputeFlowHash1(sip, dip, ports, vsg,
 					szone, asf_ffp_hash_init_value);
@@ -726,9 +733,14 @@ static inline ffp_flow_t *asf_ffp_flow_lookup_by_tuple(ASFFFPFlowTuple_t *tpl,
 			unsigned long ulZoneId,
 			unsigned long *pHashVal)
 {
+	ASF_uint32_t ulPorts = (tpl->usSrcPort << 16) | tpl->usDestPort;
+#if defined(ASF_SCTP_SUPPORT) && !defined(ASF_SCTP_5TUPLE_SUPPORT)
+	if (tpl->ucProtocol == IPPROTO_SCTP)
+		ulPorts = 0;
+#endif
 	return asf_ffp_flow_lookup(tpl->ulSrcIp, tpl->ulDestIp,
-				(tpl->usSrcPort << 16)|tpl->usDestPort,
-				ulVsgId, ulZoneId, tpl->ucProtocol, pHashVal);
+				ulPorts, ulVsgId, ulZoneId,
+				tpl->ucProtocol, pHashVal);
 }
 
 static inline ffp_flow_t *ffp_flow_alloc(void)
@@ -1147,6 +1159,12 @@ static void asf_pktdump(struct sk_buff *skb)
 		{
 		struct ip_auth_hdr *ahh = (struct ip_auth_hdr *)data;
 		p += sprintf(p, " AH spi-0x%x seq-%d", ahh->spi, ahh->seq_no);
+		}
+		break;
+	case IPPROTO_SCTP:
+		{
+		struct sctphdr *sctph = (struct sctphdr *)data;
+		p += sprintf(p, " SCTP %d:%d", sctph->source, sctph->dest);
 		}
 		break;
 	case IPPROTO_ICMP:
@@ -2035,6 +2053,9 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif
 	if (unlikely((iph->protocol != IPPROTO_TCP)
 		&& (iph->protocol != IPPROTO_UDP)
+#ifdef ASF_SCTP_SUPPORT
+		&& (iph->protocol != IPPROTO_SCTP)
+#endif
 #ifdef ASF_IPSEC_FP_SUPPORT
 		&& (iph->protocol != IPPROTO_ESP)
 		&& (iph->protocol != IPPROTO_AH)
@@ -2065,6 +2086,10 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 				&& (*(unsigned short *) (skb->data
 					+ x_hh_len + iph->ihl*4 + 6) == 0))) {
 				XGSTATS_INC(UdpBlankCsum);
+#ifdef ASF_SCTP_SUPPORT
+			} else if (iph->protocol == IPPROTO_SCTP) {
+				asf_debug("SCTP Packet\n");
+#endif
 			} else {
 				XGSTATS_INC(InvalidCsum);
 				gstats->ulErrCsum++;
@@ -3075,7 +3100,11 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		}
 #endif
 		if (unlikely((iph->protocol != IPPROTO_TCP)
-			&& (iph->protocol != IPPROTO_UDP))) {
+			&& (iph->protocol != IPPROTO_UDP)
+#ifdef ASF_SCTP_SUPPORT
+			&& (iph->protocol != IPPROTO_SCTP)
+#endif
+			)) {
 			if (pFFPIpsecInVerify) {
 				pFFPIpsecInVerify(ulVsgId, skb,
 				anDev->ulCommonInterfaceId, NULL, pIpsecOpaque);
@@ -3110,6 +3139,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			asf_debug("First fragment does not have transport headers ready\n");
 			if (iph->protocol == IPPROTO_UDP)
 				iRetVal = asfReasmPullBuf(skb, 8, &fragCnt);
+#ifdef ASF_SCTP_SUPPORT
+			else if (iph->protocol == IPPROTO_SCTP)
+				iRetVal = asfReasmPullBuf(skb, 12, &fragCnt);
+#endif
 			else
 				iRetVal	= asfReasmPullBuf(skb, 28, &fragCnt);
 
@@ -3344,6 +3377,19 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			asf_debug_l2("TCP state processing is done!\n");
+#ifdef ASF_SCTP_SUPPORT
+		} else { /* SCTP Traffic */
+			XGSTATS_INC(UdpPkts);
+			if ((iph->tot_len-iphlen) < 12) {
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+				gstats->ulErrIpProtoHdr++;
+#endif
+				asfFfpSendLog(flow,
+					ASF_LOG_ID_INVALID_SCTP_HDRLEN,
+					ulHashVal);
+				goto drop_pkt;
+			}
+#endif
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		flow_stats->ulInPkts++;
@@ -3383,9 +3429,12 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				iph->daddr = flow->ulDestNATIp;
 			}
 
-			*ptrhdrOffset = flow->ulNATPorts;
 			skb_set_transport_header(skb, iphlen);
-
+#ifdef ASF_SCTP_SUPPORT
+			if (iph->protocol == IPPROTO_SCTP)
+						goto sctp_flow;
+#endif
+			*ptrhdrOffset = flow->ulNATPorts;
 #ifndef ASF_DO_INC_CHECKSUM
 			if (iph->ihl != 5) /* Options */
 #endif
@@ -3446,7 +3495,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				}
 			}
 		}
-
+sctp_flow:
 #ifdef ASF_INGRESS_MARKER
 		if (ASF_QM_NULL_DSCP != flow->mkinfo.uciDscp) {
 		#ifdef ASF_DO_INC_CHECKSUM

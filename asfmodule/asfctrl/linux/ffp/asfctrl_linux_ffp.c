@@ -31,6 +31,9 @@
 #include <net/ip.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#ifdef ASFCTRL_SCTP_SUPPORT
+#include <linux/sctp.h>
+#endif
 #include <net/dst.h>
 #include <net/netfilter/nf_conntrack_extend.h>
 #include <net/netfilter/nf_conntrack_ecache.h>
@@ -816,9 +819,13 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	if ((ct_tuple_orig->dst.protonum != IPPROTO_UDP)
 		&& (ct_tuple_orig->dst.protonum != IPPROTO_TCP)
 		&& (ct_tuple_reply->dst.protonum != IPPROTO_UDP)
-		&& (ct_tuple_reply->dst.protonum != IPPROTO_TCP)) {
-
-		ASFCTRL_INFO("Non TCP/UDP connection, ignoring");
+		&& (ct_tuple_reply->dst.protonum != IPPROTO_TCP)
+#ifdef ASFCTRL_SCTP_SUPPORT
+		&& (ct_tuple_orig->dst.protonum != IPPROTO_SCTP)
+		&& (ct_tuple_reply->dst.protonum != IPPROTO_SCTP)
+#endif
+	) {
+		ASFCTRL_INFO("Non TCP/UDP/SCTP connection, ignoring");
 		return -EINVAL;
 	}
 
@@ -1258,6 +1265,11 @@ static int asfctrl_conntrack_event(unsigned int events, struct nf_ct_event *ptr)
 		if (ct_tuple->dst.protonum == IPPROTO_UDP) {
 			ASFCTRL_INFO("UDP flow");
 			asfctrl_offload_session(ct);
+#ifdef ASFCTRL_SCTP_SUPPORT
+		} else if (ct_tuple->dst.protonum == IPPROTO_SCTP) {
+			ASFCTRL_INFO("SCTP flow");
+			asfctrl_offload_session(ct);
+#endif
 		}
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
 	} else if (events & (1 << IPCT_ASSURED)) {
@@ -1272,7 +1284,7 @@ static int asfctrl_conntrack_event(unsigned int events, struct nf_ct_event *ptr)
 			asfctrl_offload_session(ct);
 		}
 	} else {
-		ASFCTRL_INFO("DEFAULT event! {0x%x} ", events);
+		ASFCTRL_DBG("DEFAULT event! {0x%x} ", events);
 	}
 
 	ASFCTRL_FUNC_EXIT;
