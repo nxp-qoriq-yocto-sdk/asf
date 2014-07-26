@@ -951,7 +951,7 @@ static inline int asfIPv6CheckFragInfo(struct sk_buff *skb,
 		}
 	}
 
-	*offset = fhdr->frag_off;
+	*offset = ASF_NTOHS(fhdr->frag_off);
 	*flags = *offset & 0x1; /* Only MF bit is there */
 	*flags = *flags << 13; /* Hack to convert IPV6 MF bit to IPv4 bit, this is done to make the rest of the processing work for both */
 	*offset &= ~0x7; /*offset is in multiple of 8, already shited by 3 bits */
@@ -2233,7 +2233,7 @@ int asfIpv6Fragment(struct sk_buff *skb,
 	unsigned	char nexthdr;
 
 	asf_reasm_debug("skb->len = %d, ulMTU=%d, ip_tot_len =%d\r\n", skb->len,
-			ulMTU, , ip6h->payload_len);
+			ulMTU, , ASF_NTOHS(ip6h->payload_len));
 
 	ip6hpexh_len = skb_transport_header(skb) - skb_network_header(skb);
 
@@ -2332,8 +2332,8 @@ int asfIpv6Fragment(struct sk_buff *skb,
 
 		fhdr = (struct frag_hdr *)(skb_network_header(frag) + ip6hpexh_len);
 		fhdr->nexthdr = nexthdr;
-		fhdr->frag_off = ((offset >> 3) << 3);
-		fhdr->frag_off |= (bytesLeft != 0);
+		fhdr->frag_off = ASF_HTONS((offset >> 3) << 3);
+		fhdr->frag_off |= ASF_HTONS(bytesLeft != 0);
 		fhdr->identification = ident;
 
 		offset += len;
@@ -2376,9 +2376,9 @@ int asfIpv6MakeFragment(struct sk_buff *skb,
 	skb->len = skb_pagelen(skb);
 	skb->len += sizeof(struct frag_hdr);
 
-	ipv6h->payload_len = skb->len - sizeof(struct ipv6hdr);
+	ipv6h->payload_len = ASF_HTONS(skb->len - sizeof(struct ipv6hdr));
 	fhdr->identification = ident;
-	fhdr->frag_off = 0x1; /* Zero offset , MF bit set */
+	fhdr->frag_off = ASF_HTONS(0x1); /* Zero offset , MF bit set */
 
 	skb_set_transport_header(skb, hdrtocpy + sizeof(struct frag_hdr));
 
@@ -2396,7 +2396,7 @@ int asfIpv6MakeFragment(struct sk_buff *skb,
 
 		fhdr = (struct frag_hdr *)(skb_network_header(frag) + hdrtocpy);
 		fhdr->identification = ident;
-		fhdr->frag_off = (offset >> 3) << 3;
+		fhdr->frag_off = ASF_HTONS((offset >> 3) << 3);
 
 		if (frag->next != NULL)
 			fhdr->frag_off |= htons(0x1);
