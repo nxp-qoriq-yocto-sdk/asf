@@ -500,6 +500,8 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		if (pSA->SAParams.bCopyDscp)
+			pdb->options |= PDBOPTS_ESP_DIFFSERV;
 		pdb->options |= PDBOPTS_ESP_IPV6;
 		iphv6 = (struct ipv6hdr *) pdb->ip_hdr;
 		iphv6->version = 6;
