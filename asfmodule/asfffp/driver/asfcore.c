@@ -2062,7 +2062,8 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif
 		)) {
 		XGSTATS_INC(NonTcpUdpPkts);
-		asf_debug_l2("Non IP traffic. EthType = 0x%x\n", usEthType);
+		asf_debug_l2("Non supported IP traffic. Protocol = 0x%x\n",
+			iph->protocol);
 		goto ret_pkt;
 	}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
