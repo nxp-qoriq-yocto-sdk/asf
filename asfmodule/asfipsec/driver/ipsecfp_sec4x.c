@@ -52,7 +52,7 @@ extern struct device *pdev;
 #define DESC_AEAD_ENCRYPT_TEXT_LEN 21
 #define DESC_AEAD_DECRYPT_TEXT_LEN 24
 #define DESC_AEAD_GIVENCRYPT_TEXT_LEN 27
-
+#define OP_PCL_IPSEC_NULL 0x0b00
 
 static void secfp_splitKeyDone(struct device *dev, u32 *desc, u32 error,
 				void *context)
@@ -210,6 +210,13 @@ static inline u32 alg_to_caamdesc(u8 cipheralg, u8 authalg)
 		* add #define in linux
 		*/
 		descwd |= 0x1500;
+		break;
+	case SECFP_ESP_NULL:
+		/*
+		* hard code for PROTOCOL operation, should
+		* add #define in linux
+		*/
+		descwd |= OP_PCL_IPSEC_NULL;
 		break;
 	}
 

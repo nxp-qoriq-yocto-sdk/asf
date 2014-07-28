@@ -1772,6 +1772,7 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 							OP_ALG_AAI_GCM;
 			break;
 		case SECFP_ESP_NULL:
+			pSA->ctx.class1_alg_type = OP_TYPE_CLASS1_ALG;
 			ASFIPSEC_DEBUG("NULL Encryption set");
 			break;
 		default:
@@ -2002,6 +2003,7 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 							OP_ALG_AAI_GCM;
 			break;
 		case SECFP_ESP_NULL:
+			pSA->ctx.class1_alg_type = OP_TYPE_CLASS1_ALG;
 			ASFIPSEC_DEBUG("NULL Encryption set");
 			break;
 		default:

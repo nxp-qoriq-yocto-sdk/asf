@@ -605,16 +605,14 @@ ASF_void_t ASFIPSecGetCapabilities(ASFIPSecCap_t *pCap)
 		pCap->AuthAlgoCap.bMD5 = 1;
 		pCap->AuthAlgoCap.bSHA1 = 1;
 		pCap->AuthAlgoCap.bSHA2 = 1;
-		/* This Authentication Algorithm is not supported by IDC_ASF */
-		pCap->AuthAlgoCap.bAES_XBC = 0;
+		pCap->AuthAlgoCap.bAES_XBC = 1;
 
 		/* Encryption algorithm DES, 3DES, AES are supported */
 		pCap->EncryptAlgoCap.bDES = 1;
 		pCap->EncryptAlgoCap.b3DES = 1;
 		pCap->EncryptAlgoCap.bAES = 1;
-		/* These Encryption Algorithms are not supported by IDC_ASF */
-		pCap->EncryptAlgoCap.bAES_CTR = 0;
-		pCap->EncryptAlgoCap.bNULL = 0;
+		pCap->EncryptAlgoCap.bAES_CTR = 1;
+		pCap->EncryptAlgoCap.bNULL = 1;
 
 		/* Modules parameters */
 		pCap->ulMaxVSGs = ulMaxVSGs_g;
@@ -848,9 +846,9 @@ aes_gcm_copy:
 					pSAParams->EncKeyLen);
 	} else {
 		ASFIPSEC_WARN("no encr/auth algo; choosing ESP_NULL\n");
-		pSAParams->ucCipherAlgo = SECFP_ENC_NONE;
+		pSAParams->ucCipherAlgo = SECFP_ESP_NULL;
 		pSAParams->bEncrypt = ASF_FALSE;
-		pSAParams->ulBlockSize = 0;
+		pSAParams->ulBlockSize = 4;
 		pSAParams->ulIvSize = 0;
 		pSAParams->EncKeyLen = 0;
 	}
@@ -1483,6 +1481,7 @@ static unsigned int asf_FillSAParams(ASF_IPSecSA_t *pASFSAParams,
 		memcpy(pASFSAParams->encDecKey, pSAParams->ucEncKey, pASFSAParams->encDecKeyLenBits);
 	} else {
 		pASFSAParams->encAlgo = ASF_IPSEC_EALG_NULL;
+		pASFSAParams->encDecKeyLenBits = 0;
 	}
 
 	pASFSAParams->bRedSideFragment = pSAParams->bRedSideFragment;

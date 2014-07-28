@@ -91,6 +91,7 @@ algo_types[MAX_ALGO_TYPE][MAX_AUTH_ENC_ALGO] = {
 		{"rfc4309(ccm(aes))", ASF_IPSEC_EALG_AES_CCM_ICV8},
 		{"rfc4106(gcm(aes))", ASF_IPSEC_EALG_AES_GCM_ICV8},
 		{"rfc4543(gcm(aes))", ASF_IPSEC_EALG_NULL_AES_GMAC},
+		{"ecb(cipher_null)", ASF_IPSEC_EALG_NULL},
 		{NULL, -1}
 	},
 	{
