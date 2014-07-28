@@ -167,6 +167,7 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 			goto drop;
 
 		nskb->mapped = 0;
+		nskb->gianfar_destructor = 0;
 		ip_forward(nskb);
 		goto drop;
 	} else
@@ -245,9 +246,10 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 			pFreeFn(Buffer.nativeBuffer);
 			skb = nskb;
 			Buffer.nativeBuffer = skb;
-			pFreeFn = (genericFreeFn_f)kfree;
+			pFreeFn = (genericFreeFn_f)kfree_skb;
 		}
 		skb->mapped = 0;
+		skb->gianfar_destructor = 0;
 	}
 #endif
 	/*1.  find the SA (xfrm pointer) on the basis of SPI,
