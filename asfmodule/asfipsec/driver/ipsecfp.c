@@ -3499,12 +3499,10 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (inneriph->version == 6) {
 		struct ipv6hdr *ipv6h2 = (struct ipv6hdr *) inneriph;
-		skb->len = ipv6h2->payload_len + SECFP_IPV6_HDR_LEN;
 		ipv6h2->hop_limit--;
 	} else
 #endif
 	{
-		skb->len = inneriph->tot_len;
 		ip_decrease_ttl(inneriph);
 	}
 #else /*NO ASF_SECFP_PROTO_OFFLOAD*/
