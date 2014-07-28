@@ -342,6 +342,46 @@ ASF_void_t asfctrl_ipsec_fn_SeqNoOverFlow(ASF_uint32_t ulVSGId,
 					ASF_uint8_t ucProtocol,
 					ASF_IPAddr_t  DestAddr)
 {
+	struct xfrm_state *x;
+	xfrm_address_t daddr;
+	unsigned short family;
+	int bVal = in_softirq();
+
+	ASFCTRL_FUNC_TRACE;
+
+	if (!bVal)
+	local_bh_disable();
+
+	ASFCTRL_WARN("Sequence Number Overflow\n");
+
+	 /*1. find the SA (xfrm pointer) on the basis of SPI,
+	 * protcol, dest Addr */
+
+	family = AF_INET;
+	daddr.a4 = (DestAddr.ipv4addr);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
+	x = xfrm_state_lookup(&init_net, 0, &daddr, ulSPI, ucProtocol, family);
+#else
+	x = xfrm_state_lookup(&init_net, &daddr, ulSPI, ucProtocol, family);
+#endif
+	if (unlikely(!x)) {
+		ASFCTRL_INFO("Unable to get SA SPI=0x%x, dest=0x%x",
+		ulSPI, daddr.a4);
+		goto back;
+	}
+	if (unlikely(x->km.state != XFRM_STATE_VALID)) {
+		ASFCTRL_INFO("Invalid SA SPI=0x%x, dest=0x%x",
+		ulSPI, daddr.a4);
+		goto back;
+	}
+
+	x->km.dying = 1;
+
+	km_state_expired(x, 0, 0);
+back:
+	if (!bVal)
+		local_bh_enable();
 	ASFCTRL_FUNC_TRACE;
 	return;
 }

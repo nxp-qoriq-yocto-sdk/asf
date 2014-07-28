@@ -2133,6 +2133,28 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 			ASFIPSEC_DPERR("%08x: %s\n", error,
 				caam_jr_strstatus(tmp, error));
 #endif
+			if ((error & SEQ_NO_OVERFLOW) == SEQ_NO_OVERFLOW) {
+				ASF_IPAddr_t DestAddr;
+				ASF_uint32_t ulVSGId =
+					skb->cb[SECFP_VSG_ID_INDEX];
+				ASFIPSEC_PRINT("Going for re-keying");
+				pSA = (outSA_t *)ptrIArray_getData(
+					&secFP_OutSATable,
+					*(unsigned int *)&(skb->cb[SECFP_SAD_SAI_INDEX]));
+				DestAddr.ipv4addr =
+					pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+				if (atomic_read(&pSA->SeqOverflow) == 0) {
+					ASFIPSecCbFn.pFnSeqNoOverFlow(ulVSGId,
+						pSA->ulTunnelId,
+						pSA->SAParams.ulSPI,
+						pSA->SAParams.ucProtocol,
+						DestAddr);
+				/*If Anti-Replay On-Seq Number reset will not happen.
+				So, Avoid giving multiple triggers to the Control Plane */
+				if (pSA->SAParams.bDoAntiReplayCheck)
+					atomic_inc(&pSA->SeqOverflow);
+				}
+			}
 		}
 		ASFIPSEC_DPERR("error = %x DROP PKT ", error);
 #endif
