@@ -195,7 +195,7 @@ unsigned int secfp_genCaamSplitKey_null_xcbc(struct caam_ctx *ctx,
 		return -ENOMEM;
 	}
 
-	k3 = GET_CACHE_ALLIGNED(ctx->k3_null_xcbc);
+	k3 = (u8 *) GET_CACHE_ALLIGNED(ctx->k3_null_xcbc);
 
 	/* Job descriptor being created which will be submitted to caam to
 	generate k1 (ctx->key) and k3 required for null xcbc*/
@@ -899,7 +899,7 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 			return -ENOMEM;
 		}
 
-		key = GET_CACHE_ALLIGNED(pSA->ctx.key);
+		key = (u8 *) GET_CACHE_ALLIGNED(pSA->ctx.key);
 
 		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, key,
 					pSA->ctx.split_key_pad_len +
@@ -995,7 +995,7 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 			return -ENOMEM;
 		}
 
-		key = GET_CACHE_ALLIGNED(pSA->ctx.key);
+		key = (u8 *) GET_CACHE_ALLIGNED(pSA->ctx.key);
 		/* FOR LS1 this may need to move doen */
 		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, key,
 					pSA->ctx.split_key_pad_len +
