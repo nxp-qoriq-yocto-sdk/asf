@@ -593,6 +593,10 @@ static int display_secfp_proc_in_sa(struct seq_file *f, void *v)
 			for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
 				pInSA != NULL; pInSA = pInSA->pNext) {
 
+				if (pSPILinkNode->ulSPIVal !=
+					pInSA->SAParams.ulSPI)
+					continue;
+
 				ASFSAStats_t outParams = {0, 0};
 				ASFIPSecGetSAQueryParams_t inParams;
 
