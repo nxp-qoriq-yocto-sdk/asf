@@ -243,7 +243,20 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 		if (unlikely(!nskb)) {
 			goto drop;
 		} else {
-			pFreeFn(Buffer.nativeBuffer);
+			if (skb_shinfo(skb)->frag_list) {
+				struct sk_buff *frag, *frag1;
+				frag = skb_shinfo(skb)->frag_list;
+				while (frag) {
+					frag1 = frag->next;
+					frag->next = NULL;
+					pFreeFn(frag);
+					frag = frag1;
+				}
+				skb_shinfo(skb)->frag_list = NULL;
+				pFreeFn(skb);
+			} else
+				pFreeFn(Buffer.nativeBuffer);
+
 			skb = nskb;
 			Buffer.nativeBuffer = skb;
 			pFreeFn = (genericFreeFn_f)kfree_skb;
