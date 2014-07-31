@@ -842,8 +842,6 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 #endif
 
 	if (skb_shinfo(pHeadSkb)->nr_frags) {
-		pHeadSkb->data_len += pSA->ulSecHdrLen + pSA->ulSecLenIncrease;
-		ASFIPSEC_DEBUG("pHeadSkb->data_len:%d\n", pHeadSkb->data_len);
 		pHeadSkb->len = orig_pktlen + pSA->ulSecHdrLen + SECFP_IPV4_HDR_LEN;
 		ASFIPSEC_DEBUG("pHeadSkb->len:%d pHeadSkb->len1:%d\n",
 					pHeadSkb->len, org_iphdr->tot_len);
