@@ -1635,10 +1635,20 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 		memcpy(link_tbl_entry + total_frags + 1,
 			link_tbl_entry, dma_len);
 		link_tbl_entry = link_tbl_entry + total_frags + 1;
-
-		link_tbl_entry->ptr = ptr2 + SECFP_IPV4_HDR_LEN + pSA->ulSecHdrLen;
-		link_tbl_entry->len = skb_headlen(skb) - SECFP_IPV4_HDR_LEN - pSA->ulSecHdrLen;
-
+#ifdef ASF_IPV6_FP_SUPPORT
+		if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+			link_tbl_entry->ptr = ptr2 + SECFP_IPV6_HDR_LEN +
+					pSA->ulSecHdrLen;
+			link_tbl_entry->len = skb_headlen(skb) -
+					SECFP_IPV6_HDR_LEN - pSA->ulSecHdrLen;
+		} else
+#endif
+		{
+			link_tbl_entry->ptr = ptr2 +
+				SECFP_IPV4_HDR_LEN + pSA->ulSecHdrLen;
+			link_tbl_entry->len = skb_headlen(skb) -
+				SECFP_IPV4_HDR_LEN - pSA->ulSecHdrLen;
+		}
 		ptr_out = dma_map_single(pSA->ctx.jrdev, link_tbl_entry,
 					dma_len, DMA_BIDIRECTIONAL);
 
