@@ -1246,6 +1246,12 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	ASFIPSEC_FENTRY;
 	pSA = secfp_findOutSA(ulVSGId, pSecInfo, skb1, ipv6TClass,
 			&pContainer, &bRevalidate);
+	if (unlikely(pSA == NULL)) {
+		ASFIPSEC_DEBUG("SA Not Found");
+		goto no_sa;
+	}
+	ASFIPSEC_DEBUG("SA Found");
+
 	if (unlikely(pSA->odev == NULL)) {
 		ASFIPSEC_DEBUG("L2blob Not Resolved. Drop the packet");
 		goto l2blob_missing;
@@ -1258,12 +1264,6 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		ipv6h = ipv6_hdr(skb);
 	}
 #endif
-	if (unlikely(pSA == NULL)) {
-		ASFIPSEC_DEBUG("SA Not Found");
-		goto no_sa;
-	}
-
-	ASFIPSEC_DEBUG("SA Found");
 	pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);
 	pIPSecPolicyPPStats->NumOutBoundInPkts++;
 	/* Check if there is enough head room and tail room */
