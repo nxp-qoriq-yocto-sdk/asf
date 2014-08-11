@@ -52,6 +52,10 @@
 #define BPID_INDEX 79
 #define BUF_INDOMAIN_INDEX 80
 #define ANNOTATION_ADDR_INDEX 87
+
+#define ASF_L2_BLOB_TIME_INTERVAL 1    /* inter bucket gap */
+#define ASF_L2_BLOB_TIMER_BUCKET 512    /* Max L2blob timer value */
+
 enum {
 	ASF_SUCCESS = 0,
 	ASF_FAILURE = -1
