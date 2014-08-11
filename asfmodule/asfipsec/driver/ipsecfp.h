@@ -125,7 +125,11 @@
 #define DES_CBC_BLOCK_SIZE	8
 #define TDES_CBC_BLOCK_SIZE	8
 #define AES_CBC_BLOCK_SIZE	16
-#define AES_CTR_BLOCK_SIZE	8
+/* Although the block size of AES_CTR is 16 but it does not require any padding
+  of its own. The authentication data requires to be 4 bytes alligned, so we
+  are keeping the AES_CTR_BLOCK_SIZE to be 4, which leads to proper
+  calculation of the padding required */
+#define AES_CTR_BLOCK_SIZE	4
 #define AES_CCM_BLOCK_SIZE	16
 #define AES_GCM_BLOCK_SIZE	16
 #define AES_GMAC_BLOCK_SIZE	16
