@@ -2629,7 +2629,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 {
 	inSA_t *pSA = NULL;
 	int total_frag = 0;
-	skb_frag_t *frag = NULL;
+	skb_frag_t *last_frag = NULL;
 	unsigned char *charp = NULL;
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	unsigned int nhoffset = 0;
@@ -2657,15 +2657,17 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	/* Look at the Next protocol field */
 	if (skb_shinfo(pHeadSkb)->nr_frags) {
 		total_frag = skb_shinfo(pTailSkb)->nr_frags;
-		frag = &skb_shinfo(pTailSkb)->frags[total_frag - 1];
-		charp = (void *)page_address((const struct page *)frag->page.p) + frag->page_offset;
+		last_frag = &skb_shinfo(pTailSkb)->frags[total_frag - 1];
+		charp = (void *)page_address((const struct page *)last_frag->page.p)
+				+ last_frag->page_offset;
 #ifndef ASF_SECFP_PROTO_OFFLOAD
-		*pNextProto = charp[frag->size - 1];
+		*pNextProto = charp[last_frag->size - 1];
 #else
-		if (frag->size >= pHeadSkb->cb[SECFP_ICV_LENGTH] + 1) {
-			*pNextProto = charp[frag->size - pHeadSkb->cb[SECFP_ICV_LENGTH] - 1];
+		if (last_frag->size >= pHeadSkb->cb[SECFP_ICV_LENGTH] + 1) {
+			*pNextProto = charp[last_frag->size -
+					pHeadSkb->cb[SECFP_ICV_LENGTH] - 1];
 		} else {
-			unsigned int last_frag_size = frag->size;
+			unsigned int last_frag_size = last_frag->size;
 			if (total_frag == 1) {
 #ifdef ASF_IPV6_FP_SUPPORT
 			if (iph->version == 6) {
@@ -2677,7 +2679,8 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 				*pNextProto = *((u8 *)iph + iph->tot_len
 						- pHeadSkb->cb[SECFP_ICV_LENGTH] - 1);
 			} else {
-				frag = &skb_shinfo(pTailSkb)->frags[total_frag - 2];
+				skb_frag_t *frag = &skb_shinfo(pTailSkb)->frags
+							[total_frag - 2];
 				charp = (void *)page_address((const struct page *)frag->page.p)
 					+ frag->page_offset;
 				*pNextProto = charp[frag->size + last_frag_size
@@ -2747,10 +2750,10 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	if (total_frag > 0) {
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 		/* Padding Length */
-		ulStripLen = 2 + charp[frag->size - 2];
+		ulStripLen = 2 + charp[last_frag->size - 2];
 #endif
-		if (likely(frag->size > ulStripLen)) {
-			frag->size -= ulStripLen;
+		if (likely(last_frag->size > ulStripLen)) {
+			last_frag->size -= ulStripLen;
 			pTailSkb->data_len -= ulStripLen;
 			pTailSkb->len -= ulStripLen;
 		} else
@@ -2760,7 +2763,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	} else {
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 		/* Padding Length */
-		ulStripLen = 2 + charp[frag->size - 2];
+		ulStripLen = 2 + charp[last_frag->size - 2];
 #endif
 		if (unlikely(*pTotLen <= ulStripLen)) {
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
