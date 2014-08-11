@@ -514,6 +514,7 @@ void asfReasmCleanCb(struct rcu_head  *rcu)
 	for (pFrag = pCb->fragList; pFrag != NULL;  pFrag = pNextFrag) {
 		for (skb = pFrag->pHeadSkb; skb != NULL; skb = pTempSkb) {
 			pTempSkb = skb->next;
+			skb->next = NULL;
 			ASF_gfar_kfree_skb(skb);
 		}
 		pNextFrag = pFrag->next;
