@@ -548,7 +548,10 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		break;
 	}
 
-	pdb->seq_num_ext_hi = pSA->ulHOSeqNum;
+	if (pSA->SAParams.bUseExtendedSequenceNumber) {
+		pdb->options |= PDBOPTS_ESP_ESN;
+		pdb->seq_num_ext_hi = pSA->ulHOSeqNum;
+	}
 	pdb->seq_num = pSA->ulLastSeqNum;
 	pdb->anti_replay[0] = 0;/* Anti-Replay 1 */
 	pdb->anti_replay[1] = 0;/* Anti-Replay 2 */
