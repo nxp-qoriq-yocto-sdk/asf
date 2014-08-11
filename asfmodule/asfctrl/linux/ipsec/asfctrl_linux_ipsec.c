@@ -147,11 +147,41 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 4) {
 #endif
-	if (0 != ip_route_input(skb, iph->daddr, iph->saddr, 0, skb->dev)) {
-		ASFCTRL_INFO("Route not found for dst %x ",
+	if (inet_addr_type(dev_net(skb_dst(skb)->dev),
+		iph->saddr) == RTN_LOCAL) {
+		struct flowi fl;
+		struct rtable *rt = skb_rtable(skb);
+		int ret;
+
+		/* Now look for termination route */
+		memset(&fl, 0, sizeof(fl));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
+		fl.nl_u.ip4_u.daddr = iph->daddr;
+		ret = ip_route_output_key(&init_net, &rt, &fl);
+		if (ret || !rt) {
+#else
+		fl.u.ip4.daddr = iph->daddr;
+		rt = ip_route_output_key(&init_net, &fl.u.ip4);
+		if (IS_ERR(rt)) {
+#endif
+			ASFCTRL_INFO("Route not found for dst %x ",
+				iph->daddr);
+			goto drop;
+		}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
+		skb_dst_set(skb, &rt->u.dst);
+#else
+		skb_dst_set(skb, &rt->dst);
+#endif
+		skb->dev = skb_dst(skb)->dev;
+	} else
+		if (0 != ip_route_input(skb, iph->daddr,
+				iph->saddr, 0, skb->dev)) {
+			ASFCTRL_INFO("Route not found for dst %x ",
 			iph->daddr);
-		goto drop;
-	}
+			goto drop;
+		}
 	ASFCTRL_INFO("Route found for dst %x ", iph->daddr);
 
 	skb->pkt_type = PACKET_HOST;
