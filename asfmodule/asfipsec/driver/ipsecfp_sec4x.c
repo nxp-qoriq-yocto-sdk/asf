@@ -1277,7 +1277,7 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 					struct caam_ctx *ctx,
 					dma_addr_t data_in, int data_in_len,
 					dma_addr_t data_out, int data_out_len, unsigned int sg,
-					unsigned int use_dpovrd)
+					unsigned int dpovrd)
 {
 	u32 *desc = edesc->hw_desc;
 	u32 options = 0;
@@ -1302,25 +1302,15 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 		append_seq_out_ptr(desc, data_out, data_out_len, options);
 	}
 
-	if (use_dpovrd) {
+	if (dpovrd) {
 		static u32 data;
-		switch (use_dpovrd) {
-		case SECFP_PROTO_IP:
-			data = 0x80000000 | SECFP_PROTO_IP;
-			data |= SECFP_IPV4_HDR_LEN << 16;
-			append_load_as_imm(desc, &data, sizeof(data), LDST_CLASS_DECO |
-			LDST_SRCDST_WORD_DECO_PCLOVRD | 0x4);
-		break;
-		case SECFP_PROTO_IPV6:
-			data = 0x80000000 | SECFP_PROTO_IPV6;
+		data = 0x80000000 | dpovrd;
+		if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
 			data |= SECFP_IPV6_HDR_LEN << 16;
-			append_load_as_imm(desc, &data, sizeof(data), LDST_CLASS_DECO |
+		else
+			data |= SECFP_IPV4_HDR_LEN << 16;
+		append_load_as_imm(desc, &data, sizeof(data), LDST_CLASS_DECO |
 			LDST_SRCDST_WORD_DECO_PCLOVRD | 0x4);
-		break;
-		default:
-			ASFIPSEC_DPERR("Non supported protocol\n");
-		return ;
-		}
 	}
 #ifdef ASFIPSEC_DEBUG_FRAME
 		print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
