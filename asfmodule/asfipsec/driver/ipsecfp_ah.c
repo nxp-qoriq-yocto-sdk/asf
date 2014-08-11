@@ -1036,7 +1036,7 @@ void secfp_inAHComplete(struct device *dev,
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 		rcu_read_lock();
 		pSA = secfp_findInSA(*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),
-					SECFP_PROTO_ESP,
+					SECFP_PROTO_AH,
 					*(unsigned int *)&(skb->cb[SECFP_SPI_INDEX]),
 					IPSecOpque.DestAddr,
 					(unsigned int *)&(skb->cb[SECFP_HASH_VALUE_INDEX]));
