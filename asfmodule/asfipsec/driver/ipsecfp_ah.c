@@ -1243,6 +1243,13 @@ void secfp_outAHComplete(struct device *dev,
 				ASFIPSEC_PRINT("Going for re-keying");
 				pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
 					*(unsigned int *)&(skb->cb[SECFP_SAD_SAI_INDEX]));
+				if (!pSA) {
+			                ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
+						IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT24]);
+			                ASFIPSEC_DEBUG("OutSA info not available");
+					ASFSkbFree(skb);
+					return;
+				}
 				DestAddr.ipv4addr =
 					pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 				if (atomic_read(&pSA->SeqOverflow) == 0) {
