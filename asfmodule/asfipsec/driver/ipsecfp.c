@@ -4134,6 +4134,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 		}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		ulLowerBoundSeqNum = 0;
+	if (likely(pSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
 		if (pSA->SAParams.bAuth) {
 #ifndef ASF_SECFP_PROTO_OFFLOAD /* anti-replay check done in HW */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -4244,6 +4245,21 @@ So all these special boundary cases need to be handled for nr_frags*/
 			skb_set_tail_pointer(pTailSkb, skb_headlen(pTailSkb));
 			*(unsigned int *)skb_tail_pointer(pTailSkb) = 0;
 		}
+	} else {
+		/* check anything needed for AH */
+		/* do not remove the tunnel header */
+		unsigned int *pESNLoc = 0;
+		if (pSA->SAParams.bDoAntiReplayCheck) {
+			if (pSA->SAParams.bUseExtendedSequenceNumber) {
+				pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
+				pESNLoc = (unsigned int *)(pTailSkb->tail);
+				secfp_appendESN(pSA, ulSeqNum, &ulLowerBoundSeqNum, (unsigned int *)pESNLoc);
+				*(unsigned int *)&(pHeadSkb->cb[SECFP_SEQNUM_INDEX]) = ulSeqNum;
+				secfp_checkSeqNum(pSA, ulSeqNum,
+						ulLowerBoundSeqNum, pHeadSkb);
+			}
+		}
+	}
 
 		if (pSA->SAParams.bVerifyInPktWithSASelectors)
 			pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1;
