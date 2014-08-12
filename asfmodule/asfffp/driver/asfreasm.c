@@ -1774,7 +1774,12 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 						pIpHdr->tot_len = pCb->ulTotLen+ihl;
 						pIpHdr->frag_off = 0;
 						pIpHdr->ihl = (unsigned char)5;
-						pIpHdr->id = asfReasmGetNextId();
+						/* Here, we'll use the Idenitifcation field from the Head SKB itself.
+						   If we change the Identification field, then in case of AH -Tunnel Mode, if traffic is sent with
+						   'big size say 1429 for ICMP' of ftp, then as packets are fragmented packets,they are bufferred in ASF for Reassembly.
+						    This traffic is failing as ICV comparision fails . After commenting the asfReasmGetNextId() it worked.
+						    Refer to R#56651. */
+						/*pIpHdr->id = asfReasmGetNextId(); */
 
 						ip_send_check(pIpHdr);
 						skb->ip_summed = CHECKSUM_UNNECESSARY;
