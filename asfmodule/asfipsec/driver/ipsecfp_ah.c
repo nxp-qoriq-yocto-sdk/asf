@@ -869,13 +869,12 @@ void secfp_inAHComplete(struct device *dev,
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 	ASFIPSecOpqueInfo_t IPSecOpque = {};
 	ASFBuffer_t Buffer;
-	unsigned int ulCommonInterfaceId ;
+	unsigned int ulCommonInterfaceId;
 #ifndef ASF_QMAN_IPSEC
 	struct ipsec_ah_edesc *desc;
 #else
 	struct ses_pkt_info *pInfo;
 #endif
-	struct iphdr *inneriph;
 	unsigned int ulFragCnt;
 	unsigned int ah_header_len;
 
@@ -1072,25 +1071,25 @@ void secfp_inAHComplete(struct device *dev,
 		ucNextProto = skb->data[SECFP_IPV6_HDR_LEN];
 		ah_header_len = ((unsigned int)
 			(skb->data[SECFP_IPV6_HDR_LEN + 1]) + 2) << 2;
+		skb->data += SECFP_IPV6_HDR_LEN + ah_header_len;
+		skb->len -= SECFP_IPV6_HDR_LEN + ah_header_len;
 	} else
 #endif
 	{
 		ucNextProto = skb->data[SECFP_IPV4_HDR_LEN];
 		ah_header_len = ((unsigned int)
 				(skb->data[SECFP_IPV4_HDR_LEN + 1]) + 2) << 2;
+		skb->data += SECFP_IPV4_HDR_LEN + ah_header_len;
+		skb->len -= SECFP_IPV4_HDR_LEN + ah_header_len;
 	}
 	ASFIPSEC_DEBUG("\n NextProto=%d", ucNextProto);
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (ucNextProto == SECFP_PROTO_IP) {
 #endif
-		skb->data += SECFP_IPV4_HDR_LEN + ah_header_len;
-		skb->len -= SECFP_IPV4_HDR_LEN + ah_header_len;
+		struct iphdr *inneriph;
 		inneriph = (struct iphdr *)(skb->data);
 		ip_decrease_ttl(inneriph);
 #ifdef ASF_IPV6_FP_SUPPORT
-	} else {
-		skb->data += SECFP_IPV6_HDR_LEN + ah_header_len;
-		skb->len -= SECFP_IPV6_HDR_LEN + ah_header_len;
 	}
 #endif
 
