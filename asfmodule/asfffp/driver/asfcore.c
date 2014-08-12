@@ -1371,9 +1371,10 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 		ppp_proto = *(unsigned short *) (poe_hdr + 6);
 		/* PPPoE header is of 6 bytes */
 		/* PPPOE: VER = 1, TYPE = 1, CODE = 0 and
-			PPP:_PROTO = 0x0021 (IP) */
+			PPP:_PROTO = 0x0021 (IP) or 0x0057(IPV6)*/
 		if ((poe_hdr[0] != 0x11) || (poe_hdr[1] != 0) ||
-			(ppp_proto != __constant_htons(0x0021))) {
+			((ppp_proto != __constant_htons(0x0021)) &&
+			(ppp_proto != __constant_htons(0x0057)))) {
 			asf_debug("PPPoE traffic but not interested"
 				"%02x%02x %04x\n",
 				poe_hdr[0], poe_hdr[1], ppp_proto);
@@ -1893,7 +1894,8 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		/* PPPoE header is of 6 bytes */
 		/* PPPOE: VER = 1, TYPE = 1, CODE = 0 and  PPP:_PROTO = 0x0021 (IP) */
 		if ((poe_hdr[0] != 0x11) || (poe_hdr[1] != 0) ||
-		    (ppp_proto != __constant_htons(0x0021))) {
+		    ((ppp_proto != __constant_htons(0x0021)) &&
+		    (ppp_proto != __constant_htons(0x0057)))) {
 			asf_debug("PPPoE traffic but not interested %02x%02x %04x\n", poe_hdr[0], poe_hdr[1], ppp_proto);
 			XGSTATS_INC(PPPoEUnkPkts);
 			goto ret_pkt;
@@ -1907,8 +1909,11 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 		}
 		asf_debug_l2("PPPoE dev entry FOUND! (SessId %u)\n", pppoe_session_id);
 
-		x_hh_len += (8); /* 6+2 -- pppoe + ppp headers */
-		usEthType = __constant_htons(ETH_P_IP);
+		x_hh_len += PPPOE_SES_HLEN; /* 6+2 -- pppoe + ppp headers */
+		 if (ppp_proto == __constant_htons(0x0021))
+			usEthType = __constant_htons(ETH_P_IP);
+		 else
+			usEthType = __constant_htons(ETH_P_IPV6);
 		bCsumVerify = 1;
 	}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
