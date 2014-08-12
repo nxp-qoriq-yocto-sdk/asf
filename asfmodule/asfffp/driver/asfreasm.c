@@ -1439,7 +1439,13 @@ unsigned int asfReasmTmrCb(unsigned int ulVSGId,
 				goto not_found;
 			}
 		}
-
+		if (unlikely(!pCb)) {
+			asf_reasm_debug("\n unable to allocate pCb");
+			asf_reasm_debug("reasm pkt not found: args: idx"
+					" %d magic %d lkup %d pcb %p\n",
+					ulIndex, ulMagicNum, mgnum, pCb);
+			return 1;
+		}
 		asf_reasm_debug("pCb = 0x%x\r\n", pCb);
 		if (jiffies > pCb->ulLastPktTime)
 			ulTimeDiff = jiffies - pCb->ulLastPktTime;
