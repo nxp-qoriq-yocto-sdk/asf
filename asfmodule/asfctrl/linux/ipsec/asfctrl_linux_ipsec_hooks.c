@@ -628,7 +628,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else
 		SAParams.bRedSideFragment =
-				ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+				ASF_IPSEC_RED_SIDE_FRAGMENTATION_ENABLED;
 #endif
 	SAParams.bDoPeerGWIPAddressChangeAdaptation =
 				ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
