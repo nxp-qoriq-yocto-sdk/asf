@@ -3050,7 +3050,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	ptrhdrOffset = (unsigned int *)(((unsigned char *) iph) + iphlen);
 
 	flow = asf_ffp_flow_lookup(iph->saddr, iph->daddr,
-					*ptrhdrOffset/* ports*/, ulVsgId,
+					*ptrhdrOffset, ulVsgId,
 					ulZoneId, iph->protocol, &ulHashVal);
 
 	asf_debug("ASF: %s Hash(%d.%d.%d.%d, %d.%d.%d.%d, 0x%lx, %d, %d)"\

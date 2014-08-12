@@ -311,6 +311,11 @@ typedef struct asf_vsg_info_s {
 } asf_vsg_info_t;
 
 extern asf_vsg_info_t *asf_ffp_get_vsg_info_node(ASF_uint32_t ulVSGId);
+extern void asfReasmSetConfigParams(unsigned int ulVSGId,
+			unsigned int ulReasmMaxFrags,
+			unsigned int ulReasmMinFragSize,
+			unsigned int ulReasmTimeout,
+			unsigned int ulreasmMaxPktSize);
 
 extern const struct	file_operations asf_interface_fops;
 extern spinlock_t	asf_app_lock;

@@ -683,6 +683,29 @@ static void asfTimerProc(unsigned long data)
 		ulLastTimerExpiry[smp_processor_id()] = jiffies;
 	}
 #endif
+	asf_timer_debug("Reclamation Q processing:\r\n");
+	/* Process the reclamation queue */
+	for_each_possible_cpu(ii)
+	{
+		XGSTATS_INC(TmrProcReclCalls);
+		pRq = per_cpu_ptr(pTmrWheel->pQs, ii);
+
+		while (1) {
+			ptmr = pRq->pQueue[pTmrWheel->ulRqRdIndex[ii]];
+			if (ptmr != NULL) {
+				asfRemoveTmrFromBucket(pTmrWheel, ptmr);
+				asfReleaseNode(pAsfTmrAppInfo[ulAppId].pInstance[
+					ulInstanceId].ulTmrPoolId, ptmr,
+					ptmr->bHeap);
+				pRq->pQueue[pTmrWheel->ulRqRdIndex[ii]] = NULL;
+				pTmrWheel->ulRqRdIndex[ii] =
+					(pTmrWheel->ulRqRdIndex[ii] + 1)
+					& (pTmrWheel->ulMaxRqEntries - 1);
+			} else
+				break;
+		}
+	}
+
 	asf_timer_debug("Timer Bucket processing: ulCurBucketIndex = %d",
 		pTmrWheel->ulCurBucketIndex);
 	ptmr = pTmrWheel->pBuckets[pTmrWheel->ulCurBucketIndex];
@@ -747,27 +770,7 @@ static void asfTimerProc(unsigned long data)
 							asfTimerDelete);
 		}
 	}
-	asf_timer_debug("Reclamation Q processing:\r\n");
-	/* Process the reclamation queue */
-	for_each_possible_cpu(ii)
-	{
-		XGSTATS_INC(TmrProcReclCalls);
-		pRq = per_cpu_ptr(pTmrWheel->pQs, ii);
 
-		while (1) {
-			ptmr = pRq->pQueue[pTmrWheel->ulRqRdIndex[ii]];
-			if (ptmr != NULL) {
-				asfRemoveTmrFromBucket(pTmrWheel, ptmr);
-				asfReleaseNode(pAsfTmrAppInfo[ulAppId].pInstance[
-					ulInstanceId].ulTmrPoolId, ptmr, ptmr->bHeap);
-				pRq->pQueue[pTmrWheel->ulRqRdIndex[ii]] = NULL;
-				pTmrWheel->ulRqRdIndex[ii] =
-					(pTmrWheel->ulRqRdIndex[ii] + 1)
-					& (pTmrWheel->ulMaxRqEntries - 1);
-			} else
-				break;
-		}
-	}
 	/* this interval is set to zero while ASF is being removed */
 	if (pWheel->ulTimerInterval) {
 		if (!timer_pending(&pTmrWheel->timer))

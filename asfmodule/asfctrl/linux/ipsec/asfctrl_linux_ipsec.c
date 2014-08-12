@@ -789,6 +789,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 					asfctrl_vsg_config_id;
 		outInfo->configIdentity.ulTunnelConfigMagicNumber =
 					ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM;
+		outInfo->bControlPathPkt = ASF_FALSE;
 		ASFCTRL_DBG("vsg id %d magicnum %d contId %d",
 				outInfo->configIdentity.ulVSGConfigMagicNumber,
 				outInfo->ulSPDMagicNumber,
@@ -810,6 +811,7 @@ int asfctrl_ipsec_get_flow_info_fn(bool *ipsec_in, bool *ipsec_out,
 					asfctrl_vsg_config_id;
 		inInfo->configIdentity.ulTunnelConfigMagicNumber =
 					ASF_DEF_IPSEC_TUNNEL_MAGIC_NUM;
+		inInfo->bControlPathPkt = ASF_FALSE;
 		ASFCTRL_DBG("vsg id %d magicnum %d contId %d",
 				inInfo->configIdentity.ulVSGConfigMagicNumber,
 				inInfo->ulSPDMagicNumber,
@@ -926,7 +928,8 @@ static void __exit asfctrl_linux_ipsec__exit(void)
 	asfctrl_register_ipsec_func(NULL, NULL, NULL);
 	asfctrl_ipsec_km_unregister();
 	unregister_ipsec_offload_hook();
-	ASFCTRL_DBG("ASF Control Module - IPsec Unloaded \n");
+	ASFIPSecFlushContainers(ASF_DEF_VSG, ASF_DEF_IPSEC_TUNNEL_ID);
+	ASFCTRL_DBG("ASF Control Module - IPsec Unloaded\n");
 }
 
 module_init(asfctrl_linux_ipsec_init);
