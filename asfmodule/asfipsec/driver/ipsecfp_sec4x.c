@@ -53,6 +53,11 @@ extern struct device *pdev;
 #define DESC_AEAD_DECRYPT_TEXT_LEN 24
 #define DESC_AEAD_GIVENCRYPT_TEXT_LEN 27
 
+#ifdef ASF_ARM
+#define ASF_CACHE_BYTES L1_CACHE_BYTES
+#else
+#define ASF_CACHE_BYTES 0
+#endif
 
 static void secfp_splitKeyDone(struct device *dev, u32 *desc, u32 error,
 				void *context)
@@ -382,11 +387,12 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		/* Now the class 1/cipher key */
 		if (keys_fit_inline)
 			append_key_as_imm(sh_desc, (void *)ctx->key +
-				ctx->split_key_pad_len, ctx->enckeylen,
-				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
+				ctx->split_key_pad_len + ASF_CACHE_BYTES,
+				ctx->enckeylen,	ctx->enckeylen,
+				CLASS_1 | KEY_DEST_CLASS_REG);
 		else
 			append_key(sh_desc, ctx->key_phys +
-				ctx->split_key_pad_len,
+				ctx->split_key_pad_len + ASF_CACHE_BYTES,
 				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 	}
 
@@ -661,11 +667,12 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		/* Now the class 1/cipher key */
 		if (keys_fit_inline)
 			append_key_as_imm(sh_desc, (void *)ctx->key +
-				ctx->split_key_pad_len, ctx->enckeylen,
-				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
+				ctx->split_key_pad_len + ASF_CACHE_BYTES,
+				ctx->enckeylen,	ctx->enckeylen,
+				CLASS_1 | KEY_DEST_CLASS_REG);
 		else
 			append_key(sh_desc, ctx->key_phys +
-				ctx->split_key_pad_len,
+				ctx->split_key_pad_len + ASF_CACHE_BYTES,
 				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 	}
 	/* update jump cmd now that we are at the jump target */
@@ -756,7 +763,7 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 			return -ENOMEM;
 		}
 		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
-					pSA->SAParams.EncKeyLen,
+				pSA->SAParams.EncKeyLen + ASF_CACHE_BYTES,
 					GFP_DMA | flags);
 
 		if (!pSA->ctx.key) {
@@ -792,12 +799,14 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 			}
 		}
 
-		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len,
-			&pSA->SAParams.ucEncKey, pSA->SAParams.EncKeyLen);
+		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len +
+			ASF_CACHE_BYTES, &pSA->SAParams.ucEncKey,
+			pSA->SAParams.EncKeyLen);
 
 		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
 						pSA->ctx.split_key_pad_len +
-						pSA->SAParams.EncKeyLen,
+						pSA->SAParams.EncKeyLen +
+						ASF_CACHE_BYTES,
 						DMA_TO_DEVICE);
 		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
 			ASFIPSEC_DEBUG(" Unable to map key"\
@@ -842,7 +851,8 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 		}
 
 		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
-					pSA->SAParams.EncKeyLen,
+					pSA->SAParams.EncKeyLen +
+					ASF_CACHE_BYTES,
 					GFP_DMA | flags);
 
 		if (!pSA->ctx.key) {
@@ -880,13 +890,14 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 			}
 		}
 
-		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len,
-			&pSA->SAParams.ucEncKey, pSA->SAParams.EncKeyLen);
+		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len
+			+ ASF_CACHE_BYTES, &pSA->SAParams.ucEncKey,
+			pSA->SAParams.EncKeyLen);
 
 		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
 						pSA->ctx.split_key_pad_len +
-						pSA->SAParams.EncKeyLen,
-							DMA_TO_DEVICE);
+						pSA->SAParams.EncKeyLen +
+						ASF_CACHE_BYTES, DMA_TO_DEVICE);
 		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
 			ASFIPSEC_DEBUG("Unable to map key"\
 					"i/o memory\n");
