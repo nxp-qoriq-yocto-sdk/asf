@@ -63,7 +63,9 @@
 #include <linux/fsl_qman.h>
 #else
 #include <gianfar.h>
+#ifndef ASF_ARM
 #include <asf_gianfar.h>
+#endif
 #endif
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>

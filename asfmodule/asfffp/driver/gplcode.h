@@ -45,7 +45,7 @@
 }
 #endif
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM) || defined(CONFIG_DPA)
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM) || defined(CONFIG_DPA) || defined(ASF_ARM)
 #define asfDevHardXmit(dev, skb)	(dev->netdev_ops->ndo_start_xmit(skb, dev))
 #else
 extern int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev);
