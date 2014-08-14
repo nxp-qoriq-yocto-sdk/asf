@@ -31,7 +31,9 @@
 #include <dpa/dpaa_eth_common.h>
 #else
 #include <gianfar.h>
+#ifndef ASF_ARM
 #include <asf_gianfar.h>
+#endif
 #endif
 #include <net/neighbour.h>
 #include <net/dst.h>

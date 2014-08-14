@@ -25,7 +25,9 @@
 #include <linux/vmalloc.h>
 #ifndef CONFIG_DPA
 #include <gianfar.h>
+#ifndef ASF_ARM
 #include <asf_gianfar.h>
+#endif
 #endif
 #ifdef ASFCTRL_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
