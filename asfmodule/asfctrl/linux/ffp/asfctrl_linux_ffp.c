@@ -43,6 +43,7 @@
 #include <net/ipv6.h>
 
 #include "../../../asfffp/driver/asf.h"
+#include "../../../asfffp/driver/asfcmn.h"
 #include "asfctrl.h"
 
 #define tuple(ct, dir) (&(ct)->tuplehash[dir].tuple)
@@ -431,7 +432,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		}
 		dev = dev_get_by_name(&init_net, "lo");
 
-		if ((0 != ip_route_input(skb, uldestIp, pInfo->tuple.ulSrcIp, 0, dev))
+		if ((0 != ip_route_input(skb, ASF_NTOHL(uldestIp), ASF_NTOHL(pInfo->tuple.ulSrcIp), 0, dev))
 			|| (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) {
 			ASFCTRL_INFO("Route not found for dst %x local host : %d",
 			uldestIp,
