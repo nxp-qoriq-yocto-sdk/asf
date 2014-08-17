@@ -167,6 +167,11 @@ static ASF_int32_t asf_linux_IPv6XmitL2blobDummyPkt(
 	dev = dev_get_by_name(&init_net, "lo");
 	skb->dev = dev;
 	ip6_route_input(skb);
+	if (skb_dst(skb)->error || (skb_dst(skb)->dev->flags & IFF_LOOPBACK)) {
+		ASFCTRLKernelSkbFree(skb);
+		return T_FAILURE;
+	}
+
 	dev_put(dev);
 	skb->dev = skb_dst(skb)->dev;
 

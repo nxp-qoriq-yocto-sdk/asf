@@ -1451,6 +1451,11 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 				goto gen_indications;
 			}
 
+			if (!(flow->odev->flags & IFF_UP)) {
+				L2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
+				goto gen_indications;
+			}
+
 			L2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
 		}
 	}
