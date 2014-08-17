@@ -214,6 +214,7 @@ int asf_ip_send(struct sk_buff *skb)
 	neigh = dst_neigh_lookup_skb(dst, skb);
 	if (neigh) {
 		res = dst_neigh_output(dst, neigh, skb);
+		neigh_release(neigh);
 		rcu_read_unlock();
 		return res;
 	}
