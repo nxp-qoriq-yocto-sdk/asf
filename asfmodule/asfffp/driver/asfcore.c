@@ -822,10 +822,10 @@ EXPORT_SYMBOL(ASFNetDev);
 static inline void ffp_copy_flow_stats(ffp_flow_t *flow, ASFFFPFlowStats_t *stats)
 {
 	if (flow) {
-		stats->ulInPkts = htonl(flow->stats.ulInPkts);
-		stats->ulOutPkts = htonl(flow->stats.ulOutPkts);
-		stats->ulInBytes = htonl(flow->stats.ulInBytes);
-		stats->ulOutBytes = htonl(flow->stats.ulOutBytes);
+		stats->ulInPkts = ASF_HTONL(flow->stats.ulInPkts);
+		stats->ulOutPkts = ASF_HTONL(flow->stats.ulOutPkts);
+		stats->ulInBytes = ASF_HTONL(flow->stats.ulInBytes);
+		stats->ulOutBytes = ASF_HTONL(flow->stats.ulOutBytes);
 	} else
 		memset(stats, 0, sizeof(*stats));
 }
@@ -884,7 +884,7 @@ int asfAdjustFragAndSendToStack(struct sk_buff *skb, ASFNetDevEntry_t *anDev)
 					struct iphdr *iph;
 					iph = (struct iphdr *) (pSkb->data + x_hh_len);
 					/* PPPoE packet.. Set Payload length in PPPoE header */
-					*((short *)&(pSkb->data[x_hh_len-4])) = htons(ntohs(iph->tot_len) + 2);
+					*((short *)&(pSkb->data[x_hh_len-4])) = ASF_HTONS(ASF_NTOHS(iph->tot_len) + 2);
 				}
 			}
 			pSkb->dev = dev;
@@ -899,7 +899,7 @@ int asfAdjustFragAndSendToStack(struct sk_buff *skb, ASFNetDevEntry_t *anDev)
 
 			/*if (pSkb->len < 60) pSkb->len = 60;
 			pSkb->protocol = eth_type_trans(pSkb, dev); */
-			offset = (ntohs(((struct iphdr *) (pSkb->data))->frag_off) & IP_OFFSET) << 3;
+			offset = (ASF_NTOHS(((struct iphdr *) (pSkb->data))->frag_off) & IP_OFFSET) << 3;
 			asf_debug("Call netif_receive_skb (frag) : skb->len %d offset %d skb->pkt_type %d skb->protocol 0x%04x data[0] = 0x%02x\n", pSkb->len, offset, pSkb->pkt_type, pSkb->protocol, pSkb->data[0]);
 			if (ASF_netif_receive_skb(pSkb) == NET_RX_DROP)
 				asf_debug("Error in Submitting to NetRx: Should not happen\r\n");
@@ -1112,7 +1112,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	skb->tail += pAbuf->pAnnot->fd->length20 + cache_fudge;
 	skb->len  = (pAbuf->pAnnot->fd->length20 - skb->mac_len);
 	/* To handle - PPPoE, Now we are at ip hdr */
-	skb->protocol = htons(*(u16 *)(skb->data - 2));
+	skb->protocol = ASF_HTONS(*(u16 *)(skb->data - 2));
 	asf_debug("pAbuf->pAnnot->fd->length20 %d, pAbuf->ethh 0x%X,"
 			" pParse->ip_off[0] 0x%X, pParse->l4_off 0x%X\n",
 			pAbuf->pAnnot->fd->length20, pAbuf->ethh,
@@ -1281,7 +1281,7 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 
 		XGSTATS_INC(VlanPkts);
 
-		usVlanId = ntohs(vhdr->h_vlan_TCI) & VLAN_VID_MASK;
+		usVlanId = ASF_NTOHS(vhdr->h_vlan_TCI) & VLAN_VID_MASK;
 		if (likely(anDev->pVlanDevArray)) {
 			anDev = ASFGetVlanDev(anDev, usVlanId);
 			if (unlikely(anDev == NULL)) {
@@ -1438,7 +1438,7 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 #endif	/* ASF_IPV6_FP_SUPPORT */
 
 	/* do reassembly only for ipv4 */
-	if (abuf.iph->frag_off & htons(IP_MF|IP_OFFSET)) {
+	if (abuf.iph->frag_off & ASF_HTONS(IP_MF|IP_OFFSET)) {
 		int fragCnt;
 
 		if ((abuf.iph->protocol != IPPROTO_TCP) && (abuf.iph->protocol != IPPROTO_UDP)
@@ -1799,7 +1799,7 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 
 		XGSTATS_INC(VlanPkts);
 
-		usVlanId = ntohs(vhdr->h_vlan_TCI) & VLAN_VID_MASK;
+		usVlanId = ASF_NTOHS(vhdr->h_vlan_TCI) & VLAN_VID_MASK;
 		if (anDev->pVlanDevArray) {
 			anDev = ASFGetVlanDev(anDev, usVlanId);
 			if (anDev == NULL) {
@@ -1902,7 +1902,7 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 			goto drop_pkt;
 	}
 
-	len = ntohs(iph->tot_len);
+	len = ASF_NTOHS(iph->tot_len);
 	if (unlikely((skb->len < (len + x_hh_len)) || (len < (iph->ihl*4)))) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulErrIpHdr++;
@@ -2286,7 +2286,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 			goto drop_pkt;
 		}
 
-		tcp_data_len = ntohs(iph->tot_len)-iphlen-trhlen;
+		tcp_data_len = ASF_NTOHS(iph->tot_len)-iphlen-trhlen;
 		asf_debug_l2("TCP_STATE_PROC: tcp_data_len = %d\n",
 							tcp_data_len);
 
@@ -2306,8 +2306,8 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		asf_debug_l2("TCP_STATE_PROC: out of "
 				"sequence checks finished!\n");
 
-		ulOrgSeqNum = ntohl(ptcph->seq);
-		ulOrgAckNum = ntohl(ptcph->ack_seq);
+		ulOrgSeqNum = ASF_NTOHL(ptcph->seq);
+		ulOrgAckNum = ASF_NTOHL(ptcph->ack_seq);
 		asfTcpApplyDelta(flow, oth_flow, ptcph,
 				ulOrgSeqNum, ulOrgAckNum);
 		asf_debug_l2("TCP_STATE_PROC: applied delta to the packet\n");
@@ -2388,14 +2388,14 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		} else { /*if (abuf.iph->protocol == IPPROTO_TCP) */
 			abuf.pCsum = ((unsigned short int *) ptrhdrOffset) + 8;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			if (ulOrgSeqNum != ntohl(ptcph->seq))
+			if (ulOrgSeqNum != ASF_NTOHL(ptcph->seq))
 				asf_proto_csum_replace4(abuf.pCsum,
-					htonl(ulOrgSeqNum),
+					ASF_HTONL(ulOrgSeqNum),
 					ptcph->seq);
 
-			if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+			if (ulOrgAckNum != ASF_NTOHL(ptcph->ack_seq))
 				asf_proto_csum_replace4(abuf.pCsum,
-					htonl(ulOrgAckNum),
+					ASF_HTONL(ulOrgAckNum),
 					ptcph->ack_seq);
 #endif
 		}
@@ -2417,13 +2417,13 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		if (iph->protocol == IPPROTO_TCP) {
 			abuf.pCsum = ((u16 *)ptrhdrOffset) + 8;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-			if (ulOrgSeqNum != ntohl(ptcph->seq))
+			if (ulOrgSeqNum != ASF_NTOHL(ptcph->seq))
 				asf_proto_csum_replace4(abuf.pCsum,
-					htonl(ulOrgSeqNum),
+					ASF_HTONL(ulOrgSeqNum),
 					ptcph->seq);
-			if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+			if (ulOrgAckNum != ASF_NTOHL(ptcph->ack_seq))
 				asf_proto_csum_replace4(abuf.pCsum,
-					htonl(ulOrgAckNum),
+					ASF_HTONL(ulOrgAckNum),
 					ptcph->ack_seq);
 #endif
 		}
@@ -2534,7 +2534,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 					   PPPoE header */
 					*((short *)&(pSkb->data[flow->l2blob_len
 									- 4])) =
-						htons(ntohs(iph->tot_len) + 2);
+						ASF_HTONS(ASF_NTOHS(iph->tot_len) + 2);
 				}
 
 				asf_debug("skb->network_header = 0x%x,"
@@ -2602,7 +2602,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		/* PPPoE packet..
 		 * Set Payload length in PPPoE header */
 		*((short *)&(txdata[(flow->l2blob_len - tunnel_hdr_len)-4])) =
-			htons(ntohs(iph->tot_len + tunnel_hdr_len) + 2);
+			ASF_HTONS(ASF_NTOHS(iph->tot_len + tunnel_hdr_len) + 2);
 	}
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
@@ -2698,7 +2698,7 @@ gen_indications:
 			ind.tuple.usDestPort = flow->ulPorts&0xffff;
 			ind.tuple.ucProtocol = flow->ucProtocol;
 			ind.ulZoneId = flow->ulZoneId;
-			ind.ulHashVal = htonl(ulHashVal);
+			ind.ulHashVal = ASF_HTONL(ulHashVal);
 
 			ind.ASFwInfo = (ASF_uint8_t *)flow->as_flow_info;
 			ind.ulTcpState = ulTcpState;
@@ -2728,7 +2728,7 @@ gen_indications:
 			ind.tuple.usDestPort = flow->ulPorts&0xffff;
 			ind.tuple.ucProtocol = flow->ucProtocol;
 			ind.ulZoneId = flow->ulZoneId;
-			ind.ulHashVal = htonl(ulHashVal);
+			ind.ulHashVal = ASF_HTONL(ulHashVal);
 
 			ind.ASFwInfo =
 			(ASF_uint8_t *)flow->as_flow_info;
@@ -3147,7 +3147,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		if (iph->protocol == IPPROTO_UDP) {
 			XGSTATS_INC(UdpPkts);
 			if (((host_ip_tot_len - iphlen) < 8) ||
-				(ntohs(*(q + 2)) > (host_ip_tot_len - iphlen))) {
+				(ASF_NTOHS(*(q + 2)) > (host_ip_tot_len - iphlen))) {
 				/* Udp header length is invalid */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;
@@ -3219,8 +3219,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 			asf_debug_l2("TCP_STATE_PROC: out of sequence checks finished!\n");
 
-			ulOrgSeqNum = ntohl(ptcph->seq);
-			ulOrgAckNum = ntohl(ptcph->ack_seq);
+			ulOrgSeqNum = ASF_NTOHL(ptcph->seq);
+			ulOrgAckNum = ASF_NTOHL(ptcph->ack_seq);
 			asfTcpApplyDelta(flow, oth_flow, ptcph, ulOrgSeqNum, ulOrgAckNum);
 			asf_debug_l2("TCP_STATE_PROC: applied delta to the packet\n");
 
@@ -3295,14 +3295,14 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				} else { /*if (iph->protocol == IPPROTO_TCP) */
 					q = ((unsigned short int *) ptrhdrOffset) + 8;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-					if (ulOrgSeqNum != ntohl(ptcph->seq))
+					if (ulOrgSeqNum != ASF_NTOHL(ptcph->seq))
 						inet_proto_csum_replace4(q, skb,
-							htonl(ulOrgSeqNum),
+							ASF_HTONL(ulOrgSeqNum),
 							ptcph->seq, 1);
 
-					if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+					if (ulOrgAckNum != ASF_NTOHL(ptcph->ack_seq))
 						inet_proto_csum_replace4(q, skb,
-							htonl(ulOrgAckNum),
+							ASF_HTONL(ulOrgAckNum),
 							ptcph->ack_seq, 1);
 #endif
 				}
@@ -3333,13 +3333,13 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 					skb_set_transport_header(skb, iphlen);
 					q = (unsigned short int *) ptrhdrOffset;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
-					if (ulOrgSeqNum != ntohl(ptcph->seq))
+					if (ulOrgSeqNum != ASF_NTOHL(ptcph->seq))
 						inet_proto_csum_replace4(q + 8, skb,
-							htonl(ulOrgSeqNum),
+							ASF_HTONL(ulOrgSeqNum),
 							ptcph->seq, 1);
-					if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+					if (ulOrgAckNum != ASF_NTOHL(ptcph->ack_seq))
 						inet_proto_csum_replace4(q + 8, skb,
-							htonl(ulOrgAckNum),
+							ASF_HTONL(ulOrgAckNum),
 							ptcph->ack_seq, 1);
 #endif
 				}
@@ -3427,7 +3427,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 						asfCopyWords((unsigned int *)pSkb->data, (unsigned int *)flow->l2blob, flow->l2blob_len);
 						if (flow->bPPPoE) {
 							/* PPPoE packet.. Set Payload length in PPPoE header */
-							*((short *)&(pSkb->data[flow->l2blob_len-4])) = htons(host_ip_tot_len + 2);
+							*((short *)&(pSkb->data[flow->l2blob_len-4])) = ASF_HTONS(host_ip_tot_len + 2);
 						}
 
 						asf_debug("skb->network_header = 0x%x, skb->transport_header = 0x%x\r\n",
@@ -3502,7 +3502,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				/* PPPoE packet..
 				 * Set Payload length in PPPoE header */
 				*((short *)&(skb->data[(flow->l2blob_len - tunnel_hdr_len)-4])) =
-				htons(host_ip_tot_len + tunnel_hdr_len + 2);
+				ASF_HTONS(host_ip_tot_len + tunnel_hdr_len + 2);
 			}
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			skb->pkt_type = PACKET_FASTROUTE;
@@ -3558,7 +3558,7 @@ gen_indications:
 					ind.tuple.usDestPort = flow->ulPorts&0xffff;
 					ind.tuple.ucProtocol = flow->ucProtocol;
 					ind.ulZoneId = flow->ulZoneId;
-					ind.ulHashVal = htonl(ulHashVal);
+					ind.ulHashVal = ASF_HTONL(ulHashVal);
 
 					ind.ASFwInfo = (ASF_uint8_t *)flow->as_flow_info;
 					ind.ulTcpState = ulTcpState;
@@ -3586,7 +3586,7 @@ gen_indications:
 					ind.tuple.usDestPort = flow->ulPorts&0xffff;
 					ind.tuple.ucProtocol = flow->ucProtocol;
 					ind.ulZoneId = flow->ulZoneId;
-					ind.ulHashVal = htonl(ulHashVal);
+					ind.ulHashVal = ASF_HTONL(ulHashVal);
 
 					ind.ASFwInfo =
 					(ASF_uint8_t *)flow->as_flow_info;
@@ -3737,9 +3737,9 @@ ret_pkt_to_stk:
 			struct iphdr *iph;
 			iph = (struct iphdr *) (skb->data + x_hh_len);
 			/* PPPoE packet.. Set Payload length in PPPoE header */
-			asf_debug_l2("   Adjust PPPOE len (old %u) to %u\n", *((short *)  &(skb->data[x_hh_len-4])),  htons(host_ip_tot_len + 2));
+			asf_debug_l2("   Adjust PPPOE len (old %u) to %u\n", *((short *)  &(skb->data[x_hh_len-4])),  ASF_HTONS(host_ip_tot_len + 2));
 
-			*((short *)  &(skb->data[x_hh_len-4])) = htons(host_ip_tot_len + 2);
+			*((short *)  &(skb->data[x_hh_len-4])) = ASF_HTONS(host_ip_tot_len + 2);
 		}
 		skb_set_mac_header(skb, -ETH_HLEN);
 		skb->mac_len = ETH_HLEN;
@@ -4599,13 +4599,13 @@ static inline int ffp_flow_copy_info(ASFFFPFlowInfo_t *pInfo, ffp_flow_t *flow)
 		flow->bTcpOutOfSeqCheck = pInfo->bTcpOutOfSeqCheck;
 		flow->bTcpTimeStampCheck = pInfo->bTcpTimeStampCheck;
 		flow->ulTcpTimeStamp = pInfo->ulTcpTimeStamp;
-		flow->tcpState.ulHighSeqNum = ntohl(pInfo->tcpState.ulHighSeqNum);
-		flow->tcpState.ulSeqDelta = ntohl(pInfo->tcpState.ulSeqDelta);
+		flow->tcpState.ulHighSeqNum = ASF_NTOHL(pInfo->tcpState.ulHighSeqNum);
+		flow->tcpState.ulSeqDelta = ASF_NTOHL(pInfo->tcpState.ulSeqDelta);
 		flow->tcpState.bPositiveDelta = pInfo->tcpState.bPositiveDelta;
 		flow->tcpState.ucWinScaleFactor = pInfo->tcpState.ucWinScaleFactor;
-		flow->tcpState.ulRcvNext = ntohl(pInfo->tcpState.ulRcvNext);
-		flow->tcpState.ulRcvWin = ntohl(pInfo->tcpState.ulRcvWin);
-		flow->tcpState.ulMaxRcvWin = ntohl(pInfo->tcpState.ulMaxRcvWin);
+		flow->tcpState.ulRcvNext = ASF_NTOHL(pInfo->tcpState.ulRcvNext);
+		flow->tcpState.ulRcvWin = ASF_NTOHL(pInfo->tcpState.ulRcvWin);
+		flow->tcpState.ulMaxRcvWin = ASF_NTOHL(pInfo->tcpState.ulMaxRcvWin);
 	}
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 	flow->bNat = pInfo->bNAT;
@@ -5140,8 +5140,8 @@ static int ffp_cmd_update_flow(ASF_uint32_t ulVsgId, ASFFFPUpdateFlowParams_t *p
 						ind.tuple.ucProtocol = flow->ucProtocol;
 						ind.ulZoneId = flow->ulZoneId;
 
-						/*ind.ulInactiveTime = htonl(ulIdleTime);*/
-						ind.ulHashVal = htonl(hash);
+						/*ind.ulInactiveTime = ASF_HTONL(ulIdleTime);*/
+						ind.ulHashVal = ASF_HTONL(hash);
 						ffp_copy_flow_stats(flow, &ind.flow_stats);
 						ind.ASFwInfo = (ASF_uint8_t *)flow->as_flow_info;
 						XGSTATS_INC(TmrCtxInacInd);
@@ -5427,8 +5427,8 @@ unsigned int asfFfpInacRefreshTmrCb(unsigned int ulVSGId,
 			ind.tuple.ucProtocol = flow1->ucProtocol;
 			ind.ulZoneId = flow1->ulZoneId;
 
-			ind.ulInactiveTime = htonl(ulIdleTime);
-			ind.ulHashVal = htonl(ulHashVal);
+			ind.ulInactiveTime = ASF_HTONL(ulIdleTime);
+			ind.ulHashVal = ASF_HTONL(ulHashVal);
 			ffp_copy_flow_stats(flow1, &ind.flow_stats);
 			ind.ASFwInfo = (ASF_uint8_t *)flow1->as_flow_info;
 			XGSTATS_INC(TmrCtxInacInd);

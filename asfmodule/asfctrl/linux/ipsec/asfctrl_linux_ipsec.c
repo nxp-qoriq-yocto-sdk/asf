@@ -486,7 +486,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 			iph->saddr = (address->srcIP.ipv4addr);
 			iph->daddr = (address->dstIP.ipv4addr);
 			iph->protocol = ASFCTRL_IPPROTO_DUMMY_IPSEC_L2BLOB;
-			skb->protocol = htons(ETH_P_IP);
+			skb->protocol = ASF_HTONS(ETH_P_IP);
 #ifdef ASF_IPV6_FP_SUPPORT
 		} else if (address->IP_Version == 6) {
 			struct dst_entry *dst;
@@ -538,7 +538,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 				address->dstIP.ipv6addr, 16);
 
 			ipv6h->nexthdr = ASFCTRL_IPPROTO_DUMMY_IPSEC_L2BLOB;
-			skb->protocol = htons(ETH_P_IPV6);
+			skb->protocol = ASF_HTONS(ETH_P_IPV6);
 			skb_set_transport_header(skb, sizeof(struct ipv6hdr));
 			IP6CB(skb)->nhoff = offsetof(struct ipv6hdr, nexthdr);
 

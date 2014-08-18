@@ -714,7 +714,7 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 		the basis of source ip and frag-id (for IPv4 only).
 		*/
 		if ((iph->version == 4) &&
-				(iph->frag_off & htons(IP_MF|IP_OFFSET))) {
+				(iph->frag_off & ASF_HTONS(IP_MF|IP_OFFSET))) {
 			hashval = iph->id + iph->saddr;
 			frag_cpu = hashval % num_online_cpus();
 		} else if ((iph->version == 6) &&

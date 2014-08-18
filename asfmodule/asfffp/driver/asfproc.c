@@ -567,13 +567,13 @@ static int display_asf_proc_flow_stats(struct seq_file *f, void *v)
 			(flow->ucProtocol == 6) ? "TCP" : "UDP",
 
 			NIPQUAD(flow->ulSrcIp),
-			ntohs((flow->ulPorts&0xffff0000) >> 16),
+			ASF_NTOHS((flow->ulPorts&0xffff0000) >> 16),
 			NIPQUAD(flow->ulDestIp),
-			ntohs(flow->ulPorts&0xffff),
+			ASF_NTOHS(flow->ulPorts&0xffff),
 			NIPQUAD(flow->ulSrcNATIp),
-			ntohs((flow->ulNATPorts&0xffff0000) >> 16),
+			ASF_NTOHS((flow->ulNATPorts&0xffff0000) >> 16),
 			NIPQUAD(flow->ulDestNATIp),
-			ntohs(flow->ulNATPorts&0xffff),
+			ASF_NTOHS(flow->ulNATPorts&0xffff),
 			flow->stats.ulOutPkts);
 			disp_cnt++;
 			if (disp_cnt >= ffp_debug_show_count) {
@@ -634,16 +634,16 @@ static int display_asf_proc_flow_ipv6_stats(struct seq_file *f, void *v)
 			seq_printf(f, "Src IP      = %x:%x:%x:%x:%x:%x:%x:%x"
 			"	Port = %u\n",
 			PRINT_IPV6_OTH(flow->ipv6SrcIp),
-			ntohs((flow->ulPorts&0xffff0000) >> 16));
+			ASF_NTOHS((flow->ulPorts&0xffff0000) >> 16));
 			seq_printf(f, "Dest IP     = %x:%x:%x:%x:%x:%x:%x:%x"
 			"	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestIp),
-			ntohs(flow->ulPorts&0xffff));
+			ASF_NTOHS(flow->ulPorts&0xffff));
 			seq_printf(f, "NAT Src IP  = %x:%x:%x:%x:%x:%x:%x:%x"
 			"	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6SrcNATIp),
-			ntohs((flow->ulNATPorts&0xffff0000) >> 16));
+			ASF_NTOHS((flow->ulNATPorts&0xffff0000) >> 16));
 			seq_printf(f, "NAT Dest IP = %x:%x:%x:%x:%x:%x:%x:%x"
 			"	Port = %u\n", PRINT_IPV6_OTH(flow->ipv6DestNATIp),
-			ntohs(flow->ulNATPorts&0xffff));
+			ASF_NTOHS(flow->ulNATPorts&0xffff));
 			seq_printf(f, "Proto = %s  Out dev = %s   l2blob len = %u"
 			"   VSG = %u  Zone = %u\n",
 			((flow->ucProtocol == 6) ? "TCP" : "UDP"),

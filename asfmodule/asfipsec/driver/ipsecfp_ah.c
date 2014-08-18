@@ -1346,7 +1346,7 @@ void secfp_outAHComplete(struct device *dev,
 		if (pSA->bPPPoE) {
 			/* PPPoE packet.. Set Payload length in PPPoE header */
 			*((short *)&(skb->data[pSA->ulL2BlobLen-4])) =
-						htons(ntohs(tot_len) + 2);
+						ASF_HTONS(ASF_NTOHS(tot_len) + 2);
 		}
 /*		ASFIPSEC_DEBUG("skb->network_header = 0x%x,"
 			"skb->transport_header = 0x%x\r\n",
@@ -1595,7 +1595,7 @@ sa_expired1:
 						(unsigned int *)pSA->l2blob, pSA->ulL2BlobLen);
 					if (pSA->bPPPoE) {
 						/* PPPoE packet.. Set Payload length in PPPoE header */
-						*((short *)&(pOutSkb->data[pSA->ulL2BlobLen-4])) = htons(ntohs(iph->tot_len) + 2);
+						*((short *)&(pOutSkb->data[pSA->ulL2BlobLen-4])) = ASF_HTONS(ASF_NTOHS(iph->tot_len) + 2);
 					}
 					ASFIPSEC_DEBUG("skb->network_header = 0x%x, skb->transport_header = 0x%x\r\n",
 						skb_network_header(pOutSkb), skb_transport_header(pOutSkb));

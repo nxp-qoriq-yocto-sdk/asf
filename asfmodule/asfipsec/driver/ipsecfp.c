@@ -626,7 +626,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		if (pSA->bPPPoE) {
 			/* PPPoE packet.. Set Payload length in PPPoE header */
 			*((short *)&(skb->data[pSA->ulL2BlobLen-4])) =
-						htons(ntohs(tot_len) + 2);
+						ASF_HTONS(ASF_NTOHS(tot_len) + 2);
 		}
 		ASFIPSEC_DEBUG("skb->network_header = 0x%x,"
 			"skb->transport_header = 0x%x\r\n",
@@ -2185,7 +2185,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 			/* PPPoE packet:
 			Set Payload length in PPPoE header */
 			*((short *)&(skb->data[skb->cb[SECFP_OUTB_L2_OVERHEAD]-4]))
-					= htons(ntohs(tot_len) + 2);
+					= ASF_HTONS(ASF_NTOHS(tot_len) + 2);
 		}
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
 		/* FASTROUTE is required for selective recycling*/
@@ -2321,7 +2321,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 						(unsigned int *)pSA->l2blob, pSA->ulL2BlobLen);
 					if (pSA->bPPPoE) {
 						/* PPPoE packet.. Set Payload length in PPPoE header */
-						*((short *)&(pOutSkb->data[pSA->ulL2BlobLen-4])) = htons(ntohs(iph->tot_len) + 2);
+						*((short *)&(pOutSkb->data[pSA->ulL2BlobLen-4])) = ASF_HTONS(ASF_NTOHS(iph->tot_len) + 2);
 					}
 					ASFIPSEC_DEBUG("skb->network_header = 0x%x, skb->transport_header = 0x%x\r\n",
 						skb_network_header(pOutSkb), skb_transport_header(pOutSkb));
@@ -5660,8 +5660,8 @@ static int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 		iph->daddr = BUFGET32((unsigned char *)(pOrgData + 12));
 		iph->protocol = SECFP_IPPROTO_ICMP;
 		pSkb->protocol = __constant_htons(ETH_P_IP);
-		iph->tot_len = htons(ASF_IPLEN + ASF_ICMPLEN + iplen + 8);
-		pSkb->len = htons(iph->tot_len);
+		iph->tot_len = ASF_HTONS(ASF_IPLEN + ASF_ICMPLEN + iplen + 8);
+		pSkb->len = ASF_HTONS(iph->tot_len);
 
 
 	#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
@@ -5689,7 +5689,7 @@ static int ASFIPSec4SendIcmpErrMsg (unsigned char *pOrgData,
 			ASFKernelSkbFree(pSkb);
 			return 1;
 		}
-		iph->saddr = htonl(in_dev->ifa_list->ifa_local);
+		iph->saddr = ASF_HTONL(in_dev->ifa_list->ifa_local);
 		BUFPUT16(&iph->check, ASFIPCkSum((char *)pSkb->data, ASF_IPLEN));
 
 		neigh = dst_neigh_lookup_skb(dst, pSkb);
