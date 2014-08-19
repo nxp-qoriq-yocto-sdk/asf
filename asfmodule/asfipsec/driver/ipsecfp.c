@@ -1052,13 +1052,9 @@ secfp_finishOffloadOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 	if (likely(pSA->bl2blob)) {
 		/* Moving data pointer to copy L2blob */
-#ifdef ASF_QMAN_IPSEC
 		/* L2blob will be copied before the tunnel headers
 		which are inserted before current data location */
 		skb->data -= (pSA->ulL2BlobLen + pSA->ulXmitHdrLen);
-#else
-		skb->data -= pSA->ulL2BlobLen;
-#endif
 
 		skb->cb[SECFP_OUTB_L2_OVERHEAD] = pSA->ulL2BlobLen;
 
@@ -1073,11 +1069,8 @@ secfp_finishOffloadOutPacket(struct sk_buff *skb, outSA_t *pSA,
 			skb->cb[SECFP_OUTB_L2_WITH_PPPOE] = 1;
 
 		/*Reverting the data pointer to it's original location*/
-#ifdef ASF_QMAN_IPSEC
 		skb->data += (pSA->ulL2BlobLen + pSA->ulXmitHdrLen);
-#else
-		skb->data += pSA->ulL2BlobLen;
-#endif
+		skb->network_header = skb->data;
 	} else {
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
 		ASFIPSEC_DPERR("OutSA - L2blob info not available");

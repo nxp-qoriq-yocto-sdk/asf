@@ -1480,12 +1480,16 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		dma_addr_t ptr;
 
 #ifdef ASF_SECFP_PROTO_OFFLOAD
+		dma_addr_t out_ptr;
 		/* updating the length of packet to the length which is
 		   after encryption */
 		skb->len += pSA->ulSecOverHead + usPadLen;
 #endif
 		ptr = dma_map_single(pSA->ctx.jrdev, skb->data,
 			skb->len, DMA_BIDIRECTIONAL);
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+		out_ptr = ptr - pSA->ulXmitHdrLen;
+#endif
 		ASFIPSEC_FPRINT("asso@:");
 		ASFIPSEC_HEXDUMP(skb->data, 8);
 		ASFIPSEC_FPRINT("presciv@:");
@@ -1495,7 +1499,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 
 		secfp_prepareCaamJobDescriptor(descriptor, &pSA->ctx,
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-			ptr, data_in_len, ptr , skb->len, 0, dpovrd);
+			ptr, data_in_len, out_ptr , skb->len, 0, dpovrd);
 #else
 			ptr, skb->len + pSA->SAParams.uICVSize,
 			ptr, skb->len + pSA->SAParams.uICVSize, 0, dpovrd);
@@ -1544,7 +1548,8 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 					(void *)page_address(frag->page.p)
 					+ frag->page_offset, frag->size
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-					+ pSA->ulCompleteOverHead,
+					+ pSA->ulCompleteOverHead -
+						pSA->ulXmitHdrLen,
 #else
 					+ pSA->SAParams.uICVSize,
 #endif
@@ -1555,8 +1560,10 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 				len_to_caam += frag->size;
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 				/* Preparing for out put */
-				frag->size += pSA->ulSecOverHead + usPadLen;
-				skb->data_len += pSA->ulSecOverHead + usPadLen;
+				frag->size += pSA->SAParams.uICVSize + usPadLen
+						+ SECFP_ESP_TRAILER_LEN;
+				skb->data_len += pSA->SAParams.uICVSize +
+						usPadLen + SECFP_ESP_TRAILER_LEN;
 				skb->len += pSA->ulSecOverHead + usPadLen;
 #endif
 				(link_tbl_entry + i + 1)->len |=
@@ -1584,12 +1591,15 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		memcpy(link_tbl_entry + total_frags + 1,
 			link_tbl_entry, dma_len);
 		link_tbl_entry += total_frags + 1;
+		link_tbl_entry->ptr -= pSA->ulXmitHdrLen;
+		link_tbl_entry->len += pSA->ulXmitHdrLen;
 
 		ptr_out = dma_map_single(pSA->ctx.jrdev, link_tbl_entry,
 					dma_len, DMA_BIDIRECTIONAL);
 
 		link_tbl_entry += total_frags;
-		link_tbl_entry->len += pSA->ulSecOverHead + usPadLen;
+		link_tbl_entry->len += (pSA->SAParams.uICVSize + usPadLen +
+						SECFP_ESP_TRAILER_LEN);
 		len_to_caam += pSA->ulSecOverHead + usPadLen;
 
 		edesc->sec4_sg_bytes = 2*dma_len;
