@@ -512,7 +512,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 			the ESN related from the packet */
 		iph->tos |= (unsigned char)(org_iphdr->tos & 0x1100);
 	}
-	tot_len = iph->tot_len;
+	tot_len = ASF_NTOHS(iph->tot_len);
 	ipHdrLen = SECFP_IPV4_HDR_LEN;
 	etherproto = ETH_P_IP;
 	skb->ip_summed = CHECKSUM_UNNECESSARY;
@@ -525,7 +525,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 		uh->source = pSA->SAParams.IPsecNatInfo.usSrcPort;
 		uh->dest = pSA->SAParams.IPsecNatInfo.usDstPort;
-		uh->len = tot_len - ipHdrLen;
+		uh->len = ASF_HTONS(tot_len - ipHdrLen);
 		uh->check = 0;
 
 		if (pSA->SAParams.IPsecNatInfo.ulNATt == ASF_IPSEC_IKE_NATtV1) {
@@ -534,7 +534,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 			ike[1] = 0;
 		}
 		iph->protocol = IPPROTO_UDP;
-		iph->tot_len += pSA->usNatHdrSize;
+		iph->tot_len += ASF_HTONS(pSA->usNatHdrSize);
 		tot_len += pSA->usNatHdrSize;
 	}
 
@@ -559,7 +559,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 			*(unsigned int *) &(pOuterIpHdr[ii]) = pIpHdrInSA[ii];
 		}
 		ipv6h->payload_len = payload_len;
-		tot_len = ipv6h->payload_len + SECFP_IPV6_HDR_LEN;
+		tot_len = ASF_NTOHS(ipv6h->payload_len) + SECFP_IPV6_HDR_LEN;
 		ipHdrLen = SECFP_IPV6_HDR_LEN;
 		etherproto = ETH_P_IPV6;
 		/*TODO TOS related processing*/
@@ -799,7 +799,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 		ipv6_traffic_class(tos, org_ipv6hdr);
 	} else {
 #endif
-		orig_pktlen = org_iphdr->tot_len;
+		orig_pktlen = ASF_NTOHS(org_iphdr->tot_len);
 		usNxtProto = SECFP_PROTO_IP;
 		tos = org_iphdr->tos;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -837,7 +837,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 		usPadLen = 0;
 	}
 	ASFIPSEC_DEBUG("Total Len = %d +2(ESP TRAILER), padLen=%d",
-				org_iphdr->tot_len, usPadLen);
+				ASF_NTOHS(org_iphdr->tot_len), usPadLen);
 
 	/* Forming the ESP packet */
 	usLastByte = usPadLen << 8 | usNxtProto;
@@ -875,10 +875,10 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	iph = (struct iphdr *) (*pOuterIpHdr);
 
 	/* Total length = Outer IP hdr + Sec hdr len (inclusive of IV) + payload len + padding length + Trailer len */
-	iph->tot_len = orig_pktlen + pSA->usNatHdrSize +
+	iph->tot_len = ASF_HTONS(orig_pktlen + pSA->usNatHdrSize +
 				(unsigned short)pSA->ulSecHdrLen +
 				(unsigned short)pSA->ulSecLenIncrease
-				+ usPadLen + SECFP_ESP_TRAILER_LEN ;
+				+ usPadLen + SECFP_ESP_TRAILER_LEN);
 	iph->tos = tos;
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
@@ -978,7 +978,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 		pHeadSkb->len = orig_pktlen + pSA->ulSecHdrLen + usPadLen
 				+ SECFP_ESP_TRAILER_LEN;
 		ASFIPSEC_DEBUG("pHeadSkb->len:%d pHeadSkb->len1:%d\n",
-					pHeadSkb->len, org_iphdr->tot_len);
+				pHeadSkb->len, ASF_NTOHS(org_iphdr->tot_len));
 		ASFIPSEC_DEBUG("frag->size:%d pHeadSkb->data_len:%d\n",
 					frag->size, pHeadSkb->data_len);
 	} else {
@@ -1720,7 +1720,7 @@ static inline int secfp_try_fastPathOutv4(
 			if (pSA->SAParams.bRedSideFragment) {
 				struct sk_buff *tempSkb;
 				ASFIPSEC_DEBUG("Red side fragmentation is enabled");
-				if (iph->frag_off & IP_DF) {
+				if (iph->frag_off & ASF_HTONS(IP_DF)) {
 					ASFIPSEC_DEBUG("DF Bit is set while"\
 						" Red side fragmentation is enabled");
 					snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
@@ -1763,8 +1763,9 @@ static inline int secfp_try_fastPathOutv4(
 				skb->next = NULL;
 			} else {
 				if (((pSA->SAParams.handleDf == SECFP_DF_SET) ||
-				((iph->frag_off & IP_DF) && (pSA->SAParams.handleDf
-				== SECFP_DF_COPY)) || pSA->ipHdrInfo.bIpVersion)) {
+					((iph->frag_off & ASF_HTONS(IP_DF)) &&
+					 (pSA->SAParams.handleDf == SECFP_DF_COPY)) ||
+					pSA->ipHdrInfo.bIpVersion)) {
 					ASFIPSEC_DEBUG("Packet size is > Path MTU"\
 							"and fragment bit set in SA or packet");
 					snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
@@ -2158,7 +2159,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	if ((iph->version == 4) && (iph->protocol == IPPROTO_UDP)) {
 		struct udphdr *uh = (struct udphdr *) ((u32 *) iph + iph->ihl);
-			uh->len = ASF_NTOHS(iph->tot_len) - (iph->ihl * 4);
+		uh->len = ASF_HTONS(ASF_NTOHS(iph->tot_len) - (iph->ihl * 4));
 	}
 #endif
 	ASFIPSEC_FPRINT("Sending packet to:"
@@ -2195,10 +2196,11 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #ifdef ASF_IPV6_FP_SUPPORT
 			if (iph->version == 6) {
 				ipv6h = (struct ipv6hdr *) iph;
-				tot_len = ipv6h->payload_len + SECFP_IPV6_HDR_LEN;
+				tot_len = ASF_NTOHS(ipv6h->payload_len) +
+							SECFP_IPV6_HDR_LEN;
 			} else
 #endif
-				tot_len = iph->tot_len;
+				tot_len = ASF_NTOHS(iph->tot_len);
 			/* PPPoE packet:
 			Set Payload length in PPPoE header */
 			*((short *)&(skb->data[skb->cb[SECFP_OUTB_L2_OVERHEAD]-4]))
@@ -2347,7 +2349,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 						skb_network_header(pOutSkb), skb_transport_header(pOutSkb));
 					ASFIPSEC_FPRINT("Transmitting buffer = 0x%x dev->index = %d", pOutSkb, pOutSkb->dev->ifindex);
 
-					ASFIPSEC_FPRINT("Fragment offset field = 0x%x", iph->frag_off);
+					ASFIPSEC_FPRINT("Fragment offset field = 0x%x", ASF_NTOHS(iph->frag_off));
 
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
 #ifdef CONFIG_DPA
@@ -2653,7 +2655,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 					+ SECFP_IPV6_HDR_LEN - pHeadSkb->cb[SECFP_ICV_LENGTH] - 1);
 			} else
 #endif
-				*pNextProto = *((u8 *)iph + iph->tot_len
+				*pNextProto = *((u8 *)iph + ASF_NTOHS(iph->tot_len)
 						- pHeadSkb->cb[SECFP_ICV_LENGTH] - 1);
 			} else {
 				frag = &skb_shinfo(pTailSkb)->frags[total_frag - 2];
@@ -4616,7 +4618,7 @@ int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
 
 	if (skb_shinfo(skb)->frag_list) {
 		if (asfReasmLinearize(&skb,
-			ip_hdr(skb)->tot_len, VPN_TOT_OVHD, VPN_HDROOM)) {
+			ASF_NTOHS(ip_hdr(skb)->tot_len), VPN_TOT_OVHD, VPN_HDROOM)) {
 			ASFIPSEC_WARN("skb->linearize failed ");
 			ASFSkbFree(skb);
 			*skbuff = NULL;
@@ -4636,7 +4638,7 @@ int secfp_process_udp_encapsulator(struct sk_buff **skbuff,
 	memcpy(skb->data, aIpHeader, usIPHdrLen);
 	skb->len -= ucSkipLen;
 	skb_reset_network_header(skb);
-	ip_hdr(skb)->tot_len -= ucSkipLen;
+	ip_hdr(skb)->tot_len -= ASF_HTONS(ucSkipLen);
 	ip_hdr(skb)->protocol = SECFP_PROTO_ESP;
 	*skbuff = skb;
 	return ASF_NATT_PACKET;
@@ -4737,7 +4739,7 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 		iph = ip_hdr(skb1);
 #ifdef CONFIG_ASF_SEC3x
 		ASFIPSEC_DEBUG("encrypted frags, linearizing skb %p ...\n", skb1->head);
-		if (asfReasmLinearize(&skb1, iph->tot_len, VPN_TOT_OVHD, VPN_HDROOM)) {
+		if (asfReasmLinearize(&skb1, ASF_NTOHS(iph->tot_len), VPN_TOT_OVHD, VPN_HDROOM)) {
 			ASFIPSEC_WARN("skb->linearize failed ");
 			ASFSkbFree(skb1);
 			return 0;
@@ -4798,7 +4800,7 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 			else
 				pHeadSkb = pTailSkb = skb1;
 			bScatterGather = SECFP_SCATTER_GATHER;
-			len = iph->tot_len;
+			len = ASF_NTOHS(iph->tot_len);
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
 		} else {
 			pHeadSkb = pTailSkb = skb1;
@@ -4824,7 +4826,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT9);
 		}
 
-		if (iph->tot_len < pSA->validIpPktLen) {
+		if (ASF_NTOHS(iph->tot_len) < pSA->validIpPktLen) {
 			ASFIPSEC_DEBUG("Invalid ESP or AH Pkt");
 			snprintf(aMsg, ASF_MAX_MESG_LEN - 1,
 				"SPI = 0x%x, Seq. No = %u"
@@ -5302,7 +5304,7 @@ sa_error:
 				memcpy(skb1->data, aIpHeader, usIPHdrLen);
 				skb1->len += ucSkipLen;
 				skb_reset_network_header(skb1);
-				ip_hdr(skb1)->tot_len += ucSkipLen;
+				ip_hdr(skb1)->tot_len += ASF_HTONS(ucSkipLen);
 				ip_hdr(skb1)->protocol = IPPROTO_UDP;
 			}
 #endif

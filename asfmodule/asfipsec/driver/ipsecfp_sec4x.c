@@ -532,7 +532,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 		switch (pSA->SAParams.handleDf) {
 		case SECFP_DF_SET:
-			iph->frag_off = IP_DF;
+			iph->frag_off = ASF_HTONS(IP_DF);
 			break;
 		case SECFP_DF_COPY:
 			pdb->hmo_rsvd |= PDBHMO_ESP_DFBIT;

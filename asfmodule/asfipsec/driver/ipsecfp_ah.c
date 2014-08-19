@@ -695,7 +695,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 	}
 #endif
 
-	ASFIPSEC_DEBUG("Org IpHeader Total Len = %d ", org_iphdr->tot_len);
+	ASFIPSEC_DEBUG("Org IpHeader Total Len = %d ", ASF_NTOHS(org_iphdr->tot_len));
 
 
 	/* skb->data is at the Original IP header */
@@ -728,7 +728,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		iph->check = 0;
 
 		ASFIPSEC_DEBUG("ulSecHdrLen = %d, uICVSiz=%d, AHPaddingLen=%d, iph->tot_len=%d",
-		 pSA->ulSecHdrLen, pSA->SAParams.uICVSize, pSA->SAParams.ucAHPaddingLen, iph->tot_len);
+		 pSA->ulSecHdrLen, pSA->SAParams.uICVSize, pSA->SAParams.ucAHPaddingLen, ASF_NTOHS(iph->tot_len));
 
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
@@ -851,7 +851,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		ASFIPSEC_DEBUG("pHeadSkb->data_len:%d\n", pHeadSkb->data_len);
 		pHeadSkb->len = orig_pktlen + pSA->ulSecHdrLen + SECFP_IPV4_HDR_LEN;
 		ASFIPSEC_DEBUG("pHeadSkb->len:%d pHeadSkb->len1:%d\n",
-					pHeadSkb->len, org_iphdr->tot_len);
+					pHeadSkb->len, ASF_NTOHS(org_iphdr->tot_len));
 	} else {
 		/* Update skb->len */
 		pHeadSkb->len += pSA->ulSecHdrLen + pSA->ulSecLenIncrease;
@@ -1604,7 +1604,7 @@ sa_expired1:
 						skb_network_header(pOutSkb), skb_transport_header(pOutSkb));
 					ASFIPSEC_FPRINT("Transmitting buffer = 0x%x dev->index = %d", pOutSkb, pOutSkb->dev->ifindex);
 
-					ASFIPSEC_FPRINT("Fragment offset field = 0x%x", iph->frag_off);
+					ASFIPSEC_FPRINT("Fragment offset field = 0x%x", ASF_NTOHS(iph->frag_off));
 
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
 #ifdef CONFIG_DPA
