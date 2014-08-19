@@ -2194,7 +2194,25 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		skb_set_tail_pointer(skb, skb->len);
 #endif
 	}
-
+#ifdef CONFIG_ASF_SEC4x
+#ifdef ASF_SECFP_PROTO_OFFLOAD
+	/*In case of IPv6-in-IPv4 tunnel*/
+	if (*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) &
+			SECFP_IPv6_IN_IPv4) {
+		struct iphdr *iph = (struct iphdr *) skb->data;
+		iph->tos = *(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX]);
+		ip_send_check(iph);
+	} else if (*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) &
+			SECFP_IPv4_IN_IPv6) {
+		/*In case of IPv4-in-IPv6 tunnel*/
+		struct ipv6hdr *ipv6h = (struct ipv6hdr *) skb->data;
+		ipv6h->priority = (*(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX])
+					& 0xf0) >> 4;
+		ipv6h->flow_lbl[0] |= (*(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX])
+				& 0x0f) << 4;
+	}
+#endif /*ASF_SECFP_PROTO_OFFLOAD*/
+#endif
 	if (!skb->cb[SECFP_OUTB_FRAG_REQD]) {
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 		skb->data -= skb->cb[SECFP_OUTB_L2_OVERHEAD];

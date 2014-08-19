@@ -803,7 +803,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
-		if (pSA->SAParams.bCopyDscp)
+		if ((bSelIPv4OrIPv6) && (pSA->SAParams.bCopyDscp))
 			pdb->options |= PDBOPTS_ESP_DIFFSERV;
 		pdb->options |= PDBOPTS_ESP_IPV6;
 		iphv6 = (struct ipv6hdr *) pdb->ip_hdr;
@@ -1458,6 +1458,13 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 			ASFIPSEC_DEBUG("UPDATE DPOVRD REG with v6");
 			dpovrd = SECFP_PROTO_IPV6;
 		}
+		/*In case of IPv6-in-IPv4 tunnel*/
+		if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+			struct ipv6hdr *ipv6h1 = ipv6_hdr(skb);
+			ipv6_traffic_class(*(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX]), ipv6h1);
+			*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv6_IN_IPv4;
+		} else /* In case of IPv6-in-IPv6 tunnel*/
+			*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv6_IN_IPv6;
 	} else
 #endif
 	{
@@ -1469,6 +1476,13 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 			ASFIPSEC_DEBUG("UPDATE DPOVRD REG with v6");
 			dpovrd = SECFP_PROTO_IP;
 		}
+		/*In case of IPv4-to-IPv6 tunnel*/
+		if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+			*(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX]) = iph->tos;
+			*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv4_IN_IPv6;
+		} else /*In case of IPv4-to-IPv4 tunnel*/
+			*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv4_IN_IPv4;
+
 	}
 
 	ASFIPSEC_DEBUG("ulSecOverHead %d skb->len %d, data_len=%d pad_len =%d",

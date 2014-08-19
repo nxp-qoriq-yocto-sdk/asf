@@ -158,6 +158,16 @@
 
 #define K3_NULL_XCBC_LEN 	0x20
 #define K3_NULL_XCBC_OFFSET 	0x10
+/*SEC combination*/
+	/*IPv4-in-IPv4 tunnel*/
+#define SECFP_IPv4_IN_IPv4 0x01
+	/*IPv4-in-IPv6 tunnel*/
+#define SECFP_IPv4_IN_IPv6 0x02
+	/*IPv6-in-IPv4 tunnel*/
+#define SECFP_IPv6_IN_IPv4 0x04
+	/*IPv6-in-IPv6 tunnel*/
+#define SECFP_IPv6_IN_IPv6 0x08
+
 /* Sequence number related */
 #define SECFP_APPEND_BUF_LEN_FIELD	4
 #define SECFP_HO_SEQNUM_LEN		4
@@ -212,6 +222,8 @@
 #define SECFP_IV_DATA_INDEX		28
 #define SECFP_OUTB_PATH_MTU		32
 #define SECFP_OUTB_L2_OVERHEAD		36
+#define SECFP_TOS_TC_INDEX 		37
+#define SECFP_IN_OUT_HDR_DIFF 		38
 #define SECFP_OUTB_L2_WITH_PPPOE	40
 
 #define SECFP_NUM_IV_DATA_GET_AT_ONE_TRY	1
