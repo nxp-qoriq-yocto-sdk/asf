@@ -693,10 +693,6 @@ static inline ffp_flow_t  *asf_ffp_flow_lookup(
 #ifdef ASF_DEBUG
 	unsigned long ulCount = 0;
 #endif
-#if defined(ASF_SCTP_SUPPORT) && !defined(ASF_SCTP_5TUPLE_SUPPORT)
-	if (protocol == IPPROTO_SCTP)
-			ports = 0;
-#endif
 
 	*pHashVal = ASFFFPComputeFlowHash1(sip, dip, ports, vsg,
 					szone, asf_ffp_hash_init_value);
@@ -734,10 +730,7 @@ static inline ffp_flow_t *asf_ffp_flow_lookup_by_tuple(ASFFFPFlowTuple_t *tpl,
 			unsigned long *pHashVal)
 {
 	ASF_uint32_t ulPorts = (tpl->usSrcPort << 16) | tpl->usDestPort;
-#if defined(ASF_SCTP_SUPPORT) && !defined(ASF_SCTP_5TUPLE_SUPPORT)
-	if (tpl->ucProtocol == IPPROTO_SCTP)
-		ulPorts = 0;
-#endif
+
 	return asf_ffp_flow_lookup(tpl->ulSrcIp, tpl->ulDestIp,
 				ulPorts, ulVsgId, ulZoneId,
 				tpl->ucProtocol, pHashVal);
@@ -2053,12 +2046,12 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif
 	if (unlikely((iph->protocol != IPPROTO_TCP)
 		&& (iph->protocol != IPPROTO_UDP)
-#ifdef ASF_SCTP_SUPPORT
-		&& (iph->protocol != IPPROTO_SCTP)
-#endif
 #ifdef ASF_IPSEC_FP_SUPPORT
 		&& (iph->protocol != IPPROTO_ESP)
 		&& (iph->protocol != IPPROTO_AH)
+#endif
+#ifdef ASF_SCTP_SUPPORT
+		&& (iph->protocol != IPPROTO_SCTP)
 #endif
 		)) {
 		XGSTATS_INC(NonTcpUdpPkts);
@@ -3380,13 +3373,13 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			asf_debug_l2("TCP state processing is done!\n");
 #ifdef ASF_SCTP_SUPPORT
 		} else { /* SCTP Traffic */
-			XGSTATS_INC(UdpPkts);
+			XGSTATS_INC(ulSctpPkts);
 			if ((iph->tot_len-iphlen) < 12) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;
 #endif
 				asfFfpSendLog(flow,
-					ASF_LOG_ID_INVALID_SCTP_HDRLEN,
+					ASF_LOG_ID_SCTP_INV_HDRLEN,
 					ulHashVal);
 				goto drop_pkt;
 			}

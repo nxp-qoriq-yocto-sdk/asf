@@ -320,6 +320,7 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 		XGSTATS_SUM(TcpTimeStampErr);
 		XGSTATS_SUM(TcpOutOfSequenceErr);
 		XGSTATS_SUM(TcpProcessErr);
+		XGSTATS_SUM(SctpPkts);
 		XGSTATS_SUM(NatPkts);
 		XGSTATS_SUM(BlankL2blobInd);
 		XGSTATS_SUM(FragAndXmit);
@@ -428,6 +429,7 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 	XGSTATS_DISP(TcpTimeStampErr);
 	XGSTATS_DISP(TcpOutOfSequenceErr);
 	XGSTATS_DISP(TcpProcessErr);
+	XGSTATS_DISP(SctpPkts);
 	XGSTATS_DISP(NatPkts);
 	XGSTATS_DISP(BlankL2blobInd);
 	XGSTATS_DISP(FragAndXmit);

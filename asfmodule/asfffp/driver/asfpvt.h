@@ -62,6 +62,8 @@ typedef struct ASFFFPXtraGlobalStats_s {
 	unsigned long   ulTcpOutOfSequenceErr;
 	unsigned long   ulTcpProcessErr;
 
+	unsigned long   ulSctpPkts;
+
 	unsigned long   ulNatPkts;
 	unsigned long   ulBlankL2blobInd;
 	unsigned long   ulFragAndXmit;

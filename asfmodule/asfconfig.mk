@@ -28,9 +28,10 @@ endif
 #ASF_FULL 	:= 3
 
 # SCTP Flags
+# Please enable IP_SCTP & NF_CT_PROTO_SCTP in kernel
+# for SCTP flows to be offloaded by ASF.
 EXTRA_CFLAGS += -DASFCTRL_SCTP_SUPPORT
 EXTRA_CFLAGS += -DASF_SCTP_SUPPORT
-#EXTRA_CFLAGS += -DASF_SCTP_5TUPLE_SUPPORT
 
 ifeq ($(CONFIG_FSL_DPAA_ETH),y)
 CONFIG_DPA=y
