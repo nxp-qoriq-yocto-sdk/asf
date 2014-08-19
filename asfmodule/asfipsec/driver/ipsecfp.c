@@ -3498,18 +3498,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 		ASFSkbFree(skb);
 		return;
 	}
-#ifdef ASF_SECFP_PROTO_OFFLOAD
-	/* dealing with inner ip header */
-#ifdef ASF_IPV6_FP_SUPPORT
-	if (inneriph->version == 6) {
-		struct ipv6hdr *ipv6h2 = (struct ipv6hdr *) inneriph;
-		ipv6h2->hop_limit--;
-	} else
-#endif
-	{
-		ip_decrease_ttl(inneriph);
-	}
-#else /*NO ASF_SECFP_PROTO_OFFLOAD*/
+#ifndef ASF_SECFP_PROTO_OFFLOAD
 	if (secfp_inHandleICVCheck(desc, skb)) {
 #ifndef CONFIG_ASF_SEC4x
 		/* Failure case - only in case of SEC3x*/

@@ -1083,15 +1083,6 @@ void secfp_inAHComplete(struct device *dev,
 		skb->len -= SECFP_IPV4_HDR_LEN + ah_header_len;
 	}
 	ASFIPSEC_DEBUG("\n NextProto=%d", ucNextProto);
-#ifdef ASF_IPV6_FP_SUPPORT
-	if (ucNextProto == SECFP_PROTO_IP) {
-#endif
-		struct iphdr *inneriph;
-		inneriph = (struct iphdr *)(skb->data);
-		ip_decrease_ttl(inneriph);
-#ifdef ASF_IPV6_FP_SUPPORT
-	}
-#endif
 
 	iRetVal = secfp_inCompleteSAProcess(&skb, &IPSecOpque,
 		SECFP_PROTO_AH, &ulCommonInterfaceId);
