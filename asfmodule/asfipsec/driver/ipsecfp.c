@@ -607,6 +607,11 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 			goto send_l2blob;
 		}
 
+		if ((pSA->odev) && !(pSA->odev->flags & IFF_UP)) {
+			bl2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
+			goto send_l2blob;
+		}
+
 		bl2blobRefresh = ASF_L2BLOB_REFRESH_NORMAL;
 	}
 #endif
@@ -1037,6 +1042,11 @@ secfp_finishOffloadOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		if (time_after(jiffies,
 			pSA->l2blobConfig.ulOldL2blobJiffies +
 			ASF_MAX_OLD_L2BLOB_JIFFIES_TIMEOUT)) {
+			bl2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
+			goto send_l2blob;
+		}
+
+		if ((pSA->odev) && !(pSA->odev->flags & IFF_UP)) {
 			bl2blobRefresh = ASF_L2BLOB_REFRESH_DROP_PKT;
 			goto send_l2blob;
 		}
