@@ -104,13 +104,8 @@ int asf_debug_devfp_rx(void *ptr, struct net_device *real_dev,
 	tx_fd->cmd = FM_FD_CMD_FCO;
 
 	do {
-#ifdef CONFIG_ASF_DEBUG_T4240
-		err = qman_enqueue(priv->recycle_fqs[smp_processor_id()],
-								tx_fd, 0);
-#else
 		err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 								tx_fd, 0);
-#endif
 		if (err == 0)
 			break;
 		if (++retryCount == ASF_MAX_TX_TRY_COUNT) {

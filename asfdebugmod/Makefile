@@ -19,9 +19,6 @@ endif
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/drivers/net/ethernet/freescale
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/net/bridge
 EXTRA_CFLAGS += -I$(KERNEL_PATH)/net
-ifeq ($(CONFIG_FSL_DPAA_TX_RECYCLE),y)
-EXTRA_CFLAGS += -DCONFIG_ASF_DEBUG_T4240
-endif
 
 obj-m += asf_debug.o
 

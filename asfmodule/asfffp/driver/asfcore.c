@@ -2736,13 +2736,8 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		err = asf_qos_fd_handling(&abuf, flow->odev,
 					iph->tos, &flow->tc_filter_res);
 #else
-#ifdef CONFIG_ASF_T4240
-		err = qman_enqueue(priv->recycle_fqs[smp_processor_id()],
-								tx_fd, 0);
-#else
 		err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 								tx_fd, 0);
-#endif
 #endif
 		if (err == 0)
 			break;
@@ -5833,13 +5828,8 @@ int asf_qos_fd_handling(ASFBuffer_t *abuf,
 	{
 		struct dpa_priv_s *priv = netdev_priv(dev);
 
-#ifdef CONFIG_ASF_T4240
-			return qman_enqueue(priv->recycle_fqs[smp_processor_id()],
-					(struct qm_fd *)&(abuf->pAnnot->reserved[1]), 0);
-#else
-			return qman_enqueue(priv->egress_fqs[smp_processor_id()],
-					(struct qm_fd *)&(abuf->pAnnot->reserved[1]), 0);
-#endif
+		return qman_enqueue(priv->egress_fqs[smp_processor_id()],
+				(struct qm_fd *)&(abuf->pAnnot->reserved[1]), 0);
 	}
 }
 EXPORT_SYMBOL(asf_qos_fd_handling);
