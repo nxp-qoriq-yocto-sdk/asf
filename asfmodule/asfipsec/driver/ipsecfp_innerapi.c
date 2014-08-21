@@ -3508,9 +3508,9 @@ unsigned int secfp_DeleteOutSA(unsigned int	ulSPDContainerIndex,
 				}
 				memset(&pOutSA->PolicyPPStats, 0x0,
 					sizeof(pOutSA->PolicyPPStats));
+				pOutSA->uRefCnt--;
 			}
 			ulSAIndex = pOutSALinkNode->ulSAIndex;
-			pOutSA->uRefCnt--;
 			secfp_delOutSALinkNode(pContainer,
 					pOutSALinkNode);
 			ptrIArray_delete(&secFP_OutSATable, ulSAIndex,
@@ -4452,11 +4452,15 @@ ASF_uint32_t asfFlushInSA(SPDInContainer_t *pInContainer,
 			break;
 		pSASPDMapNode = pSASPDMapNode->pNext;
 	}
-
-	if (pSASPDMapNode->ulSPDSelSetIndexMagicNum == ptrIArray_getMagicNum(
-		&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
-		ptrIArray_delete(&secFP_InSelTable,
-			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
+	if (pSASPDMapNode) {
+		if (pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
+					ptrIArray_getMagicNum(
+					&secFP_InSelTable,
+					pSASPDMapNode->ulSPDSelSetIndex)) {
+			ptrIArray_delete(&secFP_InSelTable,
+				pSASPDMapNode->ulSPDSelSetIndex,
+				secfp_freeInSelSet);
+		}
 	}
 	secfp_deleteInSAFromSPIList(pInSA);
 	return SECFP_SUCCESS;
@@ -4496,11 +4500,13 @@ ASF_uint32_t asfFlushAllOutSAs(ASF_uint32_t ulSPDOutContainerIndex)
 			secfp_delOutSALinkNode(pOutContainer, pOutSALinkNode);
 			pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
 					ulSAIndex);
-			if (pSA->uRefCnt > 1)
-				pSA->uRefCnt--;
-			else
-				ptrIArray_delete(&secFP_OutSATable, ulSAIndex,
-					secfp_freeOutSA);
+			if (pSA) {
+				if (pSA->uRefCnt > 1)
+					pSA->uRefCnt--;
+				else
+					ptrIArray_delete(&secFP_OutSATable,
+						ulSAIndex, secfp_freeOutSA);
+			}
 			pOutSALinkNode = pOutContainer->SAHolder.pSAList;
 		}
 	}
