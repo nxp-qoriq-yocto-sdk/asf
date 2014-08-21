@@ -29,6 +29,7 @@
 #include <net/ipv6.h>
 #include <net/dst.h>
 #include <net/route.h>
+#include <net/ip6_route.h>
 #include <linux/inetdevice.h>
 #include "../../asfffp/driver/asfparry.h"
 #include "../../asfffp/driver/asfmpool.h"
@@ -1319,6 +1320,12 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 				ASFIPSEC_DEBUG("Packet size is > Path MTU and fragment bit set in SA or packet");
 				/* Need to send to normal path */
 				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT21);
+
+				ip6_route_input(skb);
+				if (!skb_dst(skb))
+					goto drop_skb_list;
+				skb->dev = skb_dst(skb)->dev;
+
 				icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0,
 						pSA->ulInnerPathMTU);
 				goto drop_skb_list;
