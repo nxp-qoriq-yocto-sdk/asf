@@ -918,13 +918,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			err = asf_qos_fd_handling(&abuf, flow->odev,
 					hdr->tc, &flow->tc_filter_res);
 #else
-#ifdef CONFIG_ASF_T4240
-			err = qman_enqueue(priv->recycle_fqs[smp_processor_id()],
-					tx_fd, 0);
-#else
 			err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 					tx_fd, 0);
-#endif
 #endif
 			if (err == 0)
 				break;
