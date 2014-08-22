@@ -1276,9 +1276,10 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 		return AS_FP_PROCEED;
 
 	ASF_RCU_READ_LOCK(bLockFlag);
+	ACCESS_XGSTATS();
+
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
-	ACCESS_XGSTATS();
 	gstats->ulInPkts++;
 #endif
 
@@ -3307,7 +3308,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			asf_debug_l2("TCP state processing is done!\n");
 #ifdef ASF_SCTP_SUPPORT
 		} else { /* SCTP Traffic */
-			XGSTATS_INC(ulSctpPkts);
+			XGSTATS_INC(SctpPkts);
 			if ((iph->tot_len-iphlen) < 12) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;

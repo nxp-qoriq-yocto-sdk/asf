@@ -28,100 +28,119 @@ typedef struct ASFFFPXtraFlowStats_s {
 } ASFFFPXtraFlowStats_t;
 
 typedef struct ASFFFPXtraGlobalStats_s {
-	unsigned long   ulBridgePkts;
-	unsigned long   ulInvalidBridgeDev;
-	unsigned long   ulVlanPkts;
-	unsigned long   ulInvalidVlanDev;
-	unsigned long   ulPPPoEPkts;
-	unsigned long   ulPPPoEUnkPkts;
-	unsigned long   ulInvalidPPPoEDev;
+	unsigned long	ulBMCastPkts;
+	unsigned long	ulOtherHost;
+	unsigned long	ulThisHost;
+	unsigned long	ulVsgUnknown;
+	unsigned long	ulZoneUnknown;
+	unsigned long	ulIKEPkts;
+	unsigned long	ulTTLExpire;
+	unsigned long	ulFlowSpecialInd;
 
-	unsigned long   ulNonIpPkts;
-	unsigned long   ulNonTcpUdpPkts;
-	unsigned long   ulVsgSzoneUnk;
-	unsigned long   ulInvalidCsum;
+	unsigned long	ulL2Unknown;
+	unsigned long	ulIfNotFound;
+	unsigned long	ulBridgePkts;
+	unsigned long	ulInvalidBridgeDev;
+	unsigned long	ulVlanPkts;
+	unsigned long	ulInvalidVlanDev;
+	unsigned long	ulPPPoEPkts;
+	unsigned long	ulPPPoEUnkPkts;
+	unsigned long	ulInvalidPPPoEDev;
 
-	unsigned long   ulIpOptPkts;
+	unsigned long	ulRetPkts;
+	unsigned long	ulSentPkts;
+	unsigned long	ulSendDrop;
+	unsigned long	ulNoFlow;
 
-	unsigned long   ulLocalCsumVerify;
-	unsigned long   ulLocalBadCsum;
-	unsigned long   ulUdpBlankCsum;
+	unsigned long	ulNonIpPkts;
+	unsigned long	ulNonTcpUdpPkts;
+	unsigned long	ulVsgSzoneUnk;
+	unsigned long	ulInvalidCsum;
 
-	unsigned long   ulIpOptProcFail;
+	unsigned long	ulIpOptPkts;
 
-	unsigned long   ulIpFragPkts;
-	unsigned long   ulbDropPkts;
+	unsigned long	ulLocalCsumVerify;
+	unsigned long	ulLocalBadCsum;
+	unsigned long	ulUdpBlankCsum;
 
-	unsigned long   ulCondition1;
-	unsigned long   ulCondition2;
+	unsigned long	ulIpOptProcFail;
 
-	unsigned long   ulUdpPkts;
-	unsigned long   ulTcpPkts;
-	unsigned long   ulTcpHdrLenErr;
-	unsigned long   ulTcpTimeStampErr;
-	unsigned long   ulTcpOutOfSequenceErr;
-	unsigned long   ulTcpProcessErr;
+	unsigned long	ulIpFragPkts;
+	unsigned long	ulbDropPkts;
+	unsigned long	ulIpReasmPkts;
+	unsigned long	ulNonFragXmit;
 
-	unsigned long   ulSctpPkts;
+	unsigned long	ulCondition1;
+	unsigned long	ulCondition2;
 
-	unsigned long   ulNatPkts;
-	unsigned long   ulBlankL2blobInd;
-	unsigned long   ulFragAndXmit;
-	unsigned long   ulNormalXmit;
-	unsigned long   ulL2hdrAdjust;
-	unsigned long   ulDevXmitErr;
-	unsigned long   ulFlowEndInd;
-	unsigned long   ulPktCtxInacRefreshInd;
-	unsigned long   ulPktCtxL2blobInd;
-	unsigned long   ulNetIfQStopped;
+	unsigned long	ulUdpPkts;
+	unsigned long	ulTcpPkts;
+	unsigned long	ulTcpHdrLenErr;
+	unsigned long	ulTcpTimeStampErr;
+	unsigned long	ulTcpOutOfSequenceErr;
+	unsigned long	ulTcpProcessErr;
 
-	unsigned long   ulCreateFlowsCmd;
-	unsigned long   ulCreateFlowsCmdVsgErr;
-	unsigned long   ulCreateFlowsCmdErrDown;
-	unsigned long   ulCreateFlowsCmdErrDown1;
-	unsigned long   ulCreateFlowsCmdErrDown2;
-	unsigned long   ulCreateFlowsCmdFailures;
-	unsigned long   ulDeleteFlowsCmd;
-	unsigned long   ulDeleteFlowsCmdFailures;
-	unsigned long   ulModifyFlowsCmd;
-	unsigned long   ulModifyFlowsCmdFailures;
+	unsigned long	ulSctpPkts;
+	unsigned long	ulESPPkts;
 
-	unsigned long   ulBlobTmrCalls;
-	unsigned long   ulTmrCtxL2blobInd;
-	unsigned long   ulBlobTmrCtxBadFlow;
+	unsigned long	ulNatPkts;
+	unsigned long	ulBlankL2blobInd;
+	unsigned long	ulFragAndXmit;
+	unsigned long	ulNormalXmit;
+	unsigned long	ulL2hdrAdjust;
+	unsigned long	ulDevXmitErr;
+	unsigned long	ulFlowEndInd;
+	unsigned long	ulPktCtxInacRefreshInd;
+	unsigned long	ulPktCtxL2blobInd;
+	unsigned long	ulNetIfQStopped;
 
-	unsigned long   ulInacTmrCalls;
-	unsigned long   ulTmrCtxInacInd;
-	unsigned long   ulInacTmrCtxBadFlow1;
-	unsigned long   ulInacTmrCtxBadFlow2;
+	unsigned long	ulCreateFlowsCmd;
+	unsigned long	ulCreateFlowsCmdVsgErr;
+	unsigned long	ulCreateFlowsCmdErrDown;
+	unsigned long	ulCreateFlowsCmdErrDown1;
+	unsigned long	ulCreateFlowsCmdErrDown2;
+	unsigned long	ulCreateFlowsCmdFailures;
+	unsigned long	ulDeleteFlowsCmd;
+	unsigned long	ulDeleteFlowsCmdFailures;
+	unsigned long	ulModifyFlowsCmd;
+	unsigned long	ulModifyFlowsCmdFailures;
 
-	unsigned long   ulInacTmrCtxAutoFlowDel;
+	unsigned long	ulBlobTmrCalls;
+	unsigned long	ulTmrCtxL2blobInd;
+	unsigned long	ulBlobTmrCtxBadFlow;
 
-	unsigned long   ulPktCmdTxInPkts;
-	unsigned long   ulPktCmdTxBlobRefresh;
-	unsigned long   ulPktCmdTxAutoFlowCreate;
-	unsigned long   ulPktCmdTxAutoFlowBlobRefresh;
-	unsigned long   ulPktCmdTxLogicalDevErr;
-	unsigned long   ulPktCmdTxNonIpErr;
+	unsigned long	ulInacTmrCalls;
+	unsigned long	ulTmrCtxInacInd;
+	unsigned long	ulInacTmrCtxBadFlow1;
+	unsigned long	ulInacTmrCtxBadFlow2;
 
-	unsigned long   ulPktCmdTxDummyPkt;
-	unsigned long   ulPktCmdTxValidPkt;
-	unsigned long   ulPktCmdTxFlowFound;
-	unsigned long   ulPktCmdTxBlobInitialUpdates;
-	unsigned long   ulPktCmdTxBlobTmrErr;
-	unsigned long   ulPktCmdTxInacTmrErr;
-	unsigned long   ulPktCmdTxVlanTag;
-	unsigned long   ulPktCmdTxSkbFrees;
-	unsigned long   ulPktCmdTxInvalidFlowErr;
+	unsigned long	ulInacTmrCtxAutoFlowDel;
 
-	unsigned long   ulPktCtxAutoFlowDel;
-	unsigned long   ulAutoFlowBlobRefreshSentUp;
-	unsigned long   ulAutoFlowCreateSentUp;
+	unsigned long	ulPktCmdTxInPkts;
+	unsigned long	ulPktCmdTxBlobRefresh;
+	unsigned long	ulPktCmdTxAutoFlowCreate;
+	unsigned long	ulPktCmdTxAutoFlowBlobRefresh;
+	unsigned long	ulPktCmdTxLogicalDevErr;
+	unsigned long	ulPktCmdTxNonIpErr;
 
-	unsigned long   ulPktCmdTxHdrSizeErr;
-	unsigned long   ulPktCmdBlobSkbFrees;
-	unsigned long   ulPktCmdTxAutoDelFlows;
-	unsigned long   ulPktCmdTxAutoFlowCreateErr;
+	unsigned long	ulPktCmdTxDummyPkt;
+	unsigned long	ulPktCmdTxValidPkt;
+	unsigned long	ulPktCmdTxFlowFound;
+	unsigned long	ulPktCmdTxBlobInitialUpdates;
+	unsigned long	ulPktCmdTxBlobTmrErr;
+	unsigned long	ulPktCmdTxInacTmrErr;
+	unsigned long	ulPktCmdTxVlanTag;
+	unsigned long	ulPktCmdTxSkbFrees;
+	unsigned long	ulPktCmdTxInvalidFlowErr;
+
+	unsigned long	ulPktCtxAutoFlowDel;
+	unsigned long	ulAutoFlowBlobRefreshSentUp;
+	unsigned long	ulAutoFlowCreateSentUp;
+
+	unsigned long	ulPktCmdTxHdrSizeErr;
+	unsigned long	ulPktCmdBlobSkbFrees;
+	unsigned long	ulPktCmdTxAutoDelFlows;
+	unsigned long	ulPktCmdTxAutoFlowCreateErr;
 
 	unsigned long	ulTmrProcCalls;
 	unsigned long	ulTmrProcReclCalls;

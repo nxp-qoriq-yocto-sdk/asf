@@ -294,6 +294,16 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 		ASFFFPXtraGlobalStats_t *xgstats;
 		xgstats = asfPerCpuPtr(asf_xgstats, cpu);
 
+		XGSTATS_SUM(BMCastPkts);
+		XGSTATS_SUM(OtherHost);
+		XGSTATS_SUM(ThisHost);
+		XGSTATS_SUM(VsgUnknown);
+		XGSTATS_SUM(ZoneUnknown);
+		XGSTATS_SUM(IKEPkts);
+		XGSTATS_SUM(TTLExpire);
+		XGSTATS_SUM(FlowSpecialInd);
+		XGSTATS_SUM(L2Unknown);
+		XGSTATS_SUM(IfNotFound);
 		XGSTATS_SUM(BridgePkts);
 		XGSTATS_SUM(InvalidBridgeDev);
 		XGSTATS_SUM(VlanPkts);
@@ -301,6 +311,10 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 		XGSTATS_SUM(PPPoEPkts);
 		XGSTATS_SUM(PPPoEUnkPkts);
 		XGSTATS_SUM(InvalidPPPoEDev);
+		XGSTATS_SUM(RetPkts);
+		XGSTATS_SUM(SentPkts);
+		XGSTATS_SUM(SendDrop);
+		XGSTATS_SUM(NoFlow);
 		XGSTATS_SUM(NonIpPkts);
 		XGSTATS_SUM(NonTcpUdpPkts);
 		XGSTATS_SUM(VsgSzoneUnk);
@@ -312,6 +326,8 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 		XGSTATS_SUM(IpOptProcFail);
 		XGSTATS_SUM(IpFragPkts);
 		XGSTATS_SUM(bDropPkts);
+		XGSTATS_SUM(IpReasmPkts);
+		XGSTATS_SUM(NonFragXmit);
 		XGSTATS_SUM(Condition1);
 		XGSTATS_SUM(Condition2);
 		XGSTATS_SUM(UdpPkts);
@@ -321,6 +337,7 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 		XGSTATS_SUM(TcpOutOfSequenceErr);
 		XGSTATS_SUM(TcpProcessErr);
 		XGSTATS_SUM(SctpPkts);
+		XGSTATS_SUM(ESPPkts);
 		XGSTATS_SUM(NatPkts);
 		XGSTATS_SUM(BlankL2blobInd);
 		XGSTATS_SUM(FragAndXmit);
@@ -403,6 +420,16 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 		XGSTATS_SUM(DefragCbTimerMagicMatchErr);
 		XGSTATS_SUM(FragHandleCalls);
 	}
+	XGSTATS_DISP(BMCastPkts);
+	XGSTATS_DISP(OtherHost);
+	XGSTATS_DISP(ThisHost);
+	XGSTATS_DISP(VsgUnknown);
+	XGSTATS_DISP(ZoneUnknown);
+	XGSTATS_DISP(IKEPkts);
+	XGSTATS_DISP(TTLExpire);
+	XGSTATS_DISP(FlowSpecialInd);
+	XGSTATS_DISP(L2Unknown);
+	XGSTATS_DISP(IfNotFound);
 	XGSTATS_DISP(BridgePkts);
 	XGSTATS_DISP(InvalidBridgeDev);
 	XGSTATS_DISP(VlanPkts);
@@ -410,6 +437,10 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 	XGSTATS_DISP(PPPoEPkts);
 	XGSTATS_DISP(PPPoEUnkPkts);
 	XGSTATS_DISP(InvalidPPPoEDev);
+	XGSTATS_DISP(RetPkts);
+	XGSTATS_DISP(SentPkts);
+	XGSTATS_DISP(SendDrop);
+	XGSTATS_DISP(NoFlow);
 	XGSTATS_DISP(NonIpPkts);
 	XGSTATS_DISP(NonTcpUdpPkts);
 	XGSTATS_DISP(VsgSzoneUnk);
@@ -421,6 +452,8 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 	XGSTATS_DISP(IpOptProcFail);
 	XGSTATS_DISP(IpFragPkts);
 	XGSTATS_DISP(bDropPkts);
+	XGSTATS_DISP(IpReasmPkts);
+	XGSTATS_DISP(NonFragXmit);
 	XGSTATS_DISP(Condition1);
 	XGSTATS_DISP(Condition2);
 	XGSTATS_DISP(UdpPkts);
@@ -430,6 +463,7 @@ static int display_asfproc_xtra_global_stats(struct seq_file *f, void *v)
 	XGSTATS_DISP(TcpOutOfSequenceErr);
 	XGSTATS_DISP(TcpProcessErr);
 	XGSTATS_DISP(SctpPkts);
+	XGSTATS_DISP(ESPPkts);
 	XGSTATS_DISP(NatPkts);
 	XGSTATS_DISP(BlankL2blobInd);
 	XGSTATS_DISP(FragAndXmit);
