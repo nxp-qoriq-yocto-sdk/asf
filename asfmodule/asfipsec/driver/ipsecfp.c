@@ -2131,18 +2131,20 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 				pSA = (outSA_t *)ptrIArray_getData(
 					&secFP_OutSATable,
 					*(unsigned int *)&(skb->cb[SECFP_SAD_SAI_INDEX]));
-				DestAddr.ipv4addr =
-					pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
-				if (atomic_read(&pSA->SeqOverflow) == 0) {
-					ASFIPSecCbFn.pFnSeqNoOverFlow(ulVSGId,
-						pSA->ulTunnelId,
-						pSA->SAParams.ulSPI,
-						pSA->SAParams.ucProtocol,
-						DestAddr);
-				/*If Anti-Replay On-Seq Number reset will not happen.
-				So, Avoid giving multiple triggers to the Control Plane */
-				if (pSA->SAParams.bDoAntiReplayCheck)
-					atomic_inc(&pSA->SeqOverflow);
+				if (pSA) {
+					DestAddr.ipv4addr =
+						pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+					if (atomic_read(&pSA->SeqOverflow) == 0) {
+						ASFIPSecCbFn.pFnSeqNoOverFlow(ulVSGId,
+							pSA->ulTunnelId,
+							pSA->SAParams.ulSPI,
+							pSA->SAParams.ucProtocol,
+							DestAddr);
+					/*If Anti-Replay On-Seq Number reset will not happen.
+					So, Avoid giving multiple triggers to the Control Plane */
+					if (pSA->SAParams.bDoAntiReplayCheck)
+						atomic_inc(&pSA->SeqOverflow);
+					}
 				}
 			}
 		}
@@ -4120,7 +4122,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		pContainer = (SPDInContainer_t *)(ptrIArray_getData(
 				&(secfp_InDB), pSA->pSASPDMapNode->ulSPDInContainerIndex));
-		if (pContainer->SPDParams.bDPDAlive) {
+		if (pContainer && pContainer->SPDParams.bDPDAlive) {
 			ASF_IPAddr_t DestAddr;
 			DestAddr.bIPv4OrIPv6 = 1;
 			memcpy(DestAddr.ipv6addr,
@@ -4873,7 +4875,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		pContainer = (SPDInContainer_t *)(ptrIArray_getData(
 				&(secfp_InDB), pSA->pSASPDMapNode->ulSPDInContainerIndex));
-		if (pContainer->SPDParams.bDPDAlive) {
+		if (pContainer && pContainer->SPDParams.bDPDAlive) {
 			ASF_IPAddr_t DestAddr;
 			DestAddr.bIPv4OrIPv6 = 0;
 			DestAddr.ipv4addr = iph->daddr;
@@ -5405,7 +5407,7 @@ static int secfp_CheckInPkt(unsigned int ulVSGId,
 
 		pContainer = (SPDInContainer_t *)ptrIArray_getData(&(secfp_InDB),
 				pSecInfo->inContainerInfo.ulSPDContainerId);
-
+		if (pContainer) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (ptrIArray_getMagicNum(&(secfp_InDB),
 				pSecInfo->inContainerInfo.ulSPDContainerId)
@@ -5419,12 +5421,18 @@ static int secfp_CheckInPkt(unsigned int ulVSGId,
 				return 0 /* ASF_IPSEC_PROCEED */;
 			} else {
 				ASFIPSEC_DEBUG("Stored values don't match");
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+				goto callverify;
+#endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 			}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		} else {
 			ASFIPSEC_DEBUG("Stored SPD not matched");
 		}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
+		} else {
+			ASFIPSEC_DEBUG("SPD IN Container not found.");
+		}
 		ASFSkbFree(skb);
 		return 1;
 	}

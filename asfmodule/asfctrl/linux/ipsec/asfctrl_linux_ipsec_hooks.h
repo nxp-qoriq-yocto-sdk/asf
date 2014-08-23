@@ -92,4 +92,12 @@ extern struct xfrm_policy *__xfrm_policy_lookup(struct net *, struct flowi *,
 extern void xfrm_state_policy_mapping(struct xfrm_state *xfrm,
 						struct policy_list *pol_lst);
 
+int asfctrl_ipsec_get_policy4(struct sk_buff *skb, int dir,
+					struct xfrm_policy **pol);
+int asfctrl_ipsec_get_policy6(struct sk_buff *skb, int dir,
+					struct xfrm_policy **pol);
+int asfctrl_ipsec_get_policy(struct sk_buff *skb, int dir,
+					struct xfrm_policy **pol);
+int asfctrl_map_pol_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp);
+int asfctrl_map_pol_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp);
 #endif

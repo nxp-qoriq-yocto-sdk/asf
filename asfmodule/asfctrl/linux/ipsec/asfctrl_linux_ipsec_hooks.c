@@ -415,7 +415,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 			i = alloc_container_index(xp, ASF_OUT_CONTANER_ID);
 			if (i >= 0) {
 				ASFCTRL_TRACE("Out Container Index %d", i);
-				outSPDContainer.ulSPDContainerIndex = i;
+				outSPDContainer.ulSPDContainerIndex = i - 1;
 				outSPDContainer.ulMagicNumber =
 					asfctrl_vsg_ipsec_cont_magic_id;
 			} else {
@@ -452,7 +452,7 @@ int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 			i = alloc_container_index(xp, ASF_IN_CONTANER_ID);
 			if (i >= 0) {
 				ASFCTRL_TRACE("In Container Index %d", i);
-				inSPDContainer.ulSPDContainerIndex = i;
+				inSPDContainer.ulSPDContainerIndex = i - 1;
 				inSPDContainer.ulMagicNumber =
 					asfctrl_vsg_ipsec_cont_magic_id;
 
@@ -513,7 +513,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 		outSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		outSPDContainer.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		outSPDContainer.ulContainerIndex =
-			free_container_index(xp, ASF_OUT_CONTANER_ID);
+			free_container_index(xp, ASF_OUT_CONTANER_ID) - 1;
 
 		ASFIPSecConfig(ulVSGId,
 			ASF_IPSEC_CONFIG_DEL_OUTSPDCONTAINER,
@@ -531,7 +531,7 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 		inSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		inSPDContainer.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		inSPDContainer.ulContainerIndex =
-			free_container_index(xp, ASF_IN_CONTANER_ID);
+			free_container_index(xp, ASF_IN_CONTANER_ID) - 1;
 
 		ASFIPSecConfig(ulVSGId,
 			ASF_IPSEC_CONFIG_DEL_INSPDCONTAINER,
@@ -609,6 +609,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	xfrm->asf_sa_direction = OUT_SA;
 	xfrm->asf_sa_cookie = sa_id + 1;
+	xp->asf_sa_id = sa_id + 1;
 
 	memset(&outSA, 0, sizeof(ASFIPSecRuntimeAddOutSAArgs_t));
 
@@ -616,7 +617,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	outSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 
 	outSA.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-	outSA.ulSPDContainerIndex = xp->asf_cookie;
+	outSA.ulSPDContainerIndex = xp->asf_cookie - 1;
 
 	memset(&SAParams, 0, sizeof(ASF_IPSecSA_t));
 	memset(&srcSel, 0, sizeof(ASF_IPSecSelectorSet_t));
@@ -845,7 +846,6 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	outSA.pSAParams = &SAParams;
 	handle = (uintptr_t)xfrm;
 	xfrm->asf_sa_direction = OUT_SA;
-	xfrm->asf_sa_cookie = sa_id + 1;
 	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
 	ASFIPSecRuntime(ulVSGId,
 			ASF_IPSEC_RUNTIME_ADD_OUTSA,
@@ -915,6 +915,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 	xfrm->asf_sa_direction = IN_SA;
 	xfrm->asf_sa_cookie = sa_id + 1;
+	xp->asf_sa_id = sa_id + 1;
 
 	memset(&inSA, 0, sizeof(ASFIPSecRuntimeAddInSAArgs_t));
 	memset(&inSASel, 0, sizeof(ASF_IPSecSASelector_t));
@@ -923,7 +924,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	memset(&SAParams, 0, sizeof(ASF_IPSecSA_t));
 
 	inSA.ulInSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-	inSA.ulInSPDContainerIndex = xp->asf_cookie;
+	inSA.ulInSPDContainerIndex = xp->asf_cookie - 1;
 
 	sel = &xp->selector;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -1225,7 +1226,7 @@ ASFCTRL_FUNC_ENTRY;
 	outSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 
 	outSA.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-	outSA.ulSPDContainerIndex = xp->asf_cookie;
+	outSA.ulSPDContainerIndex = xp->asf_cookie - 1;
 
 	memset(&SAParams, 0, sizeof(ASF_IPSecSA_t));
 	memset(&srcSel, 0, sizeof(ASF_IPSecSelectorSet_t));
@@ -1343,7 +1344,7 @@ int asfctrl_map_pol_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	memset(&SAParams, 0, sizeof(ASF_IPSecSA_t));
 
 	inSA.ulInSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-	inSA.ulInSPDContainerIndex = xp->asf_cookie;
+	inSA.ulInSPDContainerIndex = xp->asf_cookie - 1;
 
 	sel = &xp->selector;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -1645,19 +1646,23 @@ int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 					continue;
 				}
 			}
-			if (pol_cnt == 0) {
+			if (!xfrm->asf_sa_cookie) {
 				if (dir == XFRM_POLICY_OUT) {
+					ASFCTRL_INFO("\nOUT ADD %s %d\n", __func__, __LINE__);
 					if (asfctrl_xfrm_add_outsa(xfrm, xp))
 						goto out;
 				} else {
+					ASFCTRL_INFO("\nIN ADD %s %d\n", __func__, __LINE__);
 					if (asfctrl_xfrm_add_insa(xfrm, xp))
 						goto out;
 				}
 			} else {
 				if (dir == XFRM_POLICY_OUT) {
+					ASFCTRL_INFO("\nOUT ADD %s %d\n", __func__, __LINE__);
 					if (asfctrl_map_pol_outsa(xfrm, xp))
 						goto out;
 				} else {
+					ASFCTRL_INFO("\nIN ADD %s %d\n", __func__, __LINE__);
 					if (asfctrl_map_pol_insa(xfrm, xp))
 						goto out;
 				}
@@ -1713,7 +1718,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 				if (dir == XFRM_POLICY_OUT) {
 					ASFCTRL_INFO("Delete Encrypt SA");
 					delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-					delSA.ulSPDContainerIndex = xp->asf_cookie;
+					delSA.ulSPDContainerIndex = xp->asf_cookie - 1;
 					delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 #ifdef ASF_IPV6_FP_SUPPORT
 				if (xfrm->props.family == AF_INET6) {
@@ -1733,7 +1738,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 				delSA.usDscpEnd = 0;
 
 				ASFIPSecRuntime(ASF_DEF_VSG,
-					ASF_IPSEC_RUNTIME_DEL_OUTSA,
+					ASF_IPSEC_RUNTIME_UNMAPPOL_OUTSA,
 					&delSA,
 					sizeof(ASFIPSecRuntimeDelOutSAArgs_t),
 					&handle, sizeof(uint32_t));
@@ -1742,7 +1747,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 				ASFCTRL_INFO("UNMAP Decrypt SA");
 
 				delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-				delSA.ulSPDContainerIndex = xp->asf_cookie;
+				delSA.ulSPDContainerIndex = xp->asf_cookie - 1;
 				delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		#ifdef ASF_IPV6_FP_SUPPORT
 				if (xfrm->props.family == AF_INET6) {
@@ -1769,7 +1774,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 			if (dir == XFRM_POLICY_OUT) {
 				ASFCTRL_INFO("Delete Encrypt SA");
 				delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-				delSA.ulSPDContainerIndex = xp->asf_cookie;
+				delSA.ulSPDContainerIndex = xp->asf_cookie - 1;
 				delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 #ifdef ASF_IPV6_FP_SUPPORT
 				if (xfrm->props.family == AF_INET6) {
@@ -1797,7 +1802,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 			} else {
 				ASFCTRL_INFO("Delete Decrypt SA");
 				delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-				delSA.ulSPDContainerIndex = xp->asf_cookie;
+				delSA.ulSPDContainerIndex = xp->asf_cookie - 1;
 				delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 #ifdef ASF_IPV6_FP_SUPPORT
 				if (xfrm->props.family == AF_INET6) {
@@ -1820,12 +1825,13 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 					sizeof(ASFIPSecRuntimeDelInSAArgs_t),
 					&handle, sizeof(uint32_t));
 				}
+			xp->asf_sa_id = 0;
+			free_sa_index(xfrm, dir);
+			xfrm->asf_sa_cookie = 0;
 			}
 		}
 		ret = 0;
 	}
-	free_sa_index(xfrm, dir);
-	xfrm->asf_sa_cookie = 0;
 
 	ASFCTRL_FUNC_EXIT;
 	return 0;
@@ -2032,10 +2038,22 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
 #endif
-	cont_id = sa_table[OUT_SA][sa_id].container_id;
 
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
+	{
+		struct xfrm_policy *xp = 0;
+		if (asfctrl_ipsec_get_policy(skb, OUT_SA, &xp) < 0)
+			return -EINVAL;
+		if (xp) {
+			cont_id = xp->asf_cookie - 1;
+			if (!xp->asf_sa_id)
+				asfctrl_map_pol_outsa(xfrm, xp);
+		} else {
+			ASFCTRL_INFO("Not Valid policy");
+			return -EINVAL;
+		}
+	}
 	skb_dst_drop(skb);
 
 	if ((skb_tailroom(skb) < ASF_IPSEC_NEEDED_TAILROOM)

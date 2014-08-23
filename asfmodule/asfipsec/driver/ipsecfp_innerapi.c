@@ -1620,7 +1620,7 @@ outSA_t *secfp_findOutSA(
 
 	SPDOutContainer_t *pContainer;
 	outSA_t *pSA;
-	SPDOutSALinkNode_t *pOutSALinkNode;
+	SPDOutSALinkNode_t *pOutSALinkNode = NULL;
 
 	ASFIPSEC_FENTRY;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -3069,6 +3069,8 @@ unsigned int secfp_mapPolOutSA(
 	int ii;
 	SPDOutSALinkNode_t *pOutSALinkNode;
 	int bVal = in_interrupt();
+	ASF_IPAddr_t daddr;
+
 	ASFIPSEC_DEBUG("===MapPolOutSA: outSPI 0x%X\n", SAParams->ulSPI);
 	if (!bVal)
 		local_bh_disable();
@@ -3093,6 +3095,18 @@ unsigned int secfp_mapPolOutSA(
 			local_bh_enable();
 		return SECFP_FAILURE;
 	}
+	daddr.bIPv4OrIPv6 = 0;
+	daddr.ipv4addr = pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
+	pOutSALinkNode = secfp_findOutSALinkNode(pContainer,
+			daddr, pSA->SAParams.ucProtocol, pSA->SAParams.ulSPI);
+	if (pOutSALinkNode) {
+		ASFIPSEC_DEBUG("\nSA ID 0x%08x for SPD ID 0x%08x already present, no need to add\n",
+			ulSAIndex, ulSPDContainerIndex);
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_SUCCESS;
+	}
+
 	if (!pContainer->SPDParams.bOnlySaPerDSCP) {
 		secfp_mapOutSelSet(pSA, pSrcSel, pDstSel, ucSelMask,
 			usDscpStart, usDscpEnd);
@@ -3783,6 +3797,15 @@ unsigned int secfp_MapPolInSA(
 	pSA = secfp_findInSA(ulVSGId, pSAParams->ucProtocol, pSAParams->ulSPI, daddr, &hashVal);
 	if (pSA) {
 		struct SASPDMapNode_s *pTempMapNode;
+		SPDInSPIValLinkNode_t *spilink = NULL;
+		spilink = secfp_findInSPINode(pContainer,
+				pSAParams->ulSPI);
+		if (spilink) {
+			ASFIPSEC_DEBUG("\nSPDContainer already have SPI LINK node present(SPI VAL = 0x%08x)", pSAParams->ulSPI);
+			if (!bVal)
+				local_bh_enable();
+			return SECFP_SUCCESS;
+		}
 
 		ulLastInSAChan_g = (ulLastInSAChan_g == 0) ? 1 : 0;
 
@@ -3790,9 +3813,6 @@ unsigned int secfp_MapPolInSA(
 			pDstSel, ucSelFlags);
 		if (!pNode) {
 			ASFIPSEC_DEBUG("secfp_updateInSelSet returned failure");
-			/* Remove from Selector List */
-			secfp_deleteInContainerSelList(pContainer, pNode);
-			kfree(pSA);
 			if (!bVal)
 				local_bh_enable();
 			return SECFP_FAILURE;
@@ -3802,7 +3822,6 @@ unsigned int secfp_MapPolInSA(
 			ASFIPSEC_DEBUG("secfp_allocAndAppendSPIVal failure");
 			/* Remove from Selector List */
 			secfp_deleteInContainerSelList(pContainer, pNode);
-			kfree(pSA);
 			if (!bVal)
 				local_bh_enable();
 			return SECFP_FAILURE;
@@ -3810,7 +3829,6 @@ unsigned int secfp_MapPolInSA(
 		pTempMapNode = kzalloc(sizeof(struct SASPDMapNode_s), flags);
 		if (!pTempMapNode) {
 			ASFIPSEC_DEBUG("secfp_updateInSelSet returned failure");
-			kfree(pSA);
 			if (!bVal)
 				local_bh_enable();
 			return SECFP_FAILURE;
@@ -3828,7 +3846,7 @@ unsigned int secfp_MapPolInSA(
 			pSA->pSASPDMapNode = pTempMapNode;
 			pSA->ulMappedPolCount++;
 	} else {
-		ASFIPSEC_DPERR("Could not allocate In SA");
+		ASFIPSEC_DPERR("Could not find In SA");
 		GlobalErrors.ulResourceNotAvailable++;
 		if (!bVal)
 			local_bh_enable();
@@ -4011,7 +4029,7 @@ unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
 		pSASPDMapNode = pSASPDMapNode->pNext;
 	}
 
-	if (pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
+	if (pSASPDMapNode && pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
 		ptrIArray_getMagicNum(&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
 		ptrIArray_delete(&secFP_InSelTable,
 			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
@@ -4112,7 +4130,7 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 		pSASPDMapNode = pSASPDMapNode->pNext;
 	}
 
-	if (pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
+	if (pSASPDMapNode && pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
 		ptrIArray_getMagicNum(&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
 		ptrIArray_delete(&secFP_InSelTable,
 			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
@@ -4448,11 +4466,6 @@ ASF_uint32_t asfFlushInSA(SPDInContainer_t *pInContainer,
 
 	pSASPDMapNode = pInSA->pSASPDMapNode;
 	while (pSASPDMapNode) {
-		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
-			break;
-		pSASPDMapNode = pSASPDMapNode->pNext;
-	}
-	if (pSASPDMapNode) {
 		if (pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
 					ptrIArray_getMagicNum(
 					&secFP_InSelTable,
@@ -4461,6 +4474,7 @@ ASF_uint32_t asfFlushInSA(SPDInContainer_t *pInContainer,
 				pSASPDMapNode->ulSPDSelSetIndex,
 				secfp_freeInSelSet);
 		}
+		pSASPDMapNode = pSASPDMapNode->pNext;
 	}
 	secfp_deleteInSAFromSPIList(pInSA);
 	return SECFP_SUCCESS;
@@ -4517,6 +4531,7 @@ ASF_uint32_t asfFlushAllInSAs(ASF_uint32_t ulSPDInContainerIndex)
 {
 	SPDInContainer_t *pInContainer = NULL;
 	SPDInSPIValLinkNode_t *pSPILinkNode;
+	SPDInSelTblIndexLinkNode_t *pNode;
 	inSA_t *pInSA = NULL;
 	unsigned int ulHashVal;
 
@@ -4529,9 +4544,18 @@ ASF_uint32_t asfFlushAllInSAs(ASF_uint32_t ulSPDInContainerIndex)
 	for (pSPILinkNode = pInContainer->pSPIValList; pSPILinkNode != NULL;
 		pSPILinkNode = pSPILinkNode->pNext) {
 		ulHashVal = secfp_compute_hash(pSPILinkNode->ulSPIVal);
-		for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
-			pInSA != NULL; pInSA = pInSA->pNext) {
-			asfFlushInSA(pInContainer, pInSA, ulSPDInContainerIndex);
+		pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
+		if (pInSA) {
+			for (; pInSA != NULL; pInSA = pInSA->pNext)
+				asfFlushInSA(pInContainer, pInSA, ulSPDInContainerIndex);
+		} else {
+			SPDInSPIValLinkNode_t *pSPINode;
+			pSPINode = secfp_findInSPINode(pInContainer, pSPILinkNode->ulSPIVal);
+			if (pSPINode)
+				secfp_deleteInContainerSPIList(pInContainer, pSPINode);
+			for (pNode = pInContainer->pSelIndex; pNode != NULL;
+					pNode = pNode->pNext)
+				secfp_deleteInContainerSelList(pInContainer, pNode);
 		}
 	}
 	return SECFP_SUCCESS;
@@ -4643,9 +4667,6 @@ ASF_uint32_t ASFIPSecFlushAllSA(ASF_uint32_t ulVSGId, ASF_uint32_t ulTunnelId)
 		iRetVal = asfFlushAllOutSAs(pCINode->ulIndex);
 		if (iRetVal == SECFP_FAILURE) {
 			ASFIPSEC_WARN("Failure while flushing Out SAs");
-			if (!bVal)
-				local_bh_enable();
-			return SECFP_FAILURE;
 		}
 		pCINode = pCINode->pNext;
 	}
@@ -4656,9 +4677,6 @@ ASF_uint32_t ASFIPSecFlushAllSA(ASF_uint32_t ulVSGId, ASF_uint32_t ulTunnelId)
 		iRetVal = asfFlushAllInSAs(pCINode->ulIndex);
 		if (iRetVal == SECFP_FAILURE) {
 			ASFIPSEC_WARN("Failure while flushing SAs");
-			if (!bVal)
-				local_bh_enable();
-			return SECFP_FAILURE;
 		}
 		pCINode = pCINode->pNext;
 	}
