@@ -60,14 +60,22 @@ extern int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 					ASFIPSecOpqueInfo_t *pIPSecOpaque,
 					unsigned char ucProto,
 					unsigned int *pulCommonInterfaceId);
+#ifndef CONFIG_ASF_SEC4x
+void secfp_inAHComplete(struct device *dev, struct talitos_desc *desc,
+			void *context, int err);
+#else
 void secfp_inAHComplete(struct device *dev,
 		u32 *pdesc,
 		u32 err, void *context);
+#endif
 int secfp_createAHInCaamCtx(inSA_t *pSA);
 int secfp_createAHOutCaamCtx(outSA_t *pSA);
+#ifdef CONFIG_ASF_SEC4x
 int secfp_buildAHProtocolDesc(struct caam_ctx *ctx,
 	void *pSA, int dir);
-
+unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
+					const u8 *key_in, u32 authkeylen);
+#endif
 static inline uint32_t *cmd_insert_bkey(
 	uint32_t	*descwd,
 	uint8_t		*key,
@@ -78,8 +86,6 @@ static inline uint32_t *cmd_insert_bkey(
 	enum item_inline	imm,
 	enum item_purpose	purpose);
 
-unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
-					const u8 *key_in, u32 authkeylen);
 int32_t secfp_cnstr_shdsc_hmac(uint32_t *descbuf, uint16_t *bufsize,
 			uint8_t *algkey, uint32_t cipher, u_int8_t keylen, uint8_t *icv,
 			uint8_t clear, enum key_dest keydest,
@@ -92,6 +98,28 @@ int secfp_cnstr_seq_jobdesc(uint32_t *jobdesc, uint16_t *jobdescsz,
 			uint32_t *shrdesc, uint16_t shrdescsz,
 			void *inbuf, uint32_t insize,
 			void *outbuf, uint32_t outsize, uint32_t flag);
+void secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
+			SPDOutContainer_t *pContainer,
+			unsigned int **pOuterIpHdr);
+void secfp_finishOutAHPacket(struct sk_buff *skb, outSA_t *pSA,
+			SPDOutContainer_t *pContainer,
+			unsigned int *pOuterIpHdr,
+			unsigned int ulVSGId,
+			unsigned int ulSPDContainerIndex);
+#ifndef CONFIG_ASF_SEC4x
+void secfp_outAHComplete(struct device *dev, struct talitos_desc *desc,
+		void *context, int error);
+#else
+void secfp_outAHComplete(struct device *dev,
+		u32 *pdesc, u32 error, void *context);
+#endif
+#ifndef CONFIG_ASF_SEC4x
+dma_addr_t secfp_prepareGatherList(
+		struct sk_buff *skb, struct sk_buff **pTailSkb,
+		unsigned int ulOffsetHeadLen, unsigned int ulExtraTailLen);
+#endif
+void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
+		void *descriptor, unsigned int ulOptionIndex);
 
 static inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
 {
@@ -142,6 +170,20 @@ inline void secfp_ah_icv_free(void *icv)
 #endif
 	return;
 }
+static inline void secfp_ah_unmap_descs(struct sk_buff *skb)
+{
+	struct sk_buff *pTempSkb;
+
+	for (pTempSkb = skb_shinfo(skb)->frag_list; pTempSkb != NULL;
+			pTempSkb = pTempSkb->next) {
+		SECFP_UNMAP_SINGLE_DESC(pdev, (dma_addr_t)*((unsigned int *)
+			&(pTempSkb->cb[SECFP_SKB_DATA_DMA_INDEX])),
+			skb_end_pointer(pTempSkb) - pTempSkb->head);
+	}
+#ifdef CONFIG_ASF_SEC3x
+	secfp_dma_unmap_sglist(skb);
+#endif
+}
 static inline void secfp_ahdesc_free_frags(void *desc, struct sk_buff *skb)
 {
 	struct ipsec_ah_edesc *edesc = desc;
@@ -165,11 +207,17 @@ static inline void secfp_ahdesc_free_frags(void *desc, struct sk_buff *skb)
 		}
 		kfree(edesc->link_tbl);
 	}
-#endif
-	dma_unmap_single(pdev, edesc->icv_dma, edesc->icv_bytes, DMA_BIDIRECTIONAL);
 	if (edesc->in_icv)
 		secfp_ah_icv_free(edesc->in_icv);
 	secfp_ah_icv_free(edesc->icv);
+#else
+	if (skb_shinfo(skb)->frag_list) {
+		secfp_ah_unmap_descs(skb);
+	} else {
+		dma_unmap_single(pdev, skb->data, skb->len, DMA_TO_DEVICE);
+	}
+#endif
+	dma_unmap_single(pdev, edesc->icv_dma, edesc->icv_bytes, DMA_BIDIRECTIONAL);
 	secfp_desc_free(desc);
 }
 #endif
@@ -248,7 +296,109 @@ static inline void secfp_copyAHIcvQman(struct sk_buff *skb, outSA_t *pSA)
 #endif
 }
 #endif
+static inline void ASF_AH_UpdateOutSAFields(outSA_t *pSA)
+{
+	unsigned char ucRemainder;
+	pSA->ipHdrInfo.bIpVersion =
+	pSA->SAParams.tunnelInfo.bIPv4OrIPv6;
+	/* Prepare the IP header and keep it for reuse */
+	if (!pSA->ipHdrInfo.bIpVersion) { /* IPv4 */
+		pSA->ipHdrInfo.hdrdata.iphv4.version = 4;
+		pSA->ipHdrInfo.hdrdata.iphv4.ihl = 5;
+		if (!pSA->SAParams.bCopyDscp)
+			pSA->ipHdrInfo.hdrdata.iphv4.tos =
+				pSA->SAParams.ucDscp;
+		else
+			pSA->ipHdrInfo.hdrdata.iphv4.tos = 0;
+		pSA->ipHdrInfo.hdrdata.iphv4.tot_len = 0;
+		pSA->ipHdrInfo.hdrdata.iphv4.id = 0;
+		pSA->ipHdrInfo.hdrdata.iphv4.protocol = SECFP_PROTO_AH;
+		pSA->ipHdrInfo.hdrdata.iphv4.check = 0;
+		pSA->ipHdrInfo.hdrdata.iphv4.saddr =
+		pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
+		pSA->ipHdrInfo.hdrdata.iphv4.daddr =
+		pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 
+		/* mutable fields are set to zero */
+		pSA->ipHdrInfo.hdrdata.iphv4.frag_off = 0;
+		pSA->ipHdrInfo.hdrdata.iphv4.ttl = 0;
+		pSA->ipHdrInfo.hdrdata.iphv4.tos = 0;
+
+		switch (pSA->SAParams.ucAuthAlgo) {
+			case SECFP_HMAC_SHA256:
+			case SECFP_HMAC_SHA384:
+			case SECFP_HMAC_SHA512:
+			{
+				ucRemainder = ((pSA->SAParams.uICVSize +
+						SECFP_AH_FIXED_HDR_LEN) % 8);
+				if (ucRemainder > 0)
+					pSA->SAParams.ucAHPaddingLen =
+							8 - ucRemainder;
+			}
+			break;
+			default:
+			{
+				/* compute AH padding length */
+				ucRemainder = ((pSA->SAParams.uICVSize +
+						SECFP_AH_FIXED_HDR_LEN) % 4);
+				if (ucRemainder > 0)
+					pSA->SAParams.ucAHPaddingLen = 4 - ucRemainder;
+			}
+		}
+		pSA->ulSecOverHead = SECFP_IPV4_HDR_LEN
+			+ SECFP_AH_FIXED_HDR_LEN + pSA->SAParams.uICVSize
+			+ pSA->SAParams.ucAHPaddingLen;
+		pSA->ulSecLenIncrease = SECFP_IPV4_HDR_LEN;
+		ASFIPSEC_DEBUG("pSA->ulSecOverHead=%d", pSA->ulSecOverHead);
+		ASFIPSEC_DEBUG("pSA->SAParams.ucAHPaddingLen=%d", pSA->SAParams.ucAHPaddingLen);
+	} else { /* Handle IPv6 case */
+#ifdef ASF_IPV6_FP_SUPPORT
+		pSA->ipHdrInfo.hdrdata.iphv6.version = 6;
+		pSA->ipHdrInfo.hdrdata.iphv6.priority = 0;
+		memset(pSA->ipHdrInfo.hdrdata.iphv6.flow_lbl, 0, 3);
+		pSA->ipHdrInfo.hdrdata.iphv6.payload_len = 0;
+
+		pSA->ipHdrInfo.hdrdata.iphv6.nexthdr = SECFP_PROTO_AH;
+		pSA->ipHdrInfo.hdrdata.iphv6.hop_limit = SECFP_IP_TTL;
+		memcpy(pSA->ipHdrInfo.hdrdata.iphv6.saddr.s6_addr32,
+		pSA->SAParams.tunnelInfo.addr.iphv6.saddr, 16);
+		memcpy(pSA->ipHdrInfo.hdrdata.iphv6.daddr.s6_addr32,
+		pSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
+		/* compute AH padding length */
+		ucRemainder = ((pSA->SAParams.uICVSize + SECFP_AH_FIXED_HDR_LEN) % 8);
+		if (ucRemainder > 0)
+			pSA->SAParams.ucAHPaddingLen = 8 - ucRemainder;
+
+		pSA->ulSecOverHead = SECFP_IPV6_HDR_LEN
+				+ SECFP_AH_FIXED_HDR_LEN +
+				pSA->SAParams.uICVSize +
+				pSA->SAParams.ucAHPaddingLen;
+		pSA->ulSecLenIncrease = SECFP_IPV6_HDR_LEN;
+#endif
+	}
+
+	pSA->ulSecHdrLen = SECFP_AH_FIXED_HDR_LEN + pSA->SAParams.uICVSize + pSA->SAParams.ucAHPaddingLen;
+	ASFIPSEC_DEBUG("pSA->ulSecHdrLen = %d, pSA->SAParams.uICVSiz=%d, pSA->SAParams.ucAHPaddingLen=%d",
+	pSA->ulSecHdrLen, pSA->SAParams.uICVSize, pSA->SAParams.ucAHPaddingLen);
+	pSA->bSoftExpiry = 0;
+	/* starting the seq number from 2 to avoid the conflict
+	with the Networking Stack seq number */
+	atomic_set(&pSA->ulLoSeqNum, 2);
+
+
+	pSA->ulCompleteOverHead = pSA->ulSecOverHead;
+	pSA->ulCompleteOverHead += pSA->SAParams.ulBlockSize;
+
+	ASFIPSEC_DEBUG(" Overhead = %d", pSA->ulCompleteOverHead);
+
+	ASFIPSEC_DEBUG("IV=%d, Overhead=%d block=%d iMtu=%d secOH=%d, NAT=%d",
+		pSA->SAParams.ulIvSize, pSA->ulCompleteOverHead,
+		pSA->SAParams.ulBlockSize, pSA->ulInnerPathMTU,
+		pSA->ulSecOverHead, pSA->usNatHdrSize);
+
+	pSA->option[1] = SECFP_NONE;
+}
+#ifdef CONFIG_ASF_SEC4x
 int secfp_updateAHInSA(inSA_t *pSA, SAParams_t *pSAParams)
 {
 
@@ -512,63 +662,6 @@ int secfp_updateAHOutSA(outSA_t *pSA, void *buff)
 		return -1;
 	}
 
-	pSA->ipHdrInfo.bIpVersion =
-			pSA->SAParams.tunnelInfo.bIPv4OrIPv6;
-	/* Prepare the IP header and keep it for reuse */
-	if (!pSA->ipHdrInfo.bIpVersion) { /* IPv4 */
-		pSA->ipHdrInfo.hdrdata.iphv4.version = 4;
-		pSA->ipHdrInfo.hdrdata.iphv4.ihl = 5;
-		if (!pSA->SAParams.bCopyDscp)
-			pSA->ipHdrInfo.hdrdata.iphv4.tos =
-					pSA->SAParams.ucDscp;
-		else
-			pSA->ipHdrInfo.hdrdata.iphv4.tos = 0;
-		pSA->ipHdrInfo.hdrdata.iphv4.tot_len = 0;
-		pSA->ipHdrInfo.hdrdata.iphv4.id = 0;
-		pSA->ipHdrInfo.hdrdata.iphv4.protocol = SECFP_PROTO_AH;
-		pSA->ipHdrInfo.hdrdata.iphv4.check = 0;
-		pSA->ipHdrInfo.hdrdata.iphv4.saddr =
-			pSA->SAParams.tunnelInfo.addr.iphv4.saddr;
-		pSA->ipHdrInfo.hdrdata.iphv4.daddr =
-			pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
-
-		/* mutable fields are set to zero */
-		pSA->ipHdrInfo.hdrdata.iphv4.frag_off = 0;
-		pSA->ipHdrInfo.hdrdata.iphv4.ttl = 0;
-		pSA->ipHdrInfo.hdrdata.iphv4.tos = 0;
-
-		/* compute AH padding length */
-		ucRemainder = ((pSAParams->uICVSize + SECFP_AH_FIXED_HDR_LEN) % 4);
-		if (ucRemainder > 0)
-			 pSA->SAParams.ucAHPaddingLen = 4 - ucRemainder;
-
-		pSA->ulSecOverHead = SECFP_IPV4_HDR_LEN
-			+ SECFP_AH_FIXED_HDR_LEN + pSA->SAParams.uICVSize + pSAParams->ucAHPaddingLen;
-		pSA->ulSecLenIncrease = SECFP_IPV4_HDR_LEN;
-		ASFIPSEC_DEBUG("pSA->ulSecOverHead=%d", pSA->ulSecOverHead);
-	} else { /* Handle IPv6 case */
-#ifdef ASF_IPV6_FP_SUPPORT
-		pSA->ipHdrInfo.hdrdata.iphv6.version = 6;
-		pSA->ipHdrInfo.hdrdata.iphv6.priority = 0;
-		memset(pSA->ipHdrInfo.hdrdata.iphv6.flow_lbl, 0, 3);
-		pSA->ipHdrInfo.hdrdata.iphv6.payload_len = 0;
-
-		pSA->ipHdrInfo.hdrdata.iphv6.nexthdr = SECFP_PROTO_AH;
-		pSA->ipHdrInfo.hdrdata.iphv6.hop_limit = SECFP_IP_TTL;
-		memcpy(pSA->ipHdrInfo.hdrdata.iphv6.saddr.s6_addr32,
-			pSA->SAParams.tunnelInfo.addr.iphv6.saddr, 16);
-		memcpy(pSA->ipHdrInfo.hdrdata.iphv6.daddr.s6_addr32,
-			pSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
-		/* compute AH padding length */
-		ucRemainder = ((pSAParams->uICVSize + SECFP_AH_FIXED_HDR_LEN) % 8);
-		if (ucRemainder > 0)
-			pSA->SAParams.ucAHPaddingLen = 8 - ucRemainder;
-
-		pSA->ulSecOverHead = SECFP_IPV6_HDR_LEN
-			+ SECFP_AH_FIXED_HDR_LEN + pSA->SAParams.uICVSize + pSAParams->ucAHPaddingLen;
-		pSA->ulSecLenIncrease = SECFP_IPV6_HDR_LEN;
-#endif
-	}
 	pSA->prepareOutPktFnPtr = secfp_prepareOutAHPacket;
 	pSA->finishOutPktFnPtr = secfp_finishOutAHPacket;
 	pSA->outComplete = secfp_outAHComplete;
@@ -576,27 +669,6 @@ int secfp_updateAHOutSA(outSA_t *pSA, void *buff)
 	pSA->prepareOutDescriptor = secfp_prepareAHOutDescriptor;
 	pSA->prepareOutDescriptorWithFrags = secfp_prepareAHOutDescriptor;
 #endif
-	pSA->ulSecHdrLen = SECFP_AH_FIXED_HDR_LEN + pSA->SAParams.uICVSize + pSA->SAParams.ucAHPaddingLen;
-	ASFIPSEC_DEBUG("pSA->ulSecHdrLen = %d, pSA->SAParams.uICVSiz=%d, pSA->SAParams.ucAHPaddingLen=%d",
-			pSA->ulSecHdrLen, pSA->SAParams.uICVSize, pSA->SAParams.ucAHPaddingLen);
-	pSA->bSoftExpiry = 0;
-	/* starting the seq number from 2 to avoid the conflict
-	with the Networking Stack seq number */
-	atomic_set(&pSA->ulLoSeqNum, 2);
-
-
-	pSA->ulCompleteOverHead = pSA->ulSecOverHead;
-	pSA->ulCompleteOverHead += pSA->SAParams.ulBlockSize;
-
-	ASFIPSEC_DEBUG(" Overhead = %d", pSA->ulCompleteOverHead);
-
-	ASFIPSEC_DEBUG("IV=%d, Overhead=%d block=%d iMtu=%d secOH=%d, NAT=%d",
-		pSA->SAParams.ulIvSize, pSA->ulCompleteOverHead,
-		pSA->SAParams.ulBlockSize, pSA->ulInnerPathMTU,
-		pSA->ulSecOverHead, pSA->usNatHdrSize);
-
-
-	pSA->option[1] = SECFP_NONE;
 
 	if (secfp_createAHOutCaamCtx(pSA)) {
 			ASFIPSEC_DEBUG("secfp_createAHOutCaamCtx"\
@@ -613,9 +685,236 @@ int secfp_updateAHOutSA(outSA_t *pSA, void *buff)
 
 	return 0;
 }
+#else
+int secfp_updateAHInSA(inSA_t *pSA, SAParams_t *pSAParams)
+{
+	unsigned char ucRemainder;
+	memcpy(&pSA->SAParams, pSAParams, sizeof(SAParams_t));
+	/* framing auth template */
+	switch (pSA->SAParams.ucAuthAlgo) {
+	case SECFP_HMAC_MD5:
+	{
+		if (pSA->SAParams.AuthKeyLen != 16) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC-MD5 configured for SEC3X, authkey len (%d) "
+			"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+		return -EINVAL;
+	}
 
+	pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_MD5;
+	pSA->SAParams.uICVSize = 12;
+	break;
+	}
 
+	case SECFP_HMAC_SHA1:
+	{
+		if (pSA->SAParams.AuthKeyLen != 20) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC-SHA1 configured for SEC3X, authkey len (%d) "
+			"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
 
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA1;
+		pSA->SAParams.uICVSize = 12;
+		break;
+	}
+	case SECFP_HMAC_AES_XCBC_MAC:
+	{
+		if (pSA->SAParams.AuthKeyLen != 16) {
+			ASFIPSEC_DEBUG("%s(%d) : AES_XCBC_MAC configured, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+		pSA->hdr_Auth_template_0 |=
+			DESC_HDR_SEL0_AESU | DESC_HDR_MODE0_AES_XCBC_MAC | DESC_HDR_DONE_NOTIFY;
+		pSA->SAParams.uICVSize = 12;
+		break;
+	}
+	case SECFP_HMAC_SHA256:
+	{
+		if (pSA->SAParams.AuthKeyLen != 32) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC_SHA2_256 configured, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA256;
+		pSA->SAParams.uICVSize = 12;
+	break;
+	}
+
+	case SECFP_HMAC_SHA384:
+	{
+		if (pSA->SAParams.AuthKeyLen != 48) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC_SHA2_384 configured, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA384;
+		pSA->SAParams.uICVSize = 24;
+	break;
+	}
+
+	case SECFP_HMAC_SHA512:
+	{
+		if (pSA->SAParams.AuthKeyLen != 64) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC_SHA2_512 configured, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA512;
+		pSA->SAParams.uICVSize = 32;
+	break;
+	}
+
+	default:
+		ASFIPSEC_DEBUG("%s(%d) : Invalid AUTH ALG\r\n", __FUNCTION__, __LINE__);
+	return -EINVAL;
+	}
+
+	/* compute AH padding length */
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (pSAParams->tunnelInfo.bIPv4OrIPv6) {
+		ucRemainder = ((pSA->SAParams.uICVSize + SECFP_AH_FIXED_HDR_LEN) % 8);
+		if (ucRemainder > 0)
+			pSA->SAParams.ucAHPaddingLen = 8 - ucRemainder;
+	} else
+#endif
+	{
+		switch (pSA->SAParams.ucAuthAlgo) {
+			case SECFP_HMAC_SHA256:
+			case SECFP_HMAC_SHA384:
+			case SECFP_HMAC_SHA512:
+			{
+				ucRemainder = ((pSA->SAParams.uICVSize + SECFP_AH_FIXED_HDR_LEN) % 8);
+				if (ucRemainder > 0)
+					pSA->SAParams.ucAHPaddingLen = 8 - ucRemainder;
+			}
+			break;
+			default:
+			{
+			ucRemainder = ((pSA->SAParams.uICVSize + SECFP_AH_FIXED_HDR_LEN) % 4);
+			if (ucRemainder > 0)
+				pSA->SAParams.ucAHPaddingLen = 4 - ucRemainder;
+			}
+		}
+	}
+
+	pSA->ulSecHdrLen = SECFP_AH_FIXED_HDR_LEN + pSA->SAParams.uICVSize + pSA->SAParams.ucAHPaddingLen;
+	ASFIPSEC_DEBUG("SEC padding length %d", pSA->SAParams.ucAHPaddingLen);
+	pSA->ulReqTailRoom = 0;
+	if (pSA->SAParams.bUseExtendedSequenceNumber)
+		pSA->ulReqTailRoom += SECFP_HO_SEQNUM_LEN;
+
+	pSA->option[1] = SECFP_NONE;
+
+	pSA->inComplete = secfp_inAHComplete;
+	pSA->inCompleteWithFrags = secfp_inAHComplete;
+	pSA->AuthKeyDmaAddr = dma_map_single(pdev,
+		&pSA->SAParams.ucAuthKey,
+		pSA->SAParams.AuthKeyLen,
+		DMA_TO_DEVICE);
+	return 0;
+}
+
+int secfp_updateAHOutSA(outSA_t *pSA, void *buff)
+{
+	SAParams_t *pSAParams = (SAParams_t *)(buff);
+
+	ASFIPSEC_DEBUG("Secfp_updateAHOutSA entry: ");
+	/* if AH is configured, encryption alg should not be passed */
+	if (pSAParams->ucCipherAlgo) {
+		ASFIPSEC_WARN("If AH protocol selected,encryption alg should not be "
+			"passed");
+		return -1;
+	}
+	memcpy(&pSA->SAParams, pSAParams, sizeof(SAParams_t));
+
+	/* framing auth template */
+	switch (pSA->SAParams.ucAuthAlgo) {
+	case SECFP_HMAC_MD5:
+	{
+		if (pSA->SAParams.AuthKeyLen != 16) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC-MD5 configured for SEC3X, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_MD5;
+		pSA->SAParams.uICVSize = 12;
+	break;
+	}
+
+	case SECFP_HMAC_SHA1:
+	{
+		if (pSA->SAParams.AuthKeyLen != 20) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC-SHA1 configured for SEC3X, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA1;
+		pSA->SAParams.uICVSize = 12;
+	break;
+	}
+
+	case SECFP_HMAC_SHA256:
+	{
+		if (pSA->SAParams.AuthKeyLen != 32) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC_SHA2_256 configured for SEC3X, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA256;
+		pSA->SAParams.uICVSize = 12;
+	break;
+	}
+
+	case SECFP_HMAC_SHA384:
+	{
+		if (pSA->SAParams.AuthKeyLen != 48) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC_SHA2_384 configured, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA384;
+		pSA->SAParams.uICVSize = 24;
+
+	break;
+	}
+	case SECFP_HMAC_SHA512:
+	{
+		if (pSA->SAParams.AuthKeyLen != 64) {
+			ASFIPSEC_DEBUG("%s(%d) : HMAC_SHA2_512 configured, authkey len (%d) "
+				"invalid \r\n", __FUNCTION__, __LINE__, pSA->SAParams.AuthKeyLen);
+			return -EINVAL;
+		}
+
+		pSA->hdr_Auth_template_0 = ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA512;
+		pSA->SAParams.uICVSize = 32;
+	break;
+	}
+
+	default:
+		ASFIPSEC_DEBUG("%s(%d) : Invalid AUTH ALG\r\n", __FUNCTION__, __LINE__);
+	return -EINVAL;
+	}
+
+	pSA->AuthKeyDmaAddr = dma_map_single(pdev,
+			&pSA->SAParams.ucAuthKey,
+			pSA->SAParams.AuthKeyLen,
+			DMA_TO_DEVICE);
+	ASF_AH_UpdateOutSAFields(pSA);
+
+	pSA->prepareOutPktFnPtr = secfp_prepareOutAHPacket;
+	pSA->finishOutPktFnPtr = secfp_finishOutAHPacket;
+	pSA->outComplete = secfp_outAHComplete;
+	pSA->prepareOutDescriptor = secfp_prepareAHOutDescriptor;
+	pSA->prepareOutDescriptorWithFrags = secfp_prepareAHOutDescriptor;
+	return 0;
+}
+#endif
 /*
  * Outbound packet processing is split as follows -
  * Lookup SA
@@ -851,15 +1150,19 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 	}
 	return;
 }
-
+#ifndef CONFIG_ASF_SEC4x
+void secfp_inAHComplete(struct device *dev, struct talitos_desc *pdesc,
+		void *context, int err)
+#else
 void secfp_inAHComplete(struct device *dev,
 		u32 *pdesc,
 		u32 err, void *context
 		)
+#endif
 {
 	struct sk_buff *skb = (struct sk_buff *) context;
 	struct sk_buff *pHeadSkb, *pTailSkb;
-	unsigned char ucNextProto;
+	unsigned char ucNextProto, ucAHhdrLen;
 	unsigned int /*ulTempLen,*/ iRetVal;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	inSA_t *pSA;
@@ -882,8 +1185,6 @@ void secfp_inAHComplete(struct device *dev,
 #ifndef ASF_QMAN_IPSEC
 	desc = (struct ipsec_ah_edesc *)((char *)pdesc -
 			offsetof(struct ipsec_ah_edesc, hw_desc));
-	ASFIPSEC_DEBUG("icv=%p, in_icv=%p, dma_icv=%p \n",
-		desc->icv, desc->in_icv, desc->icv_dma);
 #else
 	pInfo = (struct ses_pkt_info *)pdesc;
 #endif
@@ -906,9 +1207,10 @@ void secfp_inAHComplete(struct device *dev,
 	skb->cb[SECFP_REF_INDEX] = 0;
 
 	if (unlikely(err)) {
-
+#ifdef CONFIG_ASF_SEC4x
 		char tmp[SECFP_ERROR_STR_MAX];
 		ASFIPSEC_DPERR("%08x: %s\n", err, caam_jr_strstatus(tmp, err));
+#endif
 #ifndef ASF_QMAN_IPSEC
 		secfp_ahdesc_free_frags(desc, skb);
 #endif
@@ -954,7 +1256,6 @@ void secfp_inAHComplete(struct device *dev,
 		pHeadSkb = pTailSkb = skb;
 	}
 
-#ifndef ASF_SECFP_PROTO_OFFLOAD
 	if (secfp_inHandleAHICVCheck(desc, pHeadSkb)) {
 
 #ifndef ASF_QMAN_IPSEC
@@ -986,7 +1287,6 @@ void secfp_inAHComplete(struct device *dev,
 #endif
 		return;
 	}
-#endif
 
 #ifdef ASF_QMAN_IPSEC
 	rcu_read_lock();
@@ -1160,18 +1460,23 @@ void secfp_inAHComplete(struct device *dev,
 #endif
 	} else {
 		ASFIPSEC_WARN("Protocol not supported 0x%x", ucNextProto);
+		skb->data_len = 0;
+		skb->next = NULL;
 #ifndef ASF_QMAN_IPSEC
 		ASFSkbFree(skb);
 #endif
 		return;
 	}
 }
-
-
+#ifndef CONFIG_ASF_SEC4x
+void secfp_outAHComplete(struct device *dev, struct talitos_desc *pdesc,
+		void *context, int error)
+#else
 void secfp_outAHComplete(struct device *dev,
 		u32 *pdesc,
 		u32 error, void *context
 		)
+#endif
 {
 	struct sk_buff *skb = (struct sk_buff *) context;
 	struct sk_buff *pOutSkb = skb, *pTempSkb;
@@ -1221,9 +1526,11 @@ void secfp_outAHComplete(struct device *dev,
 
 	if (unlikely(error || skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP)) {
 		if (error) {
+#ifdef CONFIG_ASF_SEC4x
 			char tmp[SECFP_ERROR_STR_MAX];
 			ASFIPSEC_DPERR("Dropping the packet %08x: %s\n", error,
 				caam_jr_strstatus(tmp, error));
+#endif
 #ifndef ASF_QMAN_IPSEC
 			secfp_ahdesc_free_frags(desc, skb);
 #endif
@@ -1942,7 +2249,7 @@ int secfp_createAHOutCaamCtx(outSA_t *pSA)
 	return ret;
 }
 
-
+#ifdef CONFIG_ASF_SEC4x
 #ifndef ASF_QMAN_IPSEC
 void secfp_prepareAHInDescriptor(struct sk_buff *skb,
 			void *pData, void *descriptor,
@@ -2246,7 +2553,202 @@ void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
 	return;
 }
 #endif
+#else
+void secfp_prepareAHInDescriptor(struct sk_buff *skb,
+	void *pData, void *descriptor,
+	unsigned int ulIndex)
+{
+	inSA_t *pSA = (inSA_t *)pData;
+	unsigned short ii;
+	dma_addr_t ptr;
+	struct iphdr *iph;
+	int iDword, iDword1;
+	unsigned int ulAppendLen;
+	struct sk_buff *pTailSkb;
+	struct ipsec_ah_edesc *edesc = (struct ipsec_ah_edesc *)descriptor;
+	struct talitos_desc *desc = (struct talitos_desc *)edesc->hw_desc;
 
+	/*Storing the icv received for post-crypto comparison */
+	/* Assuming that AH header is always in the first fragment*/
+	/*Storing the original ICV*/
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+#endif
+		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
+			edesc->in_icv[ii] = skb->data[SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii];
+
+		/*setting icv to zero before computing new ICV*/
+		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
+			skb->data[SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii] = 0;
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	} else {
+		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
+			edesc->in_icv[ii] = skb->data[SECFP_IPV6_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii];
+
+		/*setting icv to zero before computing new ICV*/
+		for (ii = 0; ii < pSA->SAParams.uICVSize; ii++)
+			skb->data[SECFP_IPV6_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + ii] = 0;
+	}
+#endif
+
+	/*setting mutable fields to zero */
+	if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		iph = (struct iphdr *)skb->data;
+		iph->frag_off = 0;
+		iph->ttl = 0;
+		iph->tos = 0;
+		iph->check = 0;
+	} else {
+		struct ipv6hdr *ipv6h;
+		ipv6h = (struct ipv6hdr *)skb->data;
+		ipv6h->hop_limit = 0;
+		ipv6h->priority = 0;
+		memset(ipv6h->flow_lbl, 0, 3);
+	}
+
+	desc->hdr_lo = 0;
+	desc->hdr = pSA->hdr_Auth_template_0;
+
+	/* 1st and 2nd pointers -- none */
+	SECFP_SET_DESC_PTR(desc->ptr[0], 0, 0, 0);
+	SECFP_SET_DESC_PTR(desc->ptr[1], 0, 0, 0);
+
+	/* 3rd pointer -- AUTH key */
+	SECFP_SET_DESC_PTR(desc->ptr[2],
+		pSA->SAParams.AuthKeyLen,
+		pSA->AuthKeyDmaAddr,
+		0);
+
+	/* 4th pointer -- input pointer */
+	if (pSA->SAParams.bUseExtendedSequenceNumber) {
+		ulAppendLen = SECFP_APPEND_BUF_LEN_FIELD;
+	} else {
+		ulAppendLen = 0;
+	}
+
+	if (skb_shinfo(skb)->frag_list) {
+		ptr = secfp_prepareGatherList(skb, &pTailSkb, 0, ulAppendLen);
+		SECFP_SET_DESC_PTR(desc->ptr[3],
+			skb->data_len + ulAppendLen, ptr,
+			DESC_PTR_LNKTBL_JUMP);
+	} else {
+		ptr = dma_map_single(pdev, skb->data, skb->len + ulAppendLen, DMA_TO_DEVICE);
+		SECFP_SET_DESC_PTR(desc->ptr[3],
+			skb->len + ulAppendLen, ptr, 0);
+	}
+
+	/* 5th pointer -- received ICV in inbound processing */
+	/* in outbound case, none */
+	SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0);
+
+	/*Setting up the output pointer */
+	edesc->icv_dma = dma_map_single(pdev, edesc->icv, pSA->SAParams.uICVSize, DMA_BIDIRECTIONAL);
+	edesc->icv_bytes = pSA->SAParams.uICVSize;
+
+	if (!((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBC_MAC)
+		== DESC_HDR_MODE0_AES_XCBC_MAC)) {
+		iDword = 5;
+		iDword1 = 6;
+	} else {
+		iDword = 6;
+		iDword1 = 5;
+	}
+	/*iDword - ICV as output*/
+	/*iDword1 - none */
+
+	SECFP_SET_DESC_PTR(desc->ptr[iDword],
+		pSA->SAParams.uICVSize,
+		edesc->icv_dma, 0);
+
+	SECFP_SET_DESC_PTR(desc->ptr[iDword1], 0, 0, 0);
+#ifdef ASFIPSEC_DEBUG_FRAME
+	print_desc(desc);
+#endif
+
+	return;
+}
+
+void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
+	void *descriptor, unsigned int ulOptionIndex)
+{
+	dma_addr_t ptr;
+	outSA_t *pSA = (outSA_t *) (pData);
+	int iDword, iDword1;
+	unsigned int ulAppendLen;
+	struct sk_buff *pTailSkb;
+	struct ipsec_ah_edesc *edesc =
+		(struct ipsec_ah_edesc *)descriptor;
+	struct talitos_desc *desc;
+
+	desc = (struct talitos_desc *)edesc->hw_desc;
+
+	edesc->icv_dma = dma_map_single(pdev, edesc->icv,
+			pSA->SAParams.uICVSize, DMA_BIDIRECTIONAL);
+
+	edesc->icv_bytes = pSA->SAParams.uICVSize;
+
+	desc->hdr_lo = 0;
+	desc->hdr = pSA->hdr_Auth_template_0;
+
+	/* 1st and 2nd pointers -- none */
+	SECFP_SET_DESC_PTR(desc->ptr[0], 0, 0, 0);
+	SECFP_SET_DESC_PTR(desc->ptr[1], 0, 0, 0);
+
+	/* 3rd pointer -- AUTH key */
+	SECFP_SET_DESC_PTR(desc->ptr[2],
+		pSA->SAParams.AuthKeyLen,
+		pSA->AuthKeyDmaAddr,
+		0);
+
+	/* 4th pointer -- input pointer */
+	if (pSA->SAParams.bUseExtendedSequenceNumber) {
+		ulAppendLen = SECFP_APPEND_BUF_LEN_FIELD;
+	} else {
+		ulAppendLen = 0;
+	}
+
+	if (skb_shinfo(skb)->frag_list) {
+		ptr = secfp_prepareGatherList(skb, &pTailSkb, 0, ulAppendLen);
+		SECFP_SET_DESC_PTR(desc->ptr[3],
+			skb->data_len + ulAppendLen, ptr,
+			DESC_PTR_LNKTBL_JUMP);
+	} else {
+		ptr = dma_map_single(pdev, skb->data, skb->len + ulAppendLen, DMA_TO_DEVICE);
+		SECFP_SET_DESC_PTR(desc->ptr[3],
+			skb->len + ulAppendLen, ptr, 0);
+
+	}
+
+	/* 5th pointer -- received ICV in inbound processing */
+	/* in outbound case, none */
+	SECFP_SET_DESC_PTR(desc->ptr[4], 0, 0, 0);
+
+	if (!((pSA->hdr_Auth_template_0 & DESC_HDR_MODE0_AES_XCBC_MAC)
+		== DESC_HDR_MODE0_AES_XCBC_MAC)) {
+		iDword = 5;
+		iDword1 = 6;
+	} else {
+		iDword = 6;
+		iDword1 = 5;
+	}
+	/*iDword - ICV as output*/
+	/*iDword1 - none */
+
+	SECFP_SET_DESC_PTR(desc->ptr[iDword],
+		pSA->SAParams.uICVSize,
+		edesc->icv_dma, 0);
+
+	SECFP_SET_DESC_PTR(desc->ptr[iDword1], 0, 0, 0);
+#ifdef ASFIPSEC_DEBUG_FRAME
+	print_desc(desc);
+#endif
+
+	desc->hdr |= DESC_HDR_DONE_NOTIFY;
+
+	return;
+}
+#endif
 /**
  *  * HMAC shared
  *   * @descbuf - descriptor buffer

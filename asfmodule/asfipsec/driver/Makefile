@@ -23,11 +23,11 @@ asfipsec-y := \
 	ipsecfp.o \
 	ipsfpapi.o \
 	ipsecproc.o \
+	ipsecfp_ah.o \
 	ipsecfp_innerapi.o
 
 asfipsec-$(CONFIG_ASF_SEC3x) += ipsecfp_sec3x.o
 asfipsec-$(CONFIG_ASF_SEC4x) += ipsecfp_sec4x.o
-asfipsec-$(CONFIG_ASF_SEC4x) += ipsecfp_ah.o
 asfipsec-$(CONFIG_DPA) += ipsecfp_qman.o
 
 all:

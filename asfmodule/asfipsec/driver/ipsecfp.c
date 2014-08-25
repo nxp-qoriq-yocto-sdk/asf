@@ -349,8 +349,8 @@ int secfp_init(void)
 #else
 	desc_cache = kmem_cache_create("desc_cache",
 #ifndef CONFIG_ASF_SEC4x
-			sizeof(struct talitos_desc),
-			__alignof__(struct talitos_desc),
+			sizeof(struct ipsec_ah_full_desc),
+			__alignof__(struct ipsec_ah_full_desc),
 			SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA, NULL);
 #else
 			sizeof(struct aead_edesc) + CAAM_DESC_BYTES_MAX,
@@ -365,8 +365,8 @@ int secfp_init(void)
 
 	icv_cache = kmem_cache_create("icv_cache",
 #ifndef CONFIG_ASF_SEC4x
-			sizeof(struct talitos_desc),
-			__alignof__(struct talitos_desc),
+			sizeof(struct ipsec_ah_full_desc),
+			__alignof__(struct ipsec_ah_full_desc),
 			SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA, NULL);
 #else
 			sizeof(struct ipsec_ah_edesc) + CAAM_DESC_BYTES_MAX,
@@ -1382,7 +1382,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		pIPSecPPGlobalStats->ulTotOutRecvPktsSecApply++;
 #ifndef CONFIG_ASF_SEC4x
 		update_chan_out(pSA);
-		if (talitos_submit(pdev, pSA->chan, desc,
+		if (talitos_submit(pdev, pSA->chan, (char *)desc,
 			pSA->outComplete, (void *)skb) == -EAGAIN)
 #elif defined(ASF_QMAN_IPSEC)
 		if (secfp_qman_out_submit(pSA, (void *) skb))
@@ -1744,6 +1744,7 @@ static inline int secfp_try_fastPathOutv4(
 				tempSkb->next = pNextSkb;
 				pNextSkb = skb->next;
 				skb->next = NULL;
+				bScatterGatherList = SECFP_NO_SCATTER_GATHER;
 			} else {
 				if (((pSA->SAParams.handleDf == SECFP_DF_SET) ||
 				((iph->frag_off & IP_DF) && (pSA->SAParams.handleDf
@@ -1858,8 +1859,17 @@ static inline int secfp_try_fastPathOutv4(
 		pIPSecPPGlobalStats->ulTotOutRecvPktsSecApply++;
 #ifndef CONFIG_ASF_SEC4x
 		update_chan_out(pSA);
-		if (talitos_submit(pdev, pSA->chan, desc,
-			pSA->outComplete, (void *)skb) == -EAGAIN)
+		if (likely(pSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
+			iRetVal = talitos_submit(pdev, pSA->chan, desc,
+				pSA->outComplete, (void *)skb);
+		} else {
+			void *desc1;
+			char *offset = (char *) desc;
+			desc1 = (char *)offset + sizeof(struct ipsec_ah_edesc)
+			iRetVal = talitos_submit(pdev, pSA->chan, (struct talitos_desc *)desc1,
+					pSA->outComplete, (void *)skb);
+		}
+		if (iRetVal == -EAGAIN)
 #elif defined(ASF_QMAN_IPSEC)
 		if (secfp_qman_out_submit(pSA, (void *) skb))
 #else
@@ -1918,9 +1928,16 @@ static inline int secfp_try_fastPathOutv4(
 			else
 				secfp_prepareOutDescriptor(skb, pSA, desc, 1);
 
-			if (talitos_submit(pdev, pSA->chan, desc,
-					pSA->outComplete,
-					(void *)skb) == -EAGAIN) {
+			if (likely(pSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
+				iRetVal = talitos_submit(pdev, pSA->chan, desc,
+					pSA->outComplete, (void *)skb);
+			} else {
+				char *desc1 = (struct ipsec_ah_edesc *)desc;
+				desc1 += offsetof(struct ipsec_ah_edesc, hw_desc);
+				iRetVal = talitos_submit(pdev, pSA->chan, (struct talitos_desc *)desc1,
+						pSA->outComplete, (void *)skb);
+			}
+			if (iRetVal == -EAGAIN) {
 				ASFIPSEC_WARN("Outbound Submission to"\
 						"SEC failed ");
 				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT13]);
@@ -2811,7 +2828,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 		} else {
 			unsigned int remaininglen = *pTotLen - pHeadSkb->len;
 			skb1 = skb_shinfo(pHeadSkb)->frag_list;
-			while (skb1 && remaininglen > 0) {
+			while (skb1 && remaininglen >= 0) {
 				if (skb1->len >= remaininglen) {
 					skb1->len = remaininglen;
 					pTailSkb = skb1;
@@ -4716,6 +4733,7 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 #endif
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
+	unsigned char offset = 0;
 #elif !defined(ASF_QMAN_IPSEC)
 	void *desc;
 #ifdef ASF_SECFP_PROTO_OFFLOAD
@@ -5115,11 +5133,11 @@ So all these special boundary cases need to be handled for nr_frags*/
 		/* Since we will be giving packet to fwnat processing,
 		keep the data pointer as 14 bytes before data start */
 		ASFIPSEC_DEBUG("In: Offseting data by ulSecHdrLen = %d",
-					pSA->ulSecHdrLen);
+					ulSecLen);
 
 #ifndef ASF_SECFP_PROTO_OFFLOAD
-		pHeadSkb->len -= (pSA->ulSecHdrLen);
-		pHeadSkb->data += (pSA->ulSecHdrLen);
+		pHeadSkb->len -= ulSecLen;
+		pHeadSkb->data += ulSecLen;
 		pHeadSkb->cb[SECFP_REF_INDEX]--;
 		ASFIPSEC_DEBUG("IN-submit to SEC");
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -5199,10 +5217,20 @@ sa_expired:
 		pIPSecPPGlobalStats->ulTotInRecvSecPkts++;
 #ifndef CONFIG_ASF_SEC4x
 		update_chan_in(pSA);
-		if (talitos_submit(pdev, pSA->chan, desc,
+		if (likely(pSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
+			iRetVal = talitos_submit(pdev, pSA->chan, desc,
 			(secin_sg_flag & SECFP_SCATTER_GATHER) ?
 			pSA->inCompleteWithFrags : pSA->inComplete,
-			(void *)pHeadSkb) == -EAGAIN)
+			(void *)pHeadSkb);
+		} else {
+			void *desc1;
+			desc1 = (char *)desc + sizeof(struct ipsec_ah_edesc);
+			iRetVal = talitos_submit(pdev, pSA->chan, (struct talitos_desc *)desc1,
+					(secin_sg_flag & SECFP_SCATTER_GATHER) ?
+					pSA->inCompleteWithFrags : pSA->inComplete,
+					(void *)pHeadSkb);
+		}
+		if (iRetVal == -EAGAIN)
 #elif defined(ASF_QMAN_IPSEC)
 		if (secfp_qman_in_submit(pSA, pHeadSkb))
 #else
@@ -5232,6 +5260,7 @@ sa_expired:
 		/* length of skb memory to unmap upon completion */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 #ifndef CONFIG_ASF_SEC4x
+		if (likely(pSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
 		if (pSA->option[1] != SECFP_NONE) {
 			pHeadSkb->cb[SECFP_REF_INDEX]++;
 
@@ -5278,6 +5307,7 @@ sa_expired:
 				rcu_read_unlock();
 				return 0;
 			}
+		}
 		}
 		/* Post submission, we can move the data pointer beyond the ESP header */
 		/* Trim the length accordingly */

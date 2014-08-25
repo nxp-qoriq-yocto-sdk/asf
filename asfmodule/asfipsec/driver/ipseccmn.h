@@ -85,6 +85,10 @@ extern unsigned int ulTimeStamp_g;
 #define DESC_HDR_MODE0_AES_CTR cpu_to_be32(0x00600000)
 #define DESC_HDR_MODE0_MDEU_CICV cpu_to_be32(0x04000000)
 #define DESC_HDR_TYPE_AESU_CTR_HMAC cpu_to_be32(3 << 6)
+#define DESC_HDR_MODE0_HMAC_SHA_256 (0xb1d00010)
+#define DESC_HDR_MODE0_HMAC_SHA_384 (0xb1c00010)
+#define DESC_HDR_MODE0_HMAC_SHA_224 (0xb1f00010)
+#define DESC_HDR_MODE0_HMAC_SHA_512 (0xb1e00010)
 #endif
 
 #endif

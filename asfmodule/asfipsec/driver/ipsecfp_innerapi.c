@@ -90,7 +90,13 @@ static unsigned int SPDOutSALinkNodePoolId_g = 0xFFFFFFFF;
 #endif
 
 extern struct device *pdev;
-
+int secfp_updateAHInSA(inSA_t *pSA, SAParams_t *pSAParams);
+void secfp_prepareAHInDescriptor(struct sk_buff *skb,
+			void *pData, void *descriptor,
+			unsigned int ulIndex);
+int secfp_updateAHOutSA(outSA_t *pSA, void *buff);
+void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
+			void *descriptor, unsigned int ulOptionIndex);
 /************* Beginning of API Function and inner functions used by API******
  * All APIs to normal path return SECFP_SUCCESS upon SUCCESS and
  * SECFP_FAILURE upon FAILURE
@@ -1721,6 +1727,9 @@ outSA_t *secfp_findOutSA(
 static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 {
 	memcpy(&pSA->SAParams, pSAParams, sizeof(SAParams_t));
+	pSA->hdr_Auth_template_1 = 0;
+	pSA->hdr_Auth_template_0 = 0;
+
 	if (pSA->SAParams.bAuth) {
 			switch (pSA->SAParams.ucAuthAlgo) {
 			case SECFP_HMAC_MD5:
@@ -1750,6 +1759,38 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 				pSA->hdr_Auth_template_0 |=
 				DESC_HDR_SEL0_AESU |
 				DESC_HDR_MODE0_AES_XCBC_MAC;
+				break;
+			case SECFP_HMAC_SHA256:
+				pSA->hdr_Auth_template_1 |=
+				DESC_HDR_SEL1_MDEUA | DESC_HDR_MODE1_MDEU_INIT |
+				DESC_HDR_MODE1_MDEU_PAD | DESC_HDR_MODE1_MDEU_SHA256_HMAC;
+
+				pSA->hdr_Auth_template_0 |=
+				DESC_HDR_SEL0_MDEUA | DESC_HDR_MODE0_MDEU_INIT |
+				DESC_HDR_MODE0_MDEU_PAD | DESC_HDR_MODE0_MDEU_SHA256_HMAC
+				| DESC_HDR_DONE_NOTIFY;
+				break;
+			case SECFP_HMAC_SHA384:
+				pSA->hdr_Auth_template_1 |=
+				DESC_HDR_SEL1_MDEUB | DESC_HDR_MODE1_MDEU_INIT |
+				DESC_HDR_MODE1_MDEU_PAD | DESC_HDR_MODE1_MDEUB_SHA384_HMAC | DESC_HDR_DONE_NOTIFY;
+
+				pSA->hdr_Auth_template_0 |=
+				DESC_HDR_SEL0_MDEUB | DESC_HDR_MODE0_MDEU_INIT |
+				DESC_HDR_MODE0_MDEU_PAD | DESC_HDR_MODE0_MDEU_SHA384_HMAC
+				| DESC_HDR_DONE_NOTIFY;
+				break;
+			case SECFP_HMAC_SHA512:
+				pSA->hdr_Auth_template_0 |=
+					DESC_HDR_SEL0_MDEUB |
+					DESC_HDR_MODE0_MDEU_INIT |
+					DESC_HDR_MODE0_MDEU_PAD |
+					DESC_HDR_MODE0_MDEUB_SHA512_HMAC;
+				pSA->hdr_Auth_template_1 |=
+					DESC_HDR_SEL1_MDEUB |
+					DESC_HDR_MODE1_MDEU_INIT |
+					DESC_HDR_MODE1_MDEU_PAD |
+					DESC_HDR_MODE1_MDEUB_SHA512_HMAC | DESC_HDR_DONE_NOTIFY;
 				break;
 			default:
 				ASFIPSEC_DEBUG("Invalid ucAuthAlgo");
@@ -1978,6 +2019,35 @@ static inline int secfp_updateOutSA(outSA_t *pSA, void *buff)
 				DESC_HDR_SEL0_AESU |
 				DESC_HDR_MODE0_AES_XCBC_MAC;
 				break;
+		case SECFP_HMAC_SHA256:
+			pSA->hdr_Auth_template_1 |=
+				DESC_HDR_SEL1_MDEUA | DESC_HDR_MODE1_MDEU_INIT |
+				DESC_HDR_MODE1_MDEU_PAD | DESC_HDR_MODE1_MDEU_SHA256_HMAC;
+			pSA->hdr_Auth_template_0 |=
+				DESC_HDR_SEL0_MDEUA | DESC_HDR_MODE0_MDEU_INIT |
+				DESC_HDR_MODE0_MDEU_PAD | DESC_HDR_MODE0_MDEU_SHA256_HMAC
+				| DESC_HDR_DONE_NOTIFY;
+				break;
+		case SECFP_HMAC_SHA384:
+			pSA->hdr_Auth_template_1 |=
+				DESC_HDR_SEL1_MDEUB | DESC_HDR_MODE1_MDEU_INIT |
+				DESC_HDR_MODE1_MDEU_PAD | DESC_HDR_MODE1_MDEU_SHA384_HMAC | DESC_HDR_DONE_NOTIFY;
+			pSA->hdr_Auth_template_0 |=
+				DESC_HDR_SEL0_MDEUA | DESC_HDR_MODE0_MDEU_INIT |
+				DESC_HDR_MODE0_MDEU_PAD | DESC_HDR_MODE0_MDEU_SHA384_HMAC
+				| DESC_HDR_DONE_NOTIFY;
+			break;
+		case SECFP_HMAC_SHA512:
+			pSA->hdr_Auth_template_0 |= DESC_HDR_SEL0_MDEUA |
+				DESC_HDR_MODE0_MDEU_INIT |
+				DESC_HDR_MODE0_MDEU_PAD |
+				DESC_HDR_MODE0_MDEUB_SHA512_HMAC;
+			pSA->hdr_Auth_template_1 |=
+				DESC_HDR_SEL1_MDEUB |
+				DESC_HDR_MODE1_MDEU_INIT |
+				DESC_HDR_MODE1_MDEU_PAD |
+				DESC_HDR_MODE1_MDEUB_SHA512_HMAC | DESC_HDR_DONE_NOTIFY;
+			break;
 		default:
 			ASFIPSEC_DEBUG("Invalid ucAuthAlgo");
 			return -1;
@@ -2939,7 +3009,6 @@ unsigned int secfp_createOutSA(
 					+ pSA->usNatHdrSize + ulIpHdrLen;
 #endif
 	} else {
-#ifdef CONFIG_ASF_SEC4x
 		/* AH Handling */
 
 		if (secfp_updateAHOutSA(pSA, SAParams)) {
@@ -2966,14 +3035,6 @@ unsigned int secfp_createOutSA(
 		ulMtu, pSA->ulCompleteOverHead,
 		pSA->SAParams.ulBlockSize, pSA->ulInnerPathMTU,
 		pSA->ulSecOverHead);
-#else
-		GlobalErrors.ulInvalidAuthEncAlgo++;
-		kfree(pSA);
-		ASFIPSEC_DEBUG("AH protocol not supported for sec 3x");
-		if (!bVal)
-			local_bh_enable();
-		return SECFP_FAILURE;
-#endif
 	}
 
 	pSA->uRefCnt++;
@@ -3671,7 +3732,6 @@ unsigned int secfp_CreateInSA(
 #endif
 
 		} else {
-#ifdef CONFIG_ASF_SEC4x
 			/* AH Handling */
 			if (secfp_updateAHInSA(pSA, pSAParams)) {
 				GlobalErrors.ulInvalidAuthEncAlgo++;
@@ -3685,15 +3745,6 @@ unsigned int secfp_CreateInSA(
 			pSA->prepareInDescriptor = secfp_prepareAHInDescriptor;
 			pSA->prepareInDescriptorWithFrags = secfp_prepareAHInDescriptor;
 #endif
-#else
-		GlobalErrors.ulInvalidAuthEncAlgo++;
-		kfree(pSA);
-		ASFIPSEC_DEBUG("AH protocol not supported for sec 3x");
-		if (!bVal)
-			local_bh_enable();
-		return SECFP_FAILURE;
-#endif
-
 		}
 		/* Need to create and append Selector Set */
 		pNode = secfp_updateInSelSet(pContainer, pSrcSel,

@@ -809,6 +809,25 @@ typedef struct secfp_sgEntry_s {
 #define ASF_MAX_IPSEC_RECYCLE_ICV	128
 
 #ifndef CONFIG_ASF_SEC4x
+#define ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA1 0x31c00010
+#define ASF_SEC3X_AUTH_TEMPL0_HMAC_MD5 0x31e00010
+#define ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA256 0x31d00011
+#define ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA384 0xb1c00011
+#define ASF_SEC3X_AUTH_TEMPL0_HMAC_SHA512 0xb1e00011
+struct ipsec_ah_edesc {
+	/* this field stores the icv retrieved from the incoming packet */
+	unsigned char in_icv[64];
+	/* this field stores the icv computed over the packet */
+	unsigned char icv[64];
+	/* this field stores the length of icv */
+	int icv_bytes;
+	dma_addr_t icv_dma;
+	u32 hw_desc[0];
+};
+struct ipsec_ah_full_desc{
+	struct ipsec_ah_edesc edesc;
+	struct talitos_desc tdesc;
+};
 extern void secfp_outComplete(struct device *dev,
 				struct talitos_desc *desc,
 				void *context, int error);

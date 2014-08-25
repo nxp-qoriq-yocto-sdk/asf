@@ -169,12 +169,12 @@ int secfp_createInSATalitosDesc(inSA_t *pSA)
 	}
 	if (pSA->SAParams.bAuth)
 		pSA->AuthKeyDmaAddr = dma_map_single(pdev,
-					&pSA->SAParams.ucAuthKey,
+					pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen,
 					DMA_TO_DEVICE);
 	if (pSA->SAParams.bEncrypt)
 		pSA->EncKeyDmaAddr = dma_map_single(pdev,
-					&pSA->SAParams.ucEncKey,
+					pSA->SAParams.ucEncKey,
 					pSA->SAParams.EncKeyLen,
 					DMA_TO_DEVICE);
 	return 0;
@@ -218,8 +218,8 @@ int secfp_createOutSATalitosDesc(outSA_t *pSA)
 				pSA->desc_hdr_template |= DESC_HDR_TYPE_AESU_CTR_HMAC;
 			} else {
 				pSA->option[0] = SECFP_BOTH;
-				pSA->desc_hdr_template |= DESC_HDR_TYPE_IPSEC_ESP |
-							DESC_HDR_MODE0_ENCRYPT;
+				pSA->desc_hdr_template |= (DESC_HDR_TYPE_IPSEC_ESP |
+							DESC_HDR_MODE0_ENCRYPT);
 				pSA->desc_hdr_template |= pSA->hdr_Auth_template_1;
 			}
 		} else if (pSA->SAParams.bEncrypt && (!pSA->SAParams.bAuth)) {
@@ -243,13 +243,13 @@ int secfp_createOutSATalitosDesc(outSA_t *pSA)
 	}
 	if (pSA->SAParams.bAuth)
 		pSA->AuthKeyDmaAddr =
-			dma_map_single(pdev, &pSA->SAParams.ucAuthKey,
+			dma_map_single(pdev, pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen,
 					DMA_TO_DEVICE);
 
 	if (pSA->SAParams.bEncrypt)
 		pSA->EncKeyDmaAddr =
-			dma_map_single(pdev, &pSA->SAParams.ucEncKey,
+			dma_map_single(pdev, pSA->SAParams.ucEncKey,
 					pSA->SAParams.EncKeyLen,
 					DMA_TO_DEVICE);
 
@@ -316,7 +316,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		}
 		SECFP_SET_DESC_PTR(desc->ptr[iDword],
 				pSA->SAParams.uICVSize,
-				ptr+skb->len , 0);
+				ptr+skb->len , pSA->SAParams.uICVSize);
 
 		SECFP_SET_DESC_PTR(desc->ptr[iDword1],
 				0, 0, 0);
@@ -428,7 +428,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		SECFP_SET_DESC_PTR(desc->ptr[4],
 				skb->len - pSA->ulSecHdrLen,
 				ptr + pSA->ulSecHdrLen,
-				0);
+				pSA->SAParams.uICVSize);
 
 		ASFIPSEC_DBGL2("Output data setup at 0x%x: len = %d",
 			ptr + pSA->ulSecHdrLen,
@@ -437,7 +437,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		SECFP_SET_DESC_PTR(desc->ptr[5],
 				skb->len - pSA->ulSecHdrLen,
 				ptr + pSA->ulSecHdrLen,
-				12);
+				pSA->SAParams.uICVSize);
 		SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
 		print_desc(desc);
 		break;
@@ -737,7 +737,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 #ifdef ASF_IPSEC_DEBUG
 		{
 			int ii;
-			for (int ii = 0; ii < 3; ii++)
+			for (ii = 0; ii < 3; ii++)
 				ASFIPSEC_DEBUG("Offset ii=%d 0x%8x", ii,
 				*(unsigned int *)&(skb->data[skb->len + ii*4]));
 		}
@@ -831,14 +831,14 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 				pSA->EncKeyDmaAddr, 0)
 
 		SECFP_SET_DESC_PTR(desc->ptr[4],
-				skb->len - pSA->ulSecHdrLen - 12,
+				skb->len - pSA->ulSecHdrLen - pSA->SAParams.uICVSize,
 				addr + pSA->ulSecHdrLen,
-				12);
+				pSA->SAParams.uICVSize);
 
 		SECFP_SET_DESC_PTR(desc->ptr[5],
-				skb->len - pSA->ulSecHdrLen - 12,
+				skb->len - pSA->ulSecHdrLen - pSA->SAParams.uICVSize,
 				addr + pSA->ulSecHdrLen,
-				0);
+				pSA->SAParams.uICVSize);
 
 		SECFP_SET_DESC_PTR(desc->ptr[6], 0, 0, 0);
 	}
