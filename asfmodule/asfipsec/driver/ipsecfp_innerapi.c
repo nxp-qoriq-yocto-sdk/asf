@@ -2616,6 +2616,46 @@ unsigned int secfp_SPDOutContainerDelete(unsigned int ulVSGId,
 	return SECFP_SUCCESS;
 }
 
+/*Get SPI list from corresponding out container*/
+unsigned int secfp_SPDGetOutContainerSpiList(unsigned int ulVSGId,
+		unsigned int ulTunnelId,
+		unsigned int ulContainerIndex,
+		ASFIPSecConfigSpiList_t *spi_list)
+{
+	SPDOutContainer_t *pContainer;
+	outSA_t *pSA;
+	SPDOutSALinkNode_t *pOutSALinkNode;
+	unsigned int ulSAIndex;
+
+	pContainer = (SPDOutContainer_t *)ptrIArray_getData(&(secfp_OutDB),
+			ulContainerIndex);
+
+	if (pContainer == NULL) {
+		GlobalErrors.ulSPDOutContainerNotFound++;
+		ASFIPSEC_DEBUG("SPDContainer not found");
+		return ASF_IPSEC_OUTSPDCONTAINER_NOT_FOUND;
+	}
+
+	for (pOutSALinkNode = pContainer->SAHolder.pSAList; pOutSALinkNode != NULL;
+		pOutSALinkNode = pOutSALinkNode->pNext) {
+
+		ulSAIndex = pOutSALinkNode->ulSAIndex;
+		pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable, ulSAIndex);
+
+		if (!pSA) {
+			ASFIPSEC_DEBUG("SA not present with index:%d", ulSAIndex);
+			continue;
+		}
+
+		ASFIPSEC_DEBUG("uRefCnt:%u ulSPI:%u(0x%x)\r\n", pSA->uRefCnt, pSA->SAParams.ulSPI);
+
+		spi_list->ulSPIVal[spi_list->nr_spi] = pSA->SAParams.ulSPI;
+		spi_list->ulRefCnt[spi_list->nr_spi] = pSA->uRefCnt;
+		spi_list->nr_spi++;
+	}
+
+	return SECFP_SUCCESS;
+}
 
 /* In container create function */
 unsigned int secfp_SPDInContainerCreate(unsigned int ulVSGId,
@@ -2723,6 +2763,48 @@ unsigned int secfp_SPDInContainerDelete(unsigned int ulVSGId,
 				secfp_freeSPDInContainer);
 	if (!bVal)
 		local_bh_enable();
+	return SECFP_SUCCESS;
+}
+
+/*Get SPI list from corresponding In container*/
+unsigned int secfp_SPDGetInContainerSpiList(unsigned int ulVSGId,
+		unsigned int ulTunnelId,
+		unsigned int ulContainerIndex,
+		ASF_IPAddr_t tunDestAddr,
+		unsigned char ucProtocol,
+		ASFIPSecConfigSpiList_t *spi_list)
+{
+	SPDInContainer_t *pContainer;
+	SPDInSPIValLinkNode_t *pNode;
+	inSA_t *pSA = NULL;
+	unsigned int hashVal;
+
+	pContainer = (SPDInContainer_t *)(ptrIArray_getData(&(secfp_InDB),
+			ulContainerIndex));
+	if (pContainer == NULL) {
+		GlobalErrors.ulSPDInContainerNotFound++;
+		ASFIPSEC_DEBUG("SPDContainer not found");
+		return ASF_IPSEC_INSPDCONTAINER_NOT_FOUND;
+	}
+
+	for (pNode = pContainer->pSPIValList;
+			pNode != NULL; pNode = pNode->pNext) {
+
+		ASFIPSEC_DEBUG("pNode->ulSPIVal:%u(0x%x)\r\n", pNode->ulSPIVal, pNode->ulSPIVal);
+
+		hashVal = usMaxInSAHashTaleSize_g;
+		pSA = secfp_findInSA(ulVSGId, ucProtocol, pNode->ulSPIVal, tunDestAddr, &hashVal);
+
+		if (!pSA) {
+			ASFIPSEC_DEBUG("SA not found with SPI:%d", pNode->ulSPIVal);
+			continue;
+		}
+
+		spi_list->ulSPIVal[spi_list->nr_spi] = pNode->ulSPIVal;
+		spi_list->ulRefCnt[spi_list->nr_spi] = pSA->ulMappedPolCount;
+		spi_list->nr_spi++;
+	}
+
 	return SECFP_SUCCESS;
 }
 
@@ -3633,7 +3715,7 @@ unsigned int secfp_CreateInSA(
 	pContainer = (SPDInContainer_t *)(ptrIArray_getData(&(secfp_InDB),
 						ulContainerIndex));
 	if (pContainer == NULL) {
-		GlobalErrors.ulSPDOutContainerNotFound++;
+		GlobalErrors.ulSPDInContainerNotFound++;
 		ASFIPSEC_DEBUG("SPDContainer not found");
 		if (!bVal)
 			local_bh_enable();
@@ -3839,7 +3921,7 @@ unsigned int secfp_MapPolInSA(
 	pContainer = (SPDInContainer_t *)(ptrIArray_getData(&(secfp_InDB),
 			ulContainerIndex));
 	if (pContainer == NULL) {
-		GlobalErrors.ulSPDOutContainerNotFound++;
+		GlobalErrors.ulSPDInContainerNotFound++;
 		ASFIPSEC_DEBUG("SPDContainer not found");
 		if (!bVal)
 			local_bh_enable();
@@ -4085,6 +4167,7 @@ unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
 		ptrIArray_delete(&secFP_InSelTable,
 			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
 	}
+	pSA->ulMappedPolCount--;
 
 	for_each_possible_cpu(Index) {
 		ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[0],
@@ -4186,6 +4269,7 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 		ptrIArray_delete(&secFP_InSelTable,
 			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
 	}
+	pSA->ulMappedPolCount--;
 
 	for_each_possible_cpu(Index) {
 		ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[0],

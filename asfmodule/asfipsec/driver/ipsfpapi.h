@@ -76,6 +76,8 @@ enum ASFIPSecConfigCommands {
 	ASF_IPSEC_CONFIG_DEL_OUTSPDCONTAINER,
 	ASF_IPSEC_CONFIG_ADD_INSPDCONTAINER,
 	ASF_IPSEC_CONFIG_DEL_INSPDCONTAINER,
+	ASF_IPSEC_CONFIG_GET_SPI_OUTSPDCONTAINER,
+	ASF_IPSEC_CONFIG_GET_SPI_INSPDCONTAINER,
 };
 
 typedef ASF_uint32_t ASF_IPSecPolicyRule_ID_t;
@@ -321,6 +323,26 @@ typedef struct ASFIPSecConfigDelOutSPDContainerArgs_s {
 	ASF_uint32_t ulContainerIndex;
 	ASF_uint32_t ulMagicNumber;
 } ASFIPSecConfigDelOutSPDContainerArgs_t;
+
+typedef struct ASFIPSecConfigSpiList_s {
+	ASF_uint32_t nr_spi;
+	unsigned int ulSPIVal[SECFP_MAX_SPI_ENTRIES];
+	unsigned int ulRefCnt[SECFP_MAX_SPI_ENTRIES];
+} ASFIPSecConfigSpiList_t;
+
+typedef struct ASFIPSecConfigOutSPDContainerSpiListArgs_s {
+	ASF_uint32_t ulTunnelId;
+	ASF_uint32_t ulContainerIndex;
+	ASFIPSecConfigSpiList_t spi_list;
+} ASFIPSecConfigOutSPDContainerSpiListArgs_t;
+
+typedef struct ASFIPSecConfigInSPDContainerSpiListArgs_s {
+	ASF_uint32_t ulTunnelId;
+	ASF_uint32_t ulContainerIndex;
+	ASFIPSecConfigSpiList_t spi_list;
+	ASF_IPAddr_t tunDestAddr;
+	unsigned char ucProtocol;
+} ASFIPSecConfigInSPDContainerSpiListArgs_t;
 
 typedef struct ASFIPSecConfigAddInSPDContainerArgs_s {
 	ASF_uint32_t       ulTunnelId;

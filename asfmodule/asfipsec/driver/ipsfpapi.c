@@ -357,7 +357,102 @@ ASF_void_t ASFIPSecConfig(ASF_uint32_t   ulVSGId,
 			}
 		}
 		break;
+	case ASF_IPSEC_CONFIG_GET_SPI_OUTSPDCONTAINER: /* SPI list for out SPD Container*/
+	{
+		ASFIPSecConfigOutSPDContainerSpiListArgs_t *pContainerSpiList;
 
+		pContainerSpiList = (ASFIPSecConfigOutSPDContainerSpiListArgs_t *) pArgs;
+
+		SECFP_IS_TUNNEL_ID_INVALID(pContainerSpiList->ulTunnelId)
+		{
+			GlobalErrors.ulInvalidTunnelId++;
+			ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n",
+			pContainerSpiList->ulTunnelId);
+			ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_FAILURE,
+				pReqIdentifier,
+				ulReqIdentifierlen,
+				ASF_IPSEC_INVALID_TUNNEL_ID);
+			return;
+		}
+
+		SECFP_IS_SPD_CONTAINER_ID_INVALID(pContainerSpiList->ulContainerIndex)
+		{
+			GlobalErrors.ulInvalidOutSPDContainerId++;
+			ASFIPSEC_DEBUG("Invalid Container Id = %u\r\n",
+				pContainerSpiList->ulContainerIndex);
+			ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_FAILURE,
+					pReqIdentifier,
+					ulReqIdentifierlen,
+					ASF_IPSEC_INVALID_CONTAINER_ID);
+			return;
+		}
+
+		ret = secfp_SPDGetOutContainerSpiList(ulVSGId,
+				pContainerSpiList->ulTunnelId,
+				pContainerSpiList->ulContainerIndex,
+				&(pContainerSpiList->spi_list));
+		if (ret != SECFP_SUCCESS) {
+			ASFIPSEC_DEBUG("secfp_SPDGetOutContainerSpiList returned failure - ret = %d\r\n", ret);
+			ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_FAILURE,
+				pReqIdentifier, ulReqIdentifierlen, ret);
+			return;
+		} else {
+			ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_SUCCESS,
+				pReqIdentifier, ulReqIdentifierlen, 0);
+			ASFIPSEC_DEBUG("secfp_SPDGetOutContainerSpiList returned success");
+			return;
+		}
+	}
+		break;
+	case ASF_IPSEC_CONFIG_GET_SPI_INSPDCONTAINER: /* SPI list for in SPD Container*/
+	{
+		ASFIPSecConfigInSPDContainerSpiListArgs_t *pContainerSpiList;
+
+		pContainerSpiList = (ASFIPSecConfigInSPDContainerSpiListArgs_t *) pArgs;
+
+		SECFP_IS_TUNNEL_ID_INVALID(pContainerSpiList->ulTunnelId)
+		{
+			GlobalErrors.ulInvalidTunnelId++;
+			ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n",
+			pContainerSpiList->ulTunnelId);
+			ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_FAILURE,
+				pReqIdentifier,
+				ulReqIdentifierlen,
+				ASF_IPSEC_INVALID_TUNNEL_ID);
+				return;
+		}
+
+		SECFP_IS_SPD_CONTAINER_ID_INVALID(pContainerSpiList->ulContainerIndex)
+		{
+			GlobalErrors.ulInvalidOutSPDContainerId++;
+			ASFIPSEC_DEBUG("Invalid Container Id = %u\r\n",
+				pContainerSpiList->ulContainerIndex);
+			ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_FAILURE,
+					pReqIdentifier,
+					ulReqIdentifierlen,
+					ASF_IPSEC_INVALID_CONTAINER_ID);
+			return;
+		}
+
+		ret = secfp_SPDGetInContainerSpiList(ulVSGId,
+			pContainerSpiList->ulTunnelId,
+			pContainerSpiList->ulContainerIndex,
+			pContainerSpiList->tunDestAddr,
+			pContainerSpiList->ucProtocol,
+			&(pContainerSpiList->spi_list));
+		if (ret != SECFP_SUCCESS) {
+			ASFIPSEC_DEBUG("secfp_SPDGetInContainerSpiList returned failure - ret = %d\r\n", ret);
+			ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_FAILURE,
+				pReqIdentifier, ulReqIdentifierlen, ret);
+			return;
+		} else {
+			ASFIPSecCbFn.pFnConfig(ulVSGId, cmd, SECFP_SUCCESS,
+				pReqIdentifier, ulReqIdentifierlen, 0);
+			ASFIPSEC_DEBUG("secfp_SPDGetInContainerSpiList returned success");
+			return;
+		}
+	}
+		break;
 	default:
 		{
 			ASFIPSEC_DEBUG("Invalid Command receivedi : Cmd = %d\r\n", cmd);

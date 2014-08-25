@@ -123,6 +123,7 @@ void asfctrl_generic_free(ASF_void_t *freeArg)
 {
 	ASFCTRLSkbFree((struct sk_buff *)freeArg);
 }
+
 ASF_uint32_t asfctrl_get_ipsec_sa_vsgid(struct xfrm_state *x)
 {
 	/* TODO: Get proper VSG ID */
@@ -386,11 +387,6 @@ static inline int is_sa_offloadable(struct xfrm_state *xfrm)
 	return 0;
 }
 
-ASF_uint32_t asfctrl_get_ipsec_pol_vsgid(struct xfrm_policy *xp)
-{
-	/* TODO: Get proper VSG ID */
-	return ASF_DEF_VSG;
-}
 int asfctrl_xfrm_add_policy(struct xfrm_policy *xp, int dir)
 {
 	int i;
@@ -494,9 +490,105 @@ err:
 
 }
 
+int asfctrl_xfrm_delete_policy_sa_map(struct xfrm_policy *xp,
+			struct xfrm_state *xfrm, unsigned int ulSARefCnt)
+{
+	int dir, ret = -EINVAL;
+	int handle;
+	ASF_uint32_t ulVSGId;
+	bool bLockFlag;
+	ASFIPSecRuntimeDelOutSAArgs_t delSA;
+
+	ASFCTRL_FUNC_ENTRY;
+
+	if (!xfrm->asf_sa_cookie || xfrm->asf_sa_cookie > asfctrl_max_sas) {
+		ASFCTRL_WARN("Not an offloaded SA");
+		return ret;
+	}
+	dir = xfrm_policy_id2dir(xp->index);
+
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
+
+	if (match_sa_index_no_lock(xfrm, dir) < 0) {
+		ASFCTRL_WARN("Not an offloaded SA -1");
+		ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
+		return ret;
+	}
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
+
+	delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+	delSA.ulSPDContainerIndex = xp->asf_cookie - 1;
+	delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (xfrm->props.family == AF_INET6) {
+		delSA.DestAddr.bIPv4OrIPv6 = 1;
+		memcpy(delSA.DestAddr.ipv6addr,
+			xfrm->id.daddr.a6, 16);
+	} else {
+#endif
+		delSA.DestAddr.bIPv4OrIPv6 = 0;
+		delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
+	delSA.ucProtocol = xfrm->id.proto;
+	delSA.ulSPI = xfrm->id.spi;
+	delSA.usDscpStart = 0;
+	delSA.usDscpEnd = 0;
+	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+
+	if (ulSARefCnt > 1) {
+
+		if (dir == XFRM_POLICY_OUT) {
+			ASFCTRL_INFO("Unmap Encrypt SA");
+			ASFIPSecRuntime(ulVSGId,
+				ASF_IPSEC_RUNTIME_UNMAPPOL_OUTSA,
+				&delSA,
+				sizeof(ASFIPSecRuntimeDelOutSAArgs_t),
+				&handle, sizeof(uint32_t));
+		} else {
+			ASFCTRL_INFO("UNMAP Decrypt SA");
+
+			ASFIPSecRuntime(ulVSGId,
+				ASF_IPSEC_RUNTIME_UNMAPPOL_INSA,
+				&delSA,
+				sizeof(ASFIPSecRuntimeDelInSAArgs_t),
+				&handle, sizeof(uint32_t));
+		}
+		xp->asf_sa_id = 0;
+
+	} else {
+
+		if (dir == XFRM_POLICY_OUT) {
+			ASFCTRL_INFO("Delete Encrypt SA");
+			ASFIPSecRuntime(ulVSGId,
+				ASF_IPSEC_RUNTIME_DEL_OUTSA,
+				&delSA,
+				sizeof(ASFIPSecRuntimeDelOutSAArgs_t),
+				&handle, sizeof(uint32_t));
+		} else {
+			ASFCTRL_INFO("Delete Decrypt SA");
+			ASFIPSecRuntime(ulVSGId,
+				ASF_IPSEC_RUNTIME_DEL_INSA,
+				&delSA,
+				sizeof(ASFIPSecRuntimeDelInSAArgs_t),
+				&handle, sizeof(uint32_t));
+		}
+		xp->asf_sa_id = 0;
+		free_sa_index(xfrm, dir);
+		xfrm->asf_sa_cookie = 0;
+	}
+	ret = 0;
+
+	ASFCTRL_FUNC_EXIT;
+	return 0;
+}
+
 int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 {
 	uintptr_t handle;
+	int i, ret;
+	struct xfrm_state *x;
 	ASF_uint32_t ulVSGId;
 
 	ASFCTRL_FUNC_ENTRY;
@@ -509,6 +601,36 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 	ulVSGId = asfctrl_get_ipsec_pol_vsgid(xp);
 	if (dir == XFRM_POLICY_OUT) {
 		ASFIPSecConfigDelOutSPDContainerArgs_t outSPDContainer;
+		ASFIPSecConfigOutSPDContainerSpiListArgs_t containerSpiList;
+
+		memset(&containerSpiList, 0, sizeof(ASFIPSecConfigOutSPDContainerSpiListArgs_t));
+		containerSpiList.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+		containerSpiList.ulContainerIndex = xp->asf_cookie - 1;
+
+		ASFIPSecConfig(ASF_DEF_VSG,
+			ASF_IPSEC_CONFIG_GET_SPI_OUTSPDCONTAINER,
+			&containerSpiList,
+			sizeof(ASFIPSecConfigOutSPDContainerSpiListArgs_t),
+			&handle,
+			sizeof(uint32_t));
+
+		ASFIPSecConfigSpiList_t *spi_list = &containerSpiList.spi_list;
+
+		for (i = 0; i < spi_list->nr_spi; i++) {
+			x = xfrm_state_lookup(&init_net, 0,
+				&(xp->xfrm_vec[0].id.daddr),
+				spi_list->ulSPIVal[i],
+				xp->xfrm_vec[0].id.proto,
+				AF_INET);
+			if (!x) {
+				ASFCTRL_ERR("Unable to find the SA with SPI:%lu(0x%x)\r\n", spi_list->ulSPIVal[i], spi_list->ulSPIVal[i]);
+				continue;
+			}
+
+			ret = asfctrl_xfrm_delete_policy_sa_map(xp, x, spi_list->ulRefCnt[i]);
+			if (ret != 0)
+				ASFCTRL_WARN("asfctrl_xfrm_delete_policy_sa_map returned failure(%d)\r\n", ret);
+		}
 
 		outSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		outSPDContainer.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
@@ -527,6 +649,40 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 
 	} else if (dir == XFRM_POLICY_IN) {
 		ASFIPSecConfigDelInSPDContainerArgs_t	inSPDContainer;
+		ASFIPSecConfigInSPDContainerSpiListArgs_t inContainerSpiList;
+
+		memset(&inContainerSpiList, 0, sizeof(ASFIPSecConfigInSPDContainerSpiListArgs_t));
+		inContainerSpiList.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+		inContainerSpiList.ulContainerIndex = xp->asf_cookie - 1;
+		inContainerSpiList.tunDestAddr.bIPv4OrIPv6 = 0;
+		inContainerSpiList.tunDestAddr.ipv4addr = xp->xfrm_vec[0].id.daddr.a4;
+		inContainerSpiList.ucProtocol = xp->xfrm_vec[0].id.proto;;
+
+		ASFIPSecConfig(ASF_DEF_VSG,
+			ASF_IPSEC_CONFIG_GET_SPI_INSPDCONTAINER,
+			&inContainerSpiList,
+			sizeof(ASFIPSecConfigInSPDContainerSpiListArgs_t),
+			&handle,
+			sizeof(uint32_t));
+
+		ASFIPSecConfigSpiList_t *spi_list = &inContainerSpiList.spi_list;
+
+		for (i = 0; i < spi_list->nr_spi; i++) {
+			x = xfrm_state_lookup(&init_net, 0,
+				&(xp->xfrm_vec[0].id.daddr),
+				spi_list->ulSPIVal[i],
+				xp->xfrm_vec[0].id.proto,
+				AF_INET);
+
+			if (!x) {
+				ASFCTRL_ERR("Unable to find the SA with SPI:%lu(0x%x)\r\n", spi_list->ulSPIVal[i], spi_list->ulSPIVal[i]);
+				continue;
+			}
+
+			ret = asfctrl_xfrm_delete_policy_sa_map(xp, x, spi_list->ulRefCnt[i]);
+			if (ret != 0)
+				ASFCTRL_WARN("asfctrl_xfrm_delete_policy_sa_map returned failure(%d)\r\n", ret);
+		}
 
 		inSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		inSPDContainer.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
@@ -2140,11 +2296,6 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 	return 0;
 }
 
-ASF_uint32_t asfctrl_get_ipsec_sa_vsgid(struct xfrm_state *x)
-{
-	/* TODO: Get proper VSG ID */
-	return ASF_DEF_VSG;
-}
 static int fsl_send_notify(struct xfrm_state *x, const struct km_event *c)
 {
 	ASF_uint32_t ulVSGId;

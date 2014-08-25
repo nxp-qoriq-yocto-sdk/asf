@@ -731,7 +731,7 @@ static int display_secfp_proc_sa_list(struct seq_file *f, void *v)
 						seq_printf(f,
 						"\nPol-ID=%03d CId:%03d SPI:0x%x\t"
 						"src:0x%x,dst:0x%x Auth:%s Ciph: %s",
-						pInSA->ulSPDInContainerIndex,
+						pInSA->pSASPDMapNode->ulSPDInContainerIndex,
 						pInSA->SAParams.ulCId,
 						pSPILinkNode->ulSPIVal,
 						pInSA->SAParams.tunnelInfo.addr.iphv4.saddr,
@@ -743,7 +743,7 @@ static int display_secfp_proc_sa_list(struct seq_file *f, void *v)
 						"\nPol-ID=%03d CId:%03d SPI:0x%x\t"
 						"src:%x:%x:%x:%x, dst:%x:%x:%x:%x"
 						"Auth: %s Ciph: %s",
-						pInSA->ulSPDInContainerIndex,
+						pInSA->pSASPDMapNode->ulSPDInContainerIndex,
 						pInSA->SAParams.ulCId,
 						pSPILinkNode->ulSPIVal,
 						pInSA->SAParams.tunnelInfo.addr.iphv6.saddr[0],

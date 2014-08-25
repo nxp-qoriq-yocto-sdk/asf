@@ -957,6 +957,18 @@ unsigned int secfp_SPDInContainerDelete(
 				unsigned int ulContainerIndex,
 				unsigned int ulMagicNumber);
 
+unsigned int secfp_SPDGetInContainerSpiList(unsigned int ulVSGId,
+				unsigned int ulTunnelId,
+				unsigned int ulContainerIndex,
+				ASF_IPAddr_t tunDestAddr,
+				unsigned char ucProtocol,
+				ASFIPSecConfigSpiList_t *spi_list);
+
+unsigned int secfp_SPDGetOutContainerSpiList(unsigned int ulVSGId,
+				unsigned int ulTunnelId,
+				unsigned int ulContainerIndex,
+				ASFIPSecConfigSpiList_t *spi_list);
+
 unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 				unsigned int	 ulSPDMagicNumber,
 				ASF_IPAddr_t	 daddr,
