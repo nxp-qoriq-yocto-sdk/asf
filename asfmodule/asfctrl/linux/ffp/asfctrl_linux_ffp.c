@@ -417,12 +417,12 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			} else {
 				uldestIp = ct_tuple_reply->src.u3.ip;
 				usdport = ct_tuple_reply->src.u.tcp.port;
-		}
-	} else {
-		if (pInfo->tuple.ulDestIp == ct_tuple_orig->src.u3.ip) {
-			uldestIp = pInfo->tuple.ulDestIp;
-			usdport = pInfo->tuple.usDestPort;
+			}
 		} else {
+			if (pInfo->tuple.ulDestIp == ct_tuple_orig->src.u3.ip) {
+				uldestIp = pInfo->tuple.ulDestIp;
+				usdport = pInfo->tuple.usDestPort;
+			} else {
 				uldestIp = ct_tuple_orig->src.u3.ip;
 				usdport = ct_tuple_orig->src.u.tcp.port;
 			}
@@ -434,16 +434,16 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			ASFCTRL_INFO("Route not found for dst %x local host : %d",
 			uldestIp,
 			(skb_rtable(skb)->rt_flags & RTCF_LOCAL) ? 1 : 0);
+			dev_put(dev);
+			ASFCTRLKernelSkbFree(skb);
+			return;
+		}
 		dev_put(dev);
-		ASFCTRLKernelSkbFree(skb);
-		return;
-	}
-	dev_put(dev);
-	skb->dev = skb_dst(skb)->dev;
+		skb->dev = skb_dst(skb)->dev;
 
-	skb_reset_network_header(skb);
-	skb_put(skb, sizeof(struct iphdr));
-	iph = ip_hdr(skb);
+		skb_reset_network_header(skb);
+		skb_put(skb, sizeof(struct iphdr));
+		iph = ip_hdr(skb);
 		iph->version = 5;
 		iph->ihl = 5;
 		iph->ttl = 1;
@@ -534,7 +534,6 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		}
 #ifdef ASFCTRL_IPSEC_FP_SUPPORT
 		if (fn_ipsec_get_flow4) {
-			ASFFFPIpsecInfo_t ipsecInInfo;
 
 			memset(&cmd, 0, sizeof(cmd));
 
@@ -567,7 +566,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			fl_out.flowi_tos = 0;
 		#endif
 			result = fn_ipsec_get_flow4(ulVSGId, &bIPsecIn,
-				&bIPsecOut, &ipsecInInfo, net,
+				&bIPsecOut, &cmd.u.ipsec.ipsecInfo, net,
 				fl_out, bIPv6);
 			if (result) {
 				ASFCTRL_INFO("IPSEC Not Offloadable for flow");
@@ -582,8 +581,8 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 				cmd.tuple.ulDestIp = pInfo->tuple.ulDestIp;
 				cmd.tuple.ulSrcIp = pInfo->tuple.ulSrcIp;
 			}
+			/* No need to update the IPsec src natInfo */
 			cmd.tuple.bIPv4OrIPv6 = bIPv6 == true ? 1 : 0;
-			cmd.u.ipsec.ipsecInfo = ipsecInInfo;
 			cmd.tuple.ucProtocol = pInfo->tuple.ucProtocol;
 			cmd.tuple.usDestPort =  pInfo->tuple.usDestPort;
 			cmd.tuple.usSrcPort = pInfo->tuple.usSrcPort;
@@ -596,7 +595,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			cmd.ulZoneId = ASF_DEF_ZN_ID;
 
 			ASFCTRL_INFO("Configured tunnel ID is %d ",
-				ipsecInInfo.outContainerInfo.ulTunnelId);
+			cmd.u.ipsec.ipsecInInfo.outContainerInfo.ulTunnelId);
 			if (ASFFFPRuntime(ulVSGId,
 				ASF_FFP_MODIFY_FLOWS,
 				&cmd, sizeof(cmd), NULL, 0) ==
@@ -1099,6 +1098,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			dev_put(dev);
 			return result;
 		}
+		cmd.flow1.ipsecInInfo.natInfo.bSrcNAT = 0;
 	}
 #endif
 	cmd.flow1.bIPsecIn = bIPsecIn ? 1 : 0;
@@ -1173,6 +1173,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			ASFCTRL_INFO("IPSEC Not Offloadable for flow 2");
 			return result;
 		}
+		cmd.flow2.ipsecInInfo.natInfo.bSrcNAT = 0;
 	}
 #endif
 	cmd.flow2.bIPsecIn = bIPsecIn ? 1 : 0;
@@ -1185,10 +1186,20 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		cmd.flow1.natInfo.usDestNATPort = reply_sport;
 		cmd.flow1.natInfo.usSrcNATPort = reply_dport;
 
+		if (reply_dip != orig_sip) {
+			cmd.flow1.ipsecInInfo.natInfo.bSrcNAT = 1;
+			cmd.flow1.ipsecInInfo.natInfo.OrgSrcIp = orig_sip;
+		}
+
 		cmd.flow2.natInfo.ulDestNATIp = orig_sip;
 		cmd.flow2.natInfo.ulSrcNATIp = orig_dip;
 		cmd.flow2.natInfo.usDestNATPort = orig_sport;
 		cmd.flow2.natInfo.usSrcNATPort = orig_dport;
+
+		if (reply_sip != orig_dip) {
+			cmd.flow2.ipsecInInfo.natInfo.bSrcNAT = 1;
+			cmd.flow2.ipsecInInfo.natInfo.OrgSrcIp = reply_sip;
+		}
 	}
 
 	if (ASFFFPRuntime(ulVSGId,

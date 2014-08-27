@@ -895,13 +895,16 @@ typedef struct ASFFFPIpsecSAInfo_s {
 	ASF_uint32_t ulSAIndex;
 } ASFFFPIpsecSAInfo_t;
 
-
-
+typedef struct ASFFFPIpsecNATInfo_s {
+	ASF_uint8_t	bSrcNAT:1;
+	ASF_IPv4Addr_t	OrgSrcIp;
+} ASFFFPIpsecNATInfo_t;
 
 typedef struct ASFFFPIpsecInfo_s {
 	ASFFFPIpsecContainerInfo_t   outContainerInfo;
 	ASFFFPIpsecContainerInfo_t   inContainerInfo;
 	ASFFFPIpsecSAInfo_t	  outSAInfo;
+	ASFFFPIpsecNATInfo_t	natInfo;
 } ASFFFPIpsecInfo_t;
 
 

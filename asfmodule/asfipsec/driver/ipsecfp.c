@@ -1723,6 +1723,13 @@ static inline int secfp_try_fastPathOutv4(
 							IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT21]);
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA,
 							ASF_IPSEC_PP_POL_CNT21);
+					if (pSecInfo->natInfo.bSrcNAT) {
+#ifdef ASF_DO_INC_CHECKSUM
+						csum_replace4(&iph->check, iph->saddr,
+							pSecInfo->natInfo.OrgSrcIp);
+#endif
+						iph->saddr = pSecInfo->natInfo.OrgSrcIp;
+					}
 					ASFIPSec4SendIcmpErrMsg(skb->data,
 							ASF_ICMP_DEST_UNREACH,
 							ASF_ICMP_CODE_FRAG_NEEDED,
@@ -1767,6 +1774,13 @@ static inline int secfp_try_fastPathOutv4(
 							IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT21]);
 					ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA,
 							ASF_IPSEC_PP_POL_CNT21);
+					if (pSecInfo->natInfo.bSrcNAT) {
+#ifdef ASF_DO_INC_CHECKSUM
+						csum_replace4(&iph->check, iph->saddr,
+							pSecInfo->natInfo.OrgSrcIp);
+#endif
+						iph->saddr = pSecInfo->natInfo.OrgSrcIp;
+					}
 					ASFIPSec4SendIcmpErrMsg(skb->data,
 							ASF_ICMP_DEST_UNREACH,
 							ASF_ICMP_CODE_FRAG_NEEDED,
@@ -5470,6 +5484,7 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 	SecInfo.outSAInfo.ulSAIndex = ulSAIndex;
 	SecInfo.outSAInfo.ulSAMagicNumber =
 		ptrIArray_getMagicNum(&secFP_OutSATable, ulSAIndex);
+	SecInfo.natInfo.bSrcNAT = 0;
 #ifdef ASF_QOS
 	pSA = (outSA_t *) ptrIArray_getData(&secFP_OutSATable, ulSAIndex);
 	pSA->tc_filter_res = TC_FILTER_RES_INVALID;
