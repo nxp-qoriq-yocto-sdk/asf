@@ -515,38 +515,56 @@ struct sk_buff *asf_alloc_buf_skb(struct net_device *dev)
 
 	return skb;
 }
+
+#define	MAX_BMAN_RELEASE_RETRIES	1000
 int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb)
 {
 	struct dpa_priv_s *priv = netdev_priv(dev);
 	struct dpa_bp *bp;
-	struct bm_buffer bmb;
+	struct bm_buffer bmb[8];
 	dma_addr_t addr;
 	int ret;
-	struct sk_buff **skbh;
-	int pad;
+	struct sk_buff **skbh, *temp_skb;
+	int pad, i;
+	unsigned int retries = MAX_BMAN_RELEASE_RETRIES;
 
 	bp = priv->dpa_bp;
-	pad = round_down(((uintptr_t)skb_end_pointer(skb) - (uintptr_t)skb->head) -
-			(bp->size + NET_SKB_PAD), L1_CACHE_BYTES);
-	skbh = (struct sk_buff **)(skb->head + pad);
 
-	addr = dma_map_single(bp->dev, skbh,
-				bp->size, DMA_FROM_DEVICE);
+	skb->next = skb_shinfo(skb)->frag_list;
+	skb_shinfo(skb)->frag_list = 0;
 
-	/* Recycle the SKB */
-	skb_recycle(skb);
-	skb->data = skb->head;
-	skb_reset_tail_pointer(skb);
-	*(skbh - 1) = skb;
-	bm_buffer_set64(&bmb, addr);
-	ret = bman_release(bp->pool, &bmb, 1, 0);
+	while (skb != NULL) {
 
-	if (unlikely(ret < 0)) {
-		pr_err(KBUILD_MODNAME ": dpa_free_buf_skb() "
+		for (i = 0; (skb != NULL) && (i < 8); i++) {
+
+			temp_skb = skb->next;
+
+			skbh = (struct sk_buff **)(skb->head);
+
+			addr = dma_map_single(bp->dev, skbh,
+						bp->size, DMA_FROM_DEVICE);
+
+			/* Recycle the SKB */
+			skb_recycle(skb);
+			skb->data = skb->head;
+			skb_reset_tail_pointer(skb);
+			bm_buffer_set64(&bmb[i], addr);
+
+			skb = temp_skb;
+
+		}
+
+		do {
+			ret = bman_release(bp->pool, bmb, i, 0);
+		 } while (ret == (-EBUSY) && --retries);
+
+		if (unlikely(ret < 0)) {
+			pr_err(KBUILD_MODNAME ": dpa_free_buf_skb() "
 				"failed for bman_release error: %d\n", ret);
-		return ret;
-	}
+			return ret;
+		}
 
+	}
 	return 0;
 }
 /*Refill bpool*/
@@ -2624,7 +2642,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 			vstats->ulOutPkts += ulFrags;
 			flow_stats->ulOutPkts += ulFrags;
 		} else {
-			asf_err(KERN_INFO "asfcore.c:%d - asfIpv4Fragment "
+			asf_warn(KERN_INFO "asfcore.c:%d - asfIpv4Fragment "
 					"returned NULL!!\n", __LINE__);
 		}
 		goto gen_indications;
