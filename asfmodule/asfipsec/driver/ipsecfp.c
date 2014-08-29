@@ -1856,6 +1856,7 @@ static inline int secfp_try_fastPathOutv4(
 
 		if (skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP) {
 			ASFIPSEC_DPERR("Packet Action is Drop");
+			SECFP_DESC_FREE(desc);
 			skb->data_len = 0;
 			goto drop_skb_list;
 		}
