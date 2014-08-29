@@ -134,6 +134,8 @@ struct caam_ctx {
 	u32 alg_op;
 	u8 *key;
 	dma_addr_t key_phys;
+	u8 *k3_null_xcbc;
+	dma_addr_t k3_null_xcbc_phys;
 	u32 enckeylen;
 	u32 split_key_len;
 	u32 split_key_pad_len;

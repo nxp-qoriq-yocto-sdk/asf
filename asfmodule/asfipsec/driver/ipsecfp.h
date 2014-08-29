@@ -152,7 +152,8 @@
 
 #define AES_CCM_CTR_FLAG	0x03
 
-
+#define K3_NULL_XCBC_LEN 	0x20
+#define K3_NULL_XCBC_OFFSET 	0x10
 /* Sequence number related */
 #define SECFP_APPEND_BUF_LEN_FIELD	4
 #define SECFP_HO_SEQNUM_LEN		4

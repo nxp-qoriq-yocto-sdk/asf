@@ -765,6 +765,12 @@ void secfp_freeOutSA(struct rcu_head *pData)
 #ifdef CONFIG_ASF_SEC4x
 	if (pSA->ctx.key)
 		kfree(pSA->ctx.key);
+
+	if (SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
+		SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo) {
+		if (pSA->ctx.k3_null_xcbc)
+			kfree(pSA->ctx.k3_null_xcbc);
+	}
 	if (pSA->ctx.jrdev)
 		caam_jr_free(pSA->ctx.jrdev);
 	kfree(pSA->ctx.sh_desc_mem);
@@ -1107,6 +1113,13 @@ static void secfp_freeInSA(struct rcu_head *rcu_data)
 #ifdef CONFIG_ASF_SEC4x
 	if (pSA->ctx.key)
 		kfree(pSA->ctx.key);
+
+	if (SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
+		SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo) {
+		if (pSA->ctx.k3_null_xcbc)
+			kfree(pSA->ctx.k3_null_xcbc);
+	}
+
 	if (pSA->ctx.jrdev)
 		caam_jr_free(pSA->ctx.jrdev);
 	kfree(pSA->ctx.sh_desc_mem);

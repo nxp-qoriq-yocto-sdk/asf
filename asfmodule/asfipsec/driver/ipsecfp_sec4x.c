@@ -54,6 +54,9 @@ extern struct device *pdev;
 #define DESC_AEAD_GIVENCRYPT_TEXT_LEN 27
 #define OP_PCL_IPSEC_NULL 0x0b00
 
+#define GET_CACHE_ALLIGNED(x) (u32 *)(((int)x + (L1_CACHE_BYTES - 1)) \
+	& ~(L1_CACHE_BYTES - 1)) /* THIS CAN BE AN ISSUE FOR 64BIT PLATFORM */
+
 static void secfp_splitKeyDone(struct device *dev, u32 *desc, u32 error,
 				void *context)
 {
@@ -152,6 +155,93 @@ unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 		kfree(desc);
 	}
 
+	return ret;
+}
+
+/*
+get a encrypted key for null_xcbc
+
+key generation-----------------------------------------------
+
+[00] B080000C jobhdr: stidx=0 len=12
+[01] 02800010 key: class1-keyreg len=16 imm
+[06] 22920000 fifold: class1 msg-last1 len=0 imm
+[07] 82100705 operation: cls1-op aes xcbc-mac init enc
+[08] 52201020 str: ccb1-ctx+16 len=32
+[10] 62240010 fifostr: class1 keyreg-jdk len=16
+*/
+unsigned int secfp_genCaamSplitKey_null_xcbc(struct caam_ctx *ctx,
+	const u8 *key_in, u32 authkeylen)
+{
+	u32 *desc;
+	int ret = 0;
+	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
+	u8 *k3;
+
+	desc = kzalloc(CAAM_CMD_SZ * 6 + CAAM_PTR_SZ * 2, GFP_DMA | flags);
+	if (!desc) {
+		ASFIPSEC_DPERR("Memory allocation failiure");
+		return -ENOMEM;
+	}
+
+	/* k1 and k3 keys are generated for null_xcbc and the SEC block uses
+	these keys to authenticate the packets */
+
+	ctx->k3_null_xcbc = kzalloc(K3_NULL_XCBC_LEN + L1_CACHE_BYTES - 1,
+			GFP_DMA | flags);
+	if (!ctx->k3_null_xcbc) {
+		kfree(desc);
+		ASFIPSEC_DPERR("Memory allocation failiure");
+		return -ENOMEM;
+	}
+
+	k3 = GET_CACHE_ALLIGNED(ctx->k3_null_xcbc);
+
+	/* Job descriptor being created which will be submitted to caam to
+	generate k1 (ctx->key) and k3 required for null xcbc*/
+	init_job_desc(desc, 0);
+
+	ctx->k3_null_xcbc_phys = dma_map_single(ctx->jrdev,
+			(void *)k3, K3_NULL_XCBC_LEN, DMA_TO_DEVICE);
+	if (dma_mapping_error(ctx->jrdev, ctx->k3_null_xcbc_phys)) {
+		ASFIPSEC_DPERR("secfp_genCaamSplitKey: Unable to map key"\
+			"input memory\n");
+		ret = -ENOMEM;
+		goto error;
+	}
+
+	append_key_as_imm(desc, (void *)key_in, authkeylen,
+	authkeylen, CLASS_1 | KEY_DEST_CLASS_REG);
+
+	append_fifo_load_as_imm(desc, NULL, 0, LDST_CLASS_1_CCB |
+				FIFOLD_TYPE_MSG | FIFOLD_TYPE_LAST1);
+
+	append_operation(desc, OP_TYPE_CLASS1_ALG | OP_ALG_ALGSEL_AES |
+		OP_ALG_AAI_XCBC_MAC | OP_ALG_ENCRYPT | OP_ALG_AS_INIT);
+
+	append_cmd(desc, CMD_STORE | LDST_CLASS_1_CCB |
+			LDST_SRCDST_BYTE_CONTEXT | K3_NULL_XCBC_LEN |
+			K3_NULL_XCBC_OFFSET << LDST_OFFSET_SHIFT);
+	append_ptr(desc, ctx->k3_null_xcbc_phys);
+
+	append_cmd(desc, CMD_FIFO_STORE | LDST_CLASS_1_CCB |
+			FIFOST_TYPE_KEY_KEK | ctx->split_key_pad_len);
+	append_ptr(desc, ctx->key_phys);
+
+	ret = caam_jr_enqueue(ctx->jrdev, desc, secfp_splitKeyDone, NULL);
+	if (ret) {
+		ASFIPSEC_DPERR("secfp_caam_submit failed ");
+		goto error;
+	}
+
+	return ret;
+
+error:
+	dma_unmap_single(ctx->jrdev, ctx->k3_null_xcbc_phys,
+	K3_NULL_XCBC_LEN, DMA_TO_DEVICE);
+	kfree(ctx->k3_null_xcbc);
+	kfree(desc);
+	ctx->k3_null_xcbc = NULL;
 	return ret;
 }
 
@@ -363,8 +453,21 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 #endif /* ASF_SECFP_PROTO_OFFLOAD */
 
-	jump_cmd = append_jump(sh_desc,
-		CLASS_BOTH | JUMP_TEST_ALL | JUMP_COND_SHRD | JUMP_COND_SELF);
+	if (SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
+		SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo) {
+		append_cmd(sh_desc, CMD_LOAD | LDST_CLASS_1_CCB |
+			LDST_SRCDST_BYTE_CONTEXT | K3_NULL_XCBC_LEN |
+			K3_NULL_XCBC_OFFSET << LDST_OFFSET_SHIFT);
+		append_ptr(sh_desc, ctx->k3_null_xcbc_phys);
+
+		jump_cmd = append_jump(sh_desc,
+			JUMP_JSL | JUMP_TEST_ALL | JUMP_COND_SHRD |
+			JUMP_COND_SELF);
+	} else {
+		jump_cmd = append_jump(sh_desc,
+			CLASS_BOTH | JUMP_TEST_ALL | JUMP_COND_SHRD
+			| JUMP_COND_SELF);
+	}
 
 	if (pSA->SAParams.bAuth) {
 		if (SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo) {
@@ -379,7 +482,7 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 			else
 				append_key(sh_desc, ctx->key_phys,
 					ctx->split_key_len,
-					CLASS_1 | KEY_DEST_CLASS_REG);
+					CLASS_1 | KEY_DEST_CLASS_REG | KEY_ENC);
 		} else
 			append_key(sh_desc, ctx->key_phys, ctx->split_key_len,
 				CLASS_2 | KEY_DEST_MDHA_SPLIT | KEY_ENC);
@@ -645,9 +748,21 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	}
 #endif /*Protocol Offload */
 
-	jump_cmd = append_jump(sh_desc,
-		CLASS_BOTH | JUMP_TEST_ALL | JUMP_COND_SHRD | JUMP_COND_SELF);
+	if (SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
+		SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo) {
+		append_cmd(sh_desc, CMD_LOAD | LDST_CLASS_1_CCB |
+			LDST_SRCDST_BYTE_CONTEXT | K3_NULL_XCBC_LEN |
+			K3_NULL_XCBC_OFFSET << LDST_OFFSET_SHIFT);
+		append_ptr(sh_desc, ctx->k3_null_xcbc_phys);
 
+		jump_cmd = append_jump(sh_desc,
+				JUMP_JSL | JUMP_TEST_ALL | JUMP_COND_SHRD |
+				JUMP_COND_SELF);
+	} else {
+		jump_cmd = append_jump(sh_desc,
+				CLASS_BOTH | JUMP_TEST_ALL | JUMP_COND_SHRD
+				| JUMP_COND_SELF);
+	}
 	if (pSA->SAParams.bAuth) {
 		/* process keys, starting with class 2/authentication */
 		if (SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo) {
@@ -659,7 +774,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 			else
 				append_key(sh_desc, ctx->key_phys,
 				ctx->split_key_len,
-				CLASS_1 | KEY_DEST_CLASS_REG);
+				CLASS_1 | KEY_DEST_CLASS_REG | KEY_ENC);
 		} else
 			append_key(sh_desc, ctx->key_phys, ctx->split_key_len,
 			CLASS_2 | KEY_DEST_MDHA_SPLIT | KEY_ENC);
@@ -730,8 +845,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 		return -ENOMEM;
 	}
 
-	sh_desc = (u32 *)(((int)ctx->sh_desc_mem
-			+ (L1_CACHE_BYTES - 1)) & ~(L1_CACHE_BYTES - 1));
+	sh_desc = GET_CACHE_ALLIGNED(ctx->sh_desc_mem);
 
 	ctx->sh_desc = sh_desc;
 
@@ -755,6 +869,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 int secfp_createOutSACaamCtx(outSA_t *pSA)
 {
 	int ret = 0;
+	u8 *key;
 
 	if (pSA) {
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
@@ -764,8 +879,16 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 			ASFIPSEC_DEBUG("Could not allocate Job Ring Device\n");
 			return -ENOMEM;
 		}
+		if (pSA->SAParams.bAuth && SECFP_HMAC_AES_XCBC_MAC ==
+				pSA->SAParams.ucAuthAlgo) {
+			pSA->ctx.split_key_pad_len =
+				pSA->SAParams.AuthKeyLen;
+			pSA->ctx.split_key_len =
+				pSA->SAParams.AuthKeyLen;
+		}
 		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
-					pSA->SAParams.EncKeyLen,
+					pSA->SAParams.EncKeyLen +
+					L1_CACHE_BYTES - 1,
 					GFP_DMA | flags);
 
 		if (!pSA->ctx.key) {
@@ -776,47 +899,46 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 			return -ENOMEM;
 		}
 
+		key = GET_CACHE_ALLIGNED(pSA->ctx.key);
+
+		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, key,
+					pSA->ctx.split_key_pad_len +
+					pSA->SAParams.EncKeyLen,
+					DMA_TO_DEVICE);
+		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
+			ASFIPSEC_DEBUG(" Unable to map key"\
+					"i/o memory\n");
+			ret = -ENOMEM;
+			goto error;
+		}
+
 		pSA->ctx.enckeylen = pSA->SAParams.EncKeyLen;
 		if (pSA->SAParams.bAuth) {
 			if (SECFP_HMAC_AES_XCBC_MAC ==
 				pSA->SAParams.ucAuthAlgo) {
-				memcpy(pSA->ctx.key, &pSA->SAParams.ucAuthKey,
+				memcpy(key, &pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen);
-				pSA->ctx.split_key_pad_len =
-					pSA->SAParams.AuthKeyLen;
-				pSA->ctx.split_key_len =
-					pSA->SAParams.AuthKeyLen;
+				if (SECFP_ESP_NULL ==
+					pSA->SAParams.ucCipherAlgo)
+					secfp_genCaamSplitKey_null_xcbc(
+						&pSA->ctx,
+						(u8 *)&pSA->SAParams.ucAuthKey,
+						pSA->SAParams.AuthKeyLen);
 			} else {
 				ret = secfp_genCaamSplitKey(&pSA->ctx,
 					(u8 *)&pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen);
 				if (ret) {
 					ASFIPSEC_DEBUG("Failed\n");
-					caam_jr_free(pSA->ctx.jrdev);
-					kfree(pSA->ctx.key);
-					pSA->ctx.jrdev = NULL;
-					pSA->ctx.key = NULL;
-					return ret;
+					goto error;
 				}
 			}
 		}
-
-		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len,
-			&pSA->SAParams.ucEncKey, pSA->SAParams.EncKeyLen);
-
-		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
-						pSA->ctx.split_key_pad_len +
-						pSA->SAParams.EncKeyLen,
-						DMA_TO_DEVICE);
-		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
-			ASFIPSEC_DEBUG(" Unable to map key"\
-						"i/o memory\n");
-			kfree(pSA->ctx.key);
-			caam_jr_free(pSA->ctx.jrdev);
-			pSA->ctx.jrdev = NULL;
-			pSA->ctx.key = NULL;
-			return -ENOMEM;
-		}
+		if (!(SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
+			SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo))
+				memcpy(key + pSA->ctx.split_key_pad_len,
+					&pSA->SAParams.ucEncKey,
+					pSA->SAParams.EncKeyLen);
 
 		pSA->ctx.authsize = pSA->SAParams.uICVSize;
 		ret = secfp_buildProtocolDesc(&pSA->ctx, pSA, SECFP_OUT);
@@ -825,22 +947,26 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
 				pSA->ctx.split_key_pad_len +
 					pSA->SAParams.EncKeyLen, DMA_TO_DEVICE);
-			kfree(pSA->ctx.key);
-			caam_jr_free(pSA->ctx.jrdev);
-			pSA->ctx.jrdev = NULL;
-			pSA->ctx.key = NULL;
-			return ret;
+			goto error;
 		}
 
 	} else
 		ret = -EINVAL;
-
+retrn:
 	return ret;
+error:
+	kfree(pSA->ctx.key);
+	caam_jr_free(pSA->ctx.jrdev);
+	pSA->ctx.jrdev = NULL;
+	pSA->ctx.key = NULL;
+	goto retrn;
+
 }
 
 int secfp_createInSACaamCtx(inSA_t *pSA)
 {
 	int ret = 0;
+	u8 *key;
 
 	if (pSA) {
 		gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
@@ -849,7 +975,14 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 			ASFIPSEC_DEBUG("Could not allocate Job Ring Device\n");
 			return -ENOMEM;
 		}
-
+		if ((pSA->SAParams.bAuth) &&
+			(SECFP_HMAC_AES_XCBC_MAC ==
+				pSA->SAParams.ucAuthAlgo)) {
+			pSA->ctx.split_key_pad_len =
+				pSA->SAParams.AuthKeyLen;
+			pSA->ctx.split_key_len =
+				pSA->SAParams.AuthKeyLen;
+		}
 		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
 					pSA->SAParams.EncKeyLen,
 					GFP_DMA | flags);
@@ -862,66 +995,71 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 			return -ENOMEM;
 		}
 
+		key = GET_CACHE_ALLIGNED(pSA->ctx.key);
+		/* FOR LS1 this may need to move doen */
+		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, key,
+					pSA->ctx.split_key_pad_len +
+					pSA->SAParams.EncKeyLen,
+					DMA_TO_DEVICE);
+
+		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
+			ASFIPSEC_DEBUG("Unable to map key"\
+					"i/o memory\n");
+			ret = -ENOMEM;
+			goto error;
+		}
+
 		pSA->ctx.enckeylen = pSA->SAParams.EncKeyLen;
 		if (pSA->SAParams.bAuth) {
 			if (SECFP_HMAC_AES_XCBC_MAC ==
 				pSA->SAParams.ucAuthAlgo) {
 				ASFIPSEC_DEBUG("for AES_XCBC_MAC, no need for"\
 					"splitkey generated\n");
-				memcpy(pSA->ctx.key, &pSA->SAParams.ucAuthKey,
+				memcpy(key, &pSA->SAParams.ucAuthKey,
 					pSA->SAParams.AuthKeyLen);
-				pSA->ctx.split_key_pad_len =
-					pSA->SAParams.AuthKeyLen;
-				pSA->ctx.split_key_len =
-					pSA->SAParams.AuthKeyLen;
+				if (SECFP_ESP_NULL ==
+					pSA->SAParams.ucCipherAlgo)
+					secfp_genCaamSplitKey_null_xcbc(
+						&pSA->ctx,
+						(u8 *)&pSA->SAParams.ucAuthKey,
+						pSA->SAParams.AuthKeyLen);
+
 			} else {
 				ret = secfp_genCaamSplitKey(&pSA->ctx,
 						(u8 *)&pSA->SAParams.ucAuthKey,
 						pSA->SAParams.AuthKeyLen);
 				if (ret) {
 					ASFIPSEC_DEBUG("Failed\n");
-					kfree(pSA->ctx.key);
-					caam_jr_free(pSA->ctx.jrdev);
-					pSA->ctx.jrdev = NULL;
-					pSA->ctx.key = NULL;
-					return ret;
+					goto error;
 				}
 			}
 		}
 
-		memcpy(pSA->ctx.key + pSA->ctx.split_key_pad_len,
-			&pSA->SAParams.ucEncKey, pSA->SAParams.EncKeyLen);
+		if (!(SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
+			SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo))
+			memcpy(key + pSA->ctx.split_key_pad_len,
+				&pSA->SAParams.ucEncKey,
+				pSA->SAParams.EncKeyLen);
 
-		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, pSA->ctx.key,
-						pSA->ctx.split_key_pad_len +
-						pSA->SAParams.EncKeyLen,
-							DMA_TO_DEVICE);
-		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
-			ASFIPSEC_DEBUG("Unable to map key"\
-					"i/o memory\n");
-			kfree(pSA->ctx.key);
-			caam_jr_free(pSA->ctx.jrdev);
-			pSA->ctx.jrdev = NULL;
-			pSA->ctx.key = NULL;
-			return -ENOMEM;
-		}
 		pSA->ctx.authsize = pSA->SAParams.uICVSize;
 		ret = secfp_buildProtocolDesc(&pSA->ctx, pSA, SECFP_IN);
 		if (ret) {
 			ASFIPSEC_DEBUG("Failed\n");
-			kfree(pSA->ctx.key);
 			dma_unmap_single(pSA->ctx.jrdev, pSA->ctx.key_phys,
 			pSA->ctx.split_key_pad_len +
 			pSA->SAParams.EncKeyLen, DMA_TO_DEVICE);
-			caam_jr_free(pSA->ctx.jrdev);
-			pSA->ctx.jrdev = NULL;
-			pSA->ctx.key = NULL;
-			return ret;
+			goto error;
 		}
 	} else
 		ret = -EINVAL;
-
+retrn:
 	return ret;
+error:
+	kfree(pSA->ctx.key);
+	caam_jr_free(pSA->ctx.jrdev);
+	pSA->ctx.jrdev = NULL;
+	pSA->ctx.key = NULL;
+	goto retrn;
 }
 
 #ifndef ASF_QMAN_IPSEC
