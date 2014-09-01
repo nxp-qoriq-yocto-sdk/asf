@@ -5470,6 +5470,8 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 	unsigned int ulSAIndex;
 	SPDOutContainer_t *pOutContainer;
 	SPDOutSALinkNode_t *pOutSALinkNode;
+	struct sk_buff	*trailer;
+	int tailbits;
 #ifdef ASF_QOS
 	outSA_t *pSA ;
 #endif
@@ -5529,6 +5531,14 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 		if (pFreeFn)
 			(pFreeFn)(freeArg);
 		goto ret_stk;
+	}
+	tailbits = skb_tailroom(skb);
+	if (skb_cloned(skb)) {
+		if (skb_cow_data(skb, tailbits, &trailer) < 1) {
+			if (pFreeFn)
+				(pFreeFn)(freeArg);
+			goto ret_stk;
+		}
 	}
 	if (skb_shinfo(skb)->frag_list)
 		skb->len = skb_headlen(skb);
