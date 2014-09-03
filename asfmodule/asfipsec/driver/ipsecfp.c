@@ -2550,7 +2550,7 @@ void secfp_adaptPeerGW(unsigned int ulVSGId, inSA_t *pSA,
 				pSA->SAParams.IPsecNatInfo.usDstPort = usSourcePort;
 				ASFIPSecCbFn.pFnPeerChange(ulVSGId,
 						pSA->SAParams.ulSPI,
-						pSA->ulSPDInContainerIndex,
+						pSA->pSASPDMapNode->ulSPDInContainerIndex,
 						pSA->SAParams.ucProtocol,
 						OldDstAddr, saddr,
 						usOldSourcePort, usNewSourcePort);
@@ -2843,8 +2843,8 @@ int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 		rcu_read_unlock();
 		return 1;
 	}
-	pIPSecOpaque->ulInSPDContainerId = pSA->ulSPDInContainerIndex;
-	pIPSecOpaque->ulInSPDMagicNumber = pSA->ulSPDInMagicNum;
+	pIPSecOpaque->ulInSPDContainerId = pSA->pSASPDMapNode->ulSPDInContainerIndex;
+	pIPSecOpaque->ulInSPDMagicNumber = pSA->pSASPDMapNode->ulSPDInMagicNum;
 	pIPSecOpaque->ucProtocol = pSA->SAParams.ucProtocol;
 	*pulCommonInterfaceId = pSA->ucIfaceId ;
 	ASFIPSEC_DEBUG();
@@ -4116,7 +4116,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		pContainer = (SPDInContainer_t *)(ptrIArray_getData(
-				&(secfp_InDB), pSA->ulSPDInContainerIndex));
+				&(secfp_InDB), pSA->pSASPDMapNode->ulSPDInContainerIndex));
 		if (pContainer->SPDParams.bDPDAlive) {
 			ASF_IPAddr_t DestAddr;
 			DestAddr.bIPv4OrIPv6 = 1;
@@ -4125,12 +4125,12 @@ So all these special boundary cases need to be handled for nr_frags*/
 			ASFIPSEC_DEBUG("Calling DPD alive callback VSG=%u, \
 				Tunnel=%u, address=%s, Container=%u, SPI=%x",
 					ulVSGId, pSA->ulTunnelId, ipv6h->daddr.s6_addr,
-					pSA->ulSPDInContainerIndex, ulSPI);
+					pSA->pSASPDMapNode->ulSPDInContainerIndex, ulSPI);
 			if (ASFIPSecCbFn.pFnDPDAlive)
 				ASFIPSecCbFn.pFnDPDAlive(ulVSGId,
 					pSA->ulTunnelId, ulSPI,
 					ipv6h->nexthdr, DestAddr,
-					pSA->ulSPDInContainerIndex);
+					pSA->pSASPDMapNode->ulSPDInContainerIndex);
 			pContainer->SPDParams.bDPDAlive = 0;
 		}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -4532,7 +4532,7 @@ sa_error:
 			rcu_read_unlock();
 
 			ASFIPSecCbFn.pFnSAExpired(ulVSGId,
-				pSA->ulSPDInContainerIndex,
+				pSA->pSASPDMapNode->ulSPDInContainerIndex,
 				pSA->SAParams.ulSPI,
 				pSA->SAParams.ucProtocol,
 				saDestAddr,
@@ -4869,18 +4869,18 @@ So all these special boundary cases need to be handled for nr_frags*/
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		pContainer = (SPDInContainer_t *)(ptrIArray_getData(
-				&(secfp_InDB), pSA->ulSPDInContainerIndex));
+				&(secfp_InDB), pSA->pSASPDMapNode->ulSPDInContainerIndex));
 		if (pContainer->SPDParams.bDPDAlive) {
 			ASF_IPAddr_t DestAddr;
 			DestAddr.bIPv4OrIPv6 = 0;
 			DestAddr.ipv4addr = iph->daddr;
 			ASFIPSEC_DEBUG("Calling DPD alive callback VSG=%u, Tunnel=%u, address=%x, Container=%u, SPI=%x", \
-					ulVSGId, pSA->ulTunnelId, iph->daddr, pSA->ulSPDInContainerIndex, ulSPI);
+					ulVSGId, pSA->ulTunnelId, iph->daddr, pSA->pSASPDMapNode->ulSPDInContainerIndex, ulSPI);
 			if (ASFIPSecCbFn.pFnDPDAlive)
 				ASFIPSecCbFn.pFnDPDAlive(ulVSGId,
 					pSA->ulTunnelId, ulSPI,
 					iph->protocol, DestAddr,
-					pSA->ulSPDInContainerIndex);
+					pSA->pSASPDMapNode->ulSPDInContainerIndex);
 			pContainer->SPDParams.bDPDAlive = 0;
 		}
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -5298,7 +5298,7 @@ sa_error:
 			pSA->bSoftExpiry = ASF_TRUE;
 			rcu_read_unlock();
 			ASFIPSecCbFn.pFnSAExpired(ulVSGId,
-				pSA->ulSPDInContainerIndex,
+				pSA->pSASPDMapNode->ulSPDInContainerIndex,
 				pSA->SAParams.ulSPI,
 				pSA->SAParams.ucProtocol,
 				saDestAddr,
@@ -5607,7 +5607,7 @@ inline void asfFillLogInfo(ASFLogInfo_t *pAsfLogInfo , inSA_t *pSA)
 	pAsfLogInfo->u.IPSecInfo.ucDirection = 0;
 	pAsfLogInfo->ulVSGId = pSA->ulVSGId;
 	pAsfLogInfo->u.IPSecInfo.ucDirection = 0;
-	pAsfLogInfo->u.IPSecInfo.ulSPDContainerIndex = pSA->ulSPDInContainerIndex;
+	pAsfLogInfo->u.IPSecInfo.ulSPDContainerIndex = pSA->pSASPDMapNode->ulSPDInContainerIndex;
 	for_each_possible_cpu(ii) {
 		pAsfLogInfo->u.IPSecInfo.ulNumOfPktsProcessed += pSA->ulPkts[ii];
 		pAsfLogInfo->u.IPSecInfo.ulNumOfBytesProcessed += pSA->ulBytes[ii];

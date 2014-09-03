@@ -622,19 +622,31 @@ static void secfp_freeSPDOutContainer(struct rcu_head *rcu)
 
 
 /* Cleanup function for SAList Node */
-static void secfp_cleanupSelList(OutSelList_t *pSelList)
+static void secfp_cleanupSelList(SelOutList_t *pSelList)
 {
+	OutSelList_t *pListSel = pSelList->pOutSelList;
+	SelOutList_t *pTempList = pSelList;
 	struct SASel_s *pSel, *pTmpSel;
 
-	for (pSel = pSelList->srcSel.pNext; pSel != NULL; pSel = pTmpSel) {
+	for (pSel = pListSel->srcSel.pNext; pSel != NULL; pSel = pTmpSel) {
 		pTmpSel = pSel->pNext;
 		asfReleaseNode(SASelPoolId_g, pSel, pSel->bHeap);
 	}
-	for (pSel = pSelList->destSel.pNext; pSel != NULL; pSel = pTmpSel) {
+	for (pSel = pListSel->destSel.pNext; pSel != NULL; pSel = pTmpSel) {
 		pTmpSel = pSel->pNext;
 		asfReleaseNode(SASelPoolId_g, pSel, pSel->bHeap);
 	}
-	asfReleaseNode(OutSelListPoolId_g, pSelList, pSelList->bHeap);
+
+	while (pTempList) {
+		pListSel = pTempList->pOutSelList;
+		asfReleaseNode(OutSelListPoolId_g, pListSel, pListSel->bHeap);
+		pTempList = pTempList->pNext;
+	}
+	while (pSelList) {
+		pTempList = pSelList->pNext;
+		kfree(pSelList);
+		pSelList = pTempList;
+	}
 }
 
 /* Out SA Sel Set alloc/free routines */
@@ -648,20 +660,139 @@ static void secfp_addOutSelSet(outSA_t *pSA,
 	SASel_t *pTmpSel, *pPrevSel, *pNewSel;
 	int ii;
 	char bHeap;
+	SelOutList_t *pSelList;
+	OutSelList_t *pOutList;
+	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
-
-	pSA->pSelList = (OutSelList_t *) asfGetNode(OutSelListPoolId_g, &bHeap);
-	if (pSA->pSelList == NULL) {
-		GlobalErrors.ulResourceNotAvailable++;
+	pSA->pHeadSelList = kzalloc(sizeof(SelOutList_t), flags);
+	if (pSA->pHeadSelList == NULL) {
 		ASFIPSEC_WARN("Allocation of SASelList failed");
 		return;
 	}
-	if (bHeap)
-		pSA->pSelList->bHeap = bHeap;
 
-	pSA->pSelList->ucSelFlags = ucSelFlags;
-	pSA->pSelList->usDscpStart = usDscpStart;
-	pSA->pSelList->usDscpEnd = usDscpEnd;
+	pSelList->pOutSelList = (OutSelList_t *) asfGetNode(OutSelListPoolId_g, &bHeap);
+	if (pSelList->pOutSelList == NULL) {
+		GlobalErrors.ulResourceNotAvailable++;
+		kfree(pSA->pHeadSelList);
+		ASFIPSEC_WARN("Allocation of SASelList failed");
+		return;
+	}
+	pOutList = pSelList->pOutSelList;
+	if (bHeap)
+		pOutList->bHeap = bHeap;
+
+	pOutList->ucSelFlags = ucSelFlags;
+	pOutList->usDscpStart = usDscpStart;
+	pOutList->usDscpEnd = usDscpEnd;
+	pOutList->ulSPDOutIndex = pSA->ulContainerIndex;
+	/* Allocate and copy the source selector list */
+	for (pPrevSel = NULL, pTmpSel = pSrcSel;
+		pTmpSel != NULL;
+		pTmpSel = pTmpSel->pNext) {
+			if (pTmpSel == pSrcSel)
+			/* Memory for the 1st selector is
+			allocated as part of pSAList*/
+				pNewSel = &(pOutList->srcSel);
+			else {
+				pNewSel = (struct SASel_s *)
+				asfGetNode(SASelPoolId_g, &bHeap);
+				if (pNewSel && bHeap)
+					pNewSel->bHeap = bHeap;
+			}
+			if (pNewSel) {
+				for (ii = 0; ii < pTmpSel->ucNumSelectors; ii++) {
+					memcpy(&(pNewSel->selNodes[ii]),
+						&(pTmpSel->selNodes[ii]),
+						sizeof(struct selNode_s));
+				}
+				pNewSel->ucNumSelectors = pTmpSel->ucNumSelectors;
+
+				if (pPrevSel) {
+					pPrevSel->pNext = pNewSel;
+					pNewSel->pPrev = pPrevSel;
+					pNewSel->pNext = NULL;
+				}
+				pPrevSel = pNewSel;
+			} else {
+				GlobalErrors.ulResourceNotAvailable++;
+				secfp_cleanupSelList(pSA->pHeadSelList);
+				pSA->pHeadSelList = NULL;
+				return ;
+			}
+	}
+	for (pPrevSel = NULL, pTmpSel = pDstSel;
+		pTmpSel != NULL;
+		pTmpSel = pTmpSel->pNext) {
+		if (pTmpSel == pDstSel)
+			/* Memory for the 1st selector is allocated
+			as part of pSAList*/
+			pNewSel = &(pOutList->destSel);
+		else {
+			pNewSel = (struct SASel_s *)
+			asfGetNode(SASelPoolId_g, &bHeap);
+			if (pNewSel && bHeap)
+				pNewSel->bHeap = bHeap;
+		}
+		if (pNewSel) {
+			for (ii = 0; ii < pTmpSel->ucNumSelectors; ii++) {
+				memcpy(&(pNewSel->selNodes[ii]),
+					&(pTmpSel->selNodes[ii]),
+					sizeof(struct selNode_s));
+			}
+			pNewSel->ucNumSelectors = pTmpSel->ucNumSelectors;
+
+			if (pPrevSel) {
+				pPrevSel->pNext = pNewSel;
+				pNewSel->pPrev = pPrevSel;
+				pNewSel->pNext = NULL;
+			}
+			pPrevSel = pNewSel;
+		} else {
+			GlobalErrors.ulResourceNotAvailable++;
+			secfp_cleanupSelList(pSA->pHeadSelList);
+			pSA->pHeadSelList = NULL;
+			return ;
+		}
+	}
+}
+
+/* Out SA Sel Set alloc/free routines */
+static void secfp_mapOutSelSet(outSA_t *pSA,
+			SASel_t *pSrcSel,
+			SASel_t *pDstSel,
+			unsigned char ucSelFlags,
+			unsigned short usDscpStart,
+			unsigned short usDscpEnd)
+{
+	SASel_t *pTmpSel, *pPrevSel, *pNewSel;
+	int ii;
+	char bHeap;
+	SelOutList_t *pSelList;
+	OutSelList_t *pOutList;
+	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
+
+	pSelList = kzalloc(sizeof(SelOutList_t), flags);
+	if (pSelList == NULL) {
+		ASFIPSEC_WARN("Allocation of SASelList failed");
+		return;
+	}
+	pSelList->pNext = pSA->pHeadSelList;
+	pSA->pHeadSelList = pSelList;
+	pSelList->pOutSelList = (OutSelList_t *) asfGetNode(OutSelListPoolId_g, &bHeap);
+	if (pSelList->pOutSelList == NULL) {
+		GlobalErrors.ulResourceNotAvailable++;
+		kfree(pSelList);
+		ASFIPSEC_WARN("Allocation of SASelList failed");
+		return;
+	}
+	pOutList = pSelList->pOutSelList;
+	if (bHeap)
+		pOutList->bHeap = bHeap;
+
+	pOutList->ucSelFlags = ucSelFlags;
+	pOutList->usDscpStart = usDscpStart;
+	pOutList->usDscpEnd = usDscpEnd;
+	pOutList->ulSPDOutIndex = pSA->ulContainerIndex;
 
 	/* Allocate and copy the source selector list */
 	for (pPrevSel = NULL, pTmpSel = pSrcSel;
@@ -670,7 +801,7 @@ static void secfp_addOutSelSet(outSA_t *pSA,
 		if (pTmpSel == pSrcSel)
 			/* Memory for the 1st selector is
 			allocated as part of pSAList*/
-			pNewSel = &(pSA->pSelList->srcSel);
+			pNewSel = &(pOutList->srcSel);
 		else {
 			pNewSel = (struct SASel_s *)
 					asfGetNode(SASelPoolId_g, &bHeap);
@@ -693,8 +824,8 @@ static void secfp_addOutSelSet(outSA_t *pSA,
 			pPrevSel = pNewSel;
 		} else {
 			GlobalErrors.ulResourceNotAvailable++;
-			secfp_cleanupSelList(pSA->pSelList);
-			pSA->pSelList = NULL;
+			secfp_cleanupSelList(pSA->pHeadSelList);
+			pSA->pHeadSelList = NULL;
 			return ;
 		}
 	}
@@ -705,7 +836,7 @@ static void secfp_addOutSelSet(outSA_t *pSA,
 		if (pTmpSel == pDstSel)
 			/* Memory for the 1st selector is allocated
 			as part of pSAList*/
-			pNewSel = &(pSA->pSelList->destSel);
+			pNewSel = &(pOutList->destSel);
 		else {
 			pNewSel = (struct SASel_s *)
 					asfGetNode(SASelPoolId_g, &bHeap);
@@ -728,8 +859,8 @@ static void secfp_addOutSelSet(outSA_t *pSA,
 			pPrevSel = pNewSel;
 		} else {
 			GlobalErrors.ulResourceNotAvailable++;
-			secfp_cleanupSelList(pSA->pSelList);
-			pSA->pSelList = NULL;
+			secfp_cleanupSelList(pSA->pHeadSelList);
+			pSA->pHeadSelList = NULL;
 			return ;
 		}
 	}
@@ -759,8 +890,8 @@ void secfp_freeOutSA(struct rcu_head *pData)
 	if (pSA->pL2blobTmr)
 		asfTimerStop(ASF_SECFP_BLOB_TMR_ID, 0, pSA->pL2blobTmr);
 
-	if (pSA->pSelList)
-		secfp_cleanupSelList(pSA->pSelList);
+	if (pSA->pHeadSelList)
+		secfp_cleanupSelList(pSA->pHeadSelList);
 
 #ifdef CONFIG_ASF_SEC4x
 	if (pSA->ctx.key)
@@ -1103,6 +1234,7 @@ static inline inSA_t *secfp_allocInSA(unsigned int AntiReplayWin)
 static void secfp_freeInSA(struct rcu_head *rcu_data)
 {
 	inSA_t *pSA = (inSA_t *) rcu_data;
+	SASPDMapNode_t *pSASPDMapNode;
 	/* We cannot free the skb now, as it is submitted to h/w */
 	/*h/w cb will check this flag */
 	kfree(pSA->pWinBitMap);
@@ -1124,6 +1256,11 @@ static void secfp_freeInSA(struct rcu_head *rcu_data)
 		caam_jr_free(pSA->ctx.jrdev);
 	kfree(pSA->ctx.sh_desc_mem);
 #endif
+	while (pSA->pSASPDMapNode) {
+		pSASPDMapNode = pSA->pSASPDMapNode->pNext;
+		kfree(pSA->pSASPDMapNode);
+		pSA->pSASPDMapNode = pSASPDMapNode;
+	}
 	asfReleaseNode(InSAPoolId_g, pSA, pSA->bHeap);
 }
 
@@ -1268,47 +1405,48 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 
 	for (pSALinkNode = pContainer->SAHolder.pSAList;
 		pSALinkNode != NULL; pSALinkNode = pSALinkNode->pNext) {
+		SelOutList_t *pHeadSelList;
 		pSA = (outSA_t *) ptrIArray_getData(&secFP_OutSATable,
 					pSALinkNode->ulSAIndex);
-		if ((pSA) && (pSA->pSelList)) {
-			ucMatchSrcSelFlag = ucMatchDstSelFlag = 0;
-
-			for (pSel = &(pSA->pSelList->srcSel);
-				pSel != NULL; pSel = pSel->pNext) {
-				for (ii = 0; ii < pSel->ucNumSelectors; ii++) {
-					pSelNode = &(pSel->selNodes[ii]);
-					ucMatchSrcSelFlag = 0;
-
-					if (pSA->pSelList->ucSelFlags & SECFP_SA_XPORT_SELECTOR) {
-						if (protocol == pSelNode->proto)
-							ucMatchSrcSelFlag = SECFP_SA_XPORT_SELECTOR;
-						else
-							continue;
-					}
-					if (pSA->pSelList->ucSelFlags & SECFP_SA_SRCPORT_SELECTOR) {
-						if ((sport >= pSelNode->prtStart) &&
-							(sport <= pSelNode->prtEnd)) {
-							ucMatchSrcSelFlag |= SECFP_SA_SRCPORT_SELECTOR;
-						} else
-							continue;
-					}
-					if (pSA->pSelList->ucSelFlags & SECFP_SA_SRCIPADDR_SELECTOR) {
+		if ((pSA) && (pSA->pHeadSelList)) {
+			for (pHeadSelList = pSA->pHeadSelList; pHeadSelList != NULL;
+				pHeadSelList = pHeadSelList->pNext) {
+				ucMatchSrcSelFlag = ucMatchDstSelFlag = 0;
+				for (pSel = &(pHeadSelList->pOutSelList->srcSel);
+					pSel != NULL; pSel = pSel->pNext) {
+					for (ii = 0; ii < pSel->ucNumSelectors; ii++) {
+						pSelNode = &(pSel->selNodes[ii]);
+						ucMatchSrcSelFlag = 0;
+						if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_XPORT_SELECTOR) {
+							if (protocol == pSelNode->proto)
+								ucMatchSrcSelFlag = SECFP_SA_XPORT_SELECTOR;
+							else
+								continue;
+						}
+						if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_SRCPORT_SELECTOR) {
+							if ((sport >= pSelNode->prtStart) &&
+								(sport <= pSelNode->prtEnd)) {
+								ucMatchSrcSelFlag |= SECFP_SA_SRCPORT_SELECTOR;
+							} else
+								continue;
+						}
+						if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_SRCIPADDR_SELECTOR) {
 #ifdef ASF_IPV6_FP_SUPPORT
-						if (pSelNode->IP_Version == 4) {
+							if (pSelNode->IP_Version == 4) {
 #endif
-							if (iph->version == 4 &&
-								(iph->saddr >= pSelNode->ipAddrRange.v4.start) &&
+								if (iph->version == 4 &&
+									(iph->saddr >= pSelNode->ipAddrRange.v4.start) &&
 								(iph->saddr <= pSelNode->ipAddrRange.v4.end)) {
-							ucMatchSrcSelFlag |= SECFP_SA_SRCIPADDR_SELECTOR;
-						} else
-							continue;
+								ucMatchSrcSelFlag |= SECFP_SA_SRCIPADDR_SELECTOR;
+								} else
+									continue;
 #ifdef ASF_IPV6_FP_SUPPORT
-						} else {
-							if (iph->version == 6 &&
-								(memcmp(ipv6h->saddr.s6_addr,
+							} else {
+								if (iph->version == 6 &&
+									(memcmp(ipv6h->saddr.s6_addr,
 									pSelNode->ipAddrRange.v6.start.u.b_addr, 16) >= 0) &&
-								(memcmp(ipv6h->saddr.s6_addr,
-									pSelNode->ipAddrRange.v6.end.u.b_addr, 16) <= 0)) {
+									(memcmp(ipv6h->saddr.s6_addr,
+										pSelNode->ipAddrRange.v6.end.u.b_addr, 16) <= 0)) {
 								ucMatchSrcSelFlag |= SECFP_SA_SRCIPADDR_SELECTOR;
 							} else
 								continue;
@@ -1322,26 +1460,26 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 					break;
 			}
 			bMatchFound = ASF_FALSE;
-			for (pSel = &(pSA->pSelList->destSel);
+			for (pSel = &(pHeadSelList->pOutSelList->destSel);
 				pSel != NULL; pSel = pSel->pNext) {
 				for (ii = 0; ii < pSel->ucNumSelectors; ii++) {
 					pSelNode = &(pSel->selNodes[ii]);
 					ucMatchDstSelFlag = 0;
 
-					if (pSA->pSelList->ucSelFlags & SECFP_SA_XPORT_SELECTOR) {
+					if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_XPORT_SELECTOR) {
 						if (protocol == pSelNode->proto)
 							ucMatchDstSelFlag = SECFP_SA_XPORT_SELECTOR;
 						else
 							continue;
 					}
-					if (pSA->pSelList->ucSelFlags & SECFP_SA_DESTPORT_SELECTOR) {
+					if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_DESTPORT_SELECTOR) {
 						if ((dport >= pSelNode->prtStart) &&
 							(dport <= pSelNode->prtEnd)) {
 							ucMatchDstSelFlag |= SECFP_SA_DESTPORT_SELECTOR;
 						} else
 							continue;
 					}
-					if (pSA->pSelList->ucSelFlags & SECFP_SA_DESTIPADDR_SELECTOR) {
+					if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_DESTIPADDR_SELECTOR) {
 #ifdef ASF_IPV6_FP_SUPPORT
 						if (pSelNode->IP_Version == 4) {
 #endif
@@ -1371,14 +1509,15 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 				if (bMatchFound == ASF_TRUE)
 					break;
 			}
-			if (pSA->pSelList->ucSelFlags & SECFP_SA_DSCP_SELECTOR) {
-				if ((tos >= pSA->pSelList->usDscpStart) &&
-					(tos <= pSA->pSelList->usDscpEnd))
+			if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_DSCP_SELECTOR) {
+				if ((tos >= pHeadSelList->pOutSelList->usDscpStart) &&
+					(tos <= pHeadSelList->pOutSelList->usDscpEnd))
 					ucMatchSrcSelFlag |= SECFP_SA_DSCP_SELECTOR;
 			}
 			if ((ucMatchSrcSelFlag | ucMatchDstSelFlag)
-				== pSA->pSelList->ucSelFlags)
+				== pHeadSelList->pOutSelList->ucSelFlags)
 					return pSALinkNode;
+			}
 		}
 	}
 	return NULL;
@@ -2112,9 +2251,9 @@ bool secfp_verifySASels(inSA_t *pSA, unsigned char protocol,
 	bool bMatchFound = ASF_FALSE;
 
 
-	if (pSA->ulSPDSelSetIndexMagicNum == ptrIArray_getMagicNum(
-				&secFP_InSelTable, pSA->ulSPDSelSetIndex)) {
-		pList = ptrIArray_getData(&secFP_InSelTable, pSA->ulSPDSelSetIndex);
+	if (pSA->pSASPDMapNode->ulSPDSelSetIndexMagicNum == ptrIArray_getMagicNum(
+				&secFP_InSelTable, pSA->pSASPDMapNode->ulSPDSelSetIndex)) {
+		pList = ptrIArray_getData(&secFP_InSelTable, pSA->pSASPDMapNode->ulSPDSelSetIndex);
 		if (pList) {
 			ucMatchSrcSelFlag = ucMatchDstSelFlag = 0;
 			for (pSel = pList->pSrcSel; pSel != NULL; pSel = pSel->pNext) {
@@ -2522,6 +2661,7 @@ unsigned int secfp_createOutSA(
 			unsigned int ulVSGId,
 			unsigned int ulTunnelId,
 			unsigned int ulSPDContainerIndex,
+			unsigned int *ulSAIndex,
 			unsigned int ulMagicNumber,
 			SASel_t	*pSrcSel,
 			SASel_t	*pDstSel,
@@ -2611,10 +2751,13 @@ unsigned int secfp_createOutSA(
 			local_bh_enable();
 		return SECFP_FAILURE;
 	}
+
+	pSA->ulContainerIndex = ulSPDContainerIndex;
+
 	if (!pContainer->SPDParams.bOnlySaPerDSCP) {
 		secfp_addOutSelSet(pSA, pSrcSel, pDstSel, ucSelMask,
 				usDscpStart, usDscpEnd);
-		if (!pSA->pSelList) {
+		if ((!pSA->pHeadSelList) && (!pSA->pHeadSelList->pOutSelList)) {
 			ASFIPSEC_DEBUG("secfp_addOutSelSet failure");
 			if (!bVal)
 				local_bh_enable();
@@ -2622,6 +2765,11 @@ unsigned int secfp_createOutSA(
 			return SECFP_FAILURE;
 		}
 	}
+	if (pSrcSel->selNodes[0].IP_Version == 0x04)
+		pSA->def_sel_ver = 0x04;
+	else
+		pSA->def_sel_ver = 0x06;
+
 	pSA->ulTunnelId = ulTunnelId;
 #ifdef ASF_QOS
 	/* Invalidate TC result */
@@ -2828,6 +2976,7 @@ unsigned int secfp_createOutSA(
 #endif
 	}
 
+	pSA->uRefCnt++;
 	ulIndex = ptrIArray_add(&secFP_OutSATable, pSA);
 	if (ulIndex < secFP_OutSATable.nr_entries) {
 		if (pContainer->SPDParams.bOnlySaPerDSCP) {
@@ -2847,6 +2996,7 @@ unsigned int secfp_createOutSA(
 			pOutSALinkNode->ulSAIndex = ulIndex;
 			secfp_addOutSALinkNode(pContainer,
 				pOutSALinkNode);
+			*ulSAIndex = ulIndex;
 		}
 	} else {
 		GlobalErrors.ulOutSAFull++;
@@ -2897,6 +3047,213 @@ unsigned int secfp_createOutSA(
 			ASFIPSEC_WARN("asfTimerStart failed");
 	}
 #endif
+	return SECFP_SUCCESS;
+}
+
+/* Out SA creation function */
+unsigned int secfp_mapPolOutSA(
+	unsigned int ulVSGId,
+	unsigned int ulSAIndex,
+	unsigned int ulSPDContainerIndex,
+	unsigned int ulMagicNumber,
+	SASel_t *pSrcSel,
+	SASel_t *pDstSel,
+	unsigned char ucSelMask,
+	SAParams_t *SAParams,
+	unsigned short usDscpStart,
+	unsigned short usDscpEnd,
+	unsigned int ulMtu)
+{
+	outSA_t *pSA;
+	SPDOutContainer_t *pContainer;
+	int ii;
+	SPDOutSALinkNode_t *pOutSALinkNode;
+	int bVal = in_interrupt();
+	ASFIPSEC_DEBUG("===MapPolOutSA: outSPI 0x%X\n", SAParams->ulSPI);
+	if (!bVal)
+		local_bh_disable();
+
+	pContainer = (SPDOutContainer_t *)ptrIArray_getData(&(secfp_OutDB),
+			ulSPDContainerIndex);
+	if (!pContainer) {
+		GlobalErrors.ulSPDOutContainerNotFound++;
+		ASFIPSEC_DEBUG("SPDContainer not found");
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_FAILURE;
+	}
+
+	pSA = (outSA_t *)ptrIArray_getData(
+			&secFP_OutSATable,
+			ulSAIndex);
+	if (unlikely(pSA == NULL)) {
+		GlobalErrors.ulResourceNotAvailable++;
+		ASFIPSEC_DEBUG("secfp_allocOutSA returned null");
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_FAILURE;
+	}
+	if (!pContainer->SPDParams.bOnlySaPerDSCP) {
+		secfp_mapOutSelSet(pSA, pSrcSel, pDstSel, ucSelMask,
+			usDscpStart, usDscpEnd);
+		if ((!pSA->pHeadSelList) && (!pSA->pHeadSelList->pOutSelList)) {
+			ASFIPSEC_DEBUG("secfp_addOutSelSet failure");
+			if (!bVal)
+				local_bh_enable();
+			secfp_freeOutSA((struct rcu_head *)pSA);
+			return SECFP_FAILURE;
+		}
+	}
+	ulLastOutSAChan_g = (ulLastOutSAChan_g == 0) ? 1 : 0;
+	if (ulSAIndex < secFP_OutSATable.nr_entries) {
+		if (pContainer->SPDParams.bOnlySaPerDSCP) {
+			for (ii = usDscpStart; ii < usDscpEnd; ii++)
+				pContainer->SAHolder.ulSAIndex[ii] = ulSAIndex;
+		} else {
+			pOutSALinkNode = secfp_allocOutSALinkNode();
+			if (pOutSALinkNode == NULL) {
+				GlobalErrors.ulResourceNotAvailable++;
+				ASFIPSEC_DEBUG("secfp_allocOutSALinkNod"
+					"returned null");
+				secfp_freeOutSA((struct rcu_head *)pSA);
+				if (!bVal)
+					local_bh_enable();
+				return SECFP_FAILURE;
+			}
+			pOutSALinkNode->ulSAIndex = ulSAIndex;
+				secfp_addOutSALinkNode(pContainer,
+				pOutSALinkNode);
+				pSA->uRefCnt++;
+		}
+	} else {
+		GlobalErrors.ulOutSAFull++;
+		ASFIPSEC_DEBUG("Could not find index to hold SA:"
+			"Maximum count reached ");
+		secfp_freeOutSA((struct rcu_head *)pSA);
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_FAILURE;
+	}
+
+	if (!bVal)
+		local_bh_enable();
+	return SECFP_SUCCESS;
+}
+
+/* Out SA deletion function */
+unsigned int secfp_UnMapPolOutSA(unsigned int ulSPDContainerIndex,
+		unsigned int ulSPDMagicNumber,
+		ASF_IPAddr_t daddr,
+		unsigned char ucProtocol,
+		unsigned int ulSPI,
+		unsigned short usDscpStart,
+		unsigned short usDscpEnd)
+{
+	unsigned int ulSAIndex, ii, Index;
+	SPDOutContainer_t *pContainer;
+	SPDOutSALinkNode_t *pOutSALinkNode;
+	outSA_t *pOutSA;
+	int bVal = in_softirq();
+	if (!bVal)
+		local_bh_disable();
+	pContainer = (SPDOutContainer_t *)(ptrIArray_getData(&(secfp_OutDB),
+			ulSPDContainerIndex));
+	if (unlikely(pContainer == NULL)) {
+		GlobalErrors.ulSPDOutContainerNotFound++;
+		ASFIPSEC_DEBUG("SPDOutContainer not found");
+		if (!bVal)
+			local_bh_enable();
+		return ASF_IPSEC_OUTSPDCONTAINER_NOT_FOUND;
+	}
+	if ((usDscpStart == 0) && (usDscpEnd == 0))
+		usDscpEnd = 7;
+	if (pContainer->SPDParams.bOnlySaPerDSCP) {
+		ulSAIndex = pContainer->SAHolder.ulSAIndex[
+			(unsigned int)usDscpStart];
+		if (ulSAIndex == ulMaxSupportedIPSecSAs_g) {
+			GlobalErrors.ulOutSANotFound++;
+			ASFIPSEC_DEBUG("secfp_findOutSALinkNode null");
+			if (!bVal)
+				local_bh_enable();
+			return ASF_IPSEC_OUTSA_NOT_FOUND;
+		}
+		pOutSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
+			ulSAIndex);
+		if (pOutSA) {
+			for_each_possible_cpu(Index) {
+				ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[0],
+					pOutSA->PolicyPPStats[Index].NumInBoundInPkts);
+				ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[1],
+					pOutSA->PolicyPPStats[Index].NumInBoundOutPkts);
+				ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[2],
+					pOutSA->PolicyPPStats[Index].NumOutBoundInPkts);
+				ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[3],
+					pOutSA->PolicyPPStats[Index].NumOutBoundOutPkts);
+				ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[ASF_IPSEC_PP_POL_CNT25-1],
+					pOutSA->ulBytes[Index]);
+			}
+			for (Index = 0; Index < 4; Index++)
+				ASF_IPSEC_COPY_ATOMIC_FROM_ATOMIC(
+					pContainer->PPStats.IPSecPolPPStats[Index + 4],
+				pContainer->PPStats.IPSecPolPPStats[Index]);
+			for (Index = 8; Index < (ASF_IPSEC_PP_POL_CNT_MAX - 2); Index++) {
+				ASF_IPSEC_ADD_ATOMIC_AND_ATOMIC(
+					pContainer->PPStats.IPSecPolPPStats[Index],
+					pOutSA->PPStats.IPSecPolPPStats[Index]);
+				ASF_IPSEC_ATOMIC_SET(pOutSA->PPStats.IPSecPolPPStats[Index], 0);
+			}
+		}
+		for (ii = usDscpStart; ii < usDscpEnd; ii++)
+			pContainer->SAHolder.ulSAIndex[ii] =
+			ulMaxSupportedIPSecSAs_g;
+	} else {
+		ASFIPSEC_DEBUG("Delete - dest %x, proto = %d spi= %x ",
+			daddr, ucProtocol, ulSPI);
+		pOutSALinkNode = secfp_findOutSALinkNode(
+			pContainer, daddr, ucProtocol, ulSPI);
+		if (pOutSALinkNode) {
+			pOutSA = (outSA_t *)ptrIArray_getData(
+				&secFP_OutSATable,
+				pOutSALinkNode->ulSAIndex);
+			if (pOutSA) {
+				for_each_possible_cpu(Index) {
+					ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[0],
+					pOutSA->PolicyPPStats[Index].NumInBoundInPkts);
+					ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[1],
+					pOutSA->PolicyPPStats[Index].NumInBoundOutPkts);
+					ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[2],
+					pOutSA->PolicyPPStats[Index].NumOutBoundInPkts);
+					ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[3],
+					pOutSA->PolicyPPStats[Index].NumOutBoundOutPkts);
+					ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[ASF_IPSEC_PP_POL_CNT25-1],
+					pOutSA->ulBytes[Index]);
+				}
+				for (Index = 0; Index < 4; Index++)
+					ASF_IPSEC_COPY_ATOMIC_FROM_ATOMIC(
+						pContainer->PPStats.IPSecPolPPStats[Index + 4],
+						pContainer->PPStats.IPSecPolPPStats[Index]);
+				for (Index = 8; Index < (ASF_IPSEC_PP_POL_CNT_MAX - 2); Index++) {
+					ASF_IPSEC_ADD_ATOMIC_AND_ATOMIC(
+					pContainer->PPStats.IPSecPolPPStats[Index],
+					pOutSA->PPStats.IPSecPolPPStats[Index]);
+					ASF_IPSEC_ATOMIC_SET(pOutSA->PPStats.IPSecPolPPStats[Index], 0);
+				}
+			}
+			ulSAIndex = pOutSALinkNode->ulSAIndex;
+			secfp_delOutSALinkNode(pContainer,
+				pOutSALinkNode);
+			pOutSA->uRefCnt--;
+		} else {
+			GlobalErrors.ulOutSANotFound++;
+			ASFIPSEC_DEBUG("secfp_findOutSALinkNode"
+				"returned null");
+			if (!bVal)
+				local_bh_enable();
+			return ASF_IPSEC_OUTSA_NOT_FOUND;
+		}
+	}
+	if (!bVal)
+		local_bh_enable();
 	return SECFP_SUCCESS;
 }
 
@@ -3153,6 +3510,7 @@ unsigned int secfp_DeleteOutSA(unsigned int	ulSPDContainerIndex,
 					sizeof(pOutSA->PolicyPPStats));
 			}
 			ulSAIndex = pOutSALinkNode->ulSAIndex;
+			pOutSA->uRefCnt--;
 			secfp_delOutSALinkNode(pContainer,
 					pOutSALinkNode);
 			ptrIArray_delete(&secFP_OutSATable, ulSAIndex,
@@ -3192,6 +3550,7 @@ unsigned int secfp_CreateInSA(
 	SPDInSPIValLinkNode_t *pSPINode;
 	unsigned int iphdrlen;
 	int bVal = in_interrupt();
+	gfp_t flags = bVal ? GFP_ATOMIC : GFP_KERNEL;
 
 	if (!bVal)
 		local_bh_disable();
@@ -3346,12 +3705,32 @@ unsigned int secfp_CreateInSA(
 		pSA->bSoftExpiry = 0;
 		pSA->ulRcvMTU = ulMtu;
 		/* Update the magic number and index in SPI table for easy reference */
-		pSA->ulSPDInContainerIndex = ulContainerIndex;
-		pSA->ulSPDInMagicNum = ptrIArray_getMagicNum(&secfp_InDB,
+		{
+			struct SASPDMapNode_s *pTempMapNode;
+
+			pTempMapNode = kzalloc(sizeof(struct SASPDMapNode_s), flags);
+			if (!pTempMapNode) {
+				ASFIPSEC_DEBUG("Alloc for TempMapNode failure");
+				/* Remove from Selector List */
+				secfp_deleteInContainerSelList(pContainer, pNode);
+				kfree(pSA);
+				if (!bVal)
+					local_bh_enable();
+				return SECFP_FAILURE;
+			}
+			/* Update the magic number and index in SPI table for easy reference */
+			pTempMapNode->ulSPDInContainerIndex = ulContainerIndex;
+			pTempMapNode->ulSPDInMagicNum = ptrIArray_getMagicNum(&secfp_InDB,
 							ulContainerIndex);
-		pSA->ulSPDSelSetIndex = pNode->ulIndex;
-		pSA->ulSPDSelSetIndexMagicNum = ptrIArray_getMagicNum(
+			pTempMapNode->ulSPDSelSetIndex = pNode->ulIndex;
+			pTempMapNode->ulSPDSelSetIndexMagicNum = ptrIArray_getMagicNum(
 					&secFP_InSelTable, pNode->ulIndex);
+			pTempMapNode->pNext = NULL;
+			if (pSA->pSASPDMapNode)
+				pTempMapNode->pNext = pSA->pSASPDMapNode;
+			pSA->pSASPDMapNode = pTempMapNode;
+			pSA->ulMappedPolCount++;
+		}
 		secfp_appendInSAToSPIList(pSA);
 	} else {
 		ASFIPSEC_DPERR("Could not allocate In SA");
@@ -3367,6 +3746,99 @@ unsigned int secfp_CreateInSA(
 	return SECFP_SUCCESS;
 }
 
+/* In SA creation function */
+unsigned int secfp_MapPolInSA(
+		unsigned int ulVSGId,
+		ASF_IPAddr_t daddr,
+		unsigned int ulContainerIndex,
+		unsigned int ulMagicNumber,
+		SASel_t *pSrcSel,
+		SASel_t *pDstSel,
+		unsigned int ucSelFlags,
+		SAParams_t *pSAParams,
+		unsigned int ulSPDOutContainerIndex,
+		unsigned int ulOutSPI,
+		unsigned int ulMtu)
+{
+	inSA_t *pSA;
+	SPDInContainer_t *pContainer;
+	SPDInSelTblIndexLinkNode_t *pNode;
+	unsigned int hashVal = usMaxInSAHashTaleSize_g;
+	int bVal = in_interrupt();
+	gfp_t flags = bVal ? GFP_ATOMIC : GFP_KERNEL;
+
+	ASFIPSEC_DEBUG("===CreateInSA: outSPI 0x%X inSPI 0x%X\n", ulOutSPI, pSAParams->ulSPI);
+	if (!bVal)
+		local_bh_disable();
+
+	pContainer = (SPDInContainer_t *)(ptrIArray_getData(&(secfp_InDB),
+			ulContainerIndex));
+	if (pContainer == NULL) {
+		GlobalErrors.ulSPDOutContainerNotFound++;
+		ASFIPSEC_DEBUG("SPDContainer not found");
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_FAILURE;
+	}
+	pSA = secfp_findInSA(ulVSGId, pSAParams->ucProtocol, pSAParams->ulSPI, daddr, &hashVal);
+	if (pSA) {
+		struct SASPDMapNode_s *pTempMapNode;
+
+		ulLastInSAChan_g = (ulLastInSAChan_g == 0) ? 1 : 0;
+
+		pNode = secfp_updateInSelSet(pContainer, pSrcSel,
+			pDstSel, ucSelFlags);
+		if (!pNode) {
+			ASFIPSEC_DEBUG("secfp_updateInSelSet returned failure");
+			/* Remove from Selector List */
+			secfp_deleteInContainerSelList(pContainer, pNode);
+			kfree(pSA);
+			if (!bVal)
+				local_bh_enable();
+			return SECFP_FAILURE;
+		}
+		/* Need to append SPI value to pSPIValList */
+		if (!secfp_allocAndAppendSPIVal(pContainer, pSA)) {
+			ASFIPSEC_DEBUG("secfp_allocAndAppendSPIVal failure");
+			/* Remove from Selector List */
+			secfp_deleteInContainerSelList(pContainer, pNode);
+			kfree(pSA);
+			if (!bVal)
+				local_bh_enable();
+			return SECFP_FAILURE;
+		}
+		pTempMapNode = kzalloc(sizeof(struct SASPDMapNode_s), flags);
+		if (!pTempMapNode) {
+			ASFIPSEC_DEBUG("secfp_updateInSelSet returned failure");
+			kfree(pSA);
+			if (!bVal)
+				local_bh_enable();
+			return SECFP_FAILURE;
+		}
+		/* Update the magic number and index in SPI table for easy reference */
+		pTempMapNode->ulSPDInContainerIndex = ulContainerIndex;
+		pTempMapNode->ulSPDInMagicNum = ptrIArray_getMagicNum(&secfp_InDB,
+			ulContainerIndex);
+		pTempMapNode->ulSPDSelSetIndex = pNode->ulIndex;
+		pTempMapNode->ulSPDSelSetIndexMagicNum = ptrIArray_getMagicNum(
+			&secFP_InSelTable, pNode->ulIndex);
+		pTempMapNode->pNext = NULL;
+		if (pSA->pSASPDMapNode)
+			pTempMapNode->pNext = pSA->pSASPDMapNode;
+			pSA->pSASPDMapNode = pTempMapNode;
+			pSA->ulMappedPolCount++;
+	} else {
+		ASFIPSEC_DPERR("Could not allocate In SA");
+		GlobalErrors.ulResourceNotAvailable++;
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_FAILURE;
+	}
+	if (!bVal)
+		local_bh_enable();
+		ASFIPSEC_DEBUG("returned successs");
+	return SECFP_SUCCESS;
+}
 /* Setting DPD in IN SPD function */
 unsigned int secfp_SetDPD(unsigned long int ulVSGId,
 				ASFIPSecRuntimeSetDPDArgs_t *pSetDPD)
@@ -3413,7 +3885,7 @@ unsigned int secfp_ModifyInSA(unsigned long int ulVSGId,
 		return SECFP_FAILURE;
 	}
 
-	if (pInSA->ulSPDInContainerIndex == pModSA->ulSPDContainerIndex) {
+	if (pInSA->pSASPDMapNode->ulSPDInContainerIndex == pModSA->ulSPDContainerIndex) {
 		if (pModSA->ucChangeType == ASFIPSEC_UPDATE_LOCAL_GW) {
 #ifdef ASF_IPV6_FP_SUPPORT
 			if (pInSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
@@ -3459,11 +3931,112 @@ unsigned int secfp_ModifyInSA(unsigned long int ulVSGId,
 		GlobalErrors.ulInSASPDContainerMisMatch++;
 		ASFIPSEC_PRINT("SPD Container mismatch SA Container ="
 			"%u, Passed Container = %u",
-				pInSA->ulSPDInContainerIndex,
+				pInSA->pSASPDMapNode->ulSPDInContainerIndex,
 				pModSA->ulSPDContainerIndex);
 		if (!bVal)
 			local_bh_enable();
 		return SECFP_FAILURE;
+	}
+	if (!bVal)
+		local_bh_enable();
+	return SECFP_SUCCESS;
+}
+
+/* In SA deletion function */
+unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
+				unsigned int ulContainerIndex,
+				unsigned int ulMagicNumber,
+				ASF_IPAddr_t daddr,
+				unsigned char ucProtocol,
+				unsigned int ulSPI)
+
+{
+	unsigned int hashVal = usMaxInSAHashTaleSize_g;
+	unsigned int Index;
+	SPDInContainer_t *pContainer;
+	SPDInSelTblIndexLinkNode_t *pNode;
+	SPDInSPIValLinkNode_t *pSPINode;
+	bool bFound;
+	inSA_t *pSA;
+	int bVal = in_interrupt();
+	SASPDMapNode_t *pSASPDMapNode;
+
+	if (!bVal)
+		local_bh_disable();
+
+	pSA = secfp_findInSA(ulVSGId, ucProtocol, ulSPI, daddr, &hashVal);
+	if (unlikely(pSA == NULL)) {
+		GlobalErrors.ulInSANotFound++;
+		ASFIPSEC_PRINT("secfp_findInvSA returned NULL");
+		if (!bVal)
+			local_bh_enable();
+		return SECFP_FAILURE;
+	}
+	pContainer = (SPDInContainer_t *)ptrIArray_getData(
+			&(secfp_InDB), ulContainerIndex);
+	bFound = ASF_FALSE;
+	if (pContainer) {
+		for (pNode = pContainer->pSelIndex; pNode != NULL;
+			pNode = pNode->pNext) {
+			pSASPDMapNode = pSA->pSASPDMapNode;
+			while (pSASPDMapNode) {
+				if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex) {
+					bFound = ASF_TRUE;
+					break;
+				}
+				pSASPDMapNode = pSASPDMapNode->pNext;
+			}
+			if (bFound == ASF_TRUE)
+				break;
+		}
+		if (bFound == ASF_TRUE)
+			secfp_deleteInContainerSelList(pContainer, pNode);
+		else
+			ASFIPSEC_WARN("CouldNotfind selectorlist node");
+
+		pSPINode = secfp_findInSPINode(pContainer,
+					pSA->SAParams.ulSPI);
+		if (pSPINode)
+			secfp_deleteInContainerSPIList(pContainer,
+						pSPINode);
+		else
+			ASFIPSEC_WARN("Could not find SPI Link node");
+	}
+	pSASPDMapNode = pSA->pSASPDMapNode;
+	while (pSASPDMapNode) {
+		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex) {
+			bFound = ASF_TRUE;
+			break;
+		}
+		pSASPDMapNode = pSASPDMapNode->pNext;
+	}
+
+	if (pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
+		ptrIArray_getMagicNum(&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
+		ptrIArray_delete(&secFP_InSelTable,
+			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
+	}
+
+	for_each_possible_cpu(Index) {
+		ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[0],
+			pSA->PolicyPPStats[Index].NumInBoundInPkts);
+		ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[1],
+			pSA->PolicyPPStats[Index].NumInBoundOutPkts);
+		ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[2],
+			pSA->PolicyPPStats[Index].NumOutBoundInPkts);
+		ASF_IPSEC_ATOMIC_ADD(pContainer->PPStats.IPSecPolPPStats[3],
+			pSA->PolicyPPStats[Index].NumOutBoundOutPkts);
+	}
+	for (Index = 0; Index < 4; Index++)
+		ASF_IPSEC_COPY_ATOMIC_FROM_ATOMIC(
+			pContainer->PPStats.IPSecPolPPStats[Index + 4],
+			pContainer->PPStats.IPSecPolPPStats[Index]);
+
+	for (Index = 8; Index < ASF_IPSEC_PP_POL_CNT_MAX; Index++) {
+		ASF_IPSEC_ADD_ATOMIC_AND_ATOMIC(
+			pContainer->PPStats.IPSecPolPPStats[Index],
+			pSA->PPStats.IPSecPolPPStats[Index]);
+		ASF_IPSEC_ATOMIC_SET(pSA->PPStats.IPSecPolPPStats[Index], 0);
 	}
 	if (!bVal)
 		local_bh_enable();
@@ -3487,6 +4060,7 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 	bool bFound;
 	inSA_t *pSA;
 	int bVal = in_interrupt();
+	SASPDMapNode_t *pSASPDMapNode;
 
 	if (!bVal)
 		local_bh_disable();
@@ -3500,33 +4074,48 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 		return SECFP_FAILURE;
 	}
 	pContainer = (SPDInContainer_t *)ptrIArray_getData(
-			&(secfp_InDB), pSA->ulSPDInContainerIndex);
+			&(secfp_InDB), ulContainerIndex);
 	bFound = ASF_FALSE;
 	if (pContainer) {
 		for (pNode = pContainer->pSelIndex; pNode != NULL;
 			pNode = pNode->pNext) {
-			if (pSA->ulSPDSelSetIndex == pNode->ulIndex) {
-				bFound = ASF_TRUE;
-				break;
+			pSASPDMapNode = pSA->pSASPDMapNode;
+			while (pSASPDMapNode) {
+				if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex) {
+					bFound = ASF_TRUE;
+					break;
+				}
+				pSASPDMapNode = pSASPDMapNode->pNext;
 			}
+			if (bFound == ASF_TRUE)
+				break;
 		}
-		if (bFound == ASF_TRUE)
-			secfp_deleteInContainerSelList(pContainer, pNode);
-		else
-			ASFIPSEC_WARN("CouldNotfind selectorlist node");
-
-		pSPINode = secfp_findInSPINode(pContainer,
-					pSA->SAParams.ulSPI);
-		if (pSPINode)
-			secfp_deleteInContainerSPIList(pContainer,
-						pSPINode);
-		else
-			ASFIPSEC_WARN("Could not find SPI Link node");
 	}
-	if (pSA->ulSPDSelSetIndexMagicNum ==
-		ptrIArray_getMagicNum(&secFP_InSelTable, pSA->ulSPDSelSetIndex)) {
+	if (bFound == ASF_TRUE)
+		secfp_deleteInContainerSelList(pContainer, pNode);
+	else
+		ASFIPSEC_WARN("CouldNotfind selectorlist node");
+
+	pSPINode = secfp_findInSPINode(pContainer,
+				pSA->SAParams.ulSPI);
+	if (pSPINode)
+		secfp_deleteInContainerSPIList(pContainer,
+					pSPINode);
+	else
+		ASFIPSEC_WARN("Could not find SPI Link node");
+	pSASPDMapNode = pSA->pSASPDMapNode;
+	while (pSASPDMapNode) {
+		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex) {
+			bFound = ASF_TRUE;
+			break;
+		}
+		pSASPDMapNode = pSASPDMapNode->pNext;
+	}
+
+	if (pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
+		ptrIArray_getMagicNum(&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
 		ptrIArray_delete(&secFP_InSelTable,
-			pSA->ulSPDSelSetIndex, secfp_freeInSelSet);
+			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
 	}
 
 	for_each_possible_cpu(Index) {
@@ -3823,21 +4412,29 @@ unsigned int secfp_copySrcAndDestSelSet(
 }
 
 ASF_uint32_t asfFlushInSA(SPDInContainer_t *pInContainer,
-			inSA_t *pInSA)
+			inSA_t *pInSA, ASF_uint32_t ulSPDInContainerIndex)
 {
 	SPDInSelTblIndexLinkNode_t *pNode;
 	SPDInSPIValLinkNode_t *pSPINode;
 	ASF_boolean_t bFound = ASF_FALSE;
+	SASPDMapNode_t *pSASPDMapNode;
 
 	if (!pInSA)
 		return SECFP_FAILURE;
 
+	pSASPDMapNode = pInSA->pSASPDMapNode;
+
 	for (pNode = pInContainer->pSelIndex; pNode != NULL;
 					pNode = pNode->pNext) {
-		if (pInSA->ulSPDSelSetIndex == pNode->ulIndex) {
-			bFound = ASF_TRUE;
-			break;
+		while (pSASPDMapNode) {
+			if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex) {
+				bFound = ASF_TRUE;
+				break;
+			}
+			pSASPDMapNode = pSASPDMapNode->pNext;
 		}
+		if (bFound == ASF_TRUE)
+			break;
 	}
 
 	if (bFound == ASF_TRUE)
@@ -3849,11 +4446,17 @@ ASF_uint32_t asfFlushInSA(SPDInContainer_t *pInContainer,
 	if (pSPINode)
 		secfp_deleteInContainerSPIList(pInContainer, pSPINode);
 
+	pSASPDMapNode = pInSA->pSASPDMapNode;
+	while (pSASPDMapNode) {
+		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
+			break;
+		pSASPDMapNode = pSASPDMapNode->pNext;
+	}
 
-	if (pInSA->ulSPDSelSetIndexMagicNum == ptrIArray_getMagicNum(
-		&secFP_InSelTable, pInSA->ulSPDSelSetIndex)) {
+	if (pSASPDMapNode->ulSPDSelSetIndexMagicNum == ptrIArray_getMagicNum(
+		&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
 		ptrIArray_delete(&secFP_InSelTable,
-			pInSA->ulSPDSelSetIndex, secfp_freeInSelSet);
+			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
 	}
 	secfp_deleteInSAFromSPIList(pInSA);
 	return SECFP_SUCCESS;
@@ -3886,12 +4489,18 @@ ASF_uint32_t asfFlushAllOutSAs(ASF_uint32_t ulSPDOutContainerIndex)
 			}
 		}
 	} else {
+		outSA_t *pSA;
 		pOutSALinkNode = pOutContainer->SAHolder.pSAList;
 		while (pOutSALinkNode != NULL) {
 			ulSAIndex = pOutSALinkNode->ulSAIndex;
 			secfp_delOutSALinkNode(pOutContainer, pOutSALinkNode);
-			ptrIArray_delete(&secFP_OutSATable, ulSAIndex,
-				secfp_freeOutSA);
+			pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
+					ulSAIndex);
+			if (pSA->uRefCnt > 1)
+				pSA->uRefCnt--;
+			else
+				ptrIArray_delete(&secFP_OutSATable, ulSAIndex,
+					secfp_freeOutSA);
 			pOutSALinkNode = pOutContainer->SAHolder.pSAList;
 		}
 	}
@@ -3916,7 +4525,7 @@ ASF_uint32_t asfFlushAllInSAs(ASF_uint32_t ulSPDInContainerIndex)
 		ulHashVal = secfp_compute_hash(pSPILinkNode->ulSPIVal);
 		for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
 			pInSA != NULL; pInSA = pInSA->pNext) {
-			asfFlushInSA(pInContainer, pInSA);
+			asfFlushInSA(pInContainer, pInSA, ulSPDInContainerIndex);
 		}
 	}
 	return SECFP_SUCCESS;

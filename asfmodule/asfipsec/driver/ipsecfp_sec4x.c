@@ -546,8 +546,8 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	Assuming All SA selectors are of SAME IP versions*/
 	SASel_t *pSel = NULL;
 	bool bSelIPv4OrIPv6 = 0;
-	if (pSA->pSelList)
-		pSel = &pSA->pSelList->srcSel;
+	if (pSA->pHeadSelList)
+		pSel = &pSA->pHeadSelList->pOutSelList->srcSel;
 	if (pSel && pSel->ucNumSelectors) {
 		if (pSel->selNodes[0].IP_Version == 6)
 			bSelIPv4OrIPv6 = 1;
@@ -1067,7 +1067,8 @@ error:
 static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 					struct caam_ctx *ctx,
 					dma_addr_t data_in, int data_in_len,
-					dma_addr_t data_out, int data_out_len, unsigned int sg)
+					dma_addr_t data_out, int data_out_len, unsigned int sg,
+					unsigned int use_dpovrd)
 {
 	u32 *desc = edesc->hw_desc;
 	u32 options = 0;
@@ -1079,6 +1080,32 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 		desc_len(ctx->sh_desc), HDR_REVERSE | HDR_SHARE_SERIAL);
 	append_seq_in_ptr(desc, data_in, data_in_len, options);
 	append_seq_out_ptr(desc, data_out, data_out_len, options);
+
+	if (use_dpovrd) {
+		static u32 data;
+		switch (use_dpovrd) {
+		case SECFP_PROTO_IP:
+			data = 0x80000000 | SECFP_PROTO_IP;
+			data |= SECFP_IPV4_HDR_LEN << 16;
+			append_load_as_imm(desc, &data, sizeof(data), LDST_CLASS_DECO |
+			LDST_SRCDST_WORD_DECO_PCLOVRD | 0x4);
+		break;
+		case SECFP_PROTO_IPV6:
+			data = 0x80000000 | SECFP_PROTO_IPV6;
+			data |= SECFP_IPV6_HDR_LEN << 16;
+			append_load_as_imm(desc, &data, sizeof(data), LDST_CLASS_DECO |
+			LDST_SRCDST_WORD_DECO_PCLOVRD | 0x4);
+		break;
+		default:
+			ASFIPSEC_DPERR("Non supported protocol\n");
+		return ;
+		}
+	}
+#ifdef ASFIPSEC_DEBUG_FRAME
+		print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
+		DUMP_PREFIX_ADDRESS, 16, 4, desc,
+		desc_bytes(desc), 1);
+#endif
 
 #else
 	int authsize = ctx->authsize;
@@ -1206,6 +1233,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 	unsigned int data_in_len = skb->len;
 	unsigned short usPadLen = 0;
 	struct iphdr *iph = ip_hdr(skb);
+	unsigned int dpovrd = 0;
 
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 6) {
@@ -1215,6 +1243,10 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 			& (pSA->SAParams.ulBlockSize - 1);
 		usPadLen = (usPadLen == 0) ? 0 :
 			pSA->SAParams.ulBlockSize - usPadLen;
+		if (pSA->def_sel_ver != 6) {
+			ASFIPSEC_DEBUG("UPDATE DPOVRD REG with v6");
+			dpovrd = SECFP_PROTO_IPV6;
+		}
 	} else
 #endif
 	{
@@ -1222,6 +1254,10 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 			& (pSA->SAParams.ulBlockSize - 1);
 		usPadLen = (usPadLen == 0) ? 0 :
 			pSA->SAParams.ulBlockSize - usPadLen;
+		if (pSA->def_sel_ver != 4) {
+			ASFIPSEC_DEBUG("UPDATE DPOVRD REG with v6");
+			dpovrd = SECFP_PROTO_IP;
+		}
 	}
 
 	ASFIPSEC_DEBUG("ulSecOverHead %d skb->len %d, data_len=%d pad_len =%d",
@@ -1248,10 +1284,10 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 
 		secfp_prepareCaamJobDescriptor(descriptor, &pSA->ctx,
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-			ptr, data_in_len, ptr , skb->len, 0);
+			ptr, data_in_len, ptr , skb->len, 0, dpovrd);
 #else
 			ptr, skb->len + pSA->SAParams.uICVSize,
-			ptr, skb->len + pSA->SAParams.uICVSize, 0);
+			ptr, skb->len + pSA->SAParams.uICVSize, 0, dpovrd);
 #endif
 	} else {
 		skb_frag_t *frag = 0;
@@ -1348,7 +1384,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 		edesc->sec4_sg_bytes = 2*dma_len;
 
 		secfp_prepareCaamJobDescriptor(descriptor, &pSA->ctx,
-			ptr, data_in_len, ptr_out, len_to_caam, 1);
+			ptr, data_in_len, ptr_out, len_to_caam, 1, dpovrd);
 #else
 		edesc->sec4_sg_bytes = dma_len;
 

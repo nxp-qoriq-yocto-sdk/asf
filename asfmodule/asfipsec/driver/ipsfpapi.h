@@ -216,6 +216,8 @@ typedef enum asfIPSecPolicyPPStats {
 	ASF_IPSEC_PP_POL_CNT21, /*57*/
 	ASF_IPSEC_PP_POL_CNT22,
 	ASF_IPSEC_PP_POL_CNT23,
+	ASF_IPSEC_PP_POL_CNT24,
+	ASF_IPSEC_PP_POL_CNT25,
 	ASF_IPSEC_PP_POL_CNT_MAX
 } asfIPSecPolicyPPStats_e;
 
@@ -343,7 +345,15 @@ enum ASFIPSecRunTimeCommands {
 	ASF_IPSEC_RUNTIME_MOD_OUTSA,
 	ASF_IPSEC_RUNTIME_MOD_INSA,
 	ASF_IPSEC_RUNTIME_SET_DPD,
-	ASF_IPSEC_RUNTIME_MOD_INFLOW
+	ASF_IPSEC_RUNTIME_MOD_INFLOW,
+	 /*! \brief Command for setting mapping for inbound flow.*/
+	ASF_IPSEC_RUNTIME_MAPPOL_INSA,
+	/*! \brief Command for setting mapping for outbound flow.*/
+	ASF_IPSEC_RUNTIME_MAPPOL_OUTSA,
+	/*! \brief Command for clearing mapping for inbound flow.*/
+	ASF_IPSEC_RUNTIME_UNMAPPOL_INSA,
+	/*! \brief Command for clearing mapping for outbound flow.*/
+	ASF_IPSEC_RUNTIME_UNMAPPOL_OUTSA
 };
 
 typedef struct ASF_IPSecSASelectorAddr_s {
@@ -475,6 +485,9 @@ typedef struct {
 typedef struct ASFIPSecRuntimeAddOutSAArgs_s {
 	ASF_uint32_t   ulTunnelId;
 	ASF_uint32_t   ulSPDContainerIndex;
+	/*! \brief ASF OutSA Container Index value.This value is returned
+	by ASFIPSec when outbound SA pushed.*/
+	ASF_uint32_t ulSAContainerIndex;
 	ASF_uint32_t   ulMagicNumber ;
 	ASF_uint16_t   usDscpStart;
 	ASF_uint16_t   usDscpEnd;

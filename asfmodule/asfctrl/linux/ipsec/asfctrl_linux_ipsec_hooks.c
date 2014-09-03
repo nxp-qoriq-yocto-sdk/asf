@@ -73,6 +73,7 @@ struct sa_node {
 	__be32 spi;
 	__be32 iifindex;
 	__be32 container_id;
+	__be32 sa_index;
 	__be32 con_magic_num;
 	ASF_IPAddr_t saddr;
 	ASF_IPAddr_t daddr;
@@ -105,7 +106,6 @@ algo_types[MAX_ALGO_TYPE][MAX_AUTH_ENC_ALGO] = {
 		{NULL, -1}
 	}
 };
-
 static inline int asfctrl_alg_getbyname(char *name, int type)
 {
 	int i;
@@ -123,7 +123,16 @@ void asfctrl_generic_free(ASF_void_t *freeArg)
 {
 	ASFCTRLSkbFree((struct sk_buff *)freeArg);
 }
+ASF_uint32_t asfctrl_get_ipsec_sa_vsgid(struct xfrm_state *x)
+{
+	/* TODO: Get proper VSG ID */
+	return ASF_DEF_VSG;
+}
 
+ASF_uint32_t asfctrl_get_ipsec_pol_vsgid(struct xfrm_policy *x)
+{
+	return ASF_DEF_VSG;
+}
 /**** Container Indices ***/
 static spinlock_t cont_lock;
 static ASF_uint32_t
@@ -595,6 +604,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	}
 	sa_table[OUT_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[OUT_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
+	sa_table[OUT_SA][sa_id].sa_index = outSA.ulSAContainerIndex;
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	xfrm->asf_sa_direction = OUT_SA;
@@ -834,6 +844,8 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	outSA.pSASelector = &outSASel;
 	outSA.pSAParams = &SAParams;
 	handle = (uintptr_t)xfrm;
+	xfrm->asf_sa_direction = OUT_SA;
+	xfrm->asf_sa_cookie = sa_id + 1;
 	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
 	ASFIPSecRuntime(ulVSGId,
 			ASF_IPSEC_RUNTIME_ADD_OUTSA,
@@ -1181,51 +1193,496 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	return 0;
 }
 
+int asfctrl_map_pol_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
+{
+	uint32_t handle;
+	int sa_id;
+	struct xfrm_selector *sel = NULL;
+#ifdef ASF_IPV6_FP_SUPPORT
+	bool bIPv4OrIPv6 = 0;
+	bool bSelIPv4OrIPv6 = 0;
+#endif
+	bool bLockFlag;
+	ASFIPSecRuntimeAddOutSAArgs_t outSA;
+	ASF_IPSecSASelector_t outSASel;
+	ASF_IPSecSelectorSet_t srcSel, dstSel;
+	ASF_IPSecSA_t SAParams;
+	ASF_uint32_t ulVSGId;
 
+ASFCTRL_FUNC_ENTRY;
+
+	sa_id = xfrm->asf_sa_cookie - 1;
+	if (sa_id < 0)
+		return sa_id;
+
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
+	sa_id = sa_table[OUT_SA][sa_id].sa_index;
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
+
+	memset(&outSA, 0, sizeof(ASFIPSecRuntimeAddOutSAArgs_t));
+
+	sel = &xp->selector;
+	outSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+
+	outSA.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
+	outSA.ulSPDContainerIndex = xp->asf_cookie;
+
+	memset(&SAParams, 0, sizeof(ASF_IPSecSA_t));
+	memset(&srcSel, 0, sizeof(ASF_IPSecSelectorSet_t));
+	memset(&dstSel, 0, sizeof(ASF_IPSecSelectorSet_t));
+	memset(&outSASel, 0, sizeof(ASF_IPSecSASelector_t));
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (sel->family == AF_INET6)
+		bSelIPv4OrIPv6 = 1;
+	if (xfrm->props.family == AF_INET6)
+		bIPv4OrIPv6 = 1;
+#endif
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv4OrIPv6) {
+		SAParams.TE_Addr.IP_Version = 6;
+		memcpy(SAParams.TE_Addr.srcIP.ipv6addr, xfrm->props.saddr.a6, 16);
+		memcpy(SAParams.TE_Addr.dstIP.ipv6addr, xfrm->id.daddr.a6, 16);
+		SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = bIPv4OrIPv6;
+		SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = bIPv4OrIPv6;
+	} else {
+#endif
+	SAParams.TE_Addr.IP_Version = 4;
+	SAParams.TE_Addr.srcIP.ipv4addr = xfrm->props.saddr.a4;
+	SAParams.TE_Addr.dstIP.ipv4addr = xfrm->id.daddr.a4;
+	SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = 0;
+	SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
+
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bSelIPv4OrIPv6) {
+		srcSel.IP_Version = 6;
+		dstSel.IP_Version = 6;
+		memcpy(srcSel.addr.u.prefixAddr.v6.IPv6Addr.u.w_addr,
+			sel->saddr.a6, 16);
+		srcSel.addr.u.prefixAddr.v6.IPv6Plen = sel->prefixlen_s;
+		memcpy(dstSel.addr.u.prefixAddr.v6.IPv6Addr.u.w_addr,
+			sel->daddr.a6, 16);
+		dstSel.addr.u.prefixAddr.v6.IPv6Plen = sel->prefixlen_d;
+	} else {
+#endif
+		srcSel.IP_Version = 4;
+		dstSel.IP_Version = 4;
+		srcSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->saddr.a4;
+		srcSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_s;
+		dstSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->daddr.a4;
+		dstSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_d;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
+	srcSel.protocol = dstSel.protocol = sel->proto;
+	srcSel.addr.addrType = ASF_IPSEC_ADDR_TYPE_SUBNET;
+	srcSel.port.start = sel->sport;
+	srcSel.port.end = sel->sport + ~(sel->sport_mask);
+
+	dstSel.addr.addrType = ASF_IPSEC_ADDR_TYPE_SUBNET;
+	dstSel.port.start = sel->dport;
+	dstSel.port.end = sel->dport + ~(sel->dport_mask);
+
+	outSASel.nsrcSel = 1;
+	outSASel.srcSel = &srcSel;
+	outSASel.ndstSel = 1;
+	outSASel.dstSel = &dstSel;
+
+	outSA.pSASelector = &outSASel;
+	outSA.pSAParams = &SAParams;
+	outSA.ulSAContainerIndex = sa_id;
+	handle = (uint32_t)xfrm;
+	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+	ASFIPSecRuntime(ulVSGId,
+		ASF_IPSEC_RUNTIME_MAPPOL_OUTSA,
+		&outSA,
+		sizeof(ASFIPSecRuntimeAddOutSAArgs_t),
+		&handle, sizeof(uint32_t));
+
+	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x OUT-SPD=%d",
+		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
+		outSA.ulSPDContainerIndex);
+
+	ASFCTRL_FUNC_EXIT;
+	return 0;
+}
+
+int asfctrl_map_pol_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
+{
+	uint32_t handle;
+	int sa_id;
+	int ret;
+	struct xfrm_selector *sel;
+#ifdef ASF_IPV6_FP_SUPPORT
+	bool bIPv4OrIPv6 = 0;
+	bool bSelIPv4OrIPv6 = 0;
+#endif
+	bool bLockFlag;
+	ASFIPSecRuntimeAddInSAArgs_t inSA;
+	ASF_IPSecSASelector_t inSASel;
+	ASF_IPSecSelectorSet_t srcSel, dstSel;
+	ASF_IPSecSA_t SAParams;
+	ASF_uint32_t ulVSGId;
+	struct xfrm_algo_aead *aead = xfrm->aead;
+	struct esp_data *esp = xfrm->data;
+
+	ASFCTRL_FUNC_ENTRY;
+
+	sa_id = xfrm->asf_sa_cookie - 1;
+	if (sa_id < 0)
+		return sa_id;
+
+	memset(&inSA, 0, sizeof(ASFIPSecRuntimeAddInSAArgs_t));
+	memset(&inSASel, 0, sizeof(ASF_IPSecSASelector_t));
+	memset(&srcSel, 0, sizeof(ASF_IPSecSelectorSet_t));
+	memset(&dstSel, 0, sizeof(ASF_IPSecSelectorSet_t));
+	memset(&SAParams, 0, sizeof(ASF_IPSecSA_t));
+
+	inSA.ulInSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
+	inSA.ulInSPDContainerIndex = xp->asf_cookie;
+
+	sel = &xp->selector;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (sel->family == AF_INET6)
+		bSelIPv4OrIPv6 = 1;
+	if (xfrm->props.family == AF_INET6)
+		bIPv4OrIPv6 = 1;
+#endif
+	inSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+	inSA.ulOutSPDMagicNumber = 0;
+	inSA.ulOutSPDContainerIndex = 0;
+	inSA.ulOutSPI = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	inSA.DestAddr.bIPv4OrIPv6 = bIPv4OrIPv6;
+	if (bIPv4OrIPv6)
+		memcpy(inSA.DestAddr.ipv6addr,
+			xfrm->id.daddr.a6, 16);
+	else
+#endif
+		inSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+
+	SAParams.bVerifyInPktWithSASelectors =
+		ASF_IPSEC_SA_SELECTOR_VERIFICATION_NOT_NEEDED;
+	SAParams.bDoPeerGWIPAddressChangeAdaptation =
+		ASF_IPSEC_ADAPT_PEER_GATEWAY_DISABLE;
+
+#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (!bIPv4OrIPv6)
+#endif
+		SAParams.bRedSideFragment = bRedSideFragment;
+#ifdef ASF_IPV6_FP_SUPPORT
+	else
+		SAParams.bRedSideFragment =
+		ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+#endif
+	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_ON;
+	SAParams.bDoAntiReplayCheck =
+		xfrm->props.replay_window ? ASF_IPSEC_SA_SAFLAGS_REPLAY_ON
+		: ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
+
+	SAParams.bDoAntiReplayCheck =
+		SAParams.bDoAntiReplayCheck ? bAntiReplayCheck : 0;
+
+	if (xfrm->props.replay_window < 32)
+		SAParams.replayWindowSize = 32;
+	else
+		SAParams.replayWindowSize = xfrm->props.replay_window;
+	ASFCTRL_INFO("In Replay window size = %d ", xfrm->props.replay_window);
+
+#else
+	SAParams.bRedSideFragment =
+		ASF_IPSEC_RED_SIDE_FRAGMENTATION_DISABLED;
+	SAParams.bPropogateECN = ASF_IPSEC_QOS_TOS_ECN_CHECK_OFF;
+	SAParams.bDoAntiReplayCheck = ASF_IPSEC_SA_SAFLAGS_REPLAY_OFF;
+#endif
+	if (xfrm->lft.hard_use_expires_seconds != XFRM_INF) {
+		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_ON;
+		SAParams.softSecsLimit = xfrm->lft.soft_use_expires_seconds;
+		SAParams.hardSecsLimit = xfrm->lft.hard_use_expires_seconds;
+	} else
+		SAParams.bSALifeTimeInSecs = ASF_IPSEC_SA_SAFLAGS_LIFESECS_OFF;
+
+	if (bVolumeBasedExpiry && xfrm->lft.hard_byte_limit != XFRM_INF) {
+		SAParams.softKbyteLimit = xfrm->lft.soft_byte_limit/1024;
+		SAParams.hardKbyteLimit = xfrm->lft.hard_byte_limit/1024;
+	}
+
+	if (bPacketBasedExpiry && xfrm->lft.hard_packet_limit != XFRM_INF) {
+		SAParams.softPacketLimit = xfrm->lft.soft_packet_limit;
+		SAParams.hardPacketLimit = xfrm->lft.hard_packet_limit;
+	}
+
+	SAParams.bEncapsulationMode = ASF_IPSEC_SA_SAFLAGS_TUNNELMODE;
+	SAParams.handleToSOrDSCPAndFlowLabel = ASF_IPSEC_QOS_TOS_COPY;
+	SAParams.handleDFBit = ASF_IPSEC_DF_COPY;
+	SAParams.protocol = xfrm->id.proto;
+
+	SAParams.ulMtu = ASFCTRL_DEF_PMTU;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv4OrIPv6) {
+		SAParams.TE_Addr.IP_Version = 6;
+		memcpy(SAParams.TE_Addr.srcIP.ipv6addr, xfrm->props.saddr.a6, 16);
+		memcpy(SAParams.TE_Addr.dstIP.ipv6addr, xfrm->id.daddr.a6, 16);
+		SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = bIPv4OrIPv6;
+		SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = bIPv4OrIPv6;
+	} else {
+#endif
+		SAParams.TE_Addr.IP_Version = 4;
+		SAParams.TE_Addr.srcIP.ipv4addr = xfrm->props.saddr.a4;
+		SAParams.TE_Addr.dstIP.ipv4addr = xfrm->id.daddr.a4;
+		SAParams.TE_Addr.srcIP.bIPv4OrIPv6 = 0;
+		SAParams.TE_Addr.dstIP.bIPv4OrIPv6 = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
+
+	if (xfrm->aalg) {
+		ret = asfctrl_alg_getbyname(xfrm->aalg->alg_name,
+			AUTHENTICATION);
+		if (unlikely(ret == -EINVAL)) {
+			ASFCTRL_WARN("Auth algorithm not supported");
+			return ret;
+		}
+		SAParams.authAlgo = ret;
+		SAParams.authKeyLenBits = xfrm->aalg->alg_key_len;
+		SAParams.authKey = xfrm->aalg->alg_key;
+		SAParams.icvSizeinBits = xfrm->aalg->alg_trunc_len;
+	}
+	if (xfrm->ealg) {
+		ret = asfctrl_alg_getbyname(xfrm->ealg->alg_name, ENCRYPTION);
+		if (unlikely(ret == -EINVAL)) {
+			ASFCTRL_WARN("Encryption algorithm not supported");
+			return ret;
+		}
+		SAParams.encAlgo = ret;
+		SAParams.encDecKeyLenBits = xfrm->ealg->alg_key_len;
+		SAParams.encDecKey = xfrm->ealg->alg_key;
+	}
+
+	/* CCM/GCM/GMAC mode case, aalg and ealg will be NULL
+	* from linux stack, xfrm support three algorithm modes, aalg/ealg/aead
+	*/
+	if (aead && esp) {
+		ret = asfctrl_alg_getbyname(aead->alg_name, ENCRYPTION);
+		if (ret == -EINVAL) {
+			ASFCTRL_WARN("Encryption algorithm not supported");
+			return ret;
+		}
+		/* check aead mode */
+		if (ASF_IPSEC_EALG_AES_CCM_ICV8 == ret) {
+			switch (aead->alg_icv_len) {
+			case 64:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV8;
+			break;
+			case 96:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV12;
+			break;
+			case 128:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV16;
+			break;
+			default:
+				ASFCTRL_WARN("CCM ICV length not supported");
+			return -EINVAL;
+			}
+		} else if (ASF_IPSEC_EALG_AES_GCM_ICV8 == ret) {
+			switch (aead->alg_icv_len) {
+			case 64:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV8;
+			break;
+			case 96:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV12;
+			break;
+			case 128:
+				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV16;
+			break;
+			default:
+				ASFCTRL_WARN("GCM ICV length not supported");
+			return -EINVAL;
+			}
+		} else {
+			SAParams.encAlgo = ASF_IPSEC_EALG_NULL_AES_GMAC;
+		}
+
+		SAParams.icvSizeinBits = aead->alg_icv_len;
+		SAParams.encDecKeyLenBits = aead->alg_key_len;
+		SAParams.encDecKey = aead->alg_key;
+	}
+
+	SAParams.spi = xfrm->id.spi;
+
+	/*if UDP Encapsulation is enabled */
+	if (xfrm->encap) {
+		struct xfrm_encap_tmpl *encap = xfrm->encap;
+
+		SAParams.bDoUDPEncapsulationForNATTraversal =
+			ASF_IPSEC_SA_SELECTOR_VERIFICATION_NEEDED;
+		SAParams.IPsecNatInfo.usSrcPort = encap->encap_sport;
+		SAParams.IPsecNatInfo.usDstPort = encap->encap_dport;
+
+		switch (encap->encap_type) {
+		default:
+		case UDP_ENCAP_ESPINUDP:
+			/*esph = (struct ip_esp_hdr *)(uh + 1);*/
+			SAParams.IPsecNatInfo.ulNATt = ASF_IPSEC_IKE_NATtV2;
+			break;
+		case UDP_ENCAP_ESPINUDP_NON_IKE:
+			/* udpdata32 = (__be32 *)(uh + 1);
+			udpdata32[0] = udpdata32[1] = 0;
+			esph = (struct ip_esp_hdr *)(udpdata32 + 2); */
+			SAParams.IPsecNatInfo.ulNATt = ASF_IPSEC_IKE_NATtV1;
+			break;
+		}
+	}
+
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bSelIPv4OrIPv6) {
+		srcSel.IP_Version = 6;
+		dstSel.IP_Version = 6;
+		memcpy(srcSel.addr.u.prefixAddr.v6.IPv6Addr.u.w_addr,
+			sel->saddr.a6, 16);
+		srcSel.addr.u.prefixAddr.v6.IPv6Plen = sel->prefixlen_s;
+		memcpy(dstSel.addr.u.prefixAddr.v6.IPv6Addr.u.w_addr,
+			sel->daddr.a6, 16);
+		dstSel.addr.u.prefixAddr.v6.IPv6Plen = sel->prefixlen_d;
+	} else {
+#endif
+		srcSel.IP_Version = 4;
+		dstSel.IP_Version = 4;
+		srcSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->saddr.a4;
+		srcSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_s;
+		dstSel.addr.u.prefixAddr.v4.IPv4Addrs = sel->daddr.a4;
+		dstSel.addr.u.prefixAddr.v4.IPv4Plen = sel->prefixlen_d;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
+	srcSel.protocol = dstSel.protocol = sel->proto;
+	srcSel.addr.addrType = ASF_IPSEC_ADDR_TYPE_SUBNET;
+	srcSel.port.start = sel->sport;
+	srcSel.port.end = sel->sport + ~(sel->sport_mask);
+
+	dstSel.addr.addrType = ASF_IPSEC_ADDR_TYPE_SUBNET;
+	dstSel.port.start = sel->dport;
+	dstSel.port.end = sel->dport + ~(sel->dport_mask);
+
+	inSASel.nsrcSel = 1;
+	inSASel.srcSel = &srcSel;
+	inSASel.ndstSel = 1;
+	inSASel.dstSel = &dstSel;
+
+	inSA.pSASelector = &inSASel;
+	inSA.pSAParams = &SAParams;
+	handle = (uint32_t)xfrm;
+	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+
+	ASFIPSecRuntime(ulVSGId,
+		ASF_IPSEC_RUNTIME_MAPPOL_INSA,
+		&inSA,
+		sizeof(ASFIPSecRuntimeAddInSAArgs_t),
+		&handle, sizeof(uint32_t));
+
+
+	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (bIPv4OrIPv6) {
+		memcpy(sa_table[IN_SA][sa_id].saddr.ipv6addr,
+			xfrm->props.saddr.a6, 16);
+		memcpy(sa_table[IN_SA][sa_id].daddr.ipv6addr,
+			xfrm->id.daddr.a6, 16);
+		sa_table[IN_SA][sa_id].saddr.bIPv4OrIPv6 = bIPv4OrIPv6;
+		sa_table[IN_SA][sa_id].daddr.bIPv4OrIPv6 = bIPv4OrIPv6;
+	} else {
+#endif
+		sa_table[IN_SA][sa_id].saddr.ipv4addr = xfrm->props.saddr.a4;
+		sa_table[IN_SA][sa_id].daddr.ipv4addr = xfrm->id.daddr.a4;
+		sa_table[IN_SA][sa_id].saddr.bIPv4OrIPv6 = 0;
+		sa_table[IN_SA][sa_id].daddr.bIPv4OrIPv6 = 0;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
+	sa_table[IN_SA][sa_id].spi = xfrm->id.spi;
+	sa_table[IN_SA][sa_id].container_id = inSA.ulInSPDContainerIndex;
+	sa_table[IN_SA][sa_id].ref_count++;
+	/* sa_table[OUT_SA][sa_id].iifindex = ifindex; */
+	sa_table[IN_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
+	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
+	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x IN-SPD=%d",
+		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
+		inSA.ulInSPDContainerIndex);
+
+	ASFCTRL_FUNC_EXIT;
+
+	return 0;
+}
 int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 {
-	struct xfrm_policy *xp = NULL;
-	int dir;
+	struct policy_list pol_list = {0};
+	int dir, ret = -EINVAL;
 
 	ASFCTRL_FUNC_TRACE;
 
 	if (unlikely(is_sa_offloadable(xfrm)))
-		return -EINVAL;
+		return ret;
 
-	xp = xfrm_state_policy_mapping(xfrm);
-	if (!xp) {
+	xfrm_state_policy_mapping(xfrm, &pol_list);
+	if (pol_list.nr_pol == 0) {
 		ASFCTRL_WARN("Policy not Available for this SA");
-		return -EINVAL;
-	}
-	dir = xfrm_policy_id2dir(xp->index);
-	if (!xp->asf_cookie) {
-		ASFCTRL_WARN("Policy not offloaded, xp = %p DIR=%d(%s) ",
-			xp, dir, XFRM_DIR(dir));
-		if (asfctrl_xfrm_add_policy(xp, dir)) {
-			ASFCTRL_WARN("Unable to offload Policy");
-			return -EINVAL;
+		return ret;
+	} else {
+		int pol_cnt = 0;
+		for (pol_cnt = 0; pol_cnt < pol_list.nr_pol; pol_cnt++) {
+			struct xfrm_policy *xp = pol_list.xpol[pol_cnt];
+			dir = xfrm_policy_id2dir(xp->index);
+			if (!xp->asf_cookie) {
+				ASFCTRL_WARN("Policy not offloaded, xp = %p DIR=%d(%s) ",
+					xp, dir, XFRM_DIR(dir));
+				if (asfctrl_xfrm_add_policy(xp, dir)) {
+					ASFCTRL_WARN("Unable to offload Policy");
+					continue;
+				}
+			}
+			if (pol_cnt == 0) {
+				if (dir == XFRM_POLICY_OUT) {
+					if (asfctrl_xfrm_add_outsa(xfrm, xp))
+						goto out;
+				} else {
+					if (asfctrl_xfrm_add_insa(xfrm, xp))
+						goto out;
+				}
+			} else {
+				if (dir == XFRM_POLICY_OUT) {
+					if (asfctrl_map_pol_outsa(xfrm, xp))
+						goto out;
+				} else {
+					if (asfctrl_map_pol_insa(xfrm, xp))
+						goto out;
+				}
+			}
 		}
+		ret = 0;
 	}
-
-	if (dir == XFRM_POLICY_OUT)
-		return asfctrl_xfrm_add_outsa(xfrm, xp);
-	else
-		return asfctrl_xfrm_add_insa(xfrm, xp);
-	return -EINVAL;
+out:
+	return ret;
 }
 
 int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 {
-	int cont_id, dir;
+	int dir, ret = -EINVAL;
 	int handle;
-	bool bLockFlag;
 	ASF_uint32_t ulVSGId;
+
+	struct policy_list pol_list = {0};
+	bool bLockFlag;
 
 	ASFCTRL_FUNC_ENTRY;
 
 	if (!xfrm->asf_sa_cookie || xfrm->asf_sa_cookie > asfctrl_max_sas) {
 		ASFCTRL_WARN("Not an offloaded SA");
-		return -EINVAL;
+		return ret;
 	}
 	dir = xfrm->asf_sa_direction;
 
@@ -1234,71 +1691,138 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 	if (match_sa_index_no_lock(xfrm, dir) < 0) {
 		ASFCTRL_WARN("Not an offloaded SA -1");
 		ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
-		return -EINVAL;
+		return ret;
 	}
-	cont_id = sa_table[dir][xfrm->asf_sa_cookie - 1].container_id;
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
-
-	if (dir == OUT_SA) {
-		ASFIPSecRuntimeDelOutSAArgs_t delSA;
-		ASFCTRL_INFO("Delete Encrypt SA");
-
-		delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-		delSA.ulSPDContainerIndex = cont_id;
-		delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
-#ifdef ASF_IPV6_FP_SUPPORT
-		if (xfrm->props.family == AF_INET6) {
-			delSA.DestAddr.bIPv4OrIPv6 = 1;
-			memcpy(delSA.DestAddr.ipv6addr,
-					xfrm->id.daddr.a6, 16);
-		} else {
-#endif
-			delSA.DestAddr.bIPv4OrIPv6 = 0;
-			delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
-#ifdef ASF_IPV6_FP_SUPPORT
-		}
-#endif
-		delSA.ucProtocol = xfrm->id.proto;
-		delSA.ulSPI = xfrm->id.spi;
-		delSA.usDscpStart = 0;
-		delSA.usDscpEnd = 0;
-
-		ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
-		ASFIPSecRuntime(ulVSGId,
-			ASF_IPSEC_RUNTIME_DEL_OUTSA,
-			&delSA,
-			sizeof(ASFIPSecRuntimeDelOutSAArgs_t),
-			&handle, sizeof(uint32_t));
-
+	xfrm_state_policy_mapping(xfrm, &pol_list);
+	if (pol_list.nr_pol == 0) {
+		ASFCTRL_WARN("Policy not Available for this SA");
+		return ret;
 	} else {
-		ASFIPSecRuntimeDelInSAArgs_t delSA;
-
-		ASFCTRL_INFO("Delete Decrypt SA");
-
-		delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-		delSA.ulSPDContainerIndex = cont_id;
-		delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
+		int pol_cnt = 0;
+		for (pol_cnt = 0; pol_cnt < pol_list.nr_pol; pol_cnt++) {
+			struct xfrm_policy *xp = pol_list.xpol[pol_cnt];
+			ASFIPSecRuntimeDelOutSAArgs_t delSA;
+			dir = xfrm_policy_id2dir(xp->index);
+			if (!xp->asf_cookie) {
+				ASFCTRL_WARN("Policy not offloaded, xp = %p DIR=%d(%s) ",
+					xp, dir, XFRM_DIR(dir));
+				continue;
+			}
+			if ((pol_list.nr_pol - pol_cnt) > 1) {
+				if (dir == XFRM_POLICY_OUT) {
+					ASFCTRL_INFO("Delete Encrypt SA");
+					delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+					delSA.ulSPDContainerIndex = xp->asf_cookie;
+					delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 #ifdef ASF_IPV6_FP_SUPPORT
-		if (xfrm->props.family == AF_INET6) {
-			delSA.DestAddr.bIPv4OrIPv6 = 1;
-			memcpy(delSA.DestAddr.ipv6addr,
-					xfrm->id.daddr.a6, 16);
+				if (xfrm->props.family == AF_INET6) {
+					delSA.DestAddr.bIPv4OrIPv6 = 1;
+					memcpy(delSA.DestAddr.ipv6addr,
+						xfrm->id.daddr.a6, 16);
+				} else {
+#endif
+					delSA.DestAddr.bIPv4OrIPv6 = 0;
+					delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+				}
+#endif
+				delSA.ucProtocol = xfrm->id.proto;
+				delSA.ulSPI = xfrm->id.spi;
+				delSA.usDscpStart = 0;
+				delSA.usDscpEnd = 0;
+
+				ASFIPSecRuntime(ASF_DEF_VSG,
+					ASF_IPSEC_RUNTIME_DEL_OUTSA,
+					&delSA,
+					sizeof(ASFIPSecRuntimeDelOutSAArgs_t),
+					&handle, sizeof(uint32_t));
+
+			} else {
+				ASFCTRL_INFO("UNMAP Decrypt SA");
+
+				delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+				delSA.ulSPDContainerIndex = xp->asf_cookie;
+				delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
+		#ifdef ASF_IPV6_FP_SUPPORT
+				if (xfrm->props.family == AF_INET6) {
+					delSA.DestAddr.bIPv4OrIPv6 = 1;
+					memcpy(delSA.DestAddr.ipv6addr,
+						xfrm->id.daddr.a6, 16);
+				} else {
+		#endif
+					delSA.DestAddr.bIPv4OrIPv6 = 0;
+					delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+		#ifdef ASF_IPV6_FP_SUPPORT
+				}
+		#endif
+			delSA.ucProtocol = xfrm->id.proto;
+			delSA.ulSPI = xfrm->id.spi;
+			ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+			ASFIPSecRuntime(ulVSGId,
+				ASF_IPSEC_RUNTIME_UNMAPPOL_INSA,
+				&delSA,
+				sizeof(ASFIPSecRuntimeDelInSAArgs_t),
+				&handle, sizeof(uint32_t));
+			}
 		} else {
-#endif
-			delSA.DestAddr.bIPv4OrIPv6 = 0;
-			delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+			if (dir == XFRM_POLICY_OUT) {
+				ASFCTRL_INFO("Delete Encrypt SA");
+				delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+				delSA.ulSPDContainerIndex = xp->asf_cookie;
+				delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 #ifdef ASF_IPV6_FP_SUPPORT
-		}
+				if (xfrm->props.family == AF_INET6) {
+					delSA.DestAddr.bIPv4OrIPv6 = 1;
+					memcpy(delSA.DestAddr.ipv6addr,
+						xfrm->id.daddr.a6, 16);
+				} else {
 #endif
-		delSA.ucProtocol = xfrm->id.proto;
-		delSA.ulSPI = xfrm->id.spi;
+					delSA.DestAddr.bIPv4OrIPv6 = 0;
+					delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+				}
+#endif
+				delSA.ucProtocol = xfrm->id.proto;
+				delSA.ulSPI = xfrm->id.spi;
 
-		ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
-		ASFIPSecRuntime(ulVSGId,
-			ASF_IPSEC_RUNTIME_DEL_INSA,
-			&delSA,
-			sizeof(ASFIPSecRuntimeDelInSAArgs_t),
-			&handle, sizeof(uint32_t));
+				delSA.usDscpStart = 0;
+				delSA.usDscpEnd = 0;
+				ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+				ASFIPSecRuntime(ulVSGId,
+					ASF_IPSEC_RUNTIME_DEL_OUTSA,
+					&delSA,
+					sizeof(ASFIPSecRuntimeDelOutSAArgs_t),
+					&handle, sizeof(uint32_t));
+			} else {
+				ASFCTRL_INFO("Delete Decrypt SA");
+				delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+				delSA.ulSPDContainerIndex = xp->asf_cookie;
+				delSA.ulSPDMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
+#ifdef ASF_IPV6_FP_SUPPORT
+				if (xfrm->props.family == AF_INET6) {
+					delSA.DestAddr.bIPv4OrIPv6 = 1;
+					memcpy(delSA.DestAddr.ipv6addr,
+						xfrm->id.daddr.a6, 16);
+				} else {
+#endif
+					delSA.DestAddr.bIPv4OrIPv6 = 0;
+					delSA.DestAddr.ipv4addr = xfrm->id.daddr.a4;
+#ifdef ASF_IPV6_FP_SUPPORT
+				}
+#endif
+				delSA.ucProtocol = xfrm->id.proto;
+				delSA.ulSPI = xfrm->id.spi;
+				ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
+				ASFIPSecRuntime(ulVSGId,
+					ASF_IPSEC_RUNTIME_DEL_INSA,
+					&delSA,
+					sizeof(ASFIPSecRuntimeDelInSAArgs_t),
+					&handle, sizeof(uint32_t));
+				}
+			}
+		}
+		ret = 0;
 	}
 	free_sa_index(xfrm, dir);
 	xfrm->asf_sa_cookie = 0;
@@ -1330,18 +1854,10 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (is_sa_offloadable(xfrm))
+	if (is_policy_offloadable(xp))
 		return -EINVAL;
 
-	if (unlikely(!xp)) {
-		xp = xfrm_state_policy_mapping(xfrm);
-		if (unlikely(!xp)) {
-			ASFCTRL_WARN("Policy not found for this SA");
-			return -EINVAL;
-		}
-	}
-
-	if (is_policy_offloadable(xp))
+	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
 
 	/* Check if Container is already configured down. */
@@ -1383,7 +1899,7 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 	}
 
 sa_check:
-	if (asfctrl_xfrm_add_outsa(xfrm, xp)) {
+	if (asfctrl_xfrm_add_sa(xfrm)) {
 		ASFCTRL_WARN("Unable to offload the OUT SA");
 		goto err;
 	}
@@ -1400,21 +1916,25 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 	int i;
 	int 	handle;
 	struct xfrm_policy *xp = pol;
+	struct policy_list pol_list = {0};
+	int pol_cnt = 0;
 	ASF_uint32_t ulVSGId;
 
 	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
 
 	if (unlikely(!xp)) {
-		xp = xfrm_state_policy_mapping(xfrm);
-		if (unlikely(!xp)) {
+		xfrm_state_policy_mapping(xfrm, &pol_list);
+		if (unlikely(pol_list.nr_pol == 0)) {
 			ASFCTRL_WARN("Policy not found for this SA");
 			return -EINVAL;
 		}
 	}
 
-	if (is_policy_offloadable(xp))
-		return -EINVAL;
+	for (pol_cnt = 0; pol_cnt < pol_list.nr_pol; pol_cnt++) {
+		struct xfrm_policy *xp = pol_list.xpol[pol_cnt];
+		if (is_policy_offloadable(xp))
+			continue;
 
 	/* Check if Container is already configured down. */
 	if (verify_container_index(xp, ASF_IN_CONTANER_ID)) {
@@ -1450,11 +1970,10 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 			+ sizeof(ASF_IPSecPolicy_t),
 			&handle,
 			sizeof(uint32_t));
-		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_vsg_sessions(ulVSGId);
+		}
 	}
 sa_check:
-	if (asfctrl_xfrm_add_insa(xfrm, xp)) {
+	if (asfctrl_xfrm_add_sa(xfrm)) {
 		ASFCTRL_WARN("Unable to offload the IN SA");
 		goto err;
 	}

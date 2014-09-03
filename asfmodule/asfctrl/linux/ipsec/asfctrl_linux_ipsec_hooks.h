@@ -89,6 +89,7 @@ extern void unregister_ipsec_offload_hook(void);
 extern int ip_forward(struct sk_buff *);
 extern struct xfrm_policy *__xfrm_policy_lookup(struct net *, struct flowi *,
 					u16, u8);
-extern struct xfrm_policy *xfrm_state_policy_mapping(struct xfrm_state *);
+extern void xfrm_state_policy_mapping(struct xfrm_state *xfrm,
+						struct policy_list *pol_lst);
 
 #endif

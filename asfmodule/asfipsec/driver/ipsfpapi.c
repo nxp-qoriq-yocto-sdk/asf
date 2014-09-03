@@ -67,6 +67,8 @@ extern struct device *pdev;
 #define SECFP_IS_MAGICNUMBER_INVALID(ulMagicNumber) \
 	if (ulMagicNumber == 0)
 
+#define ASFIPSEC_SA_UNLOCK
+#define ASFIPSEC_SA_LOCK
 
 extern void secfp_removeCINodeFromTunnelList(unsigned int ulVSGId,
 					     unsigned int ulTunnelId,  struct SPDCILinkNode_s *pCINode, bool bDir);
@@ -428,6 +430,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 
 			if (secfp_createOutSA(ulVSGId, pAddSA->ulTunnelId,
 					      pAddSA->ulSPDContainerIndex,
+						&pAddSA->ulSAContainerIndex,
 					      pAddSA->ulMagicNumber,
 					      pSrcSel, pDstSel, ucSelFlag, &SAParams,
 					      usDscpStart,
@@ -436,6 +439,86 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			}
 			secfp_freeSelSet(pSrcSel);
 			secfp_freeSelSet(pDstSel);
+		}
+		break;
+
+	case ASF_IPSEC_RUNTIME_MAPPOL_OUTSA: /* Adding OutSA */
+		{
+			ASFIPSecRuntimeAddOutSAArgs_t *pAddSA;
+			SASel_t *pSrcSel, *pDstSel;
+			SAParams_t SAParams;
+			unsigned short int usDscpStart, usDscpEnd;
+			unsigned char ucSelFlag = 0;
+
+			pAddSA = (ASFIPSecRuntimeAddOutSAArgs_t *) pArgs;
+#ifdef ASF_VORTIQA_CPLANE
+			pAddSA->success = ASF_FALSE;
+#endif
+			memset(&SAParams, 0, sizeof(SAParams));
+			SECFP_IS_TUNNEL_ID_INVALID(pAddSA->ulTunnelId)
+			{
+				GlobalErrors.ulInvalidTunnelId++;
+				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u",
+				pAddSA->ulTunnelId);
+				return;
+			}
+
+			if (secfp_copySrcAndDestSelSet(&pSrcSel, &pDstSel,
+				pAddSA->pSASelector,
+				&ucSelFlag) == SECFP_FAILURE) {
+				ASFIPSEC_WARN("secfp_copySrcAndDestSelSet returned failure");
+				return;
+			}
+
+			if (pAddSA->usDscpEnd) {
+				ucSelFlag |= SECFP_SA_DSCP_SELECTOR;
+				usDscpStart = pAddSA->usDscpStart;
+				usDscpEnd = pAddSA->usDscpEnd;
+			} else {
+				usDscpStart = 0;
+				usDscpEnd = 0;
+			}
+#ifdef ASF_VORTIQA_CPLANE
+			pAddSA->success = ASF_TRUE;
+#endif
+			ASFIPSEC_SA_LOCK;
+			if (secfp_mapPolOutSA(ulVSGId, pAddSA->ulSAContainerIndex,
+					pAddSA->ulSPDContainerIndex,
+					pAddSA->ulMagicNumber,
+					pSrcSel, pDstSel, ucSelFlag, &SAParams,
+					usDscpStart,
+					usDscpEnd, pAddSA->pSAParams->ulMtu) != SECFP_SUCCESS) {
+				ASFIPSEC_WARN("secfp_mapPolOutSA returned failure");
+#ifdef ASF_VORTIQA_CPLANE
+				pAddSA->success = ASF_FALSE;
+#endif
+			}
+			ASFIPSEC_SA_UNLOCK;
+			secfp_freeSelSet(pSrcSel);
+			secfp_freeSelSet(pDstSel);
+		}
+		break;
+	case ASF_IPSEC_RUNTIME_UNMAPPOL_OUTSA:
+		{
+			ASFIPSecRuntimeDelOutSAArgs_t *pDelSA;
+			pDelSA = (ASFIPSecRuntimeDelOutSAArgs_t *) pArgs;
+			SECFP_IS_TUNNEL_ID_INVALID(pDelSA->ulTunnelId)
+			{
+				GlobalErrors.ulInvalidTunnelId++;
+				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u", pDelSA->ulTunnelId);
+				return;
+			}
+			ASFIPSEC_SA_LOCK;
+			if (secfp_UnMapPolOutSA(pDelSA->ulSPDContainerIndex,
+					pDelSA->ulSPDMagicNumber,
+					pDelSA->DestAddr,
+					pDelSA->ucProtocol,
+					pDelSA->ulSPI,
+					pDelSA->usDscpStart,
+					pDelSA->usDscpEnd) !=
+					SECFP_SUCCESS)
+				ASFIPSEC_WARN("secfp_DeleteOutSA returned failure");
+			ASFIPSEC_SA_UNLOCK;
 		}
 		break;
 	case ASF_IPSEC_RUNTIME_DEL_OUTSA: /* Deleting OutSA */
@@ -504,6 +587,81 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 			secfp_freeSelSet(pDstSel);
 		}
 		break;
+	case ASF_IPSEC_RUNTIME_MAPPOL_INSA: /* Adding InSA */
+		{
+			ASFIPSecRuntimeAddInSAArgs_t *pAddSA;
+			SASel_t *pSrcSel, *pDstSel;
+			SAParams_t SAParams;
+			unsigned char ucSelFlag = 0;
+
+			pAddSA = (ASFIPSecRuntimeAddInSAArgs_t *) pArgs;
+			SECFP_IS_TUNNEL_ID_INVALID(pAddSA->ulTunnelId)
+			{
+				GlobalErrors.ulInvalidTunnelId++;
+				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n", pAddSA->ulTunnelId);
+				return;
+			}
+
+			memset(&SAParams, 0, sizeof(SAParams));
+			if (secfp_copySAParams(pAddSA->pSAParams,
+				&SAParams) == SECFP_FAILURE) {
+				ASFIPSEC_WARN("secfp_copySAParams returned failure");
+				return;
+			}
+
+			if (secfp_copySrcAndDestSelSet(&pSrcSel, &pDstSel,
+				pAddSA->pSASelector,
+				&ucSelFlag) == SECFP_FAILURE) {
+				ASFIPSEC_WARN("secfp_copySrcAndDestSelSet returned failure");
+				return;
+			}
+#ifdef ASF_VORTIQA_CPLANE
+			pAddSA->success = ASF_TRUE;
+#endif
+			ASFIPSEC_SA_LOCK;
+			if (secfp_MapPolInSA(ulVSGId,
+				pAddSA->DestAddr,
+				pAddSA->ulInSPDContainerIndex,
+				pAddSA->ulInSPDMagicNumber,
+				pSrcSel, pDstSel, ucSelFlag, &SAParams,
+				pAddSA->ulOutSPDContainerIndex,
+				pAddSA->ulOutSPI,
+				pAddSA->pSAParams->ulMtu
+				) != SECFP_SUCCESS) {
+				ASFIPSEC_WARN("secfp_CreateInSA returned failure");
+#ifdef ASF_VORTIQA_CPLANE
+				pAddSA->success = ASF_FALSE;
+#endif
+			}
+			ASFIPSEC_SA_UNLOCK;
+			secfp_freeSelSet(pSrcSel);
+			secfp_freeSelSet(pDstSel);
+		}
+		break;
+	case ASF_IPSEC_RUNTIME_UNMAPPOL_INSA:
+		{
+			ASFIPSecRuntimeDelInSAArgs_t *pDelSA;
+			pDelSA = (ASFIPSecRuntimeDelInSAArgs_t *) pArgs;
+			SECFP_IS_TUNNEL_ID_INVALID(pDelSA->ulTunnelId)
+			{
+				GlobalErrors.ulInvalidTunnelId++;
+				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n", pDelSA->ulTunnelId);
+				return;
+			}
+
+			ASFIPSEC_SA_LOCK;
+			if (secfp_UnMapPolInSA(ulVSGId,
+				pDelSA->ulSPDContainerIndex,
+				pDelSA->ulSPDMagicNumber,
+				pDelSA->DestAddr,
+				pDelSA->ucProtocol,
+				pDelSA->ulSPI) != SECFP_SUCCESS) {
+				ASFIPSEC_WARN("secfp_DeleteInSA returned failure");
+			}
+			ASFIPSEC_SA_UNLOCK;
+		}
+		break;
+
 	case ASF_IPSEC_RUNTIME_DEL_INSA: /* Deleting InSA */
 		{
 			ASFIPSecRuntimeDelInSAArgs_t *pDelSA;
@@ -1662,7 +1820,7 @@ ASF_void_t ASFIPSecGetFirstNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 			ulHashVal = secfp_compute_hash(pSPILinkNode->ulSPIVal);
 			for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
 			    pInSA != NULL; pInSA = pInSA->pNext) {
-				if ((pInSA->ulSPDInContainerIndex == pSAParams->SPDContainer.ulContainerId)
+				if ((pInSA->pSASPDMapNode->ulSPDInContainerIndex == pSAParams->SPDContainer.ulContainerId)
 				    && (pInSA->SAParams.ulSPI == pSPILinkNode->ulSPIVal)) {
 					pSAs->SA[ulCount].ulSPI = pInSA->SAParams.ulSPI;
 					pSAs->SA[ulCount].gwAddr.ipv4addr = pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
@@ -1848,7 +2006,7 @@ ASF_void_t ASFIPSecGetNextNSAs(ASFIPSecGetSAParams_t  *pSAParams,
 					continue;
 				}
 				if (bMark == ASF_TRUE) {
-					if ((pInSA->ulSPDInContainerIndex == pSAParams->SPDContainer.ulContainerId)
+					if ((pInSA->pSASPDMapNode->ulSPDInContainerIndex == pSAParams->SPDContainer.ulContainerId)
 					    && (pInSA->SAParams.ulSPI == pSPILinkNode->ulSPIVal)) {
 						pSAs->SA[ulCount].ulSPI = pInSA->SAParams.ulSPI;
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;
@@ -1996,7 +2154,7 @@ ASF_void_t ASFIPSecGetExactSAs(ASFIPSecGetSAParams_t  *pSAParams,
 				if ((pInSA->SAParams.ucProtocol == pSAParams->SPDContainer.SAInfo[ulCount].ucProtocol)
 				    && (pInSA->SAParams.ulSPI == pSAParams->SPDContainer.SAInfo[ulCount].ulSPI)
 				    && (pInSA->SAParams.tunnelInfo.addr.iphv4.daddr == pSAParams->SPDContainer.SAInfo[ulCount].gwAddr.ipv4addr)) {
-					if ((pInSA->ulSPDInContainerIndex == pSAParams->SPDContainer.ulContainerId)
+					if ((pInSA->pSASPDMapNode->ulSPDInContainerIndex == pSAParams->SPDContainer.ulContainerId)
 					    && (pInSA->SAParams.ulSPI == pSPILinkNode->ulSPIVal)) {
 						pSAs->SA[ulCount].ulSPI = pInSA->SAParams.ulSPI;
 						pSAs->SA[ulCount].gwAddr.ipv4addr = pInSA->SAParams.tunnelInfo.addr.iphv4.daddr;

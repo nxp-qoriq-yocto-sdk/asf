@@ -601,7 +601,7 @@ static int display_secfp_proc_in_sa(struct seq_file *f, void *v)
 				ASFIPSecGetSAQueryParams_t inParams;
 
 				seq_printf(f, "SpdContId =%d",
-					pInSA->ulSPDInContainerIndex);
+					pInSA->pSASPDMapNode->ulSPDInContainerIndex);
 				print_SAParams(f, &pInSA->SAParams);
 
 				inParams.ulVSGId = ulVSGId;

@@ -452,8 +452,13 @@ typedef struct SAParams_s {
 	unsigned long hardKbyteLimit;
 } SAParams_t;
 
-
-
+typedef struct SASPDMapNode_s {
+	unsigned int ulSPDInContainerIndex;
+	unsigned int ulSPDInMagicNum;
+	unsigned int ulSPDSelSetIndex;
+	unsigned int ulSPDSelSetIndexMagicNum;
+	struct SASPDMapNode_s *pNext;
+} SASPDMapNode_t __attribute__ ((aligned(64)));
 
 typedef struct inSA_s {
 	struct rcu_head rcu;
@@ -461,10 +466,8 @@ typedef struct inSA_s {
 	SAParams_t SAParams;
 	SPDInParams_t SPDParams;
 	unsigned int ulVSGId;
-	unsigned int ulSPDInContainerIndex;
-	unsigned int ulSPDInMagicNum;
-	unsigned int ulSPDSelSetIndex;
-	unsigned int ulSPDSelSetIndexMagicNum;
+	unsigned int ulMappedPolCount;
+	SASPDMapNode_t *pSASPDMapNode;
 	unsigned int ulLastSeqNum;
 	unsigned int *pWinBitMap;
 #ifdef CONFIG_ASF_SEC4x
@@ -580,8 +583,14 @@ typedef struct OutSelList_s {
 	SASel_t srcSel;
 	SASel_t destSel;
 	unsigned int ucSelFlags;
+	unsigned int ulSPDOutIndex;
 	char	bHeap;
 } OutSelList_t;
+
+typedef struct SelOutList_s {
+	OutSelList_t *pOutSelList;
+	struct SelOutList_s *pNext;
+} SelOutList_t;
 
 typedef struct InSelList_s {
 	struct rcu_head rcu;
@@ -674,6 +683,8 @@ typedef struct outSA_s {
 	struct rcu_head rcu;
 	SAParams_t SAParams;
 	SPDOutParams_t SPDParams;
+	unsigned int uRefCnt;
+	int def_sel_ver;
 	/* Hardware option AES_CBC or BOTH or only encryption etc. */
 #ifdef CONFIG_ASF_SEC4x
 	struct caam_ctx ctx;
@@ -732,6 +743,7 @@ typedef struct outSA_s {
 	unsigned char option[SECFP_MAX_SECPROC_ITERATIONS];
 	unsigned short ulTunnelId;
 	unsigned short tx_vlan_id; /*valid if bVLAN is 1*/
+	unsigned int ulContainerIndex;
 	unsigned int ulCompleteOverHead;
 	unsigned int ulXmitHdrLen;
 	unsigned int ulInnerPathMTU;
@@ -740,7 +752,7 @@ typedef struct outSA_s {
 	AsfSPDPolicyPPStats_t	PolicyPPStats[NR_CPUS];
 	AsfSPDPolPPStats_t	PPStats;
 	struct net_device *odev;
-	OutSelList_t *pSelList;
+	SelOutList_t *pHeadSelList;
 
 	asfTmr_t	*pL2blobTmr;
 	ASFFFPL2blobConfig_t	l2blobConfig;
@@ -918,12 +930,27 @@ unsigned int secfp_DeleteOutSA(unsigned int	 ulSPDContainerIndex,
 				unsigned short	usDscpStart,
 				unsigned short	usDscpEnd);
 
+unsigned int secfp_UnMapPolOutSA(unsigned int ulSPDContainerIndex,
+				unsigned int ulSPDMagicNumber,
+				ASF_IPAddr_t daddr,
+				unsigned char ucProtocol,
+				unsigned int ulSPI,
+				unsigned short usDscpStart,
+				unsigned short usDscpEnd);
+
 unsigned int secfp_DeleteInSA(unsigned int	ulVSGId,
 				unsigned int	ulContainerIndex,
 				unsigned int	ulMagicNumber,
 				ASF_IPAddr_t	daddr,
 				unsigned char	ucProtocol,
 				unsigned int	ulSPI);
+
+unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
+				unsigned int ulContainerIndex,
+				unsigned int ulMagicNumber,
+				ASF_IPAddr_t daddr,
+				unsigned char ucProtocol,
+				unsigned int ulSPI);
 
 unsigned int secfp_ModifyOutSA(unsigned int long ulVSGId,
 				ASFIPSecRuntimeModOutSAArgs_t *pModSA);
@@ -935,6 +962,20 @@ unsigned int secfp_SetDPD(unsigned int long ulVSGId,
 				ASFIPSecRuntimeSetDPDArgs_t *pSetDPD);
 
 unsigned int secfp_createOutSA(
+				unsigned int	ulVSGId,
+				unsigned int	ulTunnelId,
+				unsigned int	ulSPDContainerIndex,
+				unsigned int *pSAIndex,
+				unsigned int	ulMagicNumber,
+				SASel_t	 *pSrcSel,
+				SASel_t	 *pDstSel,
+				unsigned char	ucSelMask,
+				SAParams_t	*SAParams,
+				unsigned	short usDscpStart,
+				unsigned	short usDscpEnd,
+				unsigned int	ulMtu);
+
+unsigned int secfp_mapPolOutSA(
 				unsigned int	ulVSGId,
 				unsigned int	ulTunnelId,
 				unsigned int	ulSPDContainerIndex,
@@ -954,6 +995,19 @@ unsigned int secfp_CreateInSA(
 				unsigned int ulMagicNumber,
 				SASel_t	*pSrcSel,
 				SASel_t	*pDstSel,
+				unsigned int ucSelFlags,
+				SAParams_t *pSAParams,
+				unsigned int ulSPDOutContainerIndex,
+				unsigned int ulOutSPI,
+				unsigned int ulMtu);
+/* In SA creation function */
+unsigned int secfp_MapPolInSA(
+				unsigned int ulVSGId,
+				ASF_IPAddr_t daddr,
+				unsigned int ulContainerIndex,
+				unsigned int ulMagicNumber,
+				SASel_t *pSrcSel,
+				SASel_t *pDstSel,
 				unsigned int ucSelFlags,
 				SAParams_t *pSAParams,
 				unsigned int ulSPDOutContainerIndex,
