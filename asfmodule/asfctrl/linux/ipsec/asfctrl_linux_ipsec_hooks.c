@@ -1851,51 +1851,65 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 	int i;
 	int 	handle;
 	ASF_uint32_t ulVSGId;
+	struct policy_list pol_list = {0};
+	int pol_cnt = 0;
 
 	ASFCTRL_FUNC_ENTRY;
 
-	if (is_policy_offloadable(xp))
-		return -EINVAL;
 
 	if (is_sa_offloadable(xfrm))
 		return -EINVAL;
 
-	/* Check if Container is already configured down. */
-	if (verify_container_index(xp, ASF_OUT_CONTANER_ID)) {
-		ASFCTRL_WARN("Policy is already offloaded cookie = %x id =%u",
-			xp->asf_cookie, xp->index);
-		goto sa_check;
-	} else {
-		/* Offloading the out policy */
-		ASFIPSecConfigAddOutSPDContainerArgs_t outSPDContainer;
-		ASF_IPSecPolicy_t			spdParams;
-
-		i = alloc_container_index(xp, ASF_OUT_CONTANER_ID);
-		if (i >= 0) {
-			ASFCTRL_TRACE("Out Container Index %d", i);
-			outSPDContainer.ulSPDContainerIndex = i;
-			outSPDContainer.ulMagicNumber =
-				asfctrl_vsg_ipsec_cont_magic_id;
-		} else {
-			ASFCTRL_WARN("No free containder index");
-			goto err;
+	if (unlikely(!xp)) {
+		xfrm_state_policy_mapping(xfrm, &pol_list);
+		if (unlikely(pol_list.nr_pol == 0)) {
+			ASFCTRL_WARN("Policy not found for this SA");
+			return -EINVAL;
 		}
-		outSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-		memset(&spdParams, 0, sizeof(ASF_IPSecPolicy_t));
-		spdParams.policyID = xp->index;
-		spdParams.policyAction = ASF_IPSEC_POLICY_ACTION_IPSEC;
-		outSPDContainer.pSPDParams = &spdParams;
+	}
+	for (pol_cnt = 0; pol_cnt < pol_list.nr_pol; pol_cnt++) {
+		struct xfrm_policy *xp = pol_list.xpol[pol_cnt];
 
-		ulVSGId = asfctrl_get_ipsec_pol_vsgid(xp);
-		ASFIPSecConfig(ulVSGId,
-			ASF_IPSEC_CONFIG_ADD_OUTSPDCONTAINER,
-			&outSPDContainer,
-			sizeof(ASFIPSecConfigAddOutSPDContainerArgs_t)
-			+ sizeof(ASF_IPSecPolicy_t),
-			&handle,
-			sizeof(uint32_t));
-		/* Changing the VSG Magic Number of Policy Delete */
-		asfctrl_invalidate_vsg_sessions(ulVSGId);
+		if (is_policy_offloadable(xp))
+			continue;
+		/* Check if Container is already configured down. */
+		if (verify_container_index(xp, ASF_OUT_CONTANER_ID)) {
+			ASFCTRL_WARN("Policy is already offloaded cookie = %x"
+				" id =%u", xp->asf_cookie, xp->index);
+			goto sa_check;
+		} else {
+			/* Offloading the out policy */
+			ASFIPSecConfigAddOutSPDContainerArgs_t outSPDContainer;
+			ASF_IPSecPolicy_t	spdParams;
+
+			i = alloc_container_index(xp, ASF_OUT_CONTANER_ID);
+
+			if (i >= 0) {
+				ASFCTRL_TRACE("Out Container Index %d", i);
+				outSPDContainer.ulSPDContainerIndex = i;
+				outSPDContainer.ulMagicNumber =
+					asfctrl_vsg_ipsec_cont_magic_id;
+			} else {
+				ASFCTRL_WARN("No free containder index");
+				goto err;
+			}
+			outSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+			memset(&spdParams, 0, sizeof(ASF_IPSecPolicy_t));
+			spdParams.policyID = xp->index;
+			spdParams.policyAction = ASF_IPSEC_POLICY_ACTION_IPSEC;
+			outSPDContainer.pSPDParams = &spdParams;
+
+			ulVSGId = asfctrl_get_ipsec_pol_vsgid(xp);
+			ASFIPSecConfig(ulVSGId,
+				ASF_IPSEC_CONFIG_ADD_OUTSPDCONTAINER,
+				&outSPDContainer,
+				sizeof(ASFIPSecConfigAddOutSPDContainerArgs_t)
+				+ sizeof(ASF_IPSecPolicy_t),
+				&handle,
+				sizeof(uint32_t));
+			/* Changing the VSG Magic Number of Policy Delete */
+			asfctrl_invalidate_vsg_sessions(ulVSGId);
+		}
 	}
 
 sa_check:
