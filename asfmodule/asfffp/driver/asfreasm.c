@@ -2127,7 +2127,12 @@ int asfIpv4Fragment(struct sk_buff *skb,
 			*pOutSkb = skb;
 			pLastSkb = skb;
 			/* adjust other skb pointers */
-			len = (ulMTU & ~7);
+			if ((ulMTU + ihl) > skb_headlen(skb)) {
+				/* adjust other skb pointers */
+				len = ((skb_headlen(skb) - ihl) & ~7);
+			} else {
+				len = (ulMTU & ~7);
+			}
 			first_frag_len = len + ihl;
 			bytesLeft = iph->tot_len - first_frag_len;
 
