@@ -349,6 +349,110 @@ static inline u32 alg_to_caamdesc(u8 cipheralg, u8 authalg)
 	}
 	return descwd;
 }
+
+int secfp_prepareDecapShareDescDesXcbc(struct caam_ctx *ctx,
+	u32 *sh_desc, inSA_t *pSA)
+{
+	append_jump(sh_desc, JUMP_JSL | JUMP_COND_SHRD |
+		JUMP_COND_SELF | 0x03);
+	append_key(sh_desc, ctx->key_phys, 0x20,
+		CLASS_2 | KEY_DEST_MDHA_SPLIT);
+	append_load_imm_u32(sh_desc, 0x20080065,
+		LDST_SRCDST_WORD_DECO_MATH0 | 0x4);
+	append_key(sh_desc, ctx->key_phys, 0x10,
+		CLASS_1 | KEY_DEST_CLASS_REG);
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		append_math_sub_imm_u32(sh_desc, REG0, SEQINLEN,
+			IMM, 0x00000034);
+	} else {
+		append_math_sub_imm_u32(sh_desc, REG0, SEQINLEN,
+			IMM, 0x00000020);
+	}
+	append_math_sub(sh_desc, VARSEQINLEN, REG0, ZERO, 0x04);
+	append_operation(sh_desc, OP_TYPE_CLASS2_ALG |
+		OP_ALG_AS_INITFINAL | OP_ALG_ALGSEL_MD5
+		| OP_ALG_AAI_HMAC_PRECOMP | OP_ALG_ENCRYPT);
+	append_operation(sh_desc, OP_TYPE_CLASS1_ALG|
+		OP_ALG_AS_INITFINAL | OP_ALG_ALGSEL_AES |
+		OP_ALG_AAI_XCBC_MAC | OP_ALG_ICV_ON |
+		OP_ALG_DECRYPT);
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+		append_seq_fifo_load(sh_desc, 0x28, 0);
+	else
+		append_seq_fifo_load(sh_desc, 0x14, 0);
+	append_seq_fifo_load(sh_desc, 0x0, FIFOLD_CLASS_CLASS1 |
+		FIFOLD_TYPE_MSG | FIFOLD_TYPE_FLUSH1 | FIFOLDST_VLF);
+	append_seq_fifo_load(sh_desc, 0x0C, FIFOLD_CLASS_CLASS1 |
+		FIFOLD_TYPE_LAST1 | FIFOLD_TYPE_FLUSH1 | FIFOLD_TYPE_ICV);
+	append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+		0xDC << MOVE_OFFSET_SHIFT | MOVE_DEST_MATH1 | 0x10);
+	append_math_imm(OR, sh_desc, REG1, REG1, IMM, 0x08,
+		MATH_IFB, 0x08000000);
+	append_load_imm_u32(sh_desc, 0xA00000E1, LDST_CLASS_DECO |
+		LDST_SRCDST_WORD_DECO_MATH3 | 0x0404);
+	append_math_shld(sh_desc, REG3, REG3, REG3, 8);
+	append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_MATH1|
+		MOVE_DEST_DESCBUF | 0xEC << MOVE_OFFSET_SHIFT | 0x14);
+	append_jump(sh_desc, JUMP_TEST_ALL | 0x1E);
+	append_jump(sh_desc, JUMP_TEST_ALL | 0xF3);
+	append_seq_in_ptr_pre_rto(sh_desc, 0xFFFF, SQIN_RTO);
+	append_math_sub(sh_desc, VARSEQINLEN, REG0, ZERO, 0x04)
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		append_math_add_imm_u32(sh_desc, VARSEQOUTLEN,
+			REG0, IMM, 0x00000028);
+	} else {
+		append_math_add_imm_u32(sh_desc, VARSEQOUTLEN,
+			REG0, IMM, 0x00000014);
+	}
+	append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+		MOVE_DEST_OUTFIFO | 0x7C << MOVE_OFFSET_SHIFT | 0x08);
+	append_move(sh_desc, MOVE_SRC_OUTFIFO | 0xE0
+		<< MOVE_OFFSET_SHIFT | MOVE_DEST_DESCBUF | 0x08);
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+		append_seq_fifo_load(sh_desc, 0x28, 0);
+	else
+		append_seq_fifo_load(sh_desc, 0x14, 0);
+	append_seq_fifo_load(sh_desc, 0x0, FIFOLD_CLASS_CLASS2 |
+		FIFOLD_TYPE_MSG | FIFOLD_TYPE_LAST2 | FIFOLDST_VLF);
+	append_seq_fifo_store(sh_desc, 0x0, FIFOLDST_SGF |
+		FIFOST_TYPE_SKIP);
+	append_seq_store(sh_desc, 0xC, LDST_CLASS_2_CCB |
+		LDST_SRCDST_BYTE_CONTEXT);
+	append_jump(sh_desc, JUMP_JSL | JUMP_COND_CALM | 0x0B);
+	append_load_imm_u32(sh_desc, 0x202D0065,
+		LDST_SRCDST_WORD_DECO_MATH0 | 0x4);
+	append_seq_in_ptr_pre_rto(sh_desc, 0xFFFF, SQIN_RTO);
+
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		append_math_add_imm_u32(sh_desc, SEQINLEN,
+			REG0, IMM, 0x00000034);
+	} else {
+		append_math_add_imm_u32(sh_desc, SEQINLEN,
+			REG0, IMM, 0x00000020);
+	}
+	append_key(sh_desc, ctx->key_phys + ctx->split_key_pad_len,
+		ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
+	append_operation(sh_desc, OP_PCLID_IPSEC | OP_TYPE_DECAP_PROTOCOL |
+		alg_to_caamdesc(pSA->SAParams.ucCipherAlgo, SECFP_HMAC_MD5));
+
+	ctx->shared_desc_phys = dma_map_single(ctx->jrdev, ctx->sh_desc,
+				desc_bytes(ctx->sh_desc),
+				DMA_BIDIRECTIONAL);
+	if (dma_mapping_error(ctx->jrdev, ctx->shared_desc_phys)) {
+		ASFIPSEC_DPERR("unable to map shared descriptor");
+	return -ENOMEM;
+	}
+
+#ifdef ASFIPSEC_DEBUG_FRAME
+	pr_err("\n");
+	print_hex_dump(KERN_ERR, "shrdesc@"xstr(__LINE__)": ",
+	DUMP_PREFIX_ADDRESS, 16, 4, sh_desc,
+	desc_bytes(sh_desc), 1);
+	caam_desc_disasm(sh_desc, DISASM_SHOW_OFFSETS | DISASM_SHOW_RAW);
+#endif
+	return 0;
+}
+
 int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		inSA_t *pSA, bool keys_fit_inline)
 {
@@ -453,6 +557,14 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 #endif /* ASF_SECFP_PROTO_OFFLOAD */
 
+	if ((SECFP_DES == pSA->SAParams.ucCipherAlgo ||
+		SECFP_3DES == pSA->SAParams.ucCipherAlgo) &&
+		SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo) {
+		int ret = secfp_prepareDecapShareDescDesXcbc(ctx,
+				sh_desc, pSA);
+		return ret;
+	}
+
 	if (SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
 		SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo) {
 		append_cmd(sh_desc, CMD_LOAD | LDST_CLASS_1_CCB |
@@ -525,8 +637,93 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	print_hex_dump(KERN_ERR, "shrdesc@"xstr(__LINE__)": ",
 			DUMP_PREFIX_ADDRESS, 16, 4, sh_desc,
 			desc_bytes(sh_desc), 1);
+	caam_desc_disasm(sh_desc, DISASM_SHOW_OFFSETS | DISASM_SHOW_RAW);
 #endif
 	return 0;
+}
+
+int secfp_prepareEncapShareDescDesXcbc(struct caam_ctx *ctx,
+	u32 *sh_desc, outSA_t *pSA)
+{
+	append_jump(sh_desc, JUMP_JSL | JUMP_COND_SHRD |
+		JUMP_COND_SELF | 0x03);
+	append_key(sh_desc, ctx->key_phys, 0x20,
+		CLASS_2 | KEY_DEST_MDHA_SPLIT);
+	append_load_imm_u32(sh_desc, 0x20080065,
+		LDST_SRCDST_WORD_DECO_MATH0 | 0x4);
+	append_key(sh_desc, ctx->key_phys + ctx->split_key_pad_len,
+		ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
+	append_operation(sh_desc, OP_PCLID_IPSEC | OP_TYPE_ENCAP_PROTOCOL |
+		alg_to_caamdesc(pSA->SAParams.ucCipherAlgo, SECFP_HMAC_MD5));
+
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+		append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+			0xD0 << MOVE_OFFSET_SHIFT | MOVE_DEST_MATH1 | 0x10);
+	else
+		append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+			0xBC << MOVE_OFFSET_SHIFT | MOVE_DEST_MATH1 | 0x10);
+
+	append_math_imm(AND, sh_desc, REG1, REG1, IMM, 0x08,
+		MATH_IFB, 0xF7FFFFFF);
+	append_load_imm_u32(sh_desc, 0xA00000E5, LDST_CLASS_DECO |
+		LDST_SRCDST_WORD_DECO_MATH3 | 0x0404);
+	append_math_shld(sh_desc, REG3, REG3, REG3, 8);
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+		append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_MATH1|
+			MOVE_DEST_DESCBUF | 0xEC << MOVE_OFFSET_SHIFT | 0x14);
+	else
+		append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_MATH1|
+			MOVE_DEST_DESCBUF | 0xD8 << MOVE_OFFSET_SHIFT | 0x14);
+	append_jump(sh_desc, JUMP_TEST_ALL | 0x19);
+	append_load_imm_u32(sh_desc, 0x20080065,
+		LDST_SRCDST_WORD_DECO_MATH0 | 0x4);
+	append_seq_out_ptr_pre_rto(sh_desc, 0xFFFF, SQOUT_RTO);
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+		append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+			0xD8 << MOVE_OFFSET_SHIFT | MOVE_DEST_MATH0 | 0x08);
+		append_math_sub_imm_u32(sh_desc, VARSEQINLEN,
+			REG0, IMM, 0x00000034);
+	} else {
+		append_move(sh_desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+			0xC4 << MOVE_OFFSET_SHIFT | MOVE_DEST_MATH0 | 0x08);
+		append_math_sub_imm_u32(sh_desc, VARSEQINLEN,
+			REG0, IMM, 0x00000020);
+	}
+	append_math_sub_imm_u32(sh_desc, VARSEQOUTLEN,
+		REG0, IMM, 0x0000000C);
+	append_key(sh_desc, ctx->key_phys, 0x10,
+		CLASS_1 | KEY_DEST_CLASS_REG);
+	append_operation(sh_desc, OP_TYPE_CLASS1_ALG |
+		OP_ALG_AS_INITFINAL | OP_ALG_ALGSEL_AES |
+		OP_ALG_AAI_XCBC_MAC | OP_ALG_ENCRYPT);
+	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+		append_seq_fifo_load(sh_desc, 0x28, 0);
+	else
+		append_seq_fifo_load(sh_desc, 0x14, 0);
+	append_seq_fifo_load(sh_desc, 0x0, FIFOLD_CLASS_CLASS1 |
+		FIFOLD_TYPE_MSG | FIFOLD_TYPE_LAST1 |
+		FIFOLD_TYPE_FLUSH1 | FIFOLDST_VLF);
+	append_seq_fifo_store(sh_desc, 0x0, FIFOLDST_SGF |
+		FIFOST_TYPE_SKIP);
+	append_seq_store(sh_desc, 0xC, LDST_CLASS_1_CCB |
+		LDST_SRCDST_BYTE_CONTEXT);
+
+	ctx->shared_desc_phys = dma_map_single(ctx->jrdev, ctx->sh_desc,
+			desc_bytes(ctx->sh_desc), DMA_TO_DEVICE);
+
+	if (dma_mapping_error(ctx->jrdev, ctx->shared_desc_phys)) {
+		ASFIPSEC_DPERR("unable to map shared descriptor");
+		return -ENOMEM;
+	}
+
+#ifdef ASFIPSEC_DEBUG_FRAME
+	pr_info("sh_desc_len %d\n", desc_len(sh_desc));
+	print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
+	DUMP_PREFIX_ADDRESS, 16, 4, sh_desc,
+	desc_bytes(sh_desc), 1);
+	caam_desc_disasm(sh_desc, DISASM_SHOW_OFFSETS | DISASM_SHOW_RAW);
+#endif
+return 0;
 }
 
 int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
@@ -727,6 +924,13 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	}
 	ASFIPSEC_DEBUG("Created the PDB");
 
+	if ((SECFP_DES == pSA->SAParams.ucCipherAlgo ||
+		SECFP_3DES == pSA->SAParams.ucCipherAlgo) &&
+		SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo) {
+		int ret = secfp_prepareEncapShareDescDesXcbc(ctx,
+				sh_desc, pSA);
+		return ret;
+	}
 	/* Check if the Packet Sequence number is going to overflow
 		reset it to zero when Anti Replay is OFF.
 		(Also true for Manual/Static SA case. */
@@ -814,9 +1018,11 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 
 #ifdef ASFIPSEC_DEBUG_FRAME
 	pr_err("\n");
+	pr_info("sh_desc_len %d\n", desc_len(sh_desc));
 	print_hex_dump(KERN_ERR, "shrdesc@"xstr(__LINE__)": ",
 			DUMP_PREFIX_ADDRESS, 16, 4, sh_desc,
 			desc_bytes(sh_desc), 1);
+	caam_desc_disasm(sh_desc, DISASM_SHOW_OFFSETS | DISASM_SHOW_RAW);
 #endif
 	return 0;
 }
@@ -1072,14 +1278,26 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 {
 	u32 *desc = edesc->hw_desc;
 	u32 options = 0;
+	outSA_t *pSA = container_of(ctx, outSA_t, ctx);
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	if (sg)
 		options = LDST_SGF;
-
-	init_job_desc_shared(desc, ctx->shared_desc_phys,
-		desc_len(ctx->sh_desc), HDR_REVERSE | HDR_SHARE_SERIAL);
-	append_seq_in_ptr(desc, data_in, data_in_len, options);
-	append_seq_out_ptr(desc, data_out, data_out_len, options);
+	if ((SECFP_DES == pSA->SAParams.ucCipherAlgo ||
+		SECFP_3DES == pSA->SAParams.ucCipherAlgo) &&
+		SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo) {
+		options |= FIFOLDST_EXT;
+		init_job_desc_shared(desc, ctx->shared_desc_phys,
+			desc_len(ctx->sh_desc), HDR_REVERSE | HDR_SHARE_SERIAL);
+		append_seq_out_ptr(desc, data_out, data_out_len, options);
+		append_cmd(desc, data_out_len);
+		append_seq_in_ptr(desc, data_in, data_in_len, options);
+		append_cmd(desc, data_in_len);
+	} else {
+		init_job_desc_shared(desc, ctx->shared_desc_phys,
+			desc_len(ctx->sh_desc), HDR_REVERSE | HDR_SHARE_SERIAL);
+		append_seq_in_ptr(desc, data_in, data_in_len, options);
+		append_seq_out_ptr(desc, data_out, data_out_len, options);
+	}
 
 	if (use_dpovrd) {
 		static u32 data;
@@ -1110,7 +1328,6 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 #else
 	int authsize = ctx->authsize;
 	int ivsize;
-	outSA_t *pSA = container_of(ctx, outSA_t, ctx);
 
 	ivsize = pSA->SAParams.ulIvSize;
 
@@ -1213,6 +1430,7 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 	pr_info("job_desc_len %d\n", desc_len(desc));
 	pr_err("\nData In Len %d Data Out Len %d\n",
 				data_in_len, data_out_len);
+	caam_desc_disasm(desc, DISASM_SHOW_OFFSETS | DISASM_SHOW_RAW);
 	print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
 					DUMP_PREFIX_ADDRESS, 16, 4, desc,
 					desc_bytes(desc), 1);
@@ -1490,19 +1708,31 @@ static void secfp_prepareInCaamJobDescriptor(struct aead_edesc *edesc,
 {
 	u32 *desc = edesc->hw_desc;
 	u32 options = 0;
+	inSA_t *pSA = container_of(ctx, inSA_t, ctx);
 
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	if (sg)
 		options = LDST_SGF;
 
-	init_job_desc_shared(desc, ctx->shared_desc_phys,
-		desc_len(ctx->sh_desc), HDR_REVERSE | HDR_SHARE_SERIAL);
-	append_seq_in_ptr(desc, data_in, data_in_len, options);
-	append_seq_out_ptr(desc, data_out, data_out_len, options);
+	if ((SECFP_DES == pSA->SAParams.ucCipherAlgo ||
+		SECFP_3DES == pSA->SAParams.ucCipherAlgo) &&
+		SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo) {
+		options |= FIFOLDST_EXT;
+		init_job_desc_shared(desc, ctx->shared_desc_phys,
+			desc_len(ctx->sh_desc), HDR_REVERSE | HDR_SHARE_SERIAL);
+		append_seq_out_ptr(desc, data_out, data_out_len, options);
+		append_cmd(desc, data_out_len);
+		append_seq_in_ptr(desc, data_in, data_in_len, options);
+		append_cmd(desc, data_in_len);
+	} else {
+		init_job_desc_shared(desc, ctx->shared_desc_phys,
+			desc_len(ctx->sh_desc), HDR_REVERSE | HDR_SHARE_SERIAL);
+		append_seq_in_ptr(desc, data_in, data_in_len, options);
+		append_seq_out_ptr(desc, data_out, data_out_len, options);
+	}
 #else
 	int authsize = ctx->authsize;
 	int ivsize;
-	inSA_t *pSA = container_of(ctx, inSA_t, ctx);
 
 	ivsize = pSA->SAParams.ulIvSize;
 	ASFIPSEC_DEBUG("ivsize=%d authsize=%d", ivsize, authsize);
@@ -1587,6 +1817,7 @@ static void secfp_prepareInCaamJobDescriptor(struct aead_edesc *edesc,
 #ifdef ASFIPSEC_DEBUG_FRAME
 	pr_err("\nData In Len %d Data Out Len %d\n",
 				data_in_len, data_out_len);
+	caam_desc_disasm(desc, DISASM_SHOW_OFFSETS | DISASM_SHOW_RAW);
 	print_hex_dump(KERN_ERR, "desc@"xstr(__LINE__)": ",
 			DUMP_PREFIX_ADDRESS, 16, 4, desc, desc_bytes(desc), 1);
 #endif
