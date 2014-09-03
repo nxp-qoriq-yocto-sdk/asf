@@ -1597,8 +1597,10 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 					*bFirstFragRcvd = ASF_TRUE;
 				*(uintptr_t *)  &(skb->cb[0]) = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
 #ifdef ASF_IPV6_FP_SUPPORT
+				if (bIPv6 == true) {
 				*(uintptr_t *)  &(skb->cb[8]) = skb_transport_header(skb) - skb_network_header(skb);
 				*(uintptr_t *)  &(skb->cb[16]) = fhdr->nexthdr;
+				}
 #endif
 			}
 
@@ -1636,8 +1638,10 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 						*bFirstFragRcvd = ASF_TRUE;
 					*(uintptr_t *)  &(skb->cb[0]) = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
 #ifdef ASF_IPV6_FP_SUPPORT
+				if (bIPv6 == true) {
 					*(uintptr_t *)  &(skb->cb[8]) = skb_transport_header(skb) - skb_network_header(skb);
 					*(uintptr_t *)  &(skb->cb[16]) = fhdr->nexthdr;
+				}
 #endif
 				}
 
