@@ -479,11 +479,12 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 {
 	struct iphdr *iph, *org_iphdr;
 	unsigned int *pIpHdrInSA;
-	int ii;
+	int ii, cpu;
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	unsigned short	tot_len = 0;
 	unsigned short ipHdrLen = 0;
 	unsigned short	etherproto = 0;
+	unsigned long uPacket = 0;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	ASF_IPSecTunEndAddr_t TunAddress;
 	unsigned short	bl2blobRefresh = 0;
@@ -825,7 +826,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	*/
 	if (skb_shinfo(skb1)->nr_frags)
 		for (ii = 0, jj = 0;
-			ii < usPadlen; ii += 4, jj++)
+			ii < usPadLen; ii += 4, jj++)
 			*(unsigned int *)&(charp[frag->size + ii])
 							= pad_words[jj];
 	else
@@ -1583,6 +1584,7 @@ static inline int secfp_try_fastPathOutv4(
 	unsigned int ulMTU;
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
+	int iRetVal = 0;
 #elif !defined(ASF_QMAN_IPSEC)
 	void *desc;
 #endif
@@ -1865,7 +1867,8 @@ static inline int secfp_try_fastPathOutv4(
 		} else {
 			void *desc1;
 			char *offset = (char *) desc;
-			desc1 = (char *)offset + sizeof(struct ipsec_ah_edesc)
+			desc1 = (char *)offset + sizeof(struct ipsec_ah_edesc);
+
 			iRetVal = talitos_submit(pdev, pSA->chan, (struct talitos_desc *)desc1,
 					pSA->outComplete, (void *)skb);
 		}
@@ -2664,6 +2667,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	unsigned int nhoffset = 0;
 	struct sk_buff *skb1 = NULL;
+#endif /*ASF_SECFP_PROTO_OFFLOAD*/
 	struct iphdr *iph = (struct iphdr *)*(uintptr_t *)
 				&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
 	struct iphdr *inneriph = (struct iphdr *)(pHeadSkb->data);
@@ -2675,7 +2679,7 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 	} else
 #endif
 		ulStripLen = *pTotLen - inneriph->tot_len;
-#endif /*ASF_SECFP_PROTO_OFFLOAD*/
+
 
 	ASFIPSEC_FPRINT("pHeadSkb->data = 0x%x,"
 		"pHeadSkb->data - 20 - 16 =0x%x, pHeadSkb->len = %d",
@@ -2775,13 +2779,10 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 		ASFIPSEC_PRINT(KERN_INFO "Decrypted Protocol != IPV4 or IPV6");
 		return 1;
 	}
-#ifndef ASF_SECFP_PROTO_OFFLOAD
 	/* Look at the padding length and verify length of packet */
 	if (total_frag > 0) {
-#ifndef ASF_SECFP_PROTO_OFFLOAD
 		/* Padding Length */
 		ulStripLen = 2 + charp[last_frag->size - 2];
-#endif
 		if (likely(last_frag->size > ulStripLen)) {
 			last_frag->size -= ulStripLen;
 			pTailSkb->data_len -= ulStripLen;
@@ -2791,10 +2792,6 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 
 		*pTotLen -= ulStripLen;
 	} else {
-#ifndef ASF_SECFP_PROTO_OFFLOAD
-		/* Padding Length */
-		ulStripLen = 2 + charp[last_frag->size - 2];
-#endif
 		if (unlikely(*pTotLen <= ulStripLen)) {
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
 			rcu_read_lock();
@@ -2816,12 +2813,9 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 		pTailSkb->len -= ulStripLen;
 		*pTotLen -= ulStripLen;
 	}
-#endif
 #ifdef ASF_SECFP_PROTO_OFFLOAD
-		*pTotLen -= ulStripLen;
-		if (pTailSkb->len > ulStripLen)
-			pTailSkb->len -= ulStripLen;
-		else if (skb_shinfo(pHeadSkb)->frag_list == pTailSkb) {
+		/* Need to work on this part, Currently this part is not correct - Sahil */
+		if (skb_shinfo(pHeadSkb)->frag_list == pTailSkb) {
 			pHeadSkb->len -= (ulStripLen - pTailSkb->len);
 			ASFSkbFree(pTailSkb);
 			skb_shinfo(pHeadSkb)->frag_list = NULL;
@@ -2836,8 +2830,10 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 				remaininglen -= skb1->len;
 				skb1 = skb1->next;
 			}
-			skb_shinfo(skb1)->frag_list = skb1->next;
-			ASFSkbFree(skb1);
+			if (skb1) {
+				skb_shinfo(skb1)->frag_list = skb1->next;
+				ASFSkbFree(skb1);
+			}
 			pTailSkb->next = NULL;
 		}
 
@@ -4268,6 +4264,7 @@ So all these special boundary cases need to be handled for nr_frags*/
 			skb_set_tail_pointer(pTailSkb, skb_headlen(pTailSkb));
 			*(unsigned int *)skb_tail_pointer(pTailSkb) = 0;
 		}
+#ifndef ASF_SECFP_PROTO_OFFLOAD /* anti-replay check done in HW */
 	} else {
 		/* check anything needed for AH */
 		/* do not remove the tunnel header */
@@ -4283,6 +4280,9 @@ So all these special boundary cases need to be handled for nr_frags*/
 			}
 		}
 	}
+#else
+		}
+#endif
 
 		if (pSA->SAParams.bVerifyInPktWithSASelectors)
 			pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1;

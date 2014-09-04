@@ -1255,8 +1255,10 @@ void secfp_inAHComplete(struct device *dev,
 	} else {
 		pHeadSkb = pTailSkb = skb;
 	}
-
-	if (secfp_inHandleAHICVCheck(desc, pHeadSkb)) {
+#ifndef ASF_QMAN_IPSEC
+	if (secfp_inHandleAHICVCheck(desc, pHeadSkb))
+#endif
+		{
 
 #ifndef ASF_QMAN_IPSEC
 		secfp_ahdesc_free_frags(desc, skb);
@@ -1951,6 +1953,7 @@ sa_expired1:
 
 	ASFIPSEC_TRACE;
 }
+#ifdef CONFIG_ASF_SEC4x
 #ifdef ASF_QMAN_IPSEC
 int secfp_buildAHQMANSharedDesc(struct caam_ctx *ctx, u32 *sh_desc,
 				void *pSA, uint8_t bDir)
@@ -2249,7 +2252,6 @@ int secfp_createAHOutCaamCtx(outSA_t *pSA)
 	return ret;
 }
 
-#ifdef CONFIG_ASF_SEC4x
 #ifndef ASF_QMAN_IPSEC
 void secfp_prepareAHInDescriptor(struct sk_buff *skb,
 			void *pData, void *descriptor,
