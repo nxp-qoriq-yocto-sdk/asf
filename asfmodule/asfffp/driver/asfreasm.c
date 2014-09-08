@@ -2128,7 +2128,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				ndev = vlan_dev_priv(dev)->real_dev;
 				/* Return Error if Parent device not found */
 				if (!ndev)
-					return 1;
+					goto drop;
 			} else
 				ndev = dev;
 
