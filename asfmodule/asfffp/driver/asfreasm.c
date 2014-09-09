@@ -1783,7 +1783,6 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 
 						pIpHdr->tot_len = pCb->ulTotLen+ihl;
 						pIpHdr->frag_off = 0;
-						pIpHdr->ihl = (unsigned char)5;
 						/* Here, we'll use the Idenitifcation field from the Head SKB itself.
 						   If we change the Identification field, then in case of AH -Tunnel Mode, if traffic is sent with
 						   'big size say 1429 for ICMP' of ftp, then as packets are fragmented packets,they are bufferred in ASF for Reassembly.
