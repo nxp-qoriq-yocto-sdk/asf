@@ -2091,7 +2091,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 					for (pSrc = (unsigned int *)  iph,
 					     pTgt = (unsigned int *)
 					     (skb_network_header(frag)),
-					     ii = 0; ii < 5; ii++)
+					     ii = 0; ii < iph->ihl; ii++)
 						pTgt[ii] = pSrc[ii];
 
 					iph = ip_hdr(frag);
@@ -2188,7 +2188,8 @@ int asfIpv4Fragment(struct sk_buff *skb,
 					 */
 					pSrc = (unsigned int *) ip_hdr(skb);
 					pTgt = (unsigned int *) ip_hdr(skb2);
-					for (ii = 0; ii < 5; ii++)
+					for (ii = 0; ii < ip_hdr(skb)->ihl;
+								ii++)
 						pTgt[ii] = pSrc[ii];
 
 					asfSkbCopyBits(skb,
