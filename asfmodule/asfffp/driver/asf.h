@@ -622,6 +622,9 @@ typedef struct ASFFFPFlowValidateCbInfo_s {
 	/* Information provided by AS at the time of Flow creation  */
 	ASF_uint8_t     *ASFwInfo;
 
+	/* Network device pointer to find the flow */
+	struct net_device	*idev;
+
 } ASFFFPFlowValidateCbInfo_t;
 
 typedef  ASF_void_t (*pASFFFPCbFnFlowValidate_f) (ASF_uint32_t ulVSGId, ASFFFPFlowValidateCbInfo_t *pInfo);
