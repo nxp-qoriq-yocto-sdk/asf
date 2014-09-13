@@ -665,6 +665,7 @@ int secfp_updateAHOutSA(outSA_t *pSA, void *buff)
 		return -1;
 	}
 
+	ASF_AH_UpdateOutSAFields(pSA);
 	pSA->prepareOutPktFnPtr = secfp_prepareOutAHPacket;
 	pSA->finishOutPktFnPtr = secfp_finishOutAHPacket;
 	pSA->outComplete = secfp_outAHComplete;
