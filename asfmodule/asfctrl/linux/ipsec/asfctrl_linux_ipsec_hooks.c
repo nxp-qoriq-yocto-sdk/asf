@@ -760,7 +760,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	}
 	sa_table[OUT_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[OUT_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
-	sa_table[OUT_SA][sa_id].sa_index = outSA.ulSAContainerIndex;
+	sa_table[OUT_SA][sa_id].sa_index = sa_id;
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	xfrm->asf_sa_direction = OUT_SA;

@@ -676,6 +676,9 @@ static void secfp_addOutSelSet(outSA_t *pSA,
 		return;
 	}
 
+	pSelList = pSA->pHeadSelList;
+	pSelList->pNext = NULL;
+
 	pSelList->pOutSelList = (OutSelList_t *) asfGetNode(OutSelListPoolId_g, &bHeap);
 	if (pSelList->pOutSelList == NULL) {
 		GlobalErrors.ulResourceNotAvailable++;

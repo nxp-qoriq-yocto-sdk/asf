@@ -147,6 +147,7 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 4) {
 #endif
+#if 0
 	if (inet_addr_type(dev_net(skb_dst(skb)->dev),
 		iph->saddr) == RTN_LOCAL) {
 		struct flowi fl;
@@ -176,12 +177,15 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 #endif
 		skb->dev = skb_dst(skb)->dev;
 	} else
+#endif
+	{
 		if (0 != ip_route_input(skb, iph->daddr,
 				iph->saddr, 0, skb->dev)) {
 			ASFCTRL_INFO("Route not found for dst %x ",
 			iph->daddr);
 			goto drop;
 		}
+	}
 	ASFCTRL_INFO("Route found for dst %x ", iph->daddr);
 
 	skb->pkt_type = PACKET_HOST;

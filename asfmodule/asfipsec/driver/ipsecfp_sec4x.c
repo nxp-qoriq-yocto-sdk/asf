@@ -42,6 +42,7 @@
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 #include <pdb.h>
 #endif
+#include "dcl.h"
 extern struct device *pdev;
 
 #define xstr(s) str(s)
@@ -54,8 +55,8 @@ extern struct device *pdev;
 #define DESC_AEAD_GIVENCRYPT_TEXT_LEN 27
 #define OP_PCL_IPSEC_NULL 0x0b00
 
-#define GET_CACHE_ALLIGNED(x) (u32 *)(((int)x + (L1_CACHE_BYTES - 1)) \
-	& ~(L1_CACHE_BYTES - 1)) /* THIS CAN BE AN ISSUE FOR 64BIT PLATFORM */
+#define GET_CACHE_ALLIGNED(x) (uintptr_t *)(((uintptr_t)x + (L1_CACHE_BYTES - 1)) \
+	& ~(L1_CACHE_BYTES - 1))
 
 static void secfp_splitKeyDone(struct device *dev, u32 *desc, u32 error,
 				void *context)

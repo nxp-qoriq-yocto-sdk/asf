@@ -121,6 +121,9 @@ dma_addr_t secfp_prepareGatherList(
 void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
 		void *descriptor, unsigned int ulOptionIndex);
 
+#ifdef ASFIPSEC_DEBUG_FRAME
+extern void print_desc(struct talitos_desc *desc);
+#endif
 static inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
 {
 	ASFSkbFree(freeArg);
@@ -1255,9 +1258,8 @@ void secfp_inAHComplete(struct device *dev,
 	} else {
 		pHeadSkb = pTailSkb = skb;
 	}
-#ifndef ASF_QMAN_IPSEC
+#ifndef ASF_SECFP_PROTO_OFFLOAD
 	if (secfp_inHandleAHICVCheck(desc, pHeadSkb))
-#endif
 		{
 
 #ifndef ASF_QMAN_IPSEC
@@ -1289,7 +1291,7 @@ void secfp_inAHComplete(struct device *dev,
 #endif
 		return;
 	}
-
+#endif
 #ifdef ASF_QMAN_IPSEC
 	rcu_read_lock();
 	pSA = secfp_findInSA(*(unsigned int *)&(skb->cb[SECFP_VSG_ID_INDEX]),

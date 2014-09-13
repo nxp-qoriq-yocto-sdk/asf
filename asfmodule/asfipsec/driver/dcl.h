@@ -489,8 +489,9 @@ int32_t cnstr_pcl_shdsc_3gpp_rlc_encap(uint32_t *descbuf, uint16_t *bufsize,
 void desc_hexdump(uint32_t *descdata, uint32_t  size, uint32_t wordsperline,
 		  int8_t *indentstr);
 
-void caam_desc_disasm(uint32_t *desc, uint32_t opts);
-
+static void caam_desc_disasm(uint32_t *desc, uint32_t opts) {
+	printk(KERN_INFO "implement caam_desc_disasm\n");
+}
 #ifdef __cplusplus
 	}
 #endif

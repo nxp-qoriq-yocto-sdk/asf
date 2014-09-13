@@ -1099,7 +1099,7 @@ aes_gcm_copy:
 					pSAParams->EncKeyLen);
 	} else {
 		ASFIPSEC_WARN("no encr/auth algo; choosing ESP_NULL\n");
-		pSAParams->ucCipherAlgo = SECFP_ESP_NULL;
+		pSAParams->ucCipherAlgo = SECFP_ENC_NONE;
 		pSAParams->bEncrypt = ASF_FALSE;
 		pSAParams->ulBlockSize = 4;
 		pSAParams->ulIvSize = 0;
