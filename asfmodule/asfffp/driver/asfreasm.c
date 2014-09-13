@@ -856,7 +856,7 @@ static inline struct asf_reasmCb_s *asfIPv6ReasmFindOrCreateCb(
 #endif
 static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 				       int *offset,  unsigned int *flags, unsigned int *ulSegLen,
-				       int *pIhl, unsigned int ulVSGId)
+				       unsigned short *pIhl, unsigned int ulVSGId)
 {
 	struct iphdr *iph;
 	int ihl;
@@ -924,7 +924,7 @@ static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 
 static inline int asfIPv6CheckFragInfo(struct sk_buff *skb,
 				       int *offset,  unsigned int *flags, unsigned int *ulSegLen,
-				       int *pIhl, unsigned int ulVSGId)
+				       unsigned short *pIhl, unsigned int ulVSGId)
 {
 	struct ipv6hdr *ipv6h = ipv6_hdr(skb);
 	struct frag_hdr *fhdr = (struct frag_hdr *)skb_transport_header(skb);
@@ -971,7 +971,7 @@ static inline int asfIPv6CheckFragInfo(struct sk_buff *skb,
 
 static inline struct sk_buff  *asfFragHandle(struct asf_reasmCb_s *pCb,
 						 struct sk_buff *skb, unsigned int *pOffset,
-						 unsigned int flags, unsigned int *pLen, unsigned int ihl,
+						 unsigned int flags, unsigned int *pLen, unsigned short ihl,
 						 bool *bReasmDone, struct asf_fragInfo_s **frag, unsigned char *option) {
 	struct asf_fragInfo_s *pFrag, *pFragPrev;
 	unsigned int ulSegMap;
@@ -1442,7 +1442,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 	unsigned int ulOffset = 0;
 	unsigned int flags = 0;
 	unsigned int ulSegLen = 0;
-	unsigned int ihl;
+	unsigned short ihl;
 	struct asf_fragInfo_s *pFrag;
 	struct sk_buff *pTempSkb;
 	struct sk_buff *pHeadSkb;
@@ -2136,7 +2136,9 @@ int asfIpv4Fragment(struct sk_buff *skb,
 					iph->tot_len = ASF_HTONS(len + ihl);
 					iph->frag_off |= ASF_HTONS(IP_MF);
 					if (bytesLeft == 0 && !flags)
-						iph->frag_off &= ASF_HTONS(~IP_MF);
+						iph->frag_off = ASF_HTONS(
+								ASF_NTOHS(iph->frag_off)
+								& (~IP_MF));
 
 					ip_send_check(iph);
 					skb2->ip_summed =

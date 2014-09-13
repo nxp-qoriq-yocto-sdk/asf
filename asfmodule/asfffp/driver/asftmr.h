@@ -26,7 +26,7 @@ struct asfTmr_s {
 	struct asfTmr_s *pNext;
 	struct asfTmr_s *pPrev;
 	unsigned long ulState;
-	unsigned short int ulCoreId;
+	unsigned int ulCoreId;
 	unsigned int ulBucketIndex;
 	unsigned int ulPoolId;
 	unsigned int ulTmOutVal;
