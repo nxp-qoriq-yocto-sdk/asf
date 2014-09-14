@@ -956,7 +956,10 @@ typedef struct ASFFFPFlowInfo_s {
 	bIPsecIn:1,
 
 	/* TRUE or FALSE; indicates if IPsec Outbound Processing needs to happen on the flow */
-	bIPsecOut:1;
+	bIPsecOut:1,
+
+	/* TRUE or FALSE; indicates if Firewall is enabled on the flow */
+	bDrop:1;
 
 	/* Current time stamp value.
 		Valid only if Time Stamp check is enabled */

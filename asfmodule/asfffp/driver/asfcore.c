@@ -4632,6 +4632,7 @@ static inline int ffp_flow_copy_info(ASFFFPFlowInfo_t *pInfo, ffp_flow_t *flow)
 	flow->bIPsecIn = pInfo->bIPsecIn;
 	flow->bIPsecOut = pInfo->bIPsecOut;
 	flow->bNat = pInfo->bNAT;
+	flow->bDrop = pInfo->bDrop;
 
 	if (flow->bNat) {
 #ifdef	ASF_IPV6_FP_SUPPORT
