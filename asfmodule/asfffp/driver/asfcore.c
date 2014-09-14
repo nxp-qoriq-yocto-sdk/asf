@@ -40,6 +40,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
+#include <linux/if_pppox.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
