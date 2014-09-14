@@ -44,6 +44,7 @@
 #include <linux/sctp.h>
 #endif
 #include <linux/icmp.h>
+#include <linux/if_pppox.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
