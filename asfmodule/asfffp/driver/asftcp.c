@@ -39,7 +39,6 @@
 #include <asm/uaccess.h>
 #include <linux/module.h>
 #include <linux/dma-mapping.h>
-#include <linux/crc32.h>
 #include <linux/mii.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
@@ -57,12 +56,6 @@
 #include "asftmr.h"
 #include "asfpvt.h"
 #include "asftcp.h"
-
-
-
-
-
-
 
 static inline int asfTcpCheckForNormalOos(
 					 ffp_flow_t *flow,

@@ -592,13 +592,13 @@ static int display_secfp_proc_in_sa(struct seq_file *f, void *v)
 			ulHashVal = secfp_compute_hash(pSPILinkNode->ulSPIVal);
 			for (pInSA = secFP_SPIHashTable[ulHashVal].pHeadSA;
 				pInSA != NULL; pInSA = pInSA->pNext) {
+				ASFIPSecGetSAQueryParams_t inParams;
+				ASFSAStats_t outParams = {0, 0};
 
 				if (pSPILinkNode->ulSPIVal !=
 					pInSA->SAParams.ulSPI)
 					continue;
 
-				ASFSAStats_t outParams = {0, 0};
-				ASFIPSecGetSAQueryParams_t inParams;
 
 				seq_printf(f, "SpdContId =%d",
 					pInSA->pSASPDMapNode->ulSPDInContainerIndex);

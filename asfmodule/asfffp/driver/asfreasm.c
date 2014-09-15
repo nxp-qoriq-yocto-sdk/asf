@@ -1518,11 +1518,16 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 	int ii;
 	bool bReasmDone;
 	unsigned int ret;
+#ifdef ASF_IPV6_FP_SUPPORT
+	struct ipv6hdr	*ip6h;
+	struct frag_hdr *fhdr;
+	bool bIPv6;
+#endif
 	ACCESS_XGSTATS();
 #ifdef ASF_IPV6_FP_SUPPORT
-	struct ipv6hdr	*ip6h = (struct ipv6hdr  *)skb_network_header(skb);
-	struct frag_hdr *fhdr = (struct frag_hdr *)skb_transport_header(skb);
-	bool bIPv6 = ASFCB(skb)->Defrag.bIPv6;
+	ip6h = (struct ipv6hdr  *)skb_network_header(skb);
+	fhdr = (struct frag_hdr *)skb_transport_header(skb);
+	bIPv6 = ASFCB(skb)->Defrag.bIPv6;
 #endif
 	XGSTATS_INC(DefragCalls);
 

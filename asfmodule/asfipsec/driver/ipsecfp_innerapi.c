@@ -4108,7 +4108,7 @@ unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
 	unsigned int hashVal = usMaxInSAHashTaleSize_g;
 	unsigned int Index;
 	SPDInContainer_t *pContainer;
-	SPDInSelTblIndexLinkNode_t *pNode;
+	SPDInSelTblIndexLinkNode_t *pNode = NULL;
 	SPDInSPIValLinkNode_t *pSPINode;
 	bool bFound;
 	inSA_t *pSA;
@@ -4210,7 +4210,7 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 	unsigned int hashVal = usMaxInSAHashTaleSize_g;
 	unsigned int Index;
 	SPDInContainer_t *pContainer;
-	SPDInSelTblIndexLinkNode_t *pNode;
+	SPDInSelTblIndexLinkNode_t *pNode = NULL;
 	SPDInSPIValLinkNode_t *pSPINode;
 	bool bFound;
 	inSA_t *pSA;

@@ -601,37 +601,40 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 	ulVSGId = asfctrl_get_ipsec_pol_vsgid(xp);
 	if (dir == XFRM_POLICY_OUT) {
 		ASFIPSecConfigDelOutSPDContainerArgs_t outSPDContainer;
-		ASFIPSecConfigOutSPDContainerSpiListArgs_t containerSpiList;
+		ASFIPSecConfigOutSPDContainerSpiListArgs_t *containerSpiList;
 
-		memset(&containerSpiList, 0, sizeof(ASFIPSecConfigOutSPDContainerSpiListArgs_t));
-		containerSpiList.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-		containerSpiList.ulContainerIndex = xp->asf_cookie - 1;
+		containerSpiList = kzalloc(sizeof(ASFIPSecConfigOutSPDContainerSpiListArgs_t), GFP_ATOMIC);
+		if (unlikely(containerSpiList == NULL))
+			return -EINVAL;
+		containerSpiList->ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+		containerSpiList->ulContainerIndex = xp->asf_cookie - 1;
 
 		ASFIPSecConfig(ASF_DEF_VSG,
 			ASF_IPSEC_CONFIG_GET_SPI_OUTSPDCONTAINER,
-			&containerSpiList,
+			containerSpiList,
 			sizeof(ASFIPSecConfigOutSPDContainerSpiListArgs_t),
 			&handle,
 			sizeof(uint32_t));
+		{
+			ASFIPSecConfigSpiList_t *spi_list = &containerSpiList->spi_list;
 
-		ASFIPSecConfigSpiList_t *spi_list = &containerSpiList.spi_list;
+			for (i = 0; i < spi_list->nr_spi; i++) {
+				x = xfrm_state_lookup(&init_net, 0,
+					&(xp->xfrm_vec[0].id.daddr),
+					spi_list->ulSPIVal[i],
+					xp->xfrm_vec[0].id.proto,
+					AF_INET);
+				if (!x) {
+					ASFCTRL_ERR("Unable to find the SA with SPI:%x(0x%x)\r\n", spi_list->ulSPIVal[i], spi_list->ulSPIVal[i]);
+					continue;
+				}
 
-		for (i = 0; i < spi_list->nr_spi; i++) {
-			x = xfrm_state_lookup(&init_net, 0,
-				&(xp->xfrm_vec[0].id.daddr),
-				spi_list->ulSPIVal[i],
-				xp->xfrm_vec[0].id.proto,
-				AF_INET);
-			if (!x) {
-				ASFCTRL_ERR("Unable to find the SA with SPI:%lu(0x%x)\r\n", spi_list->ulSPIVal[i], spi_list->ulSPIVal[i]);
-				continue;
+				ret = asfctrl_xfrm_delete_policy_sa_map(xp, x, spi_list->ulRefCnt[i]);
+				if (ret != 0)
+					ASFCTRL_WARN("asfctrl_xfrm_delete_policy_sa_map returned failure(%d)\r\n", ret);
 			}
-
-			ret = asfctrl_xfrm_delete_policy_sa_map(xp, x, spi_list->ulRefCnt[i]);
-			if (ret != 0)
-				ASFCTRL_WARN("asfctrl_xfrm_delete_policy_sa_map returned failure(%d)\r\n", ret);
 		}
-
+		kfree(containerSpiList);
 		outSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		outSPDContainer.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		outSPDContainer.ulContainerIndex =
@@ -649,41 +652,43 @@ int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
 
 	} else if (dir == XFRM_POLICY_IN) {
 		ASFIPSecConfigDelInSPDContainerArgs_t	inSPDContainer;
-		ASFIPSecConfigInSPDContainerSpiListArgs_t inContainerSpiList;
+		ASFIPSecConfigInSPDContainerSpiListArgs_t *inContainerSpiList = NULL;
 
-		memset(&inContainerSpiList, 0, sizeof(ASFIPSecConfigInSPDContainerSpiListArgs_t));
-		inContainerSpiList.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
-		inContainerSpiList.ulContainerIndex = xp->asf_cookie - 1;
-		inContainerSpiList.tunDestAddr.bIPv4OrIPv6 = 0;
-		inContainerSpiList.tunDestAddr.ipv4addr = xp->xfrm_vec[0].id.daddr.a4;
-		inContainerSpiList.ucProtocol = xp->xfrm_vec[0].id.proto;;
+		inContainerSpiList = kzalloc(sizeof(ASFIPSecConfigInSPDContainerSpiListArgs_t), GFP_ATOMIC);
+		if (unlikely(inContainerSpiList == NULL))
+			return -EINVAL;
+		inContainerSpiList->ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
+		inContainerSpiList->ulContainerIndex = xp->asf_cookie - 1;
+		inContainerSpiList->tunDestAddr.bIPv4OrIPv6 = 0;
+		inContainerSpiList->tunDestAddr.ipv4addr = xp->xfrm_vec[0].id.daddr.a4;
+		inContainerSpiList->ucProtocol = xp->xfrm_vec[0].id.proto;;
 
 		ASFIPSecConfig(ASF_DEF_VSG,
 			ASF_IPSEC_CONFIG_GET_SPI_INSPDCONTAINER,
-			&inContainerSpiList,
+			inContainerSpiList,
 			sizeof(ASFIPSecConfigInSPDContainerSpiListArgs_t),
 			&handle,
 			sizeof(uint32_t));
+		{
+			ASFIPSecConfigSpiList_t *spi_list = &inContainerSpiList->spi_list;
+			for (i = 0; i < spi_list->nr_spi; i++) {
+				x = xfrm_state_lookup(&init_net, 0,
+					&(xp->xfrm_vec[0].id.daddr),
+					spi_list->ulSPIVal[i],
+					xp->xfrm_vec[0].id.proto,
+					AF_INET);
 
-		ASFIPSecConfigSpiList_t *spi_list = &inContainerSpiList.spi_list;
+				if (!x) {
+					ASFCTRL_ERR("Unable to find the SA with SPI:%x(0x%x)\r\n", spi_list->ulSPIVal[i], spi_list->ulSPIVal[i]);
+					continue;
+				}
 
-		for (i = 0; i < spi_list->nr_spi; i++) {
-			x = xfrm_state_lookup(&init_net, 0,
-				&(xp->xfrm_vec[0].id.daddr),
-				spi_list->ulSPIVal[i],
-				xp->xfrm_vec[0].id.proto,
-				AF_INET);
-
-			if (!x) {
-				ASFCTRL_ERR("Unable to find the SA with SPI:%lu(0x%x)\r\n", spi_list->ulSPIVal[i], spi_list->ulSPIVal[i]);
-				continue;
+				ret = asfctrl_xfrm_delete_policy_sa_map(xp, x, spi_list->ulRefCnt[i]);
+				if (ret != 0)
+					ASFCTRL_WARN("asfctrl_xfrm_delete_policy_sa_map returned failure(%d)\r\n", ret);
 			}
-
-			ret = asfctrl_xfrm_delete_policy_sa_map(xp, x, spi_list->ulRefCnt[i]);
-			if (ret != 0)
-				ASFCTRL_WARN("asfctrl_xfrm_delete_policy_sa_map returned failure(%d)\r\n", ret);
 		}
-
+		kfree(inContainerSpiList);
 		inSPDContainer.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
 		inSPDContainer.ulMagicNumber = asfctrl_vsg_ipsec_cont_magic_id;
 		inSPDContainer.ulContainerIndex =
@@ -1775,9 +1780,10 @@ int asfctrl_map_pol_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 
 	return 0;
 }
+
 int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 {
-	struct policy_list pol_list = {0};
+	struct policy_list *pol_list = NULL;
 	int dir, ret = -EINVAL;
 
 	ASFCTRL_FUNC_TRACE;
@@ -1785,14 +1791,18 @@ int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 	if (unlikely(is_sa_offloadable(xfrm)))
 		return ret;
 
-	xfrm_state_policy_mapping(xfrm, &pol_list);
-	if (pol_list.nr_pol == 0) {
-		ASFCTRL_WARN("Policy not Available for this SA");
+	pol_list = kzalloc(sizeof(struct policy_list), GFP_ATOMIC);
+
+	if (unlikely(pol_list == NULL))
 		return ret;
+
+	xfrm_state_policy_mapping(xfrm, pol_list);
+	if (pol_list->nr_pol == 0) {
+		ASFCTRL_WARN("Policy not Available for this SA");
 	} else {
 		int pol_cnt = 0;
-		for (pol_cnt = 0; pol_cnt < pol_list.nr_pol; pol_cnt++) {
-			struct xfrm_policy *xp = pol_list.xpol[pol_cnt];
+		for (pol_cnt = 0; pol_cnt < pol_list->nr_pol; pol_cnt++) {
+			struct xfrm_policy *xp = pol_list->xpol[pol_cnt];
 			dir = xfrm_policy_id2dir(xp->index);
 			if (!xp->asf_cookie) {
 				ASFCTRL_WARN("Policy not offloaded, xp = %p DIR=%d(%s) ",
@@ -1827,6 +1837,7 @@ int asfctrl_xfrm_add_sa(struct xfrm_state *xfrm)
 		ret = 0;
 	}
 out:
+	kfree(pol_list);
 	return ret;
 }
 
@@ -1836,7 +1847,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 	int handle;
 	ASF_uint32_t ulVSGId;
 
-	struct policy_list pol_list = {0};
+	struct policy_list *pol_list = NULL;
 	bool bLockFlag;
 
 	ASFCTRL_FUNC_ENTRY;
@@ -1855,14 +1866,20 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 		return ret;
 	}
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
-	xfrm_state_policy_mapping(xfrm, &pol_list);
-	if (pol_list.nr_pol == 0) {
-		ASFCTRL_WARN("Policy not Available for this SA");
+
+	pol_list = kzalloc(sizeof(struct policy_list), GFP_ATOMIC);
+
+	if (unlikely(pol_list == NULL))
 		return ret;
+
+	xfrm_state_policy_mapping(xfrm, pol_list);
+
+	if (pol_list->nr_pol == 0) {
+		ASFCTRL_WARN("Policy not Available for this SA");
 	} else {
 		int pol_cnt = 0;
-		for (pol_cnt = 0; pol_cnt < pol_list.nr_pol; pol_cnt++) {
-			struct xfrm_policy *xp = pol_list.xpol[pol_cnt];
+		for (pol_cnt = 0; pol_cnt < pol_list->nr_pol; pol_cnt++) {
+			struct xfrm_policy *xp = pol_list->xpol[pol_cnt];
 			ASFIPSecRuntimeDelOutSAArgs_t delSA;
 			dir = xfrm_policy_id2dir(xp->index);
 			if (!xp->asf_cookie) {
@@ -1870,7 +1887,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 					xp, dir, XFRM_DIR(dir));
 				continue;
 			}
-			if ((pol_list.nr_pol - pol_cnt) > 1) {
+			if ((pol_list->nr_pol - pol_cnt) > 1) {
 				if (dir == XFRM_POLICY_OUT) {
 					ASFCTRL_INFO("Delete Encrypt SA");
 					delSA.ulTunnelId = ASF_DEF_IPSEC_TUNNEL_ID;
@@ -1990,6 +2007,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 	}
 
 	ASFCTRL_FUNC_EXIT;
+	kfree(pol_list);
 	return 0;
 }
 
@@ -2011,26 +2029,31 @@ int asfctrl_xfrm_enc_hook(struct xfrm_policy *xp,
 		struct flowi *fl, int ifindex)
 {
 	int i;
-	int 	handle;
+	int handle, ret = -EINVAL;
 	ASF_uint32_t ulVSGId;
-	struct policy_list pol_list = {0};
+	struct policy_list *pol_list = NULL;
 	int pol_cnt = 0;
 
 	ASFCTRL_FUNC_ENTRY;
 
 
 	if (is_sa_offloadable(xfrm))
-		return -EINVAL;
+		return ret;
+
+	pol_list = kzalloc(sizeof(struct policy_list), GFP_ATOMIC);
+
+	if (unlikely(pol_list == NULL))
+		return ret;
 
 	if (unlikely(!xp)) {
-		xfrm_state_policy_mapping(xfrm, &pol_list);
-		if (unlikely(pol_list.nr_pol == 0)) {
+		xfrm_state_policy_mapping(xfrm, pol_list);
+		if (unlikely(pol_list->nr_pol == 0)) {
 			ASFCTRL_WARN("Policy not found for this SA");
-			return -EINVAL;
+			goto err;
 		}
 	}
-	for (pol_cnt = 0; pol_cnt < pol_list.nr_pol; pol_cnt++) {
-		struct xfrm_policy *xp = pol_list.xpol[pol_cnt];
+	for (pol_cnt = 0; pol_cnt < pol_list->nr_pol; pol_cnt++) {
+		struct xfrm_policy *xp = pol_list->xpol[pol_cnt];
 
 		if (is_policy_offloadable(xp))
 			continue;
@@ -2079,10 +2102,11 @@ sa_check:
 		ASFCTRL_WARN("Unable to offload the OUT SA");
 		goto err;
 	}
-	ASFCTRL_FUNC_EXIT;
-	return 0;
+	ret = 0;
 err:
-	return -EINVAL;
+	kfree(pol_list);
+	ASFCTRL_FUNC_EXIT;
+	return ret;
 }
 
 int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
@@ -2090,25 +2114,30 @@ int asfctrl_xfrm_dec_hook(struct xfrm_policy *pol,
 		struct flowi *fl, int ifindex)
 {
 	int i;
-	int 	handle;
+	int handle, ret = -EINVAL;
 	struct xfrm_policy *xp = pol;
-	struct policy_list pol_list = {0};
+	struct policy_list *pol_list = NULL;
 	int pol_cnt = 0;
 	ASF_uint32_t ulVSGId;
 
 	if (is_sa_offloadable(xfrm))
-		return -EINVAL;
+		return ret;
+
+	pol_list = kzalloc(sizeof(struct policy_list), GFP_ATOMIC);
+
+	if (unlikely(pol_list == NULL))
+		return ret;
 
 	if (unlikely(!xp)) {
-		xfrm_state_policy_mapping(xfrm, &pol_list);
-		if (unlikely(pol_list.nr_pol == 0)) {
+		xfrm_state_policy_mapping(xfrm, pol_list);
+		if (unlikely(pol_list->nr_pol == 0)) {
 			ASFCTRL_WARN("Policy not found for this SA");
-			return -EINVAL;
+			goto err;
 		}
 	}
 
-	for (pol_cnt = 0; pol_cnt < pol_list.nr_pol; pol_cnt++) {
-		struct xfrm_policy *xp = pol_list.xpol[pol_cnt];
+	for (pol_cnt = 0; pol_cnt < pol_list->nr_pol; pol_cnt++) {
+		struct xfrm_policy *xp = pol_list->xpol[pol_cnt];
 		if (is_policy_offloadable(xp))
 			continue;
 
@@ -2153,10 +2182,11 @@ sa_check:
 		ASFCTRL_WARN("Unable to offload the IN SA");
 		goto err;
 	}
-	ASFCTRL_FUNC_EXIT;
-	return 0;
+	ret = 0;
 err:
-	return -EINVAL;
+	kfree(pol_list);
+	ASFCTRL_FUNC_EXIT;
+	return ret;
 }
 
 int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,

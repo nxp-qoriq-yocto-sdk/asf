@@ -199,8 +199,8 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 		ASFIPSEC_DPERR("Could not allocate shared descriptor");
 		return -ENOMEM;
 	}
-	sh_desc = (u32 *)(((dma_addr_t)ctx->sh_desc_mem
-			+ (L1_CACHE_BYTES - 1)) & ~(L1_CACHE_BYTES - 1));
+	sh_desc = (u32 *)(((size_t)ctx->sh_desc_mem + (L1_CACHE_BYTES - 1))
+				& ~(L1_CACHE_BYTES - 1));
 
 	ctx->sh_desc = sh_desc;
 	/* Leaving space for Pre header*/
@@ -278,7 +278,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 		ASFIPSEC_DPERR("Could not allocate shared descriptor");
 		return -ENOMEM;
 	}
-	sh_desc = (u32 *)(((dma_addr_t)ctx->sh_desc_mem
+	sh_desc = (u32 *)(((size_t)ctx->sh_desc_mem
 			+ (L1_CACHE_BYTES - 1)) & ~(L1_CACHE_BYTES - 1));
 
 	ctx->sh_desc = sh_desc;

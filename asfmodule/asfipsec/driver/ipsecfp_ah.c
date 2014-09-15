@@ -549,7 +549,6 @@ int secfp_updateAHOutSA(outSA_t *pSA, void *buff)
 {
 	SAParams_t *pSAParams = (SAParams_t *)(buff);
 	unsigned char mdpadlen[] = { 16, 20, 32, 32, 64, 64 };
-	unsigned char ucRemainder;
 
 	ASFIPSEC_DEBUG("Secfp_updateAHOutSA entry: ");
 	/* if AH is configured, encryption alg should not be passed */
@@ -1166,7 +1165,7 @@ void secfp_inAHComplete(struct device *dev,
 {
 	struct sk_buff *skb = (struct sk_buff *) context;
 	struct sk_buff *pHeadSkb, *pTailSkb;
-	unsigned char ucNextProto, ucAHhdrLen;
+	unsigned char ucNextProto;
 	unsigned int /*ulTempLen,*/ iRetVal;
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	inSA_t *pSA;
@@ -2037,7 +2036,7 @@ int secfp_buildAHSharedDesc(struct caam_ctx *ctx, void *pSA, uint8_t bDir)
 		ASFIPSEC_WARN("Could not allocate shared descriptor");
 		return -ENOMEM;
 	}
-	ctx->sh_desc = (u32 *)(((dma_addr_t)ctx->sh_desc_mem
+	ctx->sh_desc = (u32 *)(((size_t)ctx->sh_desc_mem
 			+ (L1_CACHE_BYTES - 1)) & ~(L1_CACHE_BYTES - 1));
 	if (ucAuthAlgo != SECFP_HMAC_AES_XCBC_MAC) {
 		keydest = KEYDST_MD_SPLIT;

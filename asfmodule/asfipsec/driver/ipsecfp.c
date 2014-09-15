@@ -1071,7 +1071,7 @@ secfp_finishOffloadOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 		/*Reverting the data pointer to it's original location*/
 		skb->data += (pSA->ulL2BlobLen + pSA->ulXmitHdrLen);
-		skb->network_header = skb->data;
+		skb_reset_network_header(skb);
 	} else {
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT25]);
 		ASFIPSEC_DPERR("OutSA - L2blob info not available");
@@ -1581,7 +1581,6 @@ static inline int secfp_try_fastPathOutv4(
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	ASF_boolean_t	bRevalidate = ASF_FALSE;
-	unsigned int ulMTU;
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
 	int iRetVal = 0;
@@ -1594,6 +1593,7 @@ static inline int secfp_try_fastPathOutv4(
 	char bScatterGatherList = SECFP_NO_SCATTER_GATHER;
 	unsigned char secout_sg_flag;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	unsigned int ulMTU;
 	ASFLogInfo_t AsfLogInfo;
 	char aMsg[ASF_MAX_MESG_LEN + 1];
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -3446,9 +3446,6 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 	ASFIPSecOpqueInfo_t IPSecOpque = {};
 	ASFBuffer_t Buffer;
 	unsigned int ulCommonInterfaceId;
-#ifdef ASF_SECFP_PROTO_OFFLOAD
-	struct iphdr *inneriph = (struct iphdr *)(skb->data);
-#endif
 #if defined(CONFIG_ASF_SEC4x)
 	struct aead_edesc *desc;
 	desc = (struct aead_edesc *)((char *)pdesc -

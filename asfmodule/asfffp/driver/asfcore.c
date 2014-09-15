@@ -50,7 +50,6 @@
 #include <asm/uaccess.h>
 #include <linux/module.h>
 #include <linux/dma-mapping.h>
-#include <linux/crc32.h>
 #include <linux/mii.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
@@ -525,7 +524,7 @@ int asf_free_buf_skb(struct net_device *dev, struct sk_buff *skb)
 	dma_addr_t addr;
 	int ret;
 	struct sk_buff **skbh, *temp_skb;
-	int pad, i;
+	int i;
 	unsigned int retries = MAX_BMAN_RELEASE_RETRIES;
 
 	bp = priv->dpa_bp;
@@ -4195,7 +4194,7 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 			dev->pParentDev = parent_dev;
 			dev->pPPPoENext = parent_dev->pPPPoENext;
 			parent_dev->pPPPoENext = dev;
-			dev->ndev = (void *) info->ulRelatedIDs[1];
+			dev->ndev = (struct net_device *)(size_t)info->ulRelatedIDs[1];
 
 			asf_ifaces[dev->ulCommonInterfaceId] = dev;
 

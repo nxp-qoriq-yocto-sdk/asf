@@ -152,7 +152,9 @@ ASF_void_t asfctrl_ipsec_fn_NoOutSA(ASF_uint32_t ulVsgId,
 		iph->saddr) == RTN_LOCAL) {
 		struct flowi fl;
 		struct rtable *rt = skb_rtable(skb);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 		int ret;
+#endif
 
 		/* Now look for termination route */
 		memset(&fl, 0, sizeof(fl));
@@ -922,7 +924,7 @@ ASFCTRL_FUNC_TRACE;
 	ipv6_addr_copy(&fl.u.ip6.saddr, &hdr->saddr);
 
 	fl.flowi_proto = hdr->nexthdr;
-	fl.flowi_tos = hdr->flow_lbl;
+	fl.flowi_tos = ((hdr->priority << 4) | (hdr->flow_lbl[0] >> 4));
 	fl.flowi_iif = skb->skb_iif;
 
 	fl.u.ip6.fl6_sport = ports[0];

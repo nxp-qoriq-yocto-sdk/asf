@@ -27,6 +27,9 @@ min :
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile
 endif
+ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
+	make -w -C asfqos -f Makefile
+endif
 	make -w -C asfctrl -f Makefile
 	mkdir -p bin
 	mkdir -p bin/min
