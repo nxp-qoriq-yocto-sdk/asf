@@ -1110,7 +1110,7 @@ send_l2blob_2:
 			ASFIPSecCbFn.pFnRefreshL2Blob(ulVSGId, pSA->ulTunnelId,
 				ulSPDContainerIndex,
 				ptrIArray_getMagicNum(&(secfp_OutDB),
-				ulSPDContainerIndex - 1), &TunAddress,
+				ulSPDContainerIndex), &TunAddress,
 				pSA->SAParams.ulSPI, pSA->SAParams.ucProtocol);
 		} else if (ulL2BlobRefreshPktCnt_g) {
 			for_each_possible_cpu(cpu) {
