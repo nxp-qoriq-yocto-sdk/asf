@@ -5504,8 +5504,10 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 			(pFreeFn)(freeArg);
 		goto ret_stk;
 	}
-	if (skb_shinfo(skb)->frag_list)
+	if (skb_shinfo(skb)->frag_list) {
 		skb->len = skb_headlen(skb);
+		skb->data_len = 0;
+	}
 	if (skb_shinfo(skb)->nr_frags) {
 		ASFIPSEC_PRINT("Scattered packet not supported");
 		if (pFreeFn)

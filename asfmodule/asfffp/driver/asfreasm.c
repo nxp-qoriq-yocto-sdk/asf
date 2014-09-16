@@ -2237,7 +2237,7 @@ int asfIpv6Fragment(struct sk_buff *skb,
 	asf_reasm_debug("skb->len = %d, ulMTU=%d, ip_tot_len =%d\r\n", skb->len,
 			ulMTU, , ASF_NTOHS(ip6h->payload_len));
 
-	ip6hpexh_len = skb_transport_header(skb) - skb_network_header(skb);
+	ip6hpexh_len = sizeof(struct ipv6hdr);
 
 	if (skb_shinfo(skb)->frag_list) {
 		/* Fragmentation */
@@ -2330,7 +2330,7 @@ int asfIpv6Fragment(struct sk_buff *skb,
 		*	Fill in the new header fields.
 		*/
 		ip6h = ipv6_hdr(frag);
-		ip6h->payload_len = ASF_HTONS(len + ip6hpexh_len + sizeof(struct frag_hdr));
+		ip6h->payload_len = ASF_HTONS(len + sizeof(struct frag_hdr));
 
 		fhdr = (struct frag_hdr *)(skb_network_header(frag) + ip6hpexh_len);
 		fhdr->nexthdr = nexthdr;
