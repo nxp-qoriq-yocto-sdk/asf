@@ -2093,7 +2093,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 	outSA_t *pSA;
 	struct iphdr *iph;
 #ifdef CONFIG_DPA
-	struct dpa_priv_s       *priv  = netdev_priv(skb->dev);
+	struct dpa_priv_s       *priv;
 	struct dpa_bp           *dpa_bp;
 #endif
 #ifdef ASF_SECFP_PROTO_OFFLOAD
@@ -2113,7 +2113,12 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 			offsetof(struct aead_edesc, hw_desc));
 #endif
 #ifdef CONFIG_DPA
-	dpa_bp = priv->dpa_bp;
+	if (skb->cb[BUF_INDOMAIN_INDEX]) {
+		if (skb->dev) {
+			priv = netdev_priv(skb->dev);
+			dpa_bp = priv->dpa_bp;
+		}
+	}
 #endif
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;

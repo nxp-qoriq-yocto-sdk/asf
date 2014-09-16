@@ -1499,7 +1499,7 @@ void secfp_outAHComplete(struct device *dev,
 	unsigned short	bl2blobRefresh = 0;
 #endif
 #ifdef CONFIG_DPA
-	struct dpa_priv_s       *priv = netdev_priv(skb->dev);
+	struct dpa_priv_s       *priv;
 	struct dpa_bp	   *dpa_bp;
 #endif
 	unsigned short tot_len = 0;
@@ -1515,7 +1515,12 @@ void secfp_outAHComplete(struct device *dev,
 	ASFIPSEC_DEBUG(" Entry");
 
 #ifdef CONFIG_DPA
-	dpa_bp = priv->dpa_bp;
+	if (skb->cb[BUF_INDOMAIN_INDEX]) {
+		if (skb->dev) {
+			priv = netdev_priv(skb->dev);
+			dpa_bp = priv->dpa_bp;
+		}
+	}
 #endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM) && !defined(CONFIG_ASF_SEC4x)
 	skb->cb[SECFP_REF_INDEX]--;
