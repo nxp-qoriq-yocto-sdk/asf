@@ -544,11 +544,10 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
-		struct ipv6hdr *ipv6h, *org_ipv6hdr;
+		struct ipv6hdr *ipv6h;
 		unsigned short payload_len = 0;
 
 		pIpHdrInSA = (unsigned int *) &(pSA->ipHdrInfo.hdrdata.iphv6);
-		org_ipv6hdr = (struct ipv6hdr *) pIpHdrInSA;
 		/* Outer IP already has the TOS and the length field */
 		/* Since length and TOS bits are already set, copy the rest */
 
@@ -1212,9 +1211,6 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	ASF_boolean_t	bRevalidate = ASF_FALSE;
 	unsigned char ipv6TClass = 0;
-#ifndef ASF_SECFP_PROTO_OFFLOAD
-	unsigned short usPadLen = 0;
-#endif
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
 #elif !defined(ASF_QMAN_IPSEC)
@@ -1266,12 +1262,6 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	/* Need to remove decrement TTL by firewall */
 	ipv6h->hop_limit--;
-	if (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL) {
-		usPadLen = (ipv6h->payload_len + SECFP_IPV6_HDR_LEN + SECFP_ESP_TRAILER_LEN)
-				& (pSA->SAParams.ulBlockSize - 1);
-		usPadLen = (usPadLen == 0) ? 0 : pSA->SAParams.ulBlockSize - usPadLen;
-	} else
-		usPadLen = 0;
 #endif
 
 	if (skb_shinfo(skb1)->nr_frags) {
@@ -1587,9 +1577,6 @@ static inline int secfp_try_fastPathOutv4(
 #elif !defined(ASF_QMAN_IPSEC)
 	void *desc;
 #endif
-#ifndef ASF_SECFP_PROTO_OFFLOAD
-	unsigned short usPadLen = 0;
-#endif
 	char bScatterGatherList = SECFP_NO_SCATTER_GATHER;
 	unsigned char secout_sg_flag;
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -1629,14 +1616,6 @@ static inline int secfp_try_fastPathOutv4(
 	/* Fragment handling and TTL decrement already done in FW Fast Path */
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	ip_decrease_ttl(iph);
-	if (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL) {
-		usPadLen = (iph->tot_len + SECFP_ESP_TRAILER_LEN)
-				& (pSA->SAParams.ulBlockSize - 1);
-		usPadLen = (usPadLen == 0) ? 0 :
-			pSA->SAParams.ulBlockSize - usPadLen;
-	} else
-		usPadLen = 0;
-
 #endif
 
 	if (unlikely(skb_shinfo(skb1)->frag_list)) {
@@ -4735,7 +4714,6 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 #endif
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
-	unsigned char offset = 0;
 #elif !defined(ASF_QMAN_IPSEC)
 	void *desc;
 #ifdef ASF_SECFP_PROTO_OFFLOAD

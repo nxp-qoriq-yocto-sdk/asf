@@ -4158,10 +4158,8 @@ unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
 	}
 	pSASPDMapNode = pSA->pSASPDMapNode;
 	while (pSASPDMapNode) {
-		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex) {
-			bFound = ASF_TRUE;
+		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
 			break;
-		}
 		pSASPDMapNode = pSASPDMapNode->pNext;
 	}
 
@@ -4260,10 +4258,8 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 		ASFIPSEC_WARN("Could not find SPI Link node");
 	pSASPDMapNode = pSA->pSASPDMapNode;
 	while (pSASPDMapNode) {
-		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex) {
-			bFound = ASF_TRUE;
+		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
 			break;
-		}
 		pSASPDMapNode = pSASPDMapNode->pNext;
 	}
 

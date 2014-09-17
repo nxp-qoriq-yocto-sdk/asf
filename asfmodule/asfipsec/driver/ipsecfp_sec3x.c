@@ -1275,7 +1275,6 @@ void secfp_prepareOutDescriptorWithFrags(struct sk_buff *skb, void *pData,
 					0);
 
 			if (skb->prev) {
-				pTailSkb = skb->prev;
 				ptr2 = secfp_prepareScatterList(skb,
 					pSA->ulSecHdrLen, 0);
 				SECFP_SET_DESC_PTR(desc->ptr[5],

@@ -581,7 +581,7 @@ int asfctrl_xfrm_delete_policy_sa_map(struct xfrm_policy *xp,
 	ret = 0;
 
 	ASFCTRL_FUNC_EXIT;
-	return 0;
+	return ret;
 }
 
 int asfctrl_xfrm_delete_policy(struct xfrm_policy *xp, int dir)
@@ -2194,7 +2194,7 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 {
 	ASFBuffer_t Buffer;
 	ASF_IPAddr_t daddr;
-	int sa_id, cont_id;
+	int cont_id;
 	bool bLockFlag;
 	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 	ASF_uint32_t ulVSGId;
@@ -2211,7 +2211,6 @@ int asfctrl_xfrm_encrypt_n_send(struct sk_buff *skb,
 		return -EINVAL;
 	}
 
-	sa_id = xfrm->asf_sa_cookie - 1;
 	Buffer.nativeBuffer = skb;
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (xfrm->props.family == AF_INET6) {
