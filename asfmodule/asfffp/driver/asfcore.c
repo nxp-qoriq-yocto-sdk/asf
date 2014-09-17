@@ -3295,7 +3295,13 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				iph->daddr = flow->ulDestNATIp;
 			}
 
-			*ptrhdrOffset = flow->ulNATPorts;
+			/* Converting flow->ulNATPorts into network order */
+
+			us_src_port = flow->ulNATPorts >> 16;
+			us_dest_port = flow->ulNATPorts & 0x0000ffff;
+			*(unsigned short *)ptrhdrOffset = us_src_port;
+			*((unsigned short *)(ptrhdrOffset) + 1) = us_dest_port;
+
 			skb_set_transport_header(skb, iphlen);
 
 #ifndef ASF_DO_INC_CHECKSUM

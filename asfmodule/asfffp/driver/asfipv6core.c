@@ -1600,7 +1600,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 			ipv6_addr_copy((struct in6_addr *)&(ip6h->daddr), (struct in6_addr *)&(flow->ipv6DestNATIp));
 
 
-		*ptrhdrOffset = flow->ulNATPorts;
+		*(unsigned short *)ptrhdrOffset = flow->ulNATPorts >> 16;
+		*((unsigned short *)(ptrhdrOffset) + 1) = flow->ulNATPorts & 0x0000ffff;
 
 #ifdef ASF_DO_INC_CHECKSUM
 		/* Hardware does not handle this, so we do incremental checksum */
