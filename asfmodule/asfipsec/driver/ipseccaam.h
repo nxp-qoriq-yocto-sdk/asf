@@ -49,7 +49,9 @@
 #define DESC_MAX_USED_BYTES		(DESC_AEAD_GIVENC_LEN + \
 					CAAM_MAX_KEY_SIZE)
 #define DESC_MAX_USED_LEN		(DESC_MAX_USED_BYTES / CAAM_CMD_SZ)
-
+#define LATE_PACKET_ERR		0x40000083
+#define ANTI_REPLAY_ERR		0x40000084
+#define SEQUENCE_OVERFLOW_ERR	0x40000085
 #ifdef ASF_QMAN_IPSEC
 struct secfp_fq_link_node_s {
 	struct qman_fq qman_fq;

@@ -660,30 +660,6 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 
 	pInfo = container_of(pSG, struct ses_pkt_info, cb_SG[0]);
 
-	if (dqrr->fd.status) {
-		char err[256];
-		err_val = dqrr->fd.status;
-		caam_jr_strstatus(err, dqrr->fd.status);
-		if ((err_val & 0xF00000FF) == 0x40000084) {
-			ASFIPSEC_DEBUG("ANTI-REPLAY-ERR FD status = %#x "
-			"Err = %s\n", dqrr->fd.status, err);
-			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
-				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
-		} else if ((err_val & 0xF00000FF) == 0x40000083) {
-			ASFIPSEC_DEBUG("LATE-PACKET-ERR FD status = %#x "
-			"Err = %s\n", dqrr->fd.status, err);
-			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
-				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT19]);
-		} else {
-			ASFIPSEC_DEBUG("FD status = %#x Err = %s\n",
-			err_val, err);
-			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
-				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
-		}
-		ASFSkbFree(pInfo->cb_skb);
-		goto out;
-	}
-
 	addr = ((dma_addr_t)(pSG->addr_hi)<<32) + pSG->addr_lo;
 	if (!pSG->extension)
 		pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
@@ -695,15 +671,49 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 		pInfo->cb_skb->len = sgt[0].length;
 		kfree(sgt);
 	}
+
+	if (dqrr->fd.status) {
+		char err[256];
+		err_val = dqrr->fd.status & 0xF00000FF;
+		caam_jr_strstatus(err, dqrr->fd.status);
+		switch (err_val) {
+			case ANTI_REPLAY_ERR:
+				ASFIPSEC_DEBUG("FD status = %#x "
+				"Err = %s\n", dqrr->fd.status, err);
+				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
+				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
+				break;
+			case LATE_PACKET_ERR:
+				ASFIPSEC_DEBUG("FD status = %#x "
+				"Err = %s\n", dqrr->fd.status, err);
+				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
+				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT19]);
+				break;
+			case SEQUENCE_OVERFLOW_ERR:
+				ASFIPSEC_DEBUG("FD status = %#x "
+				"Err = %s\n", dqrr->fd.status, err);
+				goto down;
+			default:
+				ASFIPSEC_DEBUG("FD status = %#x "
+				"Err = %s\n",err_val, err);
+				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
+					IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
+		}
+		ASFSkbFree(pInfo->cb_skb);
+		goto out;
+	}
+down:
 	if (pInfo->proto != SECFP_PROTO_ESP)
 		pInfo->cb_skb->data += pInfo->dynamic;
 	if (pInfo->dir == SECFP_OUT) {
 		if (pInfo->proto == SECFP_PROTO_ESP)
 			pInfo->cb_skb->len = pSG->length;
 		if (pInfo->proto == SECFP_PROTO_ESP)
-			secfp_outComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);
+			secfp_outComplete(pInfo->cb_pDev, NULL,
+				err_val, pInfo->cb_skb);
 		else
-			secfp_outAHComplete(pInfo->cb_pDev, NULL, 0, pInfo->cb_skb);
+			secfp_outAHComplete(pInfo->cb_pDev, NULL,
+				err_val, pInfo->cb_skb);
 	} else {
 #ifndef ASF_DEDICTD_CHAN_SEC_OUT
 		int hashval = 0, frag_cpu;
