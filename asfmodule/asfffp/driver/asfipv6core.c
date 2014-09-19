@@ -1162,7 +1162,6 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	if (unlikely(!anDev)) {
 		asf_debug("CII %u doesn't appear to be valid\n",
 			ulCommonInterfaceId);
-		pFreeFn(skb);
 		return ASF_RTS;
 	}
 
