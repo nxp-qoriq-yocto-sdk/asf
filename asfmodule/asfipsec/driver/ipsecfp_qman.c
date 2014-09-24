@@ -442,8 +442,7 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 		sgt[0].length = skb_headlen(skb);
 		addr = dma_map_single(pSA->ctx.jrdev,
 				skb->data, skb_headlen(skb), DMA_BIDIRECTIONAL);
-		sgt[0].addr_lo = (uint32_t) (addr);
-		sgt[0].addr_hi = (uint32_t) (addr>>32);
+		sgt[0].addr = addr;
 		len_to_caam = skb_headlen(skb);
 		skb1 = skb_shinfo(skb)->frag_list;
 		while (1) {
@@ -452,8 +451,7 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 			addr = dma_map_single(pSA->ctx.jrdev,
 				skb1->data, skb1->len, DMA_BIDIRECTIONAL);
 			len_to_caam += skb1->len;
-			sgt[i].addr_lo = (uint32_t) (addr);
-			sgt[i].addr_hi = (uint32_t) (addr>>32);
+			sgt[i].addr = addr;
 			i++;
 			if (skb1->next == NULL)
 				break;
@@ -467,16 +465,14 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 			* sizeof(struct scatter_gather_entry_s),
 			DMA_BIDIRECTIONAL);
 		pSG[1].extension = 1;
-		pSG[1].addr_lo = (uint32_t) pInmap;
-		pSG[1].addr_hi = (uint32_t) (pInmap>>32);
+		pSG[1].addr = pInmap;
 		pSG[1].length = len_to_caam;
 		sgt1 = &sgt[i];
 		memcpy(sgt1, sgt, (total_frags + 1) *
 			sizeof(struct scatter_gather_entry_s));
 		addr = dma_map_single(pSA->ctx.jrdev,
 				skb->data, skb_headlen(skb), DMA_BIDIRECTIONAL);
-		sgt1[0].addr_lo = (uint32_t) (addr + ulHdrLen);
-		sgt1[0].addr_hi = (uint32_t) ((addr + ulHdrLen)>>32);
+		sgt1[0].addr = addr + ulHdrLen;
 		sgt1[0].length = skb_headlen(skb) - ulHdrLen;
 		sgt[i - 1].length += ulFragpadlen;
 		skb1->len += ulFragpadlen;
@@ -488,16 +484,13 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 			DMA_BIDIRECTIONAL);
 		pSG->length = len_to_caam - ulHdrLen;
 		pSG->extension = 1;
-		pSG->addr_lo = (uint32_t) (pInmap);
-		pSG->addr_hi = (uint32_t) (pInmap >> 32);
+		pSG->addr = pInmap;
 	} else {
 		pInmap = dma_map_single(pSA->ctx.jrdev,
 			skb->data, skb->len, DMA_BIDIRECTIONAL);
-		pSG->addr_lo = (uint32_t) (pInmap + ulHdrLen);
-		pSG->addr_hi = (uint32_t) ((pInmap + ulHdrLen)>>32);
+		pSG->addr = pInmap + ulHdrLen;
 		pSG->length = skb->len;
-		pSG[1].addr_lo = (uint32_t) pInmap;
-		pSG[1].addr_hi = (uint32_t) (pInmap>>32);
+		pSG[1].addr = pInmap;
 		pSG[1].length = skb->len;
 	}
 	} else {
@@ -508,19 +501,16 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 			DMA_BIDIRECTIONAL);
 		pInfo->dynamic = pSA->ctx.split_key_len;
 		/* filling compound frame */
-		pSG->addr_lo = (uint32_t) pInmap;
-		pSG->addr_hi = (uint32_t) (pInmap >> 32);
+		pSG->addr = pInmap;
 		pSG->length = skb->len;
-		pSG[1].addr_lo = (uint32_t) (pInmap + pSA->ctx.split_key_len);
-		pSG[1].addr_hi = (uint32_t)
-				((pInmap + pSA->ctx.split_key_len) >> 32);
+		pSG[1].addr = pInmap + pSA->ctx.split_key_len;
 		pSG[1].length = skb->len;
 	}
 	pSG[1].final = 1;
 
 
 	qmfd._format2 = qm_fd_compound;
-	qmfd.addr_lo = dma_map_single(pDev, pSG,
+	qmfd.addr = dma_map_single(pDev, pSG,
 		2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
 	qmfd.length29 = 2*sizeof(scatter_gather_entry_t);
 
@@ -586,12 +576,10 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 		DMA_BIDIRECTIONAL);
 
 	/* filling compound frame */
-	pSG->addr_lo = (uint32_t) (pInmap - pSA->ulXmitHdrLen);
-	pSG->addr_hi = (uint32_t) ((pInmap - pSA->ulXmitHdrLen)>>32);
+	pSG->addr = pInmap - pSA->ulXmitHdrLen;
 	pSG->length = skb->len + pSA->ulCompleteOverHead;
 
-	pSG[1].addr_lo = (uint32_t) (pInmap);
-	pSG[1].addr_hi = (uint32_t) (pInmap>>32);
+	pSG[1].addr = pInmap;
 	} else {
 		pInmap = dma_map_single(pSA->ctx.jrdev,
 				(skb->data - pSA->ctx.split_key_len),
@@ -599,12 +587,9 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 				DMA_BIDIRECTIONAL);
 		/* filling compound frame */
 		pInfo->dynamic = pSA->ctx.split_key_len;
-		pSG->addr_lo = (uint32_t) (pInmap);
-		pSG->addr_hi = (uint32_t) (pInmap >> 32);
+		pSG->addr = pInmap;
 		pSG->length = skb->len;
-		pSG[1].addr_lo = (uint32_t) ((pInmap) + pSA->ctx.split_key_len);
-		pSG[1].addr_hi = (uint32_t)
-				((pInmap + pSA->ctx.split_key_len) >> 32);
+		pSG[1].addr = pInmap + pSA->ctx.split_key_len;
 	}
 
 	ASFIPSEC_DEBUG("QMAN enqueue submit pSA->ulCompleteOverHead %d\n",
@@ -614,7 +599,7 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 	pSG[1].final = 1;
 
 	qmfd._format2 = qm_fd_compound;
-	qmfd.addr_lo = (u32)dma_map_single(pDev, pSG,
+	qmfd.addr = dma_map_single(pDev, pSG,
 		2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
 	qmfd.length29 = 2*sizeof(scatter_gather_entry_t);
 
@@ -651,8 +636,9 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 		}
 	}
 
+	addr = dqrr->fd.addr;
 	/* ToDo: We set dma_map_single, so, should use dma_umap_single here */
-	pSG = (scatter_gather_entry_t *)phys_to_virt(dqrr->fd.addr_lo);
+	pSG = (scatter_gather_entry_t *)phys_to_virt(addr);
 	if (!pSG) {
 		ASFIPSEC_DPERR("NULL pSG buffer\n");
 		return qman_cb_dqrr_consume;
@@ -660,13 +646,13 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 
 	pInfo = container_of(pSG, struct ses_pkt_info, cb_SG[0]);
 
-	addr = ((dma_addr_t)(pSG->addr_hi)<<32) + pSG->addr_lo;
+	addr = pSG->addr;
 	if (!pSG->extension)
 		pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
 	else {
 		struct scatter_gather_entry_s *sgt =
 		(struct scatter_gather_entry_s *)phys_to_virt(addr);
-		addr = ((dma_addr_t)(sgt[0].addr_hi)<<32) + pSG->addr_lo;
+		addr = sgt[0].addr;
 		pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
 		pInfo->cb_skb->len = sgt[0].length;
 		kfree(sgt);

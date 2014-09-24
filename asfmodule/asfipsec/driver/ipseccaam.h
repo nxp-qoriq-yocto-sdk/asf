@@ -61,9 +61,17 @@ struct secfp_fq_link_node_s {
 };
 
 typedef struct scatter_gather_entry_s {
-	u32 reserved_zero:28;
-	u32 addr_hi:4; /**< Memory Address of the start of the buffer - hi*/
-	u32 addr_lo; /**< Memory Address - lo*/
+	union {
+		struct {
+			u8 reserved_zero[3];
+			u8 addr_hi;     /* high 8-bits of 40-bit address */
+			u32 addr_lo;    /* low 32-bits of 40-bit address */
+		};
+		struct {
+			u64 __notaddress:24;
+			u64 addr:40;
+		};
+	};
 	u32 extension:1;
 	u32 final:1;
 	u32 length:30; /**< Length of the data in the frame */
