@@ -2730,9 +2730,11 @@ unsigned int secfp_createOutSA(
 
 	ASFIPSEC_DEBUG(" Overhead = %d", pSA->ulCompleteOverHead);
 	/* revisit - usAuthKeyLen or usAuthKeySize */
-	pSA->ulInnerPathMTU = ulMtu - pSA->ulSecOverHead;
+	pSA->ulInnerPathMTU = ulMtu - (pSA->ulSecOverHead -
+						 SECFP_ESP_TRAILER_LEN);
 	pSA->ulInnerPathMTU -= (pSA->ulInnerPathMTU)
 				& (pSA->SAParams.ulBlockSize - 1);
+	pSA->ulInnerPathMTU -= SECFP_ESP_TRAILER_LEN;
 
 #ifdef CONFIG_ASF_SEC4x
 	pSA->option[1] = SECFP_NONE;
@@ -2989,9 +2991,11 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 		case ASFIPSEC_UPDATE_MTU:
 			if (likely(pOutSA->SAParams.ucProtocol == SECFP_PROTO_ESP)) {
 			pOutSA->ulInnerPathMTU =
-				pModSA->u.ulMtu - pOutSA->ulSecOverHead;
+				pModSA->u.ulMtu - (pOutSA->ulSecOverHead -
+							SECFP_ESP_TRAILER_LEN);
 			pOutSA->ulInnerPathMTU -= (pOutSA->ulInnerPathMTU)
 				& (pOutSA->SAParams.ulBlockSize - 1);
+			pOutSA->ulInnerPathMTU -= SECFP_ESP_TRAILER_LEN;
 			} else {
 				pOutSA->ulInnerPathMTU =
 					pModSA->u.ulMtu - pOutSA->ulSecOverHead;
