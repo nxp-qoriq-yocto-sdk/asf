@@ -652,10 +652,13 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 	else {
 		struct scatter_gather_entry_s *sgt =
 		(struct scatter_gather_entry_s *)phys_to_virt(addr);
+		dma_addr_t tmp_addr = pSG[1].addr;
+		struct scatter_gather_entry_s *sgt_tmp =
+		(struct scatter_gather_entry_s *)phys_to_virt(tmp_addr);
 		addr = sgt[0].addr;
 		pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
 		pInfo->cb_skb->len = sgt[0].length;
-		kfree(sgt);
+		kfree(sgt_tmp);
 	}
 
 	if (dqrr->fd.status) {
