@@ -2651,9 +2651,10 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	unsigned int nhoffset = 0;
 	struct sk_buff *skb1 = NULL;
-#endif /*ASF_SECFP_PROTO_OFFLOAD*/
 	struct iphdr *iph = (struct iphdr *)*(uintptr_t *)
 				&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
+#endif /*ASF_SECFP_PROTO_OFFLOAD*/
+	struct sk_buff *pTailPrevSkb;
 	struct iphdr *inneriph = (struct iphdr *)(pHeadSkb->data);
 	unsigned int ulStripLen;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -2763,65 +2764,54 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 		ASFIPSEC_PRINT(KERN_INFO "Decrypted Protocol != IPV4 or IPV6");
 		return 1;
 	}
-	/* Look at the padding length and verify length of packet */
-	if (total_frag > 0) {
-		/* Padding Length */
-		ulStripLen = 2 + charp[last_frag->size - 2];
-		if (likely(last_frag->size > ulStripLen)) {
-			last_frag->size -= ulStripLen;
-			pTailSkb->data_len -= ulStripLen;
-			pTailSkb->len -= ulStripLen;
-		} else
-			__pskb_trim(pTailSkb, ulStripLen);
 
+	if (unlikely(*pTotLen <= ulStripLen)) {
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
+		rcu_read_lock();
+		pSA = secfp_findInSA(*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]),
+			SECFP_PROTO_ESP,
+			*(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]),
+			*daddr,
+			(unsigned int *)&(pHeadSkb->cb[SECFP_HASH_VALUE_INDEX]));
+		if (pSA) {
+			pSA->ulBytes[smp_processor_id()] -= pHeadSkb->len;
+			pSA->ulPkts[smp_processor_id()]--;
+			ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT12);
+		}
+		ASFIPSEC_WARN("Invalid Pad length");
+		rcu_read_unlock();
+		return 1;
+	}
+
+	if (!skb_shinfo(pHeadSkb)->frag_list) {
+		pHeadSkb->len -= ulStripLen;
 		*pTotLen -= ulStripLen;
 	} else {
-		if (unlikely(*pTotLen <= ulStripLen)) {
-			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT12]);
-			rcu_read_lock();
-			pSA = secfp_findInSA(*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX]),
-				SECFP_PROTO_ESP,
-				*(unsigned int *)&(pHeadSkb->cb[SECFP_SPI_INDEX]),
-				*daddr,
-				(unsigned int *)&(pHeadSkb->cb[SECFP_HASH_VALUE_INDEX]));
-			if (pSA) {
-				pSA->ulBytes[smp_processor_id()] -= pHeadSkb->len;
-				pSA->ulPkts[smp_processor_id()]--;
-				ASF_IPSEC_INC_POL_PPSTATS_CNT(pSA, ASF_IPSEC_PP_POL_CNT12);
-			}
-			ASFIPSEC_WARN("Invalid Pad length");
-			rcu_read_unlock();
-			return 1;
-		}
-		/* Padding length is is in skb->len-2 */
-		pTailSkb->len -= ulStripLen;
-		*pTotLen -= ulStripLen;
-	}
-#ifdef ASF_SECFP_PROTO_OFFLOAD
-		/* Need to work on this part, Currently this part is not correct - Sahil */
-		if (skb_shinfo(pHeadSkb)->frag_list == pTailSkb) {
+		if (pTailSkb->len > ulStripLen)
+			pTailSkb->len -= ulStripLen;
+		else if (skb_shinfo(pHeadSkb)->frag_list == pTailSkb) {
 			pHeadSkb->len -= (ulStripLen - pTailSkb->len);
 			ASFSkbFree(pTailSkb);
 			skb_shinfo(pHeadSkb)->frag_list = NULL;
 		} else {
-			unsigned int remaininglen = *pTotLen - pHeadSkb->len;
-			skb1 = skb_shinfo(pHeadSkb)->frag_list;
-			while (skb1 && remaininglen >= 0) {
-				if (skb1->len >= remaininglen) {
-					skb1->len = remaininglen;
-					pTailSkb = skb1;
-				}
-				remaininglen -= skb1->len;
-				skb1 = skb1->next;
+			for (pTailPrevSkb = pHeadSkb,
+				pTailSkb = skb_shinfo(pHeadSkb)->frag_list;
+				pTailSkb->next != NULL;
+				pTailPrevSkb = pTailSkb,
+				pTailSkb = pTailSkb->next)
+				;
+			if (pTailSkb->len == ulStripLen) {
+				pTailPrevSkb->next = NULL;
+			} else {
+				pTailPrevSkb->len -=
+					(ulStripLen - pTailSkb->len);
+				pTailPrevSkb->next = NULL;
 			}
-			if (skb1) {
-				skb_shinfo(skb1)->frag_list = skb1->next;
-				ASFSkbFree(skb1);
-			}
-			pTailSkb->next = NULL;
+			ASFSkbFree(pTailSkb);
+			pTailSkb = pTailPrevSkb;
 		}
-
-#endif
+		*pTotLen -= ulStripLen;
+	}
 	return 0;
 }
 
