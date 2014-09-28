@@ -711,6 +711,27 @@ down:
 		struct iphdr *iph = (struct iphdr *)(pInfo->cb_skb->data);
 		struct ipv6hdr *ip6h = (struct ipv6hdr *)(pInfo->cb_skb->data);
 
+		/* With AH, the tunnel headers are not removed by SEC */
+		if (pInfo->proto == SECFP_PROTO_AH) {
+			unsigned int ah_header_len;
+			unsigned int headers_len;
+#ifdef ASF_IPV6_FP_SUPPORT
+			if (iph->version == 6) {
+				ah_header_len = ((unsigned int)
+				(pInfo->cb_skb->data[SECFP_IPV6_HDR_LEN + 1]) + 2) << 2;
+				headers_len = SECFP_IPV6_HDR_LEN + ah_header_len;
+			} else
+#endif
+			{
+				ah_header_len = ((unsigned int)
+				(pInfo->cb_skb->data[SECFP_IPV4_HDR_LEN + 1]) + 2) << 2;
+				headers_len = SECFP_IPV4_HDR_LEN + ah_header_len;
+			}
+			ip6h = (struct ip6hdr *)(pInfo->cb_skb->data + headers_len);
+			iph = (struct iphdr *)(pInfo->cb_skb->data + headers_len);
+		}
+
+
 		/* determining the inner fragmented packet and hashing it on
 		the basis of source ip and frag-id (for IPv4 only).
 		*/
