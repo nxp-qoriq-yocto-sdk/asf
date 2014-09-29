@@ -1877,7 +1877,7 @@ unsigned int asfReasmLinearize(struct sk_buff **pSkb,
 			asf_reasm_debug("Total Len =%d, available = %d, "\
 					"Don't expect to allocate new SKB\n",
 					ulTotalLen,
-					pTempSkb->end
+					skb_end_pointer(pTempSkb)
 					- (pTempSkb->data + pTempSkb->len));
 			frag = skb_shinfo(pTempSkb)->frag_list;
 			/* The Calling Function will free the First SKB */

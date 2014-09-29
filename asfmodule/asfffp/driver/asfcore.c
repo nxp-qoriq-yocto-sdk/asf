@@ -1192,7 +1192,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 						sizeof(unsigned long));
 	asf_debug("skb 0x%p, skb->head 0x%p, skb->data 0x%p, skb->tail 0x%p"
 		" skb->len 0x%x skb->mac_header 0x%p\n\n",
-	       skb, skb->head, skb->data, skb->tail,
+	       skb, skb->head, skb->data, skb_tail_pointer(skb),
 	       skb->len, skb->mac_header);
 
 	return skb;
@@ -1227,7 +1227,7 @@ ASF_void_t asf_skb_to_abuf(ASFBuffer_t *pAbuf,
 			((u32)pAbuf->iph - (u32)pAbuf->ethh); */
 	asf_debug("RES: skb 0x%p, skb->head 0x%p, skb->data 0x%p, "
 			"skb->tail 0x%p skb->len 0x%x skb->mac_header 0x%p\n\n",
-			skb, skb->head, skb->data, skb->tail,
+			skb, skb->head, skb->data, skb_tail_pointer(skb),
 			skb->len, skb->mac_header);
 
 	pParse = &pAbuf->pAnnot->parse_result;

@@ -372,9 +372,9 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 
 		if (skb1 != skb) {
 			xfrm_state_hold(x);
-			skb1->tail = (u8 *)skb1->data + skb1->len;
+			skb_set_tail_pointer(skb1, skb1->len);
 		} else
-			skb1->tail = (u8 *)skb1->data + skb_headlen(skb1);
+			skb_set_tail_pointer(skb1, skb_headlen(skb1));
 		/*3. send the packet to slow path */
 		ASFCTRL_netif_receive_skb(skb1);
 		ASFCTRL_WARN(" sent the packet to slow path");

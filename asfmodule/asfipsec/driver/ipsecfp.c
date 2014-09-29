@@ -957,7 +957,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	/* Alright sequence number will be either the right one in extended sequence number
 		support or it will be set to 0 */
 	if (pSA->SAParams.bUseExtendedSequenceNumber)
-		*(unsigned int *) &(pTailSkb->tail[0]) = ulHiSeqNum;
+		*(unsigned int *) skb_tail_pointer(pTailSkb) = ulHiSeqNum;
 
 	/* Finished handling the SEC Header */
 	/* Now prepare the IV Data */
@@ -4242,7 +4242,8 @@ So all these special boundary cases need to be handled for nr_frags*/
 		if (pSA->SAParams.bDoAntiReplayCheck) {
 			if (pSA->SAParams.bUseExtendedSequenceNumber) {
 				pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
-				pESNLoc = (unsigned int *)(pTailSkb->tail);
+				pESNLoc = (unsigned int *)
+						(skb_tail_pointer(pTailSkb));
 				secfp_appendESN(pSA, ulSeqNum, &ulLowerBoundSeqNum, (unsigned int *)pESNLoc);
 				*(unsigned int *)&(pHeadSkb->cb[SECFP_SEQNUM_INDEX]) = ulSeqNum;
 				secfp_checkSeqNum(pSA, ulSeqNum,
@@ -5020,7 +5021,8 @@ So all these special boundary cases need to be handled for nr_frags*/
 			if (pSA->SAParams.bDoAntiReplayCheck) {
 				if (pSA->SAParams.bUseExtendedSequenceNumber) {
 					pHeadSkb->cb[SECFP_LOOKUP_SA_INDEX] = 1; /* To do lookup Post SEC */
-					pESNLoc = (unsigned int *)(pTailSkb->tail);
+					pESNLoc = (unsigned int *)
+						(skb_tail_pointer(pTailSkb));
 					secfp_appendESN(pSA, ulSeqNum, &ulLowerBoundSeqNum, (unsigned int *)pESNLoc);
 					*(unsigned int *)&(pHeadSkb->cb[SECFP_SEQNUM_INDEX]) = ulSeqNum;
 					secfp_checkSeqNum(pSA, ulSeqNum,
