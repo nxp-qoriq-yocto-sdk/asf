@@ -1526,7 +1526,6 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 				(unsigned char *)abuf.iph -
 		(unsigned char *)(skb_network_header(abuf.nativeBuffer)));
 		skb_reset_network_header(abuf.nativeBuffer);
-		ASFCB((struct sk_buff *)abuf.nativeBuffer)->Defrag.bIPv6 = 0;
 		abuf.nativeBuffer = asfIpv4Defrag(anDev->ulVSGId,
 					abuf.nativeBuffer,
 					NULL, NULL, NULL, &fragCnt);

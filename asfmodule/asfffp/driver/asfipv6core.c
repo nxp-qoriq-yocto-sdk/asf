@@ -331,13 +331,9 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 		/* Do we need this check ? */
 		if (unlikely((fhdr->frag_off) & htons(0xFFF9))) {
 			struct sk_buff *skb;
-			struct ASFSkbCB *cb;
 
 			abuf.bbuffInDomain = ASF_TRUE;
 			skb = asf_abuf_to_skb(&abuf);
-
-			cb = (struct ASFSkbCB *)(skb->cb);
-			cb->Defrag.bIPv6 = 1;
 
 			skb_set_transport_header(skb, pL4hdr -
 						(unsigned char *)ip6h);
@@ -350,9 +346,22 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 
 			/* update skb */
 			skb = (struct sk_buff *)abuf.nativeBuffer;
-			nexthdr = *(unsigned int *)&(skb->cb[16]);
-			pL4hdr = (skb->data + *(unsigned int *)&(skb->cb[8]));
 			skb_reset_network_header(skb);
+			ip6h = (struct ipv6hdr *)skb_network_header(skb);
+			if (ip6h->nexthdr == NEXTHDR_HOP) {
+				struct ipv6_opt_hdr *hophdr;
+				skb_set_transport_header(skb,
+						sizeof(struct ipv6hdr));
+				hophdr = (struct ipv6_opt_hdr *)
+						skb_transport_header(skb);
+				exthdrsize = (hophdr->hdrlen + 1) << 3;
+				nexthdr = hophdr->nexthdr;
+			} else {
+				exthdrsize = 0;
+				nexthdr = ip6h->nexthdr;
+			}
+			pL4hdr = skb->data + sizeof(struct ipv6hdr)
+								+ exthdrsize;
 			/* make an abuf out of head skb; this buffer should not
 			   go through another asf_abuf_to_skb - ok because
 			   abuf.nativebuffer is already populated */
@@ -360,7 +369,6 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			/* Update pParse pointer to HEAD aBuf */
 			pParse = &abuf.pAnnot->parse_result;
 			/* Do we require to update ipv6h? not sure now */
-			ip6h = (struct ipv6hdr *)abuf.iph;
 			/* Assuming that Transport Header is
 			   included in Head Fragment */
 			abuf.frag_list = 1;
@@ -1259,8 +1267,6 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 		/* Do we need this check ? */
 		if (unlikely((fhdr->frag_off) & htons(0xFFF9))) {
-			struct ASFSkbCB *cb = (struct ASFSkbCB *)(skb->cb);
-			cb->Defrag.bIPv6 = 1;
 			skb = asfIpv4Defrag(ulVsgId, skb, NULL, NULL, NULL, &fragCnt);
 			if (!(skb)) {
 				asf_debug("Skb absorbed for re-assembly \r\n");
@@ -1269,13 +1275,19 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 			skb_reset_network_header(skb);
 			ip6h = (struct ipv6hdr *)skb_network_header(skb);
 			if (ip6h->nexthdr == NEXTHDR_HOP) {
-				skb_set_transport_header(skb, sizeof(struct ipv6hdr));
-				exthdrsize = (skb_transport_header(skb)[1] + 1) << 3;
-				skb_set_transport_header(skb, exthdrsize);
+				struct ipv6_opt_hdr *hophdr;
+				skb_set_transport_header(skb,
+						sizeof(struct ipv6hdr));
+				hophdr = (struct ipv6_opt_hdr *)
+						skb_transport_header(skb);
+				exthdrsize = (hophdr->hdrlen + 1) << 3;
+				nexthdr = hophdr->nexthdr;
+			} else {
+				exthdrsize = 0;
+				nexthdr = ip6h->nexthdr;
 			}
-
-			skb_set_transport_header(skb, *(uintptr_t *)&(skb->cb[8]));
-			nexthdr = *(uintptr_t *)&(skb->cb[16]);
+			skb_set_transport_header(skb, exthdrsize +
+						sizeof(struct ipv6hdr));
 		} else {
 			nexthdr = fhdr->nexthdr;
 			exthdrsize += sizeof(struct frag_hdr);

@@ -2881,7 +2881,6 @@ int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 	if (inneriph->version == 4 &&
 			((inneriph->frag_off) & SECFP_MF_OFFSET_FLAG_NET_ORDER)) {
 		skb_reset_network_header(pHeadSkb);
-		ASFCB(pHeadSkb)->Defrag.bIPv6 = 0;
 		pHeadSkb = asfIpv4Defrag((*(unsigned int *)&(pHeadSkb->cb[SECFP_VSG_ID_INDEX])),
 				pHeadSkb, NULL, NULL, NULL, &fragCnt);
 		if (pHeadSkb == NULL) {
@@ -4757,7 +4756,6 @@ static inline int secfp_try_fastPathInv4(struct sk_buff *skb1,
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		ASFIPSEC_DEBUG("should not happen: received encrypted frag %d\n", skb1->len);
 		skb_reset_network_header(skb1);
-		ASFCB(skb1)->Defrag.bIPv6 = 0;
 		skb1 = asfIpv4Defrag(ulVSGId, skb1, NULL, NULL, NULL, &fragCnt);
 		if (skb1 == NULL) {
 			ASFIPSEC_DEBUG("ESP Packet absorbed by IP reasembly module");

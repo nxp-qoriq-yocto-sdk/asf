@@ -220,16 +220,6 @@ static inline void asf_skb_free_func(void *obj)
 			rcu_read_unlock_bh(); \
 		} \
 	} while (0)
-struct _Defrag {
-	bool	bIPv6;
-	void	*iph;
-	unsigned int	fraghdr_len;
-	unsigned char	fraghdr_nexthdr;
-};
-struct ASFSkbCB {
-	struct _Defrag Defrag;
-};
-#define	ASFCB(skb) ((struct ASFSkbCB *)((skb)->cb))
 struct ASFNetDevEntry_s;
 
 #define ASF_VLAN_ARY_LEN	(4096)

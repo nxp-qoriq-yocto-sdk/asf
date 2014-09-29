@@ -109,6 +109,14 @@ struct asf_fragInfo_s {
 	struct asf_fragInfo_s *prev;
 } ;
 
+#ifdef ASF_IPV6_FP_SUPPORT
+struct reasm_firstFrag_info {
+	uintptr_t begIphdr_addr;
+	uintptr_t iphdrExthdr_len;
+	u8 nexthdr;
+};
+#endif
+
 struct asf_reasmCb_s {
 	struct rcu_head rcu;
 	char bHeap;
@@ -140,6 +148,9 @@ struct asf_reasmCb_s {
 	int ulNumSkbs;
 	int ulLastPktTime;
 	asfTmr_t *ptmr;
+#ifdef ASF_IPV6_FP_SUPPORT
+	struct reasm_firstFrag_info fraghdr_info;
+#endif
 	unsigned int ulAppInfo[ASF_REASM_NUM_APP_INFO_VARS];
 	struct asf_reasmCb_s *pNext;
 	struct asf_reasmCb_s *pPrev;
@@ -1513,9 +1524,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 	struct sk_buff *pTempSkb;
 	struct sk_buff *pHeadSkb;
 	struct iphdr *pIpHdr;
-	unsigned int *pSrc, *pTgt;
 	char option;
-	int ii;
 	bool bReasmDone;
 	unsigned int ret;
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -1524,11 +1533,15 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 	bool bIPv6;
 #endif
 	ACCESS_XGSTATS();
+	skb_reset_network_header(skb);
 #ifdef ASF_IPV6_FP_SUPPORT
 	ip6h = (struct ipv6hdr  *)skb_network_header(skb);
 	fhdr = (struct frag_hdr *)skb_transport_header(skb);
-	bIPv6 = ASFCB(skb)->Defrag.bIPv6;
+	if (ip6h->version == 6)
+		bIPv6 = true;
+	else
 #endif
+	bIPv6 = false;
 	XGSTATS_INC(DefragCalls);
 
 	/* Calculate the hash value */
@@ -1600,16 +1613,16 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 			if (ulOffset == 0) {
 				if (bFirstFragRcvd)
 					*bFirstFragRcvd = ASF_TRUE;
-				*(uintptr_t *)  &(skb->cb[0]) = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
 #ifdef ASF_IPV6_FP_SUPPORT
 				if (bIPv6 == true) {
-				*(uintptr_t *)  &(skb->cb[8]) = skb_transport_header(skb) - skb_network_header(skb);
-				*(uintptr_t *)  &(skb->cb[16]) = fhdr->nexthdr;
+					pCb->fraghdr_info.begIphdr_addr = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
+					pCb->fraghdr_info.iphdrExthdr_len = skb_transport_header(skb) - skb_network_header(skb);
+					pCb->fraghdr_info.nexthdr = fhdr->nexthdr;
 				}
 #endif
 			}
 
-			asf_reasm_debug("First Packet skb = 0x%x, skb->data = 0x%x, skb->len = %d, *cb[0] 0x%x\r\n", skb, skb->data, skb->len, *(unsigned int *)  &(skb->cb[0]));
+			asf_reasm_debug("First Packet skb = 0x%x, skb->data = 0x%x, skb->len = %d\r\n", skb, skb->data, skb->len);
 			/* Make skb->data point after the IP header */
 			/* Update the length */
 			skb->data += (ihl);
@@ -1631,7 +1644,6 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 			}
 			return NULL;
 		} else {
-			asf_reasm_debug("ABC: 2 : *pHeadSkb->cb=0x%x\r\n", *(unsigned int *)  &(pCb->fragList->pHeadSkb->cb[0]));
 			asf_reasm_debug("2nd packet of Reassembly cb received\r\n");
 			asf_reasm_debug("Second fragment: skb->data = 0x%x, skb->len =%d\r\n", skb->data, skb->len);
 			skb = asfFragHandle(pCb, skb, &ulOffset, flags,
@@ -1641,12 +1653,12 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 				if (ulOffset == 0) {
 					if (bFirstFragRcvd)
 						*bFirstFragRcvd = ASF_TRUE;
-					*(uintptr_t *)  &(skb->cb[0]) = (uintptr_t)&(skb->data[0]); /* beginning of the IP header */
 #ifdef ASF_IPV6_FP_SUPPORT
-				if (bIPv6 == true) {
-					*(uintptr_t *)  &(skb->cb[8]) = skb_transport_header(skb) - skb_network_header(skb);
-					*(uintptr_t *)  &(skb->cb[16]) = fhdr->nexthdr;
-				}
+					if (bIPv6 == true) {
+						pCb->fraghdr_info.begIphdr_addr = (uintptr_t)&(skb->data[0]);/* beg. of the IP header */
+						pCb->fraghdr_info.iphdrExthdr_len = skb_transport_header(skb) - skb_network_header(skb);
+						pCb->fraghdr_info.nexthdr = fhdr->nexthdr;
+					}
 #endif
 				}
 
@@ -1706,7 +1718,6 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 
 					pHeadSkb = pCb->fragList->pHeadSkb;
 					asf_reasm_debug("pHeadSkb= 0x%x\r\n", pHeadSkb);
-					asf_reasm_debug("ABC: 1 :  *pHeadSkb->cb=0x%x\r\n", *(unsigned int *)  (&pHeadSkb->cb[0]));
 
 					if (pCb->fragList->next) {
 						/* Link the remaining fragments other than the first fragment */
@@ -1744,46 +1755,27 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 
 #ifdef ASF_IPV6_FP_SUPPORT
 					if (bIPv6 == true) {
-						pHeadSkb->data -= *(uintptr_t *)&(pHeadSkb->cb[8]);;
-						memmove(pHeadSkb->data, (void *)(*(uintptr_t *)&(pHeadSkb->cb[0])), *(uintptr_t *)&(pHeadSkb->cb[8]));
+						pHeadSkb->data -= pCb->fraghdr_info.iphdrExthdr_len;
+						memmove(pHeadSkb->data, (void *)pCb->fraghdr_info.begIphdr_addr, pCb->fraghdr_info.iphdrExthdr_len);
 						ip6h = (struct ipv6hdr *)pHeadSkb->data;
-						ip6h->payload_len = pCb->ulTotLen + *(uintptr_t *)&(pHeadSkb->cb[8]);
+						ip6h->payload_len = pCb->ulTotLen + pCb->fraghdr_info.iphdrExthdr_len - sizeof(struct ipv6hdr);
 						if (ip6h->nexthdr == NEXTHDR_HOP) {
-							*(unsigned char *)(ip6h + 1) = *(uintptr_t *)&(pHeadSkb->cb[16]);;
+							*(unsigned char *)(ip6h + 1) = pCb->fraghdr_info.nexthdr;
 						} else {
-							ip6h->nexthdr = *(uintptr_t *)&(pHeadSkb->cb[16]);
+							ip6h->nexthdr = pCb->fraghdr_info.nexthdr;
 						}
-						pHeadSkb->len +=  *(uintptr_t *)&(pHeadSkb->cb[8]);
+						pHeadSkb->len += pCb->fraghdr_info.iphdrExthdr_len;
 					} else
 #endif
 					{
 					/* Update the ip header */
-						asf_reasm_debug("pHeadSkb->cb = 0x%x, *pHeadSkb->cb=0x%x\r\n", pHeadSkb->cb, *(unsigned int *)  (&pHeadSkb->cb[0]));
-
-						pIpHdr = (struct iphdr *)  (*(uintptr_t *)  &(pHeadSkb->cb[0]));
+						/* skb_network_header is still pointing to ip header */
+						pIpHdr = (struct iphdr *)skb_network_header(pHeadSkb);
 						asf_reasm_debug("Updating the IP header, pIpHdr = 0x%x, cb field \r\n", pIpHdr);
-						pSrc = (unsigned int *)  pIpHdr;
 
 						ihl = pIpHdr->ihl*4;
-						if ((unsigned int *)  pHeadSkb->data - pIpHdr->ihl == (unsigned int *)  pIpHdr) {
-							asf_reasm_debug("Stored ipheader = data-ihl\r\n");
-							pHeadSkb->data -= ihl;
-						} else {
-							asf_reasm_debug("Stored ipheader != data-ihl\r\n");
-							pHeadSkb->data -= ASF_REASM_IP_HDR_LEN;
-							pTgt = (unsigned int *)  pHeadSkb->data;
-							asf_reasm_debug("pSrc = 0x%x, pTgt = 0x%x\r\n", pSrc, pTgt);
-
-							if ((unsigned int *)  pHeadSkb->data > (unsigned int *)  pIpHdr) {
-								for (ii = 4; ii >= 0; ii--)
-									pTgt[ii] =  pSrc[ii];
-							} else {
-								for (ii = 0; ii < 5; ii++)
-									pTgt[ii] = pSrc[ii];
-							}
-							pIpHdr = (struct iphdr *)  (pHeadSkb->data);
-						}
-							pHeadSkb->len += ihl;
+						pHeadSkb->data -= ihl;
+						pHeadSkb->len += ihl;
 						skb_reset_network_header(pHeadSkb);
 
 						pIpHdr->tot_len = pCb->ulTotLen+ihl;
@@ -2434,8 +2426,6 @@ int asfIpv6MakeFragment(struct sk_buff *skb,
 	unsigned int hdrtocpy = 0;
 	unsigned int ident = asfReasmGetNextId();
 
-	/*Converting Linux Fraglist to ASF frag list*/
-	asfCnvFgLLinuxToAsf(skb);
 	hdrtocpy = (uintptr_t)(skb_transport_header(skb)) - (uintptr_t)(skb_network_header(skb));
 
 	skb->data -= sizeof(struct frag_hdr);
