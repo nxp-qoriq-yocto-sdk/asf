@@ -482,7 +482,7 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 				sgt1, (total_frags + 1)
 			* sizeof(struct scatter_gather_entry_s),
 			DMA_BIDIRECTIONAL);
-		pSG->length = len_to_caam - ulHdrLen;
+		pSG->length = len_to_caam - ulHdrLen + ulFragpadlen;
 		pSG->extension = 1;
 		pSG->addr = pInmap;
 	} else {
