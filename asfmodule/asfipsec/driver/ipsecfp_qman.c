@@ -612,8 +612,10 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 		else
 			__delay(50);
 
-		if (++retryCount == ASF_MAX_TX_RETRY_CNT)
+		if (++retryCount == ASF_MAX_TX_RETRY_CNT) {
 			kfree(pInfo);
+			return iRetVal;
+		}
 	} while (1);
 	return iRetVal;
 }
