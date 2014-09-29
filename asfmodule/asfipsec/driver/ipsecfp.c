@@ -5491,6 +5491,7 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 	SPDOutSALinkNode_t *pOutSALinkNode;
 	struct sk_buff	*trailer;
 	int tailbits;
+	int retval;
 #ifdef ASF_QOS
 	outSA_t *pSA ;
 #endif
@@ -5559,10 +5560,11 @@ ASF_void_t ASFIPSecEncryptAndSendPkt(ASF_uint32_t ulVsgId,
 			goto ret_stk;
 		}
 	}
-	if (skb_shinfo(skb)->frag_list)
-		skb->len = skb_headlen(skb);
-	if (skb_shinfo(skb)->nr_frags) {
-		ASFIPSEC_PRINT("Scattered packet not supported");
+
+	/* skb_linearise will do linearisation of frag_list or nr_frags
+	otherwise it will just return */
+	retval = skb_linearize(skb);
+	if (retval) {
 		if (pFreeFn)
 			(pFreeFn)(freeArg);
 		goto ret_stk;
