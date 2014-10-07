@@ -543,7 +543,7 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 	struct ses_pkt_info *pInfo;
 	dma_addr_t pInmap;
 	struct iphdr *iph;
-	unsigned int		retryCount = 0;
+	unsigned int retryCount = 0, dpovrd = 0;
 
 	ASFIPSEC_DEBUG("QMAN enqueue submit\n");
 
@@ -558,12 +558,36 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 	iph = (struct iphdr *)skb->data;
 	if (pSA->SAParams.ucProtocol == SECFP_PROTO_ESP) {
 #ifdef ASF_IPV6_FP_SUPPORT
-	if (iph->version == 6) {
-		struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
-		ipv6h->hop_limit--;
-	} else
+		if (iph->version == 6) {
+			struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
+			ipv6h->hop_limit--;
+			if (pSA->def_sel_ver != 6) {
+				ASFIPSEC_DEBUG("UPDATE DPOVRD"
+					"REG with v6");
+				dpovrd = SECFP_PROTO_IPV6;
+			}
+			/*In case of IPv6-to-IPv4 tunnel*/
+			if (!pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+				struct ipv6hdr *ipv6h1 = ipv6_hdr(skb);
+				ipv6_traffic_class(*(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX]), ipv6h1);
+				*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv6_IN_IPv4;
+			} else /* In case of IPv6-in-IPv6 tunnel*/
+				*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv6_IN_IPv6;
+		} else {
 #endif
-		ip_decrease_ttl(iph);
+			ip_decrease_ttl(iph);
+			if (pSA->def_sel_ver != 4) {
+				ASFIPSEC_DEBUG("UPDATE DPOVRD"
+					"REG with v4");
+				dpovrd = SECFP_PROTO_IP;
+			}
+			/*In case of IPv4-to-IPv6 tunnel*/
+			if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+				*(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX]) = iph->tos;
+				*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv4_IN_IPv6;
+			} else /*In case of IPv4-to-IPv4 tunnel*/
+				*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv4_IN_IPv4;
+		}
 	}
 
 	pSG = pInfo->cb_SG;
@@ -602,7 +626,14 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 	qmfd.addr = dma_map_single(pDev, pSG,
 		2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
 	qmfd.length29 = 2*sizeof(scatter_gather_entry_t);
-
+	if (dpovrd) {
+		dpovrd = 0x80000000 | dpovrd;
+		if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+			dpovrd |= SECFP_IPV6_HDR_LEN << 16;
+		else
+			dpovrd |= SECFP_IPV4_HDR_LEN << 16;
+		qmfd.cmd = dpovrd;
+	}
 	do {
 			iRetVal = qman_enqueue(&(pSA->ctx.SecFq->qman_fq),
 					&qmfd, 0);
