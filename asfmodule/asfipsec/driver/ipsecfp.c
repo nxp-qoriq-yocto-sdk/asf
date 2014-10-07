@@ -2214,6 +2214,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		struct ipv6hdr *ipv6h = (struct ipv6hdr *) skb->data;
 		ipv6h->priority = (*(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX])
 					& 0xf0) >> 4;
+		ipv6h->flow_lbl[0] &= 0x0f;
 		ipv6h->flow_lbl[0] |= (*(unsigned char *) &(skb->cb[SECFP_TOS_TC_INDEX])
 				& 0x0f) << 4;
 	}
