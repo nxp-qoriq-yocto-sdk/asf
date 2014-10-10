@@ -2008,7 +2008,7 @@ int asfctrl_xfrm_delete_sa(struct xfrm_state *xfrm)
 
 	ASFCTRL_FUNC_EXIT;
 	kfree(pol_list);
-	return 0;
+	return ret;
 }
 
 int asfctrl_xfrm_flush_sa(ASF_uint32_t ulVSGId)

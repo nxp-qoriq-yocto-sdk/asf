@@ -3258,7 +3258,7 @@ unsigned int secfp_mapPolOutSA(
 	if (!pContainer->SPDParams.bOnlySaPerDSCP) {
 		secfp_mapOutSelSet(pSA, pSrcSel, pDstSel, ucSelMask,
 			usDscpStart, usDscpEnd);
-		if ((!pSA->pHeadSelList) && (!pSA->pHeadSelList->pOutSelList)) {
+		if ((pSA->pHeadSelList) && (!pSA->pHeadSelList->pOutSelList)) {
 			ASFIPSEC_DEBUG("secfp_addOutSelSet failure");
 			if (!bVal)
 				local_bh_enable();
@@ -3401,10 +3401,10 @@ unsigned int secfp_UnMapPolOutSA(unsigned int ulSPDContainerIndex,
 					ASF_IPSEC_ATOMIC_SET(pOutSA->PPStats.IPSecPolPPStats[Index], 0);
 				}
 			}
-			ulSAIndex = pOutSALinkNode->ulSAIndex;
 			secfp_delOutSALinkNode(pContainer,
 				pOutSALinkNode);
-			pOutSA->uRefCnt--;
+			if (pOutSA)
+				pOutSA->uRefCnt--;
 		} else {
 			GlobalErrors.ulOutSANotFound++;
 			ASFIPSEC_DEBUG("secfp_findOutSALinkNode"
@@ -4161,11 +4161,12 @@ unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
 			ASFIPSEC_WARN("Could not find SPI Link node");
 	}
 	pSASPDMapNode = pSA->pSASPDMapNode;
-	while (pSASPDMapNode) {
-		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
-			break;
-		pSASPDMapNode = pSASPDMapNode->pNext;
-	}
+	if (pNode)
+		while (pSASPDMapNode) {
+			if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
+				break;
+			pSASPDMapNode = pSASPDMapNode->pNext;
+		}
 
 	if (pSASPDMapNode && pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
 		ptrIArray_getMagicNum(&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
@@ -4247,6 +4248,9 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 			if (bFound == ASF_TRUE)
 				break;
 		}
+	} else {
+		ASFIPSEC_WARN("CouldNotfind Container");
+		return SECFP_FAILURE;
 	}
 	if (bFound == ASF_TRUE)
 		secfp_deleteInContainerSelList(pContainer, pNode);
@@ -4261,11 +4265,12 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 	else
 		ASFIPSEC_WARN("Could not find SPI Link node");
 	pSASPDMapNode = pSA->pSASPDMapNode;
-	while (pSASPDMapNode) {
-		if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
-			break;
-		pSASPDMapNode = pSASPDMapNode->pNext;
-	}
+	if (pNode)
+		while (pSASPDMapNode) {
+			if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
+				break;
+			pSASPDMapNode = pSASPDMapNode->pNext;
+		}
 
 	if (pSASPDMapNode && pSASPDMapNode->ulSPDSelSetIndexMagicNum ==
 		ptrIArray_getMagicNum(&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
