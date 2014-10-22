@@ -1013,10 +1013,10 @@ secfp_finishOffloadOutPacket(struct sk_buff *skb, outSA_t *pSA,
 	if (iph->version == 6) {
 		struct ipv6hdr *ipv6h;
 		ipv6h = (struct ipv6hdr *) pIpHdr;
-		tot_len = ipv6h->payload_len + SECFP_IPV6_HDR_LEN;
+		tot_len = ASF_NTOHS(ipv6h->payload_len) + SECFP_IPV6_HDR_LEN;
 	} else
 #endif
-		tot_len = iph->tot_len;
+		tot_len = ASF_NTOHS(iph->tot_len);
 
 	/* Update SA Statistics */
 	pSA->ulPkts[smp_processor_id()]++;
@@ -1214,6 +1214,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	AsfIPSecPPGlobalStats_t *pIPSecPPGlobalStats;
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	ASF_boolean_t	bRevalidate = ASF_FALSE;
+	unsigned short payload_len = 0;
 	unsigned char ipv6TClass = 0;
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	unsigned short usPadLen = 0;
@@ -1233,16 +1234,22 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	rcu_read_lock();
 
 	ipv6_traffic_class(ipv6TClass, ipv6h);
+	payload_len = ASF_NTOHS(ipv6h->payload_len);
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutRecvPkts++;
 
 	ASFIPSEC_FPRINT("Pkt received skb->len = %d, ipv6h->payload_len = %d",
-		skb1->len, ipv6h->payload_len);
+		skb1->len, payload_len);
 	ASFIPSEC_HEXDUMP(skb->data - 14, skb1->len + 14);
 
 	ASFIPSEC_FENTRY;
 	pSA = secfp_findOutSA(ulVSGId, pSecInfo, skb1, ipv6TClass,
 			&pContainer, &bRevalidate);
+	if (unlikely(pSA == NULL)) {
+		ASFIPSEC_DEBUG("SA Not Found");
+		goto no_sa;
+	}
+
 	if (unlikely(pSA->odev == NULL)) {
 		ASFIPSEC_DEBUG("L2blob Not Resolved. Drop the packet");
 		goto l2blob_missing;
@@ -1255,11 +1262,6 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		ipv6h = ipv6_hdr(skb);
 	}
 #endif
-	if (unlikely(pSA == NULL)) {
-		ASFIPSEC_DEBUG("SA Not Found");
-		goto no_sa;
-	}
-
 	ASFIPSEC_DEBUG("SA Found");
 	pIPSecPolicyPPStats = &(pSA->PolicyPPStats[smp_processor_id()]);
 	pIPSecPolicyPPStats->NumOutBoundInPkts++;
@@ -1270,7 +1272,7 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 	/* Need to remove decrement TTL by firewall */
 	ipv6h->hop_limit--;
 	if (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL) {
-		usPadLen = (ipv6h->payload_len + SECFP_IPV6_HDR_LEN + SECFP_ESP_TRAILER_LEN)
+		usPadLen = (payload_len + SECFP_IPV6_HDR_LEN + SECFP_ESP_TRAILER_LEN)
 				& (pSA->SAParams.ulBlockSize - 1);
 		usPadLen = (usPadLen == 0) ? 0 : pSA->SAParams.ulBlockSize - usPadLen;
 	} else
@@ -1585,6 +1587,7 @@ static inline int secfp_try_fastPathOutv4(
 	AsfSPDPolicyPPStats_t *pIPSecPolicyPPStats;
 	ASF_boolean_t	bRevalidate = ASF_FALSE;
 	unsigned int ulMTU;
+	uint16_t tot_len = ASF_NTOHS(iph->tot_len);
 #ifndef CONFIG_ASF_SEC4x
 	struct talitos_desc *desc = NULL;
 #elif !defined(ASF_QMAN_IPSEC)
@@ -1607,7 +1610,7 @@ static inline int secfp_try_fastPathOutv4(
 	pIPSecPPGlobalStats->ulTotOutRecvPkts++;
 
 	ASFIPSEC_FPRINT("*****secfp_out: Pkt received skb->len = %d,"\
-		"iph->tot_len = %d", skb1->len, iph->tot_len);
+		"iph->tot_len = %d", skb1->len, tot_len);
 	ASFIPSEC_HEXDUMP(skb->data - 14, skb1->len + 14);
 
 	pSA = secfp_findOutSA(ulVSGId, pSecInfo, skb1, iph->tos,
@@ -1632,7 +1635,7 @@ static inline int secfp_try_fastPathOutv4(
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	ip_decrease_ttl(iph);
 	if (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL) {
-		usPadLen = (iph->tot_len + SECFP_ESP_TRAILER_LEN)
+		usPadLen = (tot_len + SECFP_ESP_TRAILER_LEN)
 				& (pSA->SAParams.ulBlockSize - 1);
 		usPadLen = (usPadLen == 0) ? 0 :
 			pSA->SAParams.ulBlockSize - usPadLen;
@@ -1694,7 +1697,7 @@ static inline int secfp_try_fastPathOutv4(
 		if (unlikely(skb->len > pSA->ulInnerPathMTU)) {
 			ASFIPSEC_DEBUG("Total Leng is > ulPathMTU "
 					"tot_len = %d, ulPathMTU = %d",
-					iph->tot_len, pSA->ulInnerPathMTU);
+					tot_len, pSA->ulInnerPathMTU);
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			ASFIPSEC_DEBUG("Fragmentation activated");
 			if (pSA->SAParams.bRedSideFragment) {
@@ -1954,7 +1957,7 @@ no_sa:
 		rcu_read_unlock();
 		/* TBD - No need for this check, once the frag_list of asf is same as linux frag_list*/
 		if (skb_shinfo(skb1)->frag_list) {
-			if (asfReasmLinearize(&skb1, iph->tot_len,
+			if (asfReasmLinearize(&skb1, tot_len,
 				VPN_TOT_OVHD, VPN_HDROOM)) {
 				ASFIPSEC_DEBUG("asflLinearize failed");
 				ASFSkbFree(skb1);
@@ -2138,7 +2141,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 	if ((iph->version == 4) && (iph->protocol == IPPROTO_UDP)) {
 		struct udphdr *uh = (struct udphdr *) ((u32 *) iph + iph->ihl);
-			uh->len = iph->tot_len - (iph->ihl * 4);
+			uh->len = ASF_NTOHS(iph->tot_len) - (iph->ihl * 4);
 	}
 #endif
 	ASFIPSEC_FPRINT("Sending packet to:"
@@ -2595,13 +2598,15 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 				&(pHeadSkb->cb[SECFP_IPHDR_INDEX]);
 	struct iphdr *inneriph = (struct iphdr *)(pHeadSkb->data);
 	unsigned int ulStripLen;
+	unsigned int ulInnerPktLen;
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (inneriph->version == 6) {
 		struct ipv6hdr *ipv6h = (struct ipv6hdr *) inneriph;
-		ulStripLen = *pTotLen - (ipv6h->payload_len + SECFP_IPV6_HDR_LEN);
+		ulInnerPktLen = (ASF_NTOHS(ipv6h->payload_len) + SECFP_IPV6_HDR_LEN);
 	} else
 #endif
-		ulStripLen = *pTotLen - inneriph->tot_len;
+		ulInnerPktLen = ASF_NTOHS(inneriph->tot_len);
+	ulStripLen = *pTotLen - ulInnerPktLen;
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/
 
 	ASFIPSEC_FPRINT("pHeadSkb->data = 0x%x,"
@@ -2670,11 +2675,11 @@ static inline int secfp_inCompleteCheckAndTrimPkt(
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 6) {
 		struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
-		*pNextProto = *((u8 *)iph + ipv6h->payload_len
+		*pNextProto = *((u8 *)iph + ASF_NTOHS(ipv6h->payload_len)
 			+ SECFP_IPV6_HDR_LEN - pHeadSkb->cb[SECFP_ICV_LENGTH] - 1);
 	} else
 #endif
-		*pNextProto = *((u8 *)iph + iph->tot_len
+		*pNextProto = *((u8 *)iph + ASF_NTOHS(iph->tot_len)
 				- pHeadSkb->cb[SECFP_ICV_LENGTH] - 1);
 #else
 		*pNextProto = pTailSkb->data[pTailSkb->len - 1];
@@ -2902,16 +2907,16 @@ int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 #endif
 		{
 			seldaddr.bIPv4OrIPv6 = 0;
-			seldaddr.ipv4addr = inneriph->daddr;
+			seldaddr.ipv4addr = ASF_NTOHL(inneriph->daddr);
 			selsaddr.bIPv4OrIPv6 = 0;
-			selsaddr.ipv4addr = inneriph->saddr;
+			selsaddr.ipv4addr = ASF_NTOHL(inneriph->saddr);
 			ptrhdrOffset = (unsigned short int *)(&(pHeadSkb->data[(inneriph->ihl*4)]));
 			protocol = inneriph->protocol;
 			isFragmented = (inneriph->frag_off) & SECFP_MF_OFFSET_FLAG_NET_ORDER;
 			inneriphdrlen = (inneriph->ihl*4);
 		}
-		sport = *ptrhdrOffset;
-		dport = *(ptrhdrOffset+1);
+		sport = ASF_NTOHS(*ptrhdrOffset);
+		dport = ASF_NTOHS(*(ptrhdrOffset+1));
 
 		if ((secfp_verifySASels(pSA, protocol, sport, dport, selsaddr, seldaddr)) == ASF_FALSE) {
 
@@ -3469,10 +3474,10 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (inneriph->version == 6) {
 		struct ipv6hdr *ipv6h2 = (struct ipv6hdr *) inneriph;
-		skb->len = ipv6h2->payload_len + SECFP_IPV6_HDR_LEN;
+		skb->len = ASF_NTOHS(ipv6h2->payload_len) + SECFP_IPV6_HDR_LEN;
 	} else
 #endif
-		skb->len = inneriph->tot_len;
+		skb->len = ASF_NTOHS(inneriph->tot_len);
 #else /*NO ASF_SECFP_PROTO_OFFLOAD*/
 	if (secfp_inHandleICVCheck(desc, skb)) {
 #ifndef CONFIG_ASF_SEC4x
@@ -3584,7 +3589,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 	/* Assuming ethernet as the receiving device of original packet */
 	if (ucNextProto == SECFP_PROTO_IP) {
 		secfp_inCompleteUpdateIpv4Pkt(skb);
-		skb->protocol = ETH_P_IP;
+		skb->protocol = ASF_HTONS(ETH_P_IP);
 
 		ASFIPSEC_FPRINT("decrypt skb %p len %d frag %p\n",
 			skb->head, skb->len,
@@ -3611,7 +3616,7 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 		ASFIPSEC_DEBUG("\n ipv6 packet decrypted successfully"
 				" need to send it to ipv6stack");
 		skb_reset_network_header(skb);
-		skb->protocol = ETH_P_IPV6;
+		skb->protocol = ASF_HTONS(ETH_P_IPV6);
 		/* Homogenous buffer */
 		Buffer.nativeBuffer = skb;
 		if (ASFFFPIPv6ProcessAndSendPkt(

@@ -493,7 +493,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 #ifndef ASF_IPV6_FP_SUPPORT
 	pdb->hmo_rsvd = PDBHMO_ESP_ENCAP_DEC_TTL;
 #endif
-	pdb->spi = pSA->SAParams.ulSPI;
+	pdb->spi = ASF_NTOHL(pSA->SAParams.ulSPI);
 	pdb->seq_num = atomic_read(&pSA->ulLoSeqNum);
 	pdb->ip_hdr_len = iphdrlen + pSA->usNatHdrSize;
 
@@ -527,7 +527,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 			iph->tos = pSA->SAParams.ucDscp;
 		else
 			iph->tos = 0;
-		iph->tot_len = iphdrlen;
+		iph->tot_len = ASF_HTONS(iphdrlen);
 		iph->id = 0;
 
 		switch (pSA->SAParams.handleDf) {
@@ -565,7 +565,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 				ike[1] = 0;
 			}
 			iph->protocol = IPPROTO_UDP;
-			iph->tot_len += pSA->usNatHdrSize;
+			iph->tot_len = ASF_HTONS(iphdrlen + pSA->usNatHdrSize);
 		}
 		ip_send_check(iph);
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -1074,7 +1074,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == 6) {
 		struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
-		usPadLen = (ipv6h->payload_len + SECFP_IPV6_HDR_LEN
+		usPadLen = (ASF_NTOHS(ipv6h->payload_len) + SECFP_IPV6_HDR_LEN
 				+ SECFP_ESP_TRAILER_LEN)
 			& (pSA->SAParams.ulBlockSize - 1);
 		usPadLen = (usPadLen == 0) ? 0 :
@@ -1082,7 +1082,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 	} else
 #endif
 	{
-		usPadLen = (iph->tot_len + SECFP_ESP_TRAILER_LEN)
+		usPadLen = (ASF_NTOHS(iph->tot_len) + SECFP_ESP_TRAILER_LEN)
 			& (pSA->SAParams.ulBlockSize - 1);
 		usPadLen = (usPadLen == 0) ? 0 :
 			pSA->SAParams.ulBlockSize - usPadLen;
@@ -1103,6 +1103,7 @@ void secfp_prepareOutDescriptor(struct sk_buff *skb, void *pData,
 #endif
 		ptr = dma_map_single(pSA->ctx.jrdev, skb->data,
 			skb->len, DMA_BIDIRECTIONAL);
+		*(uintptr_t *)&(skb->cb[SECFP_SKB_DATA_DMA_INDEX]) = ptr;
 		ASFIPSEC_FPRINT("asso@:");
 		ASFIPSEC_HEXDUMP(skb->data, 8);
 		ASFIPSEC_FPRINT("presciv@:");

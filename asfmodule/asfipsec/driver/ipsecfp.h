@@ -38,7 +38,7 @@
 #define SECFP_IPV6_TCLASS_SHIFT 20
 #define ipv6_traffic_class(ipv6TClass, ipv6h) \
 { \
-	ipv6TClass = (((*(ASF_uint32_t *)ipv6h) & SECFP_IPV6_TCLASS_MASK) \
+	ipv6TClass = (((ASF_NTOHL(*(ASF_uint32_t *)ipv6h)) & SECFP_IPV6_TCLASS_MASK) \
 				>> SECFP_IPV6_TCLASS_SHIFT); \
 }
 #endif
@@ -173,11 +173,11 @@
 /* skb Cb indices where various information is kept for post SEC operation */
 /* Common for outbound and inbound */
 #define SECFP_SKB_SG_DMA_INDEX 		0
-#define SECFP_SKB_DATA_DMA_INDEX 	4
 #define SECFP_ACTION_INDEX		8
 #define SECFP_ICV_LENGTH		11
 #define SECFP_REF_INDEX 		45
 #define SECFP_UDP_SOURCE_PORT		46
+#define SECFP_SKB_DATA_DMA_INDEX 	56
 
 /* Inbound */
 #define SECFP_LOOKUP_SA_INDEX		9

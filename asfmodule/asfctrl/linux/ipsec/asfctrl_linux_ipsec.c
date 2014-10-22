@@ -700,7 +700,7 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 	iph = (struct iphdr *)(skb->data + hh_len);
 
 #ifdef ASF_IPV6_FP_SUPPORT
-	if (skb->protocol == ETH_P_IPV6)
+	if (skb->protocol == ASF_HTONS(ETH_P_IPV6))
 		pData = skb->data + hh_len + sizeof(struct ipv6hdr);
 	else
 #endif
