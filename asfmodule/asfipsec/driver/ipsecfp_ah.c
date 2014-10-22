@@ -883,6 +883,7 @@ void secfp_inAHComplete(struct device *dev,
 	struct ses_pkt_info *pInfo;
 #endif
 	unsigned int ulFragCnt;
+	unsigned int ah_header_len;
 
 	ASFIPSEC_FENTRY;
 #ifndef ASF_QMAN_IPSEC
@@ -1083,14 +1084,16 @@ void secfp_inAHComplete(struct device *dev,
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (iph->version == SECFP_PROTO_IP) {
 #endif
-		skb->data += SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + skb->cb[SECFP_ICV_LENGTH];
-		skb->len -= SECFP_IPV4_HDR_LEN + SECFP_AH_FIXED_HDR_LEN + skb->cb[SECFP_ICV_LENGTH];
+		ah_header_len = ((unsigned int)
+				(skb->data[SECFP_IPV4_HDR_LEN + 1]) + 2) << 2;
+		skb->data += SECFP_IPV4_HDR_LEN + ah_header_len;
+		skb->len -= SECFP_IPV4_HDR_LEN + ah_header_len;
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
-		skb->data += SECFP_IPV6_HDR_LEN + SECFP_AH_FIXED_HDR_LEN
-					+ skb->cb[SECFP_ICV_LENGTH];
-		skb->len -= SECFP_IPV6_HDR_LEN + SECFP_AH_FIXED_HDR_LEN
-					+ skb->cb[SECFP_ICV_LENGTH];
+		ah_header_len = ((unsigned int)
+				(skb->data[SECFP_IPV6_HDR_LEN + 1]) + 2) << 2;
+		skb->data += SECFP_IPV6_HDR_LEN + ah_header_len;
+		skb->len -= SECFP_IPV6_HDR_LEN + ah_header_len;
 	}
 #endif
 
