@@ -1306,6 +1306,7 @@ void secfp_inAHComplete(struct device *dev,
 			ASFIPSEC_DEBUG("ICV error dropping packet");
 			skb->data_len = 0;
 			skb->next = NULL;
+			ASFSkbFree(skb);
 			return;
 		}
 	} else {
@@ -1313,6 +1314,7 @@ void secfp_inAHComplete(struct device *dev,
 		kfree(pInfo->in_icv);
 		skb->data_len = 0;
 		skb->next = NULL;
+		ASFSkbFree(skb);
 		return;
 	}
 	rcu_read_unlock();
