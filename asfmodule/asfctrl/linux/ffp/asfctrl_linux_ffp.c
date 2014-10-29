@@ -545,15 +545,15 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 
 			memset(&fl_out, 0, sizeof(fl_out));
 		#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
-			fl_out.fl_ip_sport = ct_tuple_reply->dst.u.tcp.port;
-			fl_out.fl_ip_dport = ct_tuple_reply->src.u.tcp.port;
-			fl_out.proto = ct_tuple_orig->dst.protonum;
+			fl_out.fl_ip_sport = pInfo->tuple.usSrcPort;
+			fl_out.fl_ip_dport = pInfo->tuple.usDestPort;
+			fl_out.proto = pInfo->tuple.ucProtocol;
 			if (bIPv6 == true) {
-				ipv6_addr_copy(&fl_out.fl6_dst, &(ct_tuple_reply->src.u3.in6));
-				ipv6_addr_copy(&fl_out.fl6_src, &(ct_tuple_reply->dst.u3.in6));
+				ipv6_addr_copy(&fl_out.fl6_src, &(pInfo->tuple.ipv6SrcIp));
+				ipv6_addr_copy(&fl_out.fl6_dst, &(pInfo->tuple.ipv6DestIp));
 			} else {
-				fl_out.fl4_dst = ct_tuple_reply->src.u3.ip;
-				fl_out.fl4_src = ct_tuple_reply->dst.u3.ip;
+				fl_out.fl4_src = pInfo->tuple.ulSrcIp;
+				fl_out.fl4_dst = pInfo->tuple.ulDestIp;
 			}
 			fl_out.fl4_tos = 0;
 		#else
