@@ -61,10 +61,10 @@ MODULE_DESCRIPTION(ASFCTRL_LINUX_QOS_DESC);
 
 #define PORT_ANY 0xFFFF
 #ifdef	ASF_IPV6_FP_SUPPORT
-struct markerRule	*marker_rule_v6;
+markerRule_t	*marker_rule_v6;
 unsigned int	num_rules_v6;
 #endif
-struct markerRule	*marker_rule_v4;
+markerRule_t	*marker_rule_v4;
 unsigned int	num_rules_v4;
 u8		dscp_default = ASF_QM_NULL_DSCP;
 
@@ -78,7 +78,7 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 				bool		is_ipv6)
 {
 	int		i;
-	struct markerRule	*rule;
+	markerRule_t	*rule;
 	int             iDscp = dscp_default;
 
 	if (is_ipv6) {
@@ -93,7 +93,7 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 			src_port, dst_port, proto);
 
 		for (i = 0; i < num_rules_v6; i++) {
-			rule = (struct markerRule *) &marker_rule_v6[i];
+			rule = (markerRule_t *) &marker_rule_v6[i];
 
 			if ((src_ip[0] == rule->src_ip[0])
 			&& (src_ip[1] == rule->src_ip[1])
@@ -123,7 +123,7 @@ ASF_uint8_t ASFMatchMarkerRule(ASF_uint32_t	*src_ip,
 			src_ip[0], dst_ip[0], src_port, dst_port, proto);
 
 		for (i = 0; i < num_rules_v4; i++) {
-			rule = (struct markerRule *) &marker_rule_v4[i];
+			rule = (markerRule_t *) &marker_rule_v4[i];
 
 			if ((src_ip[0] == rule->src_ip[0])
 			&& (dst_ip[0] == rule->dst_ip[0])
@@ -170,7 +170,7 @@ void ASFFlushIPv4Marker(void)
 	printk(KERN_INFO "IPv4 Marker Rules Flushed\n");
 }
 
-int ASFConfigIPv4Marker(struct marker_db *arg)
+int ASFConfigIPv4Marker(marker_db_t *arg)
 {
 	int			i;
 
@@ -185,16 +185,16 @@ int ASFConfigIPv4Marker(struct marker_db *arg)
 
 	num_rules_v4 = arg->num_rules;
 	/* Allocate Marker Database */
-	marker_rule_v4 = vmalloc(num_rules_v4 * sizeof(struct markerRule));
+	marker_rule_v4 = vmalloc(num_rules_v4 * sizeof(markerRule_t));
 	if (NULL == marker_rule_v4)
 		return -ENOMEM;
 	memcpy(marker_rule_v4, arg->rule,
-		sizeof(struct markerRule) * num_rules_v4);
+		sizeof(markerRule_t) * num_rules_v4);
 
 	for (i = 0; i < num_rules_v4; i++) {
-		struct markerRule *rule;
+		markerRule_t *rule;
 
-		rule = (struct markerRule *) &marker_rule_v4[i];
+		rule = (markerRule_t *) &marker_rule_v4[i];
 
 		printk(KERN_INFO"src_ip[%pI4] dst_ip[%pI4] proto[%d] ",
 			&rule->src_ip[0], &rule->dst_ip[0], rule->proto);
@@ -230,7 +230,7 @@ void ASFFlushIPv6Marker(void)
 	printk(KERN_INFO "IPv6 Marker Rules Flushed\n");
 }
 
-int ASFConfigIPv6Marker(struct marker_db *arg)
+int ASFConfigIPv6Marker(marker_db_t *arg)
 {
 	int			i;
 
@@ -245,16 +245,16 @@ int ASFConfigIPv6Marker(struct marker_db *arg)
 
 	num_rules_v6 = arg->num_rules;
 	/* Allocate Marker Database */
-	marker_rule_v6 = vmalloc(num_rules_v6 * sizeof(struct markerRule));
+	marker_rule_v6 = vmalloc(num_rules_v6 * sizeof(markerRule_t));
 	if (NULL == marker_rule_v6)
 		return -ENOMEM;
 	memcpy(marker_rule_v6, arg->rule,
-		sizeof(struct markerRule) * num_rules_v6);
+		sizeof(markerRule_t) * num_rules_v6);
 
 	for (i = 0; i < num_rules_v6; i++) {
-		struct markerRule *rule;
+		markerRule_t *rule;
 
-		rule = (struct markerRule *) &marker_rule_v6[i];
+		rule = (markerRule_t *) &marker_rule_v6[i];
 
 		printk(KERN_INFO"src_ip[%-15pI6] dst_ip[%-15pI6] proto[%d] ",
 			&rule->src_ip[0], &rule->dst_ip[0], rule->proto);
