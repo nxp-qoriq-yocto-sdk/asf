@@ -869,7 +869,6 @@ static int qos_flush_qdisc(ASF_uint32_t  ulVsgId,
 	{
 		qdisc_cleanup_fqs(root);
 		root->dev->asf_qdisc = NULL;
-		kfree(root);
 	}
 	break;
 	case ASF_QDISC_TBF:
@@ -1137,8 +1136,8 @@ static void __exit asf_qos_exit(void)
 		root = qdisc_in_use[i];
 		if (root) {
 			qdisc_cleanup_fqs(root);
-			kfree(root);
 			root->dev->asf_qdisc = NULL;
+			kfree(root);
 		}
 		if (shaper[i].dev)
 			fm_port_del_rate_limit(shaper[i].txport);
