@@ -1128,8 +1128,10 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 								     ulSAIndex[ii]);
 				rcu_read_lock();
 				if (pOutSA && (pOutSA->SAParams.ulSPI == pInParams->ulSPI) &&
-				    (pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr ==  pInParams->gwAddr.ipv4addr) &&
-				    (pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
+					(pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr == pInParams->gwAddr.ipv4addr ||
+					!_ipv6_addr_cmp((struct in6_addr *)pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr,
+						(struct in6_addr *)pInParams->gwAddr.ipv6addr)) &&
+					(pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
 					for_each_possible_cpu(Index) {
 						pOutParams->ulPkts += pOutSA->ulPkts[Index];
 						pOutParams->ulBytes += pOutSA->ulBytes[Index];
@@ -1146,9 +1148,11 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 			pOutSA = (outSA_t *)  ptrIArray_getData(&secFP_OutSATable,
 							      pOutSALinkNode->ulSAIndex);
 			rcu_read_lock();
-			if (pOutSA && (pOutSA->SAParams.ulSPI == pInParams->ulSPI &&
-				       pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr == pInParams->gwAddr.ipv4addr &&
-				       pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
+			if (pOutSA && (pOutSA->SAParams.ulSPI == pInParams->ulSPI) &&
+					(pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr == pInParams->gwAddr.ipv4addr ||
+					!_ipv6_addr_cmp((struct in6_addr *)pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr,
+						(struct in6_addr *)pInParams->gwAddr.ipv6addr)) &&
+					(pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
 				for_each_possible_cpu(Index) {
 					pOutParams->ulPkts += pOutSA->ulPkts[Index];
 					pOutParams->ulBytes += pOutSA->ulBytes[Index];
