@@ -13,6 +13,7 @@ conn %default
 	auth=esp
 	compress=no
 	mobike=no
+	reauth=no
 
 conn net-net
         authby=secret
