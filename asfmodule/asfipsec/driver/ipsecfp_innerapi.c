@@ -4253,6 +4253,8 @@ unsigned int secfp_DeleteInSA(unsigned int ulVSGId,
 		}
 	} else {
 		ASFIPSEC_WARN("CouldNotfind Container");
+		if (!bVal)
+			local_bh_enable();
 		return SECFP_FAILURE;
 	}
 	if (bFound == ASF_TRUE)
