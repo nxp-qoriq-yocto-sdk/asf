@@ -1227,9 +1227,7 @@ void secfp_inAHComplete(struct device *dev,
 		rcu_read_unlock();
 		skb->data_len = 0;
 		skb->next = NULL;
-#ifndef ASF_QMAN_IPSEC
 		ASFSkbFree(skb);
-#endif
 		return;
 	}
 
@@ -1275,9 +1273,7 @@ void secfp_inAHComplete(struct device *dev,
 		ASFIPSEC_DEBUG("ICV error dropping packet");
 		skb->data_len = 0;
 		skb->next = NULL;
-#ifndef ASF_QMAN_IPSEC
 		ASFSkbFree(skb);
-#endif
 		return;
 	}
 #endif
@@ -1347,9 +1343,7 @@ void secfp_inAHComplete(struct device *dev,
 		ASFIPSEC_DEBUG("Due to prior operation failure, skb has to be dropped");
 		skb->data_len = 0;
 		skb->next = NULL;
-#ifndef ASF_QMAN_IPSEC
 		ASFSkbFree(skb);
-#endif
 		return;
 	}
 	ASFIPSEC_FPRINT("skb->data = 0x%x, skb->data - 20 - 16 =0x%x,"\
@@ -1469,9 +1463,7 @@ void secfp_inAHComplete(struct device *dev,
 		ASFIPSEC_WARN("Protocol not supported 0x%x", ucNextProto);
 		skb->data_len = 0;
 		skb->next = NULL;
-#ifndef ASF_QMAN_IPSEC
 		ASFSkbFree(skb);
-#endif
 		return;
 	}
 }
