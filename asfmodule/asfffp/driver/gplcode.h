@@ -45,8 +45,29 @@
 }
 #endif
 
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM) || defined(CONFIG_DPA) || defined(ASF_ARM)
+/*!
+ *  Avoiding race condition in Xmit function by using HARD_TX_LOCK
+ */
+static inline int asf_dev_hard_xmit(
+		struct net_device *dev,
+		struct sk_buff *skb) {
+	struct netdev_queue *txq;
+	int xmit;
+
+	txq = netdev_get_tx_queue(dev, skb->queue_mapping);
+	HARD_TX_LOCK(dev, txq, skb->queue_mapping);
+	xmit = dev->netdev_ops->ndo_start_xmit(skb, dev);
+	HARD_TX_UNLOCK(dev, txq);
+
+	return xmit;
+}
+
+#if defined(ASF_ARM)
+#define asfDevHardXmit(dev, skb)	asf_dev_hard_xmit(dev, skb)
+
+#elif (ASF_FEATURE_OPTION > ASF_MINIMUM) || defined(CONFIG_DPA)
 #define asfDevHardXmit(dev, skb)	(dev->netdev_ops->ndo_start_xmit(skb, dev))
+
 #else
 extern int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev);
 #define asfDevHardXmit(dev, skb)	(gfar_fast_xmit(skb, dev))
