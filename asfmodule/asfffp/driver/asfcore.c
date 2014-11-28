@@ -3103,8 +3103,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				flow->configIdentity.ulConfigMagicNumber);
 
 				FlowValidate = ASF_FLOWVALIDATE_NORAMAL;
-				pFreeFn(skb);
-				goto gen_indications;
 			}
 			/* L2blob refersh handling for the possible change in the l2blob */
 
