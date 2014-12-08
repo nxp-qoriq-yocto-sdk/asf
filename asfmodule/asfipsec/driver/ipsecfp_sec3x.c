@@ -737,7 +737,7 @@ void secfp_prepareInDescriptor(struct sk_buff *skb,
 #ifdef ASF_IPSEC_DEBUG
 		{
 			int ii;
-			for (int ii = 0; ii < 3; ii++)
+			for (ii = 0; ii < 3; ii++)
 				ASFIPSEC_DEBUG("Offset ii=%d 0x%8x", ii,
 				*(unsigned int *)&(skb->data[skb->len + ii*4]));
 		}
