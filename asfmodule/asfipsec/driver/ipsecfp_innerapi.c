@@ -4120,7 +4120,7 @@ unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
 	bool bFound;
 	inSA_t *pSA;
 	int bVal = in_interrupt();
-	SASPDMapNode_t *pSASPDMapNode;
+	SASPDMapNode_t *pSASPDMapNode, *pSASPDMapNodePrev;
 
 	if (!bVal)
 		local_bh_disable();
@@ -4163,11 +4163,12 @@ unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
 		else
 			ASFIPSEC_WARN("Could not find SPI Link node");
 	}
-	pSASPDMapNode = pSA->pSASPDMapNode;
+	pSASPDMapNode = pSASPDMapNodePrev = pSA->pSASPDMapNode;
 	if (pNode)
 		while (pSASPDMapNode) {
 			if (pSASPDMapNode->ulSPDSelSetIndex == pNode->ulIndex)
 				break;
+			pSASPDMapNodePrev = pSASPDMapNode;
 			pSASPDMapNode = pSASPDMapNode->pNext;
 		}
 
@@ -4175,6 +4176,14 @@ unsigned int secfp_UnMapPolInSA(unsigned int ulVSGId,
 		ptrIArray_getMagicNum(&secFP_InSelTable, pSASPDMapNode->ulSPDSelSetIndex)) {
 		ptrIArray_delete(&secFP_InSelTable,
 			pSASPDMapNode->ulSPDSelSetIndex, secfp_freeInSelSet);
+	}
+	if(pSASPDMapNode) {
+		if (pSASPDMapNodePrev == pSASPDMapNode) {
+			pSA->pSASPDMapNode = pSASPDMapNode->pNext;
+		} else {
+			pSASPDMapNodePrev->pNext = pSASPDMapNode->pNext;
+		}
+		kfree(pSASPDMapNode);
 	}
 	pSA->ulMappedPolCount--;
 
