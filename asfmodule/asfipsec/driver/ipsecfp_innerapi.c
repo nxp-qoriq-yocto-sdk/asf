@@ -3240,7 +3240,7 @@ unsigned int secfp_mapPolOutSA(
 			&secFP_OutSATable,
 			ulSAIndex);
 	if (unlikely(pSA == NULL)) {
-		GlobalErrors.ulResourceNotAvailable++;
+		GlobalErrors.ulOutSANotFound++;
 		ASFIPSEC_DEBUG("secfp_allocOutSA returned null");
 		if (!bVal)
 			local_bh_enable();
