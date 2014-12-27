@@ -1156,6 +1156,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	if (NULL != pAbuf->nativeBuffer)
 		return pAbuf->nativeBuffer;
 
+	struct iphdr *iph = pAbuf->iph;
 	priv = netdev_priv(pAbuf->ndev);
 	dpa_bp = priv->dpa_bp;
 	skbh = (struct sk_buff **)(pAbuf->pAnnot);
@@ -1178,7 +1179,7 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	skb_reset_mac_header(skb);
 	skb->data += skb->mac_len;
 	skb->tail += pAbuf->pAnnot->fd->length20 + cache_fudge;
-	skb->len  = (pAbuf->pAnnot->fd->length20 - skb->mac_len);
+	skb->len  = iph->tot_len;
 	/* To handle - PPPoE, Now we are at ip hdr */
 	skb->protocol = ASF_HTONS(*(u16 *)(skb->data - 2));
 	asf_debug("pAbuf->pAnnot->fd->length20 %d, pAbuf->ethh 0x%X,"
