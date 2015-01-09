@@ -502,7 +502,7 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 		pInfo->dynamic = pSA->ctx.split_key_len;
 		/* filling compound frame */
 		pSG->addr = pInmap;
-		pSG->length = skb->len;
+		pSG->length = pSA->ctx.split_key_len;
 		pSG[1].addr = pInmap + pSA->ctx.split_key_len;
 		pSG[1].length = skb->len;
 	}
@@ -612,7 +612,7 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 		/* filling compound frame */
 		pInfo->dynamic = pSA->ctx.split_key_len;
 		pSG->addr = pInmap;
-		pSG->length = skb->len;
+		pSG->length = pSA->ctx.split_key_len;
 		pSG[1].addr = pInmap + pSA->ctx.split_key_len;
 	}
 
