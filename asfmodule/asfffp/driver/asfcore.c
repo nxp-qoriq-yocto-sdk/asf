@@ -1925,7 +1925,8 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 #endif
 								) {
 		XGSTATS_INC(NonIpPkts);
-		asf_debug_l2("Non IP traffic. EthType = 0x%x\n", usEthType);
+		asf_debug_l2("Non IP traffic. EthType = 0x%x\n",
+				ASF_NTOHS(usEthType));
 		goto ret_pkt;
 	}
 
@@ -2064,7 +2065,7 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 	skb->data += x_hh_len;
 	if (anDev->ndev)
 		skb->dev = anDev->ndev;
-	skb->len = iph->tot_len;
+	skb->len = ASF_NTOHS(iph->tot_len);
 	skb_set_transport_header(skb, iph->ihl*4);
 
 #ifdef ASF_IPSEC_FP_SUPPORT
@@ -2085,7 +2086,8 @@ int asf_ffp_devfp_rx(struct sk_buff *skb, struct net_device *real_dev)
 			}
 		} else {
 			XGSTATS_INC(NonTcpUdpPkts);
-			asf_debug("Non IP traffic. EthType = 0x%x", usEthType);
+			asf_debug("Non IP traffic. EthType = 0x%x",
+					ASF_NTOHS(usEthType));
 			goto ret_pkt;
 		}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -2951,7 +2953,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	int			iRetVal;
 	struct tcphdr		*ptcph = NULL;
 #endif
-	int			tot_len;
+	unsigned short		tot_len;
 	unsigned int       *ptrhdrOffset;
 	unsigned long		ulZoneId;
 	struct sk_buff		*skb;
@@ -2967,6 +2969,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	struct dpa_priv_s       *priv;
 	struct dpa_bp		*dpa_bp;
 #endif
+	unsigned short	us_src_port;
+	unsigned short	us_dest_port;
+	unsigned int	ports;
 
 	ACCESS_XGSTATS();
 
@@ -2997,10 +3002,10 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	vstats->ulInPkts++;
 #endif
 	iph = ip_hdr(skb);
-
+	tot_len = ASF_NTOHS(iph->tot_len);
 #ifdef ASF_DEBUG_FRAME
 	asf_print(" Pkt (%x) skb->len = %d, iph->tot_len = %d",
-		pIpsecOpaque, skb->len, iph->tot_len);
+		pIpsecOpaque, skb->len, tot_len);
 	hexdump(skb->data - 14, skb->len + 14);
 #endif
 
@@ -3025,7 +3030,6 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		}
 
 		/* Do ip header length checks if the packet is received thru IPsec */
-		tot_len = ntohs(iph->tot_len);
 		if (unlikely(((skb->len < tot_len) &&
 			skb_shinfo(skb)->frag_list == NULL)
 				|| (tot_len < (iph->ihl*4)))) {
@@ -3102,7 +3106,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			}
 		}
 		asf_debug("DeFrag & Pull done .. proceed!! skb->len %d iph->tot_len %d fragCnt %d\n",
-			  skb->len, iph->tot_len, fragCnt);
+			  skb->len, tot_len, fragCnt);
 		asf_display_frags(skb, "After Pull");
 	}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
@@ -3128,10 +3132,15 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		}
 	}
 	iphlen = iph->ihl * 4;
+	/* Ports */
 	ptrhdrOffset = (unsigned int *)(((unsigned char *) iph) + iphlen);
 
+	us_src_port = *(unsigned short *)ptrhdrOffset;
+	us_dest_port = *((unsigned short *)(ptrhdrOffset) + 1);
+	ports = (us_src_port << 16) | us_dest_port;
+
 	flow = asf_ffp_flow_lookup(iph->saddr, iph->daddr,
-					*ptrhdrOffset, ulVsgId,
+					ports, ulVsgId,
 					ulZoneId, iph->protocol, &ulHashVal);
 
 	asf_debug("ASF: %s Hash(%d.%d.%d.%d, %d.%d.%d.%d, 0x%lx, %d, %d)"\
@@ -3226,8 +3235,9 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		q = (unsigned short *)  ptrhdrOffset;
 		if (iph->protocol == IPPROTO_UDP) {
 			XGSTATS_INC(UdpPkts);
-			if (((iph->tot_len-iphlen) < 8) ||
-				(ntohs(*(q + 2)) > (iph->tot_len-iphlen))) {
+			if (((tot_len - iphlen) < 8) ||
+				(ntohs(*(q + 2)) > (tot_len -
+						    iphlen))) {
 				/* Udp header length is invalid */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;
@@ -3243,13 +3253,13 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #endif
 
 			XGSTATS_INC(TcpPkts);
-			trhlen = (unsigned short)((*(ptrhdrOffset + 3) &
-							0xf0000000) >> 28) * 4;
+			trhlen = (unsigned short)((ASF_NTOHL(*(ptrhdrOffset +
+						3)) & 0xf0000000) >> 28) * 4;
 			/* Invalid length check
 			   Length indicated in IPhdr - header length < expected transport header length
 			   Length as indicated in skb - ip hder - ethernet header < expected transport header length
 			*/
-			if (((ntohs(iph->tot_len)-iphlen) < trhlen) || ((iph->tot_len-iphlen) < trhlen)) {
+			if (((tot_len - iphlen) < trhlen)) {
 				/* Need to add code for TCP */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;
@@ -3282,7 +3292,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				goto drop_pkt;
 			}
 
-			tcp_data_len = ntohs(iph->tot_len)-iphlen-trhlen;
+			tcp_data_len = tot_len-iphlen-trhlen;
 			asf_debug_l2("TCP_STATE_PROC: tcp_data_len = %d\n", tcp_data_len);
 
 			if (flow->bTcpOutOfSeqCheck) {
@@ -3520,10 +3530,13 @@ sctp_flow:
 
 						pSkb->dev = flow->odev;
 
-						asfCopyWords((unsigned int *)pSkb->data, (unsigned int *)flow->l2blob, flow->l2blob_len);
+						asfCopyWords((unsigned int *)pSkb->data,
+								(unsigned int *)flow->l2blob,
+								flow->l2blob_len);
 						if (flow->bPPPoE) {
 							/* PPPoE packet.. Set Payload length in PPPoE header */
-							*((short *)&(pSkb->data[flow->l2blob_len-4])) = htons(ntohs(iph->tot_len) + 2);
+							*((short *)&(pSkb->data[flow->l2blob_len-4])) =
+								htons(tot_len + 2);
 						}
 
 						asf_debug("skb->network_header = 0x%x, skb->transport_header = 0x%x\r\n",
@@ -3598,7 +3611,7 @@ sctp_flow:
 				/* PPPoE packet..
 				 * Set Payload length in PPPoE header */
 				*((short *)&(skb->data[(flow->l2blob_len - tunnel_hdr_len)-4])) =
-				htons(ntohs(iph->tot_len + tunnel_hdr_len) + 2);
+				htons(tot_len + tunnel_hdr_len + 2);
 			}
 #endif  /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 			skb->pkt_type = PACKET_FASTROUTE;
@@ -3813,10 +3826,12 @@ ret_pkt_to_stk:
 		skb->protocol = *(unsigned short *) (skb->mac_header + 12);
 		usEthType = skb->protocol;
 		if (usEthType == __constant_htons(ETH_P_8021Q))
-			usEthType = *(unsigned short *) (skb->mac_header + ETH_HLEN + 2);
+			usEthType = *(unsigned short *) (skb->mac_header +
+					ETH_HLEN + 2);
 
 		x_hh_len = skb->mac_len-ETH_HLEN;
-		asf_debug_l2("   ret_pkt LABEL : adjust using x_hh_len %d! (ethType 0x%04x\n", x_hh_len, usEthType);
+		asf_debug_l2("   ret_pkt LABEL : adjust using x_hh_len %d! (ethType 0x%04x\n",
+				x_hh_len, ASF_NTOHS(usEthType));
 		if ((x_hh_len < 0) || (x_hh_len > (ASF_MAX_L2BLOB_LEN-ETH_HLEN))) {
 			asf_debug("   ret_pkt LABEL : invalid x_hh_len... drop the packet!\n");
 			goto drop_pkt;
@@ -3831,9 +3846,12 @@ ret_pkt_to_stk:
 			struct iphdr *iph;
 			iph = (struct iphdr *) (skb->data + x_hh_len);
 			/* PPPoE packet.. Set Payload length in PPPoE header */
-			asf_debug_l2("   Adjust PPPOE len (old %u) to %u\n", *((short *)  &(skb->data[x_hh_len-4])),  htons(ntohs(iph->tot_len) + 2));
+			asf_debug_l2("   Adjust PPPOE len (old %u) to %u\n",
+					*((short *)  &(skb->data[x_hh_len-4])),
+					htons(tot_len + 2));
 
-			*((short *)  &(skb->data[x_hh_len-4])) = htons(ntohs(iph->tot_len) + 2);
+			*((short *)  &(skb->data[x_hh_len-4])) =
+				htons(tot_len + 2);
 		}
 		skb_set_mac_header(skb, -ETH_HLEN);
 		skb->mac_len = ETH_HLEN;
@@ -4696,7 +4714,7 @@ static inline int ffp_flow_copy_info(ASFFFPFlowInfo_t *pInfo, ffp_flow_t *flow)
 	if (flow->ucProtocol == IPPROTO_TCP) {
 		flow->bTcpOutOfSeqCheck = pInfo->bTcpOutOfSeqCheck;
 		flow->bTcpTimeStampCheck = pInfo->bTcpTimeStampCheck;
-		flow->ulTcpTimeStamp = ntohl(pInfo->ulTcpTimeStamp);
+		flow->ulTcpTimeStamp = pInfo->ulTcpTimeStamp;
 		flow->tcpState.ulHighSeqNum = ntohl(pInfo->tcpState.ulHighSeqNum);
 		flow->tcpState.ulSeqDelta = ntohl(pInfo->tcpState.ulSeqDelta);
 		flow->tcpState.bPositiveDelta = pInfo->tcpState.bPositiveDelta;

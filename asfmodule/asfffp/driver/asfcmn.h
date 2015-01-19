@@ -350,8 +350,11 @@ static inline void asfCopyWords(unsigned int *dst, unsigned int *src, int len)
 		dst[0] = src[0];
 		dst[1] = src[1];
 		dst[2] = src[2];
-		/* Copy last 2 bytes */
+#ifdef ASF_ARM
+		dst[3] = (dst[3] & 0xFFFF0000) | (src[3] & 0x0000FFFF);
+#else
 		dst[3] = (dst[3] & 0x0000FFFF) | (src[3] & 0xFFFF0000);
+#endif
 	} else {
 		while (len >= sizeof(unsigned int)) {
 			*dst = *src;
