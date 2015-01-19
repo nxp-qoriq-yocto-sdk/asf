@@ -1021,6 +1021,109 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		}
 	}
 
+       /* Check for Firewall */
+	{
+		struct net_device *idev = NULL;
+		struct sk_buff *skb;
+		struct iphdr *iph;
+		struct ipv6hdr *ipv6h;
+		struct tcphdr *tcph;
+		struct udphdr *udph;
+
+		skb = ASFCTRLKernelSkbAlloc(1024, GFP_ATOMIC);
+		if (!skb) {
+			ASFCTRL_INFO("SKB allocation failed !!\n");
+			return -EINVAL;
+		}
+
+		if (pf_ipv6 == false) {
+			struct flowi4 fl = {};
+			struct rtable *rt;
+
+			fl.daddr = ct_tuple_reply->dst.u3.ip;
+			fl.saddr = ct_tuple_reply->src.u3.ip;
+			fl.flowi4_oif = 0;
+			fl.flowi4_flags = FLOWI_FLAG_ANYSRC;
+			rt = ip_route_output_key(&init_net, &fl);
+			if (IS_ERR(rt)) {
+				ASFCTRL_INFO("Route not found dst %x !!\n",
+						ct_tuple_reply->dst.u3.ip);
+				ASFCTRLKernelSkbFree(skb);
+				return -EINVAL;
+			}
+			skb_dst_set(skb, &(rt->dst));
+			skb->dev = skb_dst(skb)->dev;
+
+			idev = dev_get_by_name(&init_net, "lo");
+			skb_reset_network_header(skb);
+			skb_put(skb, sizeof(struct iphdr));
+			iph = ip_hdr(skb);
+			iph->version = 5;
+			iph->ihl = 5;
+			iph->ttl = 1;
+			iph->saddr = ct_tuple_reply->src.u3.ip;
+			iph->daddr = ct_tuple_reply->dst.u3.ip;
+			iph->protocol = ct_tuple_reply->dst.protonum;
+		} else {
+			skb_reset_network_header(skb);
+			skb_put(skb, sizeof(struct ipv6hdr));
+			ipv6h = ipv6_hdr(skb);
+			ipv6h->version = 5;
+			ipv6h->hop_limit = 1;
+			ipv6h->priority = 0;
+			ipv6_addr_copy((struct in6_addr *)&(ipv6h->saddr),
+					(struct in6_addr *)&(ct_tuple_reply->src.u3.in6));
+			ipv6_addr_copy((struct in6_addr *)&(ipv6h->daddr),
+					(struct in6_addr *)&(ct_tuple_reply->dst.u3.in6));
+			ipv6h->nexthdr = ct_tuple_reply->dst.protonum;
+
+			idev = dev_get_by_name(&init_net, "lo");
+
+			skb->dev = idev;
+			ip6_route_input(skb);
+			dev_put(idev);
+			if (!skb_dst(skb)) {
+				ASFCTRL_INFO("Route not found dst %x !!\n",
+						ct_tuple_reply->dst.u3.ip);
+				ASFCTRLKernelSkbFree(skb);
+				return -EINVAL;
+			}
+			skb->dev = skb_dst(skb)->dev;
+		}
+		skb_reset_transport_header(skb);
+
+		if (ct_tuple_reply->dst.protonum == IPPROTO_TCP) {
+			tcph = (struct tcphdr *)skb_put(skb,
+					sizeof(struct tcphdr));
+			tcph->source = ct_tuple_reply->src.u.tcp.port;
+			tcph->dest = ct_tuple_reply->dst.u.tcp.port;
+
+		} else {
+			udph = (struct udphdr *)skb_put(skb,
+					sizeof(struct udphdr));
+			udph->source = ct_tuple_reply->src.u.udp.port;
+			udph->dest = ct_tuple_reply->dst.u.udp.port;
+		}
+
+		if (pf_ipv6 == true) {
+			result = ip6t_do_table(skb, NF_INET_FORWARD, idev,
+					skb->dev, net->ipv6.ip6table_filter);
+		} else
+			result = ipt_do_table(skb, NF_INET_FORWARD, idev,
+					skb->dev, net->ipv4.iptable_filter);
+
+		ASFCTRLKernelSkbFree(skb);
+
+		if (result) {
+			ASFCTRL_INFO("Firewall bDrop bit not set !!\n");
+			cmd.flow2.bDrop = 0;
+		} else {
+			ASFCTRL_INFO("Firewall bDrop bit is set !!\n");
+			cmd.flow2.bDrop = 1;
+		}
+	}
+
+
 	/* This will be used while refereshing the flow activity and
 		flow validation */
 	cmd.ASFWInfo = (ASF_uint8_t *)ct_event;
