@@ -3410,7 +3410,13 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 			if (iph->protocol == IPPROTO_SCTP)
 						goto sctp_flow;
 #endif
-			*ptrhdrOffset = flow->ulNATPorts;
+			/* Converting flow->ulNATPorts into network order */
+
+			us_src_port = flow->ulNATPorts >> 16;
+			us_dest_port = flow->ulNATPorts & 0x0000ffff;
+			*(unsigned short *)ptrhdrOffset = us_src_port;
+			*((unsigned short *)(ptrhdrOffset) + 1) = us_dest_port;
+
 #ifndef ASF_DO_INC_CHECKSUM
 			if (iph->ihl != 5) /* Options */
 #endif
