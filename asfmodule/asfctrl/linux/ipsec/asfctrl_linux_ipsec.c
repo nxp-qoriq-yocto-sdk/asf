@@ -589,7 +589,7 @@ ASF_void_t asfctrl_ipsec_fn_RefreshL2Blob(ASF_uint32_t ulVSGId,
 			iph->version = 5;
 			iph->ihl = 5;
 			iph->ttl = 1;
-			iph->id = IPv4_IDs[smp_processor_id()]++;
+			iph->id = ASF_HTONS(IPv4_IDs[smp_processor_id()]++);
 			iph->tos = 0;
 			iph->frag_off = 0;
 			iph->saddr = (address->srcIP.ipv4addr);

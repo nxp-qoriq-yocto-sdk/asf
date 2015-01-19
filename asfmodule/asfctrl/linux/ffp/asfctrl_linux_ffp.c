@@ -46,6 +46,7 @@
 #include <net/ipv6.h>
 
 #include "../../../asfffp/driver/asf.h"
+#include "../../../asfffp/driver/asfcmn.h"
 #include "asfctrl.h"
 
 #define tuple(ct, dir) (&(ct)->tuplehash[dir].tuple)
@@ -105,7 +106,7 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	iph->version = 5;
 	iph->ihl = 5;
 	iph->ttl = 1;
-	iph->id = IPv4_IDs[smp_processor_id()]++;
+	iph->id = ASF_HTONS(IPv4_IDs[smp_processor_id()]++);
 	iph->tos = 0;
 	iph->frag_off = 0;
 	iph->saddr = ulSrcIp;

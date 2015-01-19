@@ -1040,28 +1040,32 @@ void asf_display_frags(struct sk_buff *skb, char *msg)
 {
 	struct iphdr *iph;
 	int count = 1, data_len = 0;
+	unsigned short	host_ip_tot_len;
 
 	asf_debug("Fragment Information (%s):\n", msg);
 	iph = ip_hdr(skb);
+	host_ip_tot_len = ASF_NTOHS(iph->tot_len);
 	asf_debug(" Frag %d (rx %s %u.%u.%u.%u <-> %u.%u.%u.%u):"\
 		"skb->len %d iph->tot_len %u frag_off %u (sum %u)\n",
 		count, skb->dev->name,
 		NIPQUAD(iph->saddr), NIPQUAD(iph->daddr),
-		skb->len, iph->tot_len, iph->frag_off, data_len);
+		skb->len, host_ip_tot_len, ASF_NTOHS(iph->frag_off), data_len);
 	asf_debug("	   [ip_ptr 0x%x skb->data 0x%x data[0] 0x%02x"\
 	"data[1] 0x%02x ]\n", iph, skb->data, skb->data[0], skb->data[1]);
 
-	data_len = iph->tot_len;
+	data_len = host_ip_tot_len;
 	skb = skb_shinfo(skb)->frag_list;
 	while (skb) {
 		iph = ip_hdr(skb);
 		count++;
-		data_len += iph->tot_len;
+		host_ip_tot_len = ASF_NTOHS(iph->tot_len);
+		data_len += host_ip_tot_len;
 		asf_debug(" Frag %d (rx %s %u.%u.%u.%u <-> %u.%u.%u.%u):"\
 			"skb->len %d iph->tot_len %u frag_off %u (sum %u)\n",
 			count, skb->dev->name,
 			NIPQUAD(iph->saddr), NIPQUAD(iph->daddr),
-			skb->len, iph->tot_len, iph->frag_off, data_len);
+			skb->len, host_ip_tot_len, ASF_NTOHS(iph->frag_off),
+			data_len);
 		asf_debug("	   [ip_ptr 0x%x skb->data 0x%x data[0]"\
 			"0x%02x data[1] 0x%02x ]\n",
 			iph, skb->data, skb->data[0], skb->data[1]);
@@ -1082,7 +1086,7 @@ void asf_display_one_frag(struct sk_buff *skb)
 		"skb->len %d iph->tot_len %u frag_off %u\n",
 		skb->dev->name,
 		NIPQUAD(iph->saddr), NIPQUAD(iph->daddr),
-		skb->len, iph->tot_len, iph->frag_off);
+		skb->len, ASF_NTOHS(iph->tot_len), ASF_NTOHS(iph->frag_off));
 	asf_debug("	   [ip_ptr 0x%x data 0x%x data[0] 0x%02x data[1]"\
 		"0x%02x ]\n", iph, data, data[0], data[1]);
 }
@@ -1096,12 +1100,13 @@ void asf_display_skb_list(struct sk_buff *skb, char *msg)
 	while (skb) {
 		iph = ip_hdr(skb);
 		count++;
-		data_len += iph->tot_len;
+		data_len += ASF_NTOHS(iph->tot_len);
 		asf_debug(" Frag %d (rx %s %u.%u.%u.%u <-> %u.%u.%u.%u):"\
 			"skb->len %d iph->tot_len %u frag_off %u (sum %u)\n",
 			count, skb->dev->name,
-			NIPQUAD(iph->saddr), NIPQUAD(iph->daddr),
-			skb->len, iph->tot_len, iph->frag_off, data_len);
+			NIPQUAD(iph->saddr), NIPQUAD(iph->daddr), skb->len,
+			ASF_NTOHS(iph->tot_len), ASF_NTOHS(iph->frag_off),
+			data_len);
 		asf_debug("	   [ip_ptr 0x%x skb->data 0x%x data[0]"\
 			"0x%02x data[1] 0x%02x ]\n",
 			iph, skb->data, skb->data[0], skb->data[1]);
@@ -3086,6 +3091,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 		asf_debug("Defrag Completed!\n");
 
 		iph = ip_hdr(skb);
+		tot_len = ASF_NTOHS(iph->tot_len);
 		if (unlikely(skb->len < ((iph->ihl*4) + 8))) {
 			/* Need to have the transport headers ready */
 			asf_debug("First fragment does not have transport headers ready\n");
@@ -3489,7 +3495,7 @@ sctp_flow:
 
 				XGSTATS_INC(FragAndXmit);
 
-				if (iph->frag_off & IP_DF)
+				if (ASF_NTOHS(iph->frag_off) & IP_DF)
 					goto ret_pkt_to_stk;
 
 				/* Need to call fragmentation routine */

@@ -913,12 +913,14 @@ static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 {
 	struct iphdr *iph;
 	int ihl;
+	unsigned short	host_ip_tot_len;
 	ASFFFPGlobalStats_t     *gstats = asfPerCpuPtr(asf_gstats, smp_processor_id());
 
 	iph = ip_hdr(skb);
+	host_ip_tot_len = ASF_NTOHS(iph->tot_len);
 	*pIhl = ihl = iph->ihl * 4;
 
-	if (unlikely((iph->ihl < 5) || (ihl >= iph->tot_len)))
+	if (unlikely((iph->ihl < 5) || (ihl >= host_ip_tot_len)))
 	{
 		asf_reasm_debug("IP Header length is invalid \r\n");
 		gstats->ulErrIpHdr++;
@@ -926,27 +928,28 @@ static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 	}
 
 	if (((iph->frag_off & (htons(IP_MF))))) {
-		if (unlikely((iph->tot_len - (iph->ihl*4)) & 7)) {
+		if (unlikely((host_ip_tot_len - (iph->ihl*4)) & 7)) {
 			asf_reasm_debug("Invalid data length\r\n");
 			gstats->ulErrIpHdr++;
 			return 1;
 		}
-		if (unlikely(iph->tot_len < asf_reasmCfg[ulVSGId].ulMinFragSize)) {
+		if (unlikely(host_ip_tot_len <
+					asf_reasmCfg[ulVSGId].ulMinFragSize)) {
 			asf_reasm_debug("Length is smaller than min fragment size\r\n");
 			gstats->ulErrIpHdr++;
 			return 1;
 		}
 	}
 
-	if (unlikely(skb->len < iph->tot_len)) {
+	if (unlikely(skb->len < host_ip_tot_len)) {
 		asf_reasm_debug(" Length is invalid\r\n");
 		gstats->ulErrIpHdr++;
 		return 1;
 	} else
-		skb->len = iph->tot_len;
+		skb->len = host_ip_tot_len;
 
 
-	*offset = (ip_hdr(skb)->frag_off);
+	*offset = ASF_NTOHS(ip_hdr(skb)->frag_off);
 	*flags = *offset & ~IP_OFFSET;
 	*offset &= IP_OFFSET;
 	asf_reasm_debug("*offset before shifting = %d\r\n", *offset);
@@ -954,12 +957,12 @@ static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 	asf_reasm_debug("*offset after shifting = %d\r\n", *offset);
 
 
-	if (unlikely(iph->tot_len > (ASF_REASM_IP_MAX_PKT_LEN - *offset))) {
+	if (unlikely(host_ip_tot_len > (ASF_REASM_IP_MAX_PKT_LEN - *offset))) {
 		asf_reasm_debug("Length is invalid \r\n");
 		gstats->ulErrIpHdr++;
 		return 1;
 	}
-	*ulSegLen = iph->tot_len - ihl;
+	*ulSegLen = host_ip_tot_len - ihl;
 	return 0;
 }
 
@@ -1758,7 +1761,9 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 						pHeadSkb->data -= pCb->fraghdr_info.iphdrExthdr_len;
 						memmove(pHeadSkb->data, (void *)pCb->fraghdr_info.begIphdr_addr, pCb->fraghdr_info.iphdrExthdr_len);
 						ip6h = (struct ipv6hdr *)pHeadSkb->data;
-						ip6h->payload_len = pCb->ulTotLen + pCb->fraghdr_info.iphdrExthdr_len - sizeof(struct ipv6hdr);
+						ip6h->payload_len = ASF_HTONS(pCb->ulTotLen +
+								pCb->fraghdr_info.iphdrExthdr_len -
+								sizeof(struct ipv6hdr));
 						if (ip6h->nexthdr == NEXTHDR_HOP) {
 							*(unsigned char *)(ip6h + 1) = pCb->fraghdr_info.nexthdr;
 						} else {
@@ -1778,7 +1783,9 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 						pHeadSkb->len += ihl;
 						skb_reset_network_header(pHeadSkb);
 
-						pIpHdr->tot_len = pCb->ulTotLen+ihl;
+						pIpHdr->tot_len =
+							ASF_HTONS(pCb->ulTotLen +
+									ihl);
 						pIpHdr->frag_off = 0;
 						/* Here, we'll use the Idenitifcation field from the Head SKB itself.
 						   If we change the Identification field, then in case of AH -Tunnel Mode, if traffic is sent with
@@ -2039,15 +2046,16 @@ int asfIpv4Fragment(struct sk_buff *skb,
 	struct sk_buff *skb2, *pLastSkb;
 	unsigned int bytesLeft, len, ii, ptr = 0;
 	unsigned int *pSrc, *pTgt;
-	unsigned int offset = (iph->frag_off & IP_OFFSET) << 3;
-	unsigned int flags = iph->frag_off & IP_MF;
+	unsigned int offset = (ASF_NTOHS(iph->frag_off) & IP_OFFSET) << 3;
+	unsigned int flags = ASF_NTOHS(iph->frag_off) & IP_MF;
 	unsigned int first_frag_len;
 	bool bNewSkb = 1;
 	struct sk_buff *pSkb, *frag;
 
-	asf_reasm_debug("skb->len = %d, ulMTU=%d, ulDevXmitHdrLen = %d ip_tot_len =%d\r\n", skb->len,
-			ulMTU, ulDevXmitHdrLen, iph->tot_len);
-	if ((likely(iph->tot_len > ulMTU)) || (skb_shinfo(skb)->frag_list)) {
+	asf_reasm_debug("skb->len = %d, ulMTU=%d, ulDevXmitHdrLen = %d ip_tot_len =%d\r\n",
+			skb->len, ulMTU, ulDevXmitHdrLen, ASF_NTOHS(iph->tot_len));
+	if ((likely(ASF_NTOHS(iph->tot_len) > ulMTU)) ||
+			(skb_shinfo(skb)->frag_list)) {
 		/* Fragmentation */
 		if (((skb_pagelen(skb) <= ulMTU)
 			&& (skb_headroom(skb) > ulDevXmitHdrLen))
@@ -2140,7 +2148,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				len = (ulMTU & ~7);
 			}
 			first_frag_len = len + ihl;
-			bytesLeft = iph->tot_len - first_frag_len;
+			bytesLeft = ASF_NTOHS(iph->tot_len) - first_frag_len;
 
 			/* The first fragment will be created at the end */
 
