@@ -1187,7 +1187,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 #ifdef ASF_DEBUG_FRAME
 	asf_print(" Pkt (%x) skb->len = %d, ip6h->payload_len = %d",
-		pIpsecOpaque, skb->len, ip6h->payload_len);
+		pIpsecOpaque, skb->len, ASF_NTOHS(ip6h->payload_len));
 	hexdump(skb->data - 14, skb->len + 14);
 #endif
 
@@ -1202,7 +1202,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 	skb_set_transport_header(skb, sizeof(struct ipv6hdr));
 
-	pkt_len = ip6h->payload_len;
+	pkt_len = ASF_NTOHS(ip6h->payload_len);
 
 	/* Traverse IPv6 extension headers */
 
@@ -1339,10 +1339,16 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 	ptrhdrOffset = (unsigned int *)((unsigned char *) skb_transport_header(skb));
 
-	flow = asf_ffp_ipv6_flow_lookup((ASF_IPv6Addr_t *)&(ip6h->saddr), (ASF_IPv6Addr_t *)&(ip6h->daddr),
-					*ptrhdrOffset/* ports*/, ulVsgId,
-					ulZoneId, nexthdr, &ulHashVal);
+	{
+		unsigned short us_src_port = *(unsigned short *)ptrhdrOffset;
+		unsigned short us_dest_port = *((unsigned short *)(ptrhdrOffset) + 1);
+		unsigned int ports = (us_src_port << 16) | us_dest_port;
 
+		flow = asf_ffp_ipv6_flow_lookup((ASF_IPv6Addr_t *)&(ip6h->saddr),
+					(ASF_IPv6Addr_t *)&(ip6h->daddr),
+					ports, ulVsgId,
+					ulZoneId, nexthdr, &ulHashVal);
+	}
 
 	asf_debug("ASF: %s Hash(%x:%x:%x:%x:%x:%x:%x:%x, %x:%x:%x:%x:%x:%x:%x:%x, 0x%lx, %d, %d)"\
 		" = %lx (hindex %lx) (hini 0x%lx) => %s\n",
@@ -1484,7 +1490,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 #endif
 
 		XGSTATS_INC(TcpPkts);
-		trhlen = (unsigned short)((*(ptrhdrOffset + 3) &
+		trhlen = (unsigned short)((ASF_NTOHL(*(ptrhdrOffset + 3)) &
 						0xf0000000) >> 28) * 4;
 		/* Invalid length check
 		   Length indicated in IPhdr - header length < expected transport header length
@@ -1730,7 +1736,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		if (flow->bIP6IP4Out) {
 			struct iphdr *iph = (struct iphdr *)skb_network_header(skb);
 			iph -= 1;
-			iph->tot_len = skb->len + sizeof(struct iphdr);
+			iph->tot_len = ASF_HTONS(skb->len +
+					sizeof(struct iphdr));
 
 			if (iph->ttl <= 1)
 				iph->ttl = ip6h->hop_limit;
