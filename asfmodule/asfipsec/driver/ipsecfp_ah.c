@@ -947,7 +947,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		unsigned int **pOuterIpHdr)
 {
 	struct iphdr *iph, *org_iphdr;
-	unsigned short usNxtProto;
+	unsigned char ucNxtProto;
 	unsigned short orig_pktlen;
 	unsigned int ulLoSeqNum, ulHiSeqNum;
 	struct sk_buff *pHeadSkb, *pTailSkb;
@@ -964,14 +964,15 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (org_iphdr->version == 6) {
 		struct ipv6hdr *org_ipv6hdr = (struct ipv6hdr *) org_iphdr;
-		orig_pktlen = org_ipv6hdr->payload_len + SECFP_IPV6_HDR_LEN;
+		orig_pktlen = ASF_NTOHS(org_ipv6hdr->payload_len) +
+			SECFP_IPV6_HDR_LEN;
 		ASFIPSEC_DEBUG("\n orig_pktlen %d =", orig_pktlen);
-		usNxtProto = SECFP_PROTO_IPV6;
+		ucNxtProto = SECFP_PROTO_IPV6;
 		ipv6_traffic_class(tos, org_ipv6hdr);
 	} else {
 #endif
-		orig_pktlen = org_iphdr->tot_len;
-		usNxtProto = SECFP_PROTO_IP;
+		orig_pktlen = ASF_NTOHS(org_iphdr->tot_len);
+		ucNxtProto = SECFP_PROTO_IP;
 		tos = org_iphdr->tos;
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
@@ -997,8 +998,9 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		iph->id = secfp_getNextId();
 		iph->protocol = SECFP_PROTO_AH;
 		/* Total length = Outer IP hdr + Sec hdr len (AH Header) + payload len */
-		iph->tot_len = orig_pktlen + (unsigned short)pSA->ulSecHdrLen +
-				(unsigned short)pSA->ulSecLenIncrease ;
+		iph->tot_len = ASF_HTONS(orig_pktlen +
+				(unsigned short)pSA->ulSecHdrLen +
+				(unsigned short)pSA->ulSecLenIncrease);
 		iph->saddr = pSA->ipHdrInfo.hdrdata.iphv4.saddr;
 		iph->daddr = pSA->ipHdrInfo.hdrdata.iphv4.daddr;
 
@@ -1026,9 +1028,10 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		ipv6h->nexthdr = SECFP_PROTO_AH;
 		ipv6h->saddr = pSA->ipHdrInfo.hdrdata.iphv6.saddr;
 		ipv6h->daddr = pSA->ipHdrInfo.hdrdata.iphv6.daddr;
-		ipv6h->payload_len = orig_pktlen +
+		ipv6h->payload_len = ASF_HTONS(orig_pktlen +
 			(unsigned short)pSA->ulSecHdrLen +
-			(unsigned short)pSA->ulSecLenIncrease - SECFP_IPV6_HDR_LEN;
+			(unsigned short)pSA->ulSecLenIncrease -
+			SECFP_IPV6_HDR_LEN);
 		ASFIPSEC_DBGL2("New payload len %d", ipv6h->payload_len);
 
 		ipv6h->priority = 0;
@@ -1041,7 +1044,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 	/* data pointer at the beginning of the AH header */
 	pHeadSkb->data -= pSA->ulSecHdrLen;
 
-	*(unsigned char *) &(pHeadSkb->data[0]) = usNxtProto;
+	*(unsigned char *) &(pHeadSkb->data[0]) = ucNxtProto;
 
 	ASFIPSEC_PRINT("NextProto = 0x%x", pHeadSkb->data[0]);
 	*(unsigned char *) &(pHeadSkb->data[1]) = ((SECFP_AH_FIXED_HDR_LEN + pSA->SAParams.uICVSize +
@@ -1098,7 +1101,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 			pSA->ulLoSeqNum.counter = 1;
 		ulLoSeqNum = pSA->ulLoSeqNum.counter;
 	}
-	*(unsigned int *) &(pHeadSkb->data[8]) = ulLoSeqNum;
+	*(unsigned int *) &(pHeadSkb->data[8]) = ASF_HTONL(ulLoSeqNum);
 
 	/* Alright sequence number will be either the right one in extended sequence number
 		support or it will be set to 0 */
@@ -1118,11 +1121,11 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 	if (!pSA->ipHdrInfo.bIpVersion) {
 #endif
 		pHeadSkb->data -= SECFP_IPV4_HDR_LEN; /* outer Ip header */
-		pHeadSkb->protocol = ETH_P_IP;
+		pHeadSkb->protocol = ASF_HTONS(ETH_P_IP);
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
 		pHeadSkb->data -= SECFP_IPV6_HDR_LEN; /* outer Ip header */
-		pHeadSkb->protocol = ETH_P_IPV6;
+		pHeadSkb->protocol = ASF_HTONS(ETH_P_IPV6);
 	}
 #endif
 
@@ -1391,7 +1394,7 @@ void secfp_inAHComplete(struct device *dev,
 	/* Assuming ethernet as the receiving device of original packet */
 	if (ucNextProto == SECFP_PROTO_IP) {
 		secfp_inCompleteUpdateIpv4Pkt(skb);
-		skb->protocol = ETH_P_IP;
+		skb->protocol = ASF_HTONS(ETH_P_IP);
 
 		ASFIPSEC_FPRINT("decrypt skb %p len %d frag %p\n",
 			skb->head, skb->len,
@@ -1420,7 +1423,7 @@ void secfp_inAHComplete(struct device *dev,
 		ASFIPSEC_DEBUG("\n ipv6 packet decrypted successfully"
 				" need to send it to ipv6stack");
 		skb_reset_network_header(skb);
-		skb->protocol = ETH_P_IPV6;
+		skb->protocol = ASF_HTONS(ETH_P_IPV6);
 		/* Homogenous buffer */
 		Buffer.nativeBuffer = skb;
 #ifdef ASF_TERM_FP_SUPPORT
@@ -1611,7 +1614,7 @@ void secfp_outAHComplete(struct device *dev,
 		/*Update the Mutable fields of the outer IP header */
 		iph->tos = pSA->ipHdrInfo.hdrdata.iphv4.tos;
 		iph->ttl = 64;
-		iph->frag_off = IP_DF;
+		iph->frag_off = ASF_HTONS(IP_DF);
 
 		iph->check = ip_fast_csum((u8 *)(skb->data), iph->ihl);
 	} else {
