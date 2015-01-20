@@ -965,7 +965,6 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 	/* Fill command for flow 2 */
 	cmd.flow2.tuple.ucProtocol = reply_prot;
-	cmd.flow2.tuple.ucProtocol = reply_prot;
 #ifdef ASF_INGRESS_MARKER
 	if (pASFCbFnQosMarker_p) {
 		if (pf_ipv6)
@@ -1076,8 +1075,8 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		}
 		fl_out.fl4_tos = 0;
 	#else
-		fl_out.u.ip4.fl4_sport = reply_sport;
-		fl_out.u.ip4.fl4_dport = reply_dport;
+		fl_out.u.ip4.fl4_sport = reply_dport;
+		fl_out.u.ip4.fl4_dport = reply_sport;
 		fl_out.flowi_proto = orig_prot;
 		if (pf_ipv6 == true) {
 			ipv6_addr_copy(&fl_out.u.ip6.daddr, &ip6_reply_sip);
