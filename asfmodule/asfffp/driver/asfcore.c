@@ -2227,6 +2227,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	struct dpa_bp		*dpa_bp;
 	u32			data_len;
 	unsigned char		bSendOut  = 0;
+	struct net_device       *idev;
 
 	ACCESS_XGSTATS();
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -2281,6 +2282,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	XGSTATS_INC(Condition1);
 	flow_stats = &flow->stats;
 
+	idev = abuf.ndev;
 	vsgInfo = asf_ffp_get_vsg_info_node(anDev->ulVSGId);
 	if (likely(vsgInfo)) {
 		if (unlikely(vsgInfo->configIdentity.ulConfigMagicNumber !=
@@ -2819,6 +2821,7 @@ gen_indications:
 			ind.tuple.ucProtocol = flow->ucProtocol;
 			ind.ulZoneId = flow->ulZoneId;
 			ind.ulHashVal = htonl(ulHashVal);
+			ind.idev = idev;
 
 			ind.ASFwInfo =
 			(ASF_uint8_t *)flow->as_flow_info;
