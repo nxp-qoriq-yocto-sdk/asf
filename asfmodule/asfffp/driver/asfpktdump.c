@@ -46,7 +46,8 @@ void asf_pktdump(unsigned char *buf)
 		p += sprintf(p, "\nV4 %d.%d.%d.%d-%d.%d.%d.%d"
 			"(Len=%d proto=%d frag_off=%x)",
 			NIPQUAD(iph->saddr), NIPQUAD(iph->daddr),
-			iph->tot_len, iph->protocol, iph->frag_off & 0x7);
+			ASF_NTOHS(iph->tot_len), iph->protocol,
+			ASF_NTOHS(iph->frag_off) & 0x7);
 		proto = iph->protocol;
 		if (iph->ihl != 5) {
 			p += sprintf(p, "Packet dump of packets"
@@ -60,7 +61,8 @@ void asf_pktdump(unsigned char *buf)
 				"%x:%x:%x:%x:%x:%x:%x:%x (Len=%d nexthdr=%d)",
 				PRINT_IPV6_OTH(ip6h->saddr),
 				PRINT_IPV6_OTH(ip6h->daddr),
-				(int)(ip6h->payload_len + sizeof(struct ipv6hdr)),
+				(int)(ASF_NTOHS(ip6h->payload_len) +
+				sizeof(struct ipv6hdr)),
 				ip6h->nexthdr);
 			data += sizeof(struct ipv6hdr);
 		}
@@ -75,7 +77,8 @@ void asf_pktdump(unsigned char *buf)
 			"%x:%x:%x:%x:%x:%x:%x:%x (Len=%d nexthdr=%d)",
 			PRINT_IPV6_OTH(ip6h->saddr),
 			PRINT_IPV6_OTH(ip6h->daddr),
-			(int)(ip6h->payload_len + sizeof(struct ipv6hdr)),
+			(int)(ASF_NTOHS(ip6h->payload_len) +
+			sizeof(struct ipv6hdr)),
 			ip6h->nexthdr);
 		proto = ip6h->nexthdr;
 		data += sizeof(struct ipv6hdr);
@@ -85,7 +88,8 @@ void asf_pktdump(unsigned char *buf)
 				"%x:%x:%x:%x:%x:%x:%x:%x (Len=%d nexthdr=%d)",
 				PRINT_IPV6_OTH(ip6h->saddr),
 				PRINT_IPV6_OTH(ip6h->daddr),
-				(int)(ip6h->payload_len + sizeof(struct ipv6hdr)),
+				(int)(ASF_NTOHS(ip6h->payload_len) +
+				sizeof(struct ipv6hdr)),
 				ip6h->nexthdr);
 			data += sizeof(struct ipv6hdr);
 		} else if (proto == IPPROTO_IPIP) {
@@ -93,7 +97,8 @@ void asf_pktdump(unsigned char *buf)
 			p += sprintf(p, " V4-in-V6 %d.%d.%d.%d-%d.%d.%d.%d"
 				"(Len=%d proto=%d frag_off=%x)",
 				NIPQUAD(iph->saddr), NIPQUAD(iph->daddr),
-				iph->tot_len, iph->protocol, iph->frag_off & 0x7);
+				ASF_NTOHS(iph->tot_len), iph->protocol,
+				ASF_NTOHS(iph->frag_off) & 0x7);
 			data += sizeof(struct iphdr);
 		}
 	} else {

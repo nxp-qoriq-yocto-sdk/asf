@@ -3359,7 +3359,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 #ifdef ASF_SCTP_SUPPORT
 		} else { /* SCTP Traffic */
 			XGSTATS_INC(SctpPkts);
-			if ((iph->tot_len-iphlen) < 12) {
+			if ((ASF_NTOHS(iph->tot_len) - iphlen) < 12) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				gstats->ulErrIpProtoHdr++;
 #endif

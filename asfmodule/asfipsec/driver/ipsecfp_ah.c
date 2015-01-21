@@ -978,7 +978,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 	}
 #endif
 
-	ASFIPSEC_DEBUG("Org IpHeader Total Len = %d ", org_iphdr->tot_len);
+	ASFIPSEC_DEBUG("Org IpHeader Total Len = %d ", ASF_NTOHS(org_iphdr->tot_len));
 
 
 	/* skb->data is at the Original IP header */
@@ -1011,7 +1011,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 		iph->check = 0;
 
 		ASFIPSEC_DEBUG("ulSecHdrLen = %d, uICVSiz=%d, AHPaddingLen=%d, iph->tot_len=%d",
-		 pSA->ulSecHdrLen, pSA->SAParams.uICVSize, pSA->SAParams.ucAHPaddingLen, iph->tot_len);
+		 pSA->ulSecHdrLen, pSA->SAParams.uICVSize, pSA->SAParams.ucAHPaddingLen, ASF_NTOHS(iph->tot_len));
 
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else {
@@ -1032,7 +1032,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 			(unsigned short)pSA->ulSecHdrLen +
 			(unsigned short)pSA->ulSecLenIncrease -
 			SECFP_IPV6_HDR_LEN);
-		ASFIPSEC_DBGL2("New payload len %d", ipv6h->payload_len);
+		ASFIPSEC_DBGL2("New payload len %d", ASF_NTOHS(ipv6h->payload_len));
 
 		ipv6h->priority = 0;
 		ipv6h->hop_limit = 0;
@@ -1132,7 +1132,7 @@ secfp_prepareOutAHPacket(struct sk_buff *skb1, outSA_t *pSA,
 	if (skb_shinfo(pHeadSkb)->nr_frags) {
 		pHeadSkb->len = orig_pktlen + pSA->ulSecHdrLen + SECFP_IPV4_HDR_LEN;
 		ASFIPSEC_DEBUG("pHeadSkb->len:%d pHeadSkb->len1:%d\n",
-					pHeadSkb->len, org_iphdr->tot_len);
+					pHeadSkb->len, ASF_NTOHS(org_iphdr->tot_len));
 	} else {
 		/* Update skb->len */
 		pHeadSkb->len += pSA->ulSecHdrLen + pSA->ulSecLenIncrease;
@@ -1659,7 +1659,7 @@ void secfp_outAHComplete(struct device *dev,
 		if (pSA->bPPPoE) {
 			/* PPPoE packet.. Set Payload length in PPPoE header */
 			*((short *)&(skb->data[pSA->ulL2BlobLen-4])) =
-						ASF_HTONS(ASF_NTOHS(tot_len) + 2);
+						ASF_HTONS(tot_len + 2);
 		}
 /*		ASFIPSEC_DEBUG("skb->network_header = 0x%x,"
 			"skb->transport_header = 0x%x\r\n",
@@ -1917,7 +1917,7 @@ sa_expired1:
 						skb_network_header(pOutSkb), skb_transport_header(pOutSkb));
 					ASFIPSEC_FPRINT("Transmitting buffer = 0x%x dev->index = %d", pOutSkb, pOutSkb->dev->ifindex);
 
-					ASFIPSEC_FPRINT("Fragment offset field = 0x%x", iph->frag_off);
+					ASFIPSEC_FPRINT("Fragment offset field = 0x%x", ASF_NTOHS(iph->frag_off));
 
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
 #ifdef CONFIG_DPA
