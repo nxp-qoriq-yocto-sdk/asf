@@ -78,10 +78,10 @@ static unsigned int SPDOutSALinkNodePoolId_g = 0xFFFFFFFF;
 
 
 #define ASF_IPSEC4_GET_START_ADDR(addr, maskbits)\
- ((maskbits) == 32) ? (addr) : (((addr)&(0xffffffff << (32-(maskbits)))) + 1)
+ ((maskbits) == 32) ? (addr) : (ASF_HTONL((ASF_NTOHL((addr))&(0xffffffff << (32-(maskbits)))) + 1))
 
 #define ASF_IPSEC4_GET_END_ADDR(addr, maskbits)\
- ((maskbits) == 32) ? (addr) : (((addr)|(0xffffffff >> (maskbits))) - 1)
+ ((maskbits) == 32) ? (addr) : (ASF_HTONL(((ASF_NTOHL(addr))|(0xffffffff >> (maskbits))) - 1))
 
 #define SHARED_GWV4_OFFSET(arg) (12 + offsetof(struct iphdr, arg))
 
@@ -1390,6 +1390,7 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 	struct iphdr *iph = ip_hdr(skb);
 	unsigned short int *ptrhdrOffset;
 	unsigned short int sport, dport;
+	uint32_t saddr, daddr;
 	bool bMatchFound = ASF_FALSE;
 	SPDOutSALinkNode_t *pSALinkNode;
 	outSA_t *pSA;
@@ -1398,6 +1399,8 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 	struct ipv6hdr *ipv6h = (struct ipv6hdr *) iph;
 	if (iph->version == 4) {
 #endif
+	saddr = ASF_NTOHL(iph->saddr);
+	daddr = ASF_NTOHL(iph->daddr);
 	ptrhdrOffset = (unsigned short int *) (&(skb->data[(iph->ihl*4)]));
 		protocol = iph->protocol;
 		tos = iph->tos;
@@ -1409,8 +1412,8 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 		ipv6_traffic_class(tos, ipv6h);
 	}
 #endif
-	sport = *ptrhdrOffset;
-	dport = *(ptrhdrOffset+1);
+	sport = ASF_NTOHS(*ptrhdrOffset);
+	dport = ASF_NTOHS(*(ptrhdrOffset+1));
 
 	for (pSALinkNode = pContainer->SAHolder.pSAList;
 		pSALinkNode != NULL; pSALinkNode = pSALinkNode->pNext) {
@@ -1433,8 +1436,8 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 								continue;
 						}
 						if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_SRCPORT_SELECTOR) {
-							if ((sport >= pSelNode->prtStart) &&
-								(sport <= pSelNode->prtEnd)) {
+							if ((sport >= ASF_NTOHS(pSelNode->prtStart)) &&
+								(sport <= ASF_NTOHS(pSelNode->prtEnd))) {
 								ucMatchSrcSelFlag |= SECFP_SA_SRCPORT_SELECTOR;
 							} else
 								continue;
@@ -1444,8 +1447,8 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 							if (pSelNode->IP_Version == 4) {
 #endif
 								if (iph->version == 4 &&
-									(iph->saddr >= pSelNode->ipAddrRange.v4.start) &&
-								(iph->saddr <= pSelNode->ipAddrRange.v4.end)) {
+								(saddr >= ASF_NTOHL(pSelNode->ipAddrRange.v4.start)) &&
+								(saddr <= ASF_NTOHL(pSelNode->ipAddrRange.v4.end))) {
 								ucMatchSrcSelFlag |= SECFP_SA_SRCIPADDR_SELECTOR;
 								} else
 									continue;
@@ -1482,8 +1485,8 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 							continue;
 					}
 					if (pHeadSelList->pOutSelList->ucSelFlags & SECFP_SA_DESTPORT_SELECTOR) {
-						if ((dport >= pSelNode->prtStart) &&
-							(dport <= pSelNode->prtEnd)) {
+						if ((dport >= ASF_NTOHS(pSelNode->prtStart)) &&
+							(dport <= ASF_NTOHS(pSelNode->prtEnd))) {
 							ucMatchDstSelFlag |= SECFP_SA_DESTPORT_SELECTOR;
 						} else
 							continue;
@@ -1493,8 +1496,8 @@ SPDOutSALinkNode_t *secfp_cmpPktSelWithSelSet(
 						if (pSelNode->IP_Version == 4) {
 #endif
 							if (iph->version == 4 &&
-								(iph->daddr >= pSelNode->ipAddrRange.v4.start) &&
-								(iph->daddr <= pSelNode->ipAddrRange.v4.end)) {
+								(daddr >= ASF_NTOHL(pSelNode->ipAddrRange.v4.start)) &&
+								(daddr <= ASF_NTOHL(pSelNode->ipAddrRange.v4.end))) {
 								ucMatchDstSelFlag |= SECFP_SA_DESTIPADDR_SELECTOR;
 							} else
 								continue;
