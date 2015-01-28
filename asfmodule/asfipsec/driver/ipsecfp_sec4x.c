@@ -55,6 +55,12 @@ extern struct device *pdev;
 #define DESC_AEAD_GIVENCRYPT_TEXT_LEN 27
 #define OP_PCL_IPSEC_NULL 0x0b00
 
+#ifdef ASF_ARM
+#define ASF_CACHE_BYTES L1_CACHE_BYTES
+#else
+#define ASF_CACHE_BYTES 0
+#endif
+
 #define GET_CACHE_ALLIGNED(x) (uintptr_t *)(((uintptr_t)x + (L1_CACHE_BYTES - 1)) \
 	& ~(L1_CACHE_BYTES - 1))
 
@@ -460,6 +466,8 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 {
 	u32 *jump_cmd;
 	struct ipsec_decap_pdb *pdb;
+	u8 *key;
+	key = (u8 *) GET_CACHE_ALLIGNED(pSA->ctx.key);
 
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	init_sh_desc(sh_desc, HDR_SAVECTX | HDR_SHARE_SERIAL);
@@ -608,12 +616,13 @@ int secfp_prepareDecapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	if (pSA->SAParams.bEncrypt && likely(ctx->enckeylen)) {
 		/* Now the class 1/cipher key */
 		if (keys_fit_inline)
-			append_key_as_imm(sh_desc, (void *)ctx->key +
-				ctx->split_key_pad_len, ctx->enckeylen,
-				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
+			append_key_as_imm(sh_desc, (void *)key +
+				ctx->split_key_pad_len + ASF_CACHE_BYTES,
+				ctx->enckeylen,	ctx->enckeylen,
+				CLASS_1 | KEY_DEST_CLASS_REG);
 		else
 			append_key(sh_desc, ctx->key_phys +
-				ctx->split_key_pad_len,
+				ctx->split_key_pad_len + ASF_CACHE_BYTES,
 				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 	}
 
@@ -735,6 +744,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	outSA_t *pSA, bool keys_fit_inline)
 {
 	u32 *jump_cmd;
+	u8 *key;
 
 #ifndef ASF_SECFP_PROTO_OFFLOAD
 	init_sh_desc(sh_desc, HDR_SAVECTX | HDR_SHARE_SERIAL);
@@ -754,6 +764,7 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 		if (pSel->selNodes[0].IP_Version == 6)
 			bSelIPv4OrIPv6 = 1;
 	}
+	key = (u8 *) GET_CACHE_ALLIGNED(pSA->ctx.key);
 
 	/* todo take care of ip optionsa and ext header */
 	if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
@@ -993,12 +1004,13 @@ int secfp_prepareEncapShareDesc(struct caam_ctx *ctx, u32 *sh_desc,
 	if (pSA->SAParams.bEncrypt && likely(ctx->enckeylen)) {
 		/* Now the class 1/cipher key */
 		if (keys_fit_inline)
-			append_key_as_imm(sh_desc, (void *)ctx->key +
-				ctx->split_key_pad_len, ctx->enckeylen,
-				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
+			append_key_as_imm(sh_desc, (void *)key +
+				ctx->split_key_pad_len + ASF_CACHE_BYTES,
+				ctx->enckeylen,	ctx->enckeylen,
+				CLASS_1 | KEY_DEST_CLASS_REG);
 		else
 			append_key(sh_desc, ctx->key_phys +
-				ctx->split_key_pad_len,
+				ctx->split_key_pad_len + ASF_CACHE_BYTES,
 				ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 	}
 	/* update jump cmd now that we are at the jump target */
@@ -1099,7 +1111,7 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 		}
 		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
 					pSA->SAParams.EncKeyLen +
-					L1_CACHE_BYTES - 1,
+					L1_CACHE_BYTES - 1 + ASF_CACHE_BYTES,
 					GFP_DMA | flags);
 
 		if (!pSA->ctx.key) {
@@ -1114,7 +1126,8 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 
 		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, key,
 					pSA->ctx.split_key_pad_len +
-					pSA->SAParams.EncKeyLen,
+					pSA->SAParams.EncKeyLen +
+					ASF_CACHE_BYTES,
 					DMA_TO_DEVICE);
 		if (dma_mapping_error(pSA->ctx.jrdev, pSA->ctx.key_phys)) {
 			ASFIPSEC_DEBUG(" Unable to map key"\
@@ -1147,7 +1160,8 @@ int secfp_createOutSACaamCtx(outSA_t *pSA)
 		}
 		if (!(SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
 			SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo))
-				memcpy(key + pSA->ctx.split_key_pad_len,
+				memcpy(key + pSA->ctx.split_key_pad_len +
+						ASF_CACHE_BYTES,
 					&pSA->SAParams.ucEncKey,
 					pSA->SAParams.EncKeyLen);
 
@@ -1195,7 +1209,8 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 				pSA->SAParams.AuthKeyLen;
 		}
 		pSA->ctx.key = kzalloc(pSA->ctx.split_key_pad_len +
-					pSA->SAParams.EncKeyLen,
+					pSA->SAParams.EncKeyLen +
+					ASF_CACHE_BYTES,
 					GFP_DMA | flags);
 
 		if (!pSA->ctx.key) {
@@ -1210,6 +1225,7 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 		/* FOR LS1 this may need to move doen */
 		pSA->ctx.key_phys = dma_map_single(pSA->ctx.jrdev, key,
 					pSA->ctx.split_key_pad_len +
+					ASF_CACHE_BYTES +
 					pSA->SAParams.EncKeyLen,
 					DMA_TO_DEVICE);
 
@@ -1248,7 +1264,8 @@ int secfp_createInSACaamCtx(inSA_t *pSA)
 
 		if (!(SECFP_HMAC_AES_XCBC_MAC == pSA->SAParams.ucAuthAlgo &&
 			SECFP_ESP_NULL == pSA->SAParams.ucCipherAlgo))
-			memcpy(key + pSA->ctx.split_key_pad_len,
+			memcpy(key + pSA->ctx.split_key_pad_len +
+					ASF_CACHE_BYTES,
 				&pSA->SAParams.ucEncKey,
 				pSA->SAParams.EncKeyLen);
 
