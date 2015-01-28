@@ -880,7 +880,10 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.authAlgo = ret;
 		SAParams.authKeyLenBits = xfrm->aalg->alg_key_len;
 		SAParams.authKey = xfrm->aalg->alg_key;
-		SAParams.icvSizeinBits = xfrm->aalg->alg_trunc_len;
+		if (ret == ASF_IPSEC_AALG_SHA256HMAC)
+			SAParams.icvSizeinBits = xfrm->aalg->alg_key_len/2;
+		else
+			SAParams.icvSizeinBits = xfrm->aalg->alg_trunc_len;
 	}
 
 	if (xfrm->ealg) {
@@ -1193,7 +1196,10 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		SAParams.authAlgo = ret;
 		SAParams.authKeyLenBits = xfrm->aalg->alg_key_len;
 		SAParams.authKey = xfrm->aalg->alg_key;
-		SAParams.icvSizeinBits = xfrm->aalg->alg_trunc_len;
+		if (ret == ASF_IPSEC_AALG_SHA256HMAC)
+			SAParams.icvSizeinBits = xfrm->aalg->alg_key_len/2;
+		else
+			SAParams.icvSizeinBits = xfrm->aalg->alg_trunc_len;
 	}
 	if (xfrm->ealg) {
 		ret = asfctrl_alg_getbyname(xfrm->ealg->alg_name, ENCRYPTION);
