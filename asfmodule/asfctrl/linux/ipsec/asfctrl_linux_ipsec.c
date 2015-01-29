@@ -419,8 +419,17 @@ ASF_void_t asfctrl_ipsec_fn_SeqNoOverFlow(ASF_uint32_t ulVSGId,
 	 /*1. find the SA (xfrm pointer) on the basis of SPI,
 	 * protcol, dest Addr */
 
-	family = AF_INET;
-	daddr.a4 = (DestAddr.ipv4addr);
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (DestAddr.bIPv4OrIPv6) {
+		memcpy(daddr.a6, DestAddr.ipv6addr, 16);
+		family = AF_INET6;
+	} else {
+#endif
+		daddr.a4 = (DestAddr.ipv4addr);
+		family = AF_INET;
+#ifdef ASF_IPV6_FP_SUPPORT
+	}
+#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34))
 	x = xfrm_state_lookup(&init_net, 0, &daddr, ulSPI, ucProtocol, family);
@@ -428,13 +437,11 @@ ASF_void_t asfctrl_ipsec_fn_SeqNoOverFlow(ASF_uint32_t ulVSGId,
 	x = xfrm_state_lookup(&init_net, &daddr, ulSPI, ucProtocol, family);
 #endif
 	if (unlikely(!x)) {
-		ASFCTRL_INFO("Unable to get SA SPI=0x%x, dest=0x%x",
-		ulSPI, daddr.a4);
+		ASFCTRL_INFO("Unable to get SA SPI=0x%x", ulSPI);
 		goto back;
 	}
 	if (unlikely(x->km.state != XFRM_STATE_VALID)) {
-		ASFCTRL_INFO("Invalid SA SPI=0x%x, dest=0x%x",
-		ulSPI, daddr.a4);
+		ASFCTRL_INFO("Invalid SA SPI=0x%x", ulSPI);
 		goto back;
 	}
 

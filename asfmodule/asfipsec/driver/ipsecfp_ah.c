@@ -1556,6 +1556,14 @@ void secfp_outAHComplete(struct device *dev,
 					ASFSkbFree(skb);
 					return;
 				}
+				DestAddr.bIPv4OrIPv6 =
+					pSA->SAParams.tunnelInfo.bIPv4OrIPv6;
+#ifdef ASF_IPV6_FP_SUPPORT
+				if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+					memcpy(DestAddr.ipv6addr,
+						pSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
+				else
+#endif
 				DestAddr.ipv4addr =
 					pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 				if (atomic_read(&pSA->SeqOverflow) == 0) {

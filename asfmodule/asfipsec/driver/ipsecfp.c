@@ -2136,6 +2136,14 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 					&secFP_OutSATable,
 					*(unsigned int *)&(skb->cb[SECFP_SAD_SAI_INDEX]));
 				if (pSA) {
+					DestAddr.bIPv4OrIPv6 =
+						pSA->SAParams.tunnelInfo.bIPv4OrIPv6;
+#ifdef ASF_IPV6_FP_SUPPORT
+					if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+						memcpy(DestAddr.ipv6addr,
+							pSA->SAParams.tunnelInfo.addr.iphv6.daddr, 16);
+					else
+#endif
 					DestAddr.ipv4addr =
 						pSA->SAParams.tunnelInfo.addr.iphv4.daddr;
 					if (atomic_read(&pSA->SeqOverflow) == 0) {
