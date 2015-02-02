@@ -17,13 +17,20 @@
 #ifndef __IPSEC_CAAM_H
 #define __IPSEC_CAAM_H
 
-#include <desc_constr.h>
 #include <linux/debugfs.h>
 #include <linux/interrupt.h>
 #include <intern.h>
 #ifdef ASF_QMAN_IPSEC
 #include "linux/fsl_qman.h"
 #include "linux/fsl_bman.h"
+#endif
+
+#ifdef CONFIG_ASF_SEC4x
+#include <jr.h>
+#include <desc_constr.h>
+#ifdef ASF_IPSEC_DEBUG
+#include <error.h>
+#endif
 #endif
 
 #define AES_MAX_KEY_SIZE       32
@@ -195,13 +202,4 @@ struct ipsec_ah_edesc {
 };
 
 extern struct device *asf_caam_device(void);
-extern char *caam_jr_strstatus(char *outstr, u32 status);
-/* Prototypes for backend-level services exposed to APIs */
-/* Defined in jr.c */
-extern struct device *caam_jr_alloc(void);
-extern void caam_jr_free(struct device *rdev);
-extern int caam_jr_enqueue(struct device *dev, void *desc,
-			void (*callback) (struct device *dev, u32 *desc,
-			u32 error, void *context), void *context);
-
 #endif

@@ -2123,10 +2123,11 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #ifdef CONFIG_ASF_SEC4x
 		if (error) {
 #ifdef ASF_IPSEC_DEBUG
-			char tmp[SECFP_ERROR_STR_MAX];
-			ASFIPSEC_DPERR("%08x: %s\n", error,
-				caam_jr_strstatus(tmp, error));
+			ASFIPSEC_DPERR("%08x", error);
+			if (net_ratelimit())
+				caam_jr_strstatus(dev, error);
 #endif
+			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 			if ((error & SEQ_NO_OVERFLOW) == SEQ_NO_OVERFLOW) {
 				ASF_IPAddr_t DestAddr;
 				ASF_uint32_t ulVSGId =
@@ -3463,8 +3464,11 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 #endif
 	if (unlikely(err)) {
 #if defined(CONFIG_ASF_SEC4x) && !defined(ASF_QMAN_IPSEC)
-		char tmp[SECFP_ERROR_STR_MAX];
-		ASFIPSEC_DPERR("%08x: %s\n", err, caam_jr_strstatus(tmp, err));
+#ifdef ASF_IPSEC_DEBUG
+		ASFIPSEC_DPERR("%08x", err);
+		if (net_ratelimit())
+			caam_jr_strstatus(dev, err);
+#endif
 		if (skb_shinfo(skb)->nr_frags)
 			secfp_free_frags(desc, skb);
 		else

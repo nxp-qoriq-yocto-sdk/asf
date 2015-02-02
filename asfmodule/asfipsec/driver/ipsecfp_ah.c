@@ -1194,8 +1194,11 @@ void secfp_inAHComplete(struct device *dev,
 
 	if (unlikely(err)) {
 #ifdef CONFIG_ASF_SEC4x
-		char tmp[SECFP_ERROR_STR_MAX];
-		ASFIPSEC_DPERR("%08x: %s\n", err, caam_jr_strstatus(tmp, err));
+#ifdef ASF_IPSEC_DEBUG
+		ASFIPSEC_DPERR("%08x", err);
+		if (net_ratelimit())
+			caam_jr_strstatus(dev, err);
+#endif
 #endif
 #ifndef ASF_QMAN_IPSEC
 		secfp_ahdesc_free_frags(desc, skb);
@@ -1519,9 +1522,12 @@ void secfp_outAHComplete(struct device *dev,
 	if (unlikely(error || skb->cb[SECFP_ACTION_INDEX] == SECFP_DROP)) {
 		if (error) {
 #ifdef CONFIG_ASF_SEC4x
-			char tmp[SECFP_ERROR_STR_MAX];
-			ASFIPSEC_DPERR("Dropping the packet %08x: %s\n", error,
-				caam_jr_strstatus(tmp, error));
+#ifdef ASF_IPSEC_DEBUG
+			ASFIPSEC_DPERR("Dropping the packet %08x", error);
+			if (net_ratelimit())
+				caam_jr_strstatus(dev, error);
+#endif
+			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 #endif
 #ifndef ASF_QMAN_IPSEC
 			secfp_ahdesc_free_frags(desc, skb);
