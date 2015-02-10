@@ -326,28 +326,11 @@ static inline void ASF_AH_UpdateOutSAFields(outSA_t *pSA)
 		pSA->ipHdrInfo.hdrdata.iphv4.frag_off = 0;
 		pSA->ipHdrInfo.hdrdata.iphv4.ttl = 0;
 		pSA->ipHdrInfo.hdrdata.iphv4.tos = 0;
+		ucRemainder = ((pSA->SAParams.uICVSize +
+					SECFP_AH_FIXED_HDR_LEN) % 4);
+		if (ucRemainder > 0)
+			pSA->SAParams.ucAHPaddingLen = 4 - ucRemainder;
 
-		switch (pSA->SAParams.ucAuthAlgo) {
-			case SECFP_HMAC_SHA256:
-			case SECFP_HMAC_SHA384:
-			case SECFP_HMAC_SHA512:
-			{
-				ucRemainder = ((pSA->SAParams.uICVSize +
-						SECFP_AH_FIXED_HDR_LEN) % 8);
-				if (ucRemainder > 0)
-					pSA->SAParams.ucAHPaddingLen =
-							8 - ucRemainder;
-			}
-			break;
-			default:
-			{
-				/* compute AH padding length */
-				ucRemainder = ((pSA->SAParams.uICVSize +
-						SECFP_AH_FIXED_HDR_LEN) % 4);
-				if (ucRemainder > 0)
-					pSA->SAParams.ucAHPaddingLen = 4 - ucRemainder;
-			}
-		}
 		pSA->ulSecOverHead = SECFP_IPV4_HDR_LEN
 			+ SECFP_AH_FIXED_HDR_LEN + pSA->SAParams.uICVSize
 			+ pSA->SAParams.ucAHPaddingLen;
