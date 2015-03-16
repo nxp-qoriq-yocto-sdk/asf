@@ -2980,6 +2980,8 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	unsigned short	us_dest_port;
 	unsigned int	ports;
 
+	struct net_device       *idev;
+
 	ACCESS_XGSTATS();
 
 	skb = (struct sk_buff *) Buffer.nativeBuffer;
@@ -2998,6 +3000,7 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 	}
 
 	ulZoneId = anDev->ulZoneId;
+	idev = skb->dev;
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	vsgInfo = asf_ffp_get_vsg_info_node(ulVsgId);
@@ -3190,9 +3193,11 @@ ASF_void_t ASFFFPProcessAndSendPkt(
 				flow->configIdentity.ulConfigMagicNumber) {
 				asf_print("Calling flow validate %d != %d",
 				vsgInfo->configIdentity.ulConfigMagicNumber,
-
 				flow->configIdentity.ulConfigMagicNumber);
+
 				FlowValidate = ASF_FLOWVALIDATE_NORAMAL;
+				pFreeFn(skb);
+				goto gen_indications;
 			}
 			/* L2blob refersh handling for the possible change in the l2blob */
 
@@ -3714,6 +3719,7 @@ gen_indications:
 
 					ind.ASFwInfo =
 					(ASF_uint8_t *)flow->as_flow_info;
+					ind.idev = idev;
 
 					ffpCbFns.pFnFlowValidate(ulVsgId, &ind);
 				}

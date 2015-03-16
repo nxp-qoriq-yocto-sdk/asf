@@ -433,7 +433,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 				usdport = ct_tuple_orig->src.u.tcp.port;
 			}
 		}
-		dev = dev_get_by_name(&init_net, "lo");
+		dev = pInfo->idev;
 
 		if ((0 != ip_route_input(skb, uldestIp, pInfo->tuple.ulSrcIp, 0, dev))
 			|| (skb_rtable(skb)->rt_flags & RTCF_LOCAL)) {
