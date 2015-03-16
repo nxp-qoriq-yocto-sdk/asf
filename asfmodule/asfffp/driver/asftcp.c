@@ -154,8 +154,8 @@ int asfTcpCheckForOutOfSeq(ffp_flow_t *flow, ffp_flow_t *oth_flow,
 					asf_vsg_info_t *vsgInfo)
 {
 	int iRetVal;
-	unsigned long ulSeqNum = ntohl(tcph->seq);
-	unsigned long ulAckNum = ntohl(tcph->ack_seq);
+	unsigned long ulSeqNum = ASF_NTOHL(tcph->seq);
+	unsigned long ulAckNum = ASF_NTOHL(tcph->ack_seq);
 
 	if (tcph->rst)
 		iRetVal = asfTcpCheckForRstOos(flow, oth_flow, ulSeqNum,
@@ -169,7 +169,7 @@ int asfTcpCheckForOutOfSeq(ffp_flow_t *flow, ffp_flow_t *oth_flow,
 
 
 	if (tcph->urg) {
-		if (tcph->urg_ptr && (ntohs(tcph->urg_ptr) > data_len))
+		if (tcph->urg_ptr && (ASF_NTOHS(tcph->urg_ptr) > data_len))
 			return ASF_LOG_ID_TCP_BAD_URG_PTR;
 
 		if (data_len < 1)

@@ -90,7 +90,7 @@ static inline int asfGetTimeStamp(unsigned char *tcpopt, int optlen, unsigned lo
 			tcpopt += 3; /* 3 byte option length */
 			break;
 		case TCPOPT_TIMESTAMP:
-			*ts_val = ntohl(*((unsigned long *)  (tcpopt + 2)));
+			*ts_val = ASF_NTOHL(*((unsigned long *)  (tcpopt + 2)));
 			return 0;
 		default:
 			tcpopt += tcpopt[1];
@@ -125,16 +125,16 @@ static inline void asfTcpApplyDelta(ffp_flow_t *flow, ffp_flow_t *oth_flow, stru
 	if (tcph->ack) {
 		ulTmpDelta = oth_flow->tcpState.ulSeqDelta;
 		if (oth_flow->tcpState.bPositiveDelta) {
-			tcph->ack_seq = htonl(ulAckNum - ulTmpDelta);
+			tcph->ack_seq = ASF_HTONL(ulAckNum - ulTmpDelta);
 		} else {
-			tcph->ack_seq = htonl(ulAckNum + ulTmpDelta);
+			tcph->ack_seq = ASF_HTONL(ulAckNum + ulTmpDelta);
 		}
 	}
 
 	if (flow->tcpState.bPositiveDelta)
-		tcph->seq = htonl(ulSeqNum + flow->tcpState.ulSeqDelta);
+		tcph->seq = ASF_HTONL(ulSeqNum + flow->tcpState.ulSeqDelta);
 	else
-		tcph->seq = htonl(ulSeqNum - flow->tcpState.ulSeqDelta);
+		tcph->seq = ASF_HTONL(ulSeqNum - flow->tcpState.ulSeqDelta);
 }
 
 
@@ -153,7 +153,7 @@ static inline void asfTcpUpdateState(
 {
 	unsigned short usWindow;
 
-	usWindow = ntohs(tcph->window);
+	usWindow = ASF_NTOHS(tcph->window);
 	if (!asfTcpSeqGt(flow->tcpState.ulHighSeqNum, (ulOrgSeqNum + data_len))) {
 		if (!(tcph->syn))
 			flow->tcpState.ulHighSeqNum = ulOrgSeqNum + data_len;

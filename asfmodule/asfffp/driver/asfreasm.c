@@ -927,7 +927,7 @@ static inline int asfIPv4CheckFragInfo(struct sk_buff *skb,
 		return 1;
 	}
 
-	if (((iph->frag_off & (htons(IP_MF))))) {
+	if (((iph->frag_off & (ASF_HTONS(IP_MF))))) {
 		if (unlikely((host_ip_tot_len - (iph->ihl*4)) & 7)) {
 			asf_reasm_debug("Invalid data length\r\n");
 			gstats->ulErrIpHdr++;
@@ -982,7 +982,7 @@ static inline int asfIPv6CheckFragInfo(struct sk_buff *skb,
 		gstats->ulErrIpHdr++;
 		return 1;
 	}
-	if (((fhdr->frag_off & (htons(IP6_MF))))) {
+	if (((fhdr->frag_off & (ASF_HTONS(IP6_MF))))) {
 		if (unlikely(frag_len & 7)) {
 			asf_reasm_debug("Invalid data length\r\n");
 			gstats->ulErrIpHdr++;
@@ -2079,8 +2079,8 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				asf_reasm_debug("skb_shinfo(skb)->frag_list = 0x%x\r\n", frag);
 
 
-				iph->tot_len = htons(skb_pagelen(skb));
-				iph->frag_off = htons(IP_MF);
+				iph->tot_len = ASF_HTONS(skb_pagelen(skb));
+				iph->frag_off = ASF_HTONS(IP_MF);
 
 				ip_send_check(iph);
 				skb->ip_summed = CHECKSUM_UNNECESSARY;
@@ -2100,13 +2100,14 @@ int asfIpv4Fragment(struct sk_buff *skb,
 						pTgt[ii] = pSrc[ii];
 
 					iph = ip_hdr(frag);
-					iph->tot_len = htons(frag->len);
+					iph->tot_len = ASF_HTONS(frag->len);
 					if (ip_hdr(frag)->ihl > 5
 						&& offset == 0)
 						asf_ip_options_fragment(frag);
-					iph->frag_off = htons(offset >> 3);
+					iph->frag_off = ASF_HTONS(offset >> 3);
 					if (frag->next != NULL)
-						iph->frag_off |= htons(IP_MF);
+						iph->frag_off |=
+							ASF_HTONS(IP_MF);
 
 						ip_send_check(iph);
 						frag->ip_summed =
@@ -2208,10 +2209,11 @@ int asfIpv4Fragment(struct sk_buff *skb,
 					  *	Fill in the new header fields.
 					  */
 					iph = ip_hdr(skb2);
-					iph->frag_off = htons((offset >> 3));
-					iph->tot_len = htons(len + ihl);
+					iph->frag_off = ASF_HTONS((offset >> 3));
+					iph->tot_len = ASF_HTONS(len + ihl);
 					if (bytesLeft > 0 || flags)
-						iph->frag_off |= htons(IP_MF);
+						iph->frag_off |=
+							ASF_HTONS(IP_MF);
 
 					ip_send_check(iph);
 					skb2->ip_summed =
@@ -2259,8 +2261,8 @@ int asfIpv4Fragment(struct sk_buff *skb,
 				skb2 = skb;
 			}
 
-			ip_hdr(skb2)->frag_off |= htons(IP_MF);
-			ip_hdr(skb2)->tot_len = htons(first_frag_len);
+			ip_hdr(skb2)->frag_off |= ASF_HTONS(IP_MF);
+			ip_hdr(skb2)->tot_len = ASF_HTONS(first_frag_len);
 
 			if (ip_hdr(skb2)->ihl > 5)
 				asf_ip_options_fragment(skb2);
@@ -2406,7 +2408,7 @@ int asfIpv6Fragment(struct sk_buff *skb,
 		*	Fill in the new header fields.
 		*/
 		ip6h = ipv6_hdr(frag);
-		ip6h->payload_len = htons(len + ip6hpexh_len + sizeof(struct frag_hdr));
+		ip6h->payload_len = ASF_HTONS(len + ip6hpexh_len + sizeof(struct frag_hdr));
 
 		fhdr = (struct frag_hdr *)(skb_network_header(frag) + ip6hpexh_len);
 		fhdr->nexthdr = nexthdr;
@@ -2470,14 +2472,14 @@ int asfIpv6MakeFragment(struct sk_buff *skb,
 		memcpy(skb_network_header(frag), skb_network_header(skb), hdrtocpy + sizeof(struct frag_hdr));
 
 		ipv6h = ipv6_hdr(frag);
-		ipv6h->payload_len = htons(frag->len - sizeof(struct ipv6hdr));
+		ipv6h->payload_len = ASF_HTONS(frag->len - sizeof(struct ipv6hdr));
 
 		fhdr = (struct frag_hdr *)(skb_network_header(frag) + hdrtocpy);
 		fhdr->identification = ident;
 		fhdr->frag_off = ASF_HTONS((offset >> 3) << 3);
 
 		if (frag->next != NULL)
-			fhdr->frag_off |= htons(0x1);
+			fhdr->frag_off |= ASF_HTONS(0x1);
 		offset += frag->len - (hdrtocpy + sizeof(struct frag_hdr));
 	}
 	skb->next = skb_shinfo(skb)->frag_list;

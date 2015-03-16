@@ -59,10 +59,10 @@ static void asf_ffp_ipv6_destroy_flow_table(void);
 static inline void ffp_copy_flow_stats(ffp_flow_t *flow, ASFFFPFlowStats_t *stats)
 {
 	if (flow) {
-		stats->ulInPkts = htonl(flow->stats.ulInPkts);
-		stats->ulOutPkts = htonl(flow->stats.ulOutPkts);
-		stats->ulInBytes = htonl(flow->stats.ulInBytes);
-		stats->ulOutBytes = htonl(flow->stats.ulOutBytes);
+		stats->ulInPkts = ASF_HTONL(flow->stats.ulInPkts);
+		stats->ulOutPkts = ASF_HTONL(flow->stats.ulOutPkts);
+		stats->ulInBytes = ASF_HTONL(flow->stats.ulInBytes);
+		stats->ulOutBytes = ASF_HTONL(flow->stats.ulOutBytes);
 	} else
 		memset(stats, 0, sizeof(*stats));
 }
@@ -310,7 +310,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			return ASF_RTS;
 
 		/* jumbograms option paylaod value */
-		if (ntohs(*(unsigned int *)(&pL4hdr[4])) > ip6h->payload_len)
+		if (ASF_NTOHS(*(unsigned int *)(&pL4hdr[4])) > ip6h->payload_len)
 			goto drop_pkt;
 
 		/* Process hop by hop IP options, esp for JUMBOGRAM option */
@@ -329,7 +329,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 		fragCnt = 0;
 
 		/* Do we need this check ? */
-		if (unlikely((fhdr->frag_off) & htons(0xFFF9))) {
+		if (unlikely((fhdr->frag_off) & ASF_HTONS(0xFFF9))) {
 			struct sk_buff *skb;
 
 			abuf.bbuffInDomain = ASF_TRUE;
@@ -591,8 +591,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 		}
 		asf_debug_l2("TCP_STATE_PROC: out of sequence checks finished!\n");
 
-		ulOrgSeqNum = ntohl(ptcph->seq);
-		ulOrgAckNum = ntohl(ptcph->ack_seq);
+		ulOrgSeqNum = ASF_NTOHL(ptcph->seq);
+		ulOrgAckNum = ASF_NTOHL(ptcph->ack_seq);
 		asfTcpApplyDelta(flow, oth_flow, ptcph, ulOrgSeqNum, ulOrgAckNum);
 		asf_debug_l2("TCP_STATE_PROC: applied delta to the packet\n");
 
@@ -675,14 +675,14 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		/* TCP delta checsum handling */
 		if (nexthdr == NEXTHDR_TCP) {
-			if (ulOrgSeqNum != ntohl(ptcph->seq))
+			if (ulOrgSeqNum != ASF_NTOHL(ptcph->seq))
 				asf_proto_csum_replace4(abuf.pCsum,
-					htonl(ulOrgSeqNum),
+					ASF_HTONL(ulOrgSeqNum),
 					ptcph->seq);
 
-			if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+			if (ulOrgAckNum != ASF_NTOHL(ptcph->ack_seq))
 				asf_proto_csum_replace4(abuf.pCsum,
-					htonl(ulOrgAckNum),
+					ASF_HTONL(ulOrgAckNum),
 					ptcph->ack_seq);
 		}
 #endif
@@ -701,14 +701,14 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 		if (nexthdr == NEXTHDR_TCP) {
 			abuf.pCsum = ((unsigned short int *) ptrhdrOffset) + 8;
 
-			if (ulOrgSeqNum != ntohl(ptcph->seq))
+			if (ulOrgSeqNum != ASF_NTOHL(ptcph->seq))
 				asf_proto_csum_replace4(abuf.pCsum,
-					htonl(ulOrgSeqNum),
+					ASF_HTONL(ulOrgSeqNum),
 					ptcph->seq);
 
-			if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+			if (ulOrgAckNum != ASF_NTOHL(ptcph->ack_seq))
 				asf_proto_csum_replace4(abuf.pCsum,
-					htonl(ulOrgAckNum),
+					ASF_HTONL(ulOrgAckNum),
 					ptcph->ack_seq);
 		}
 #else
@@ -803,7 +803,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 				   length in PPPoE header */
 				*((short *)&(skb->data[(flow->l2blob_len -
 				tunnel_hdr_len)-4])) =
-					htons(skb->len + tunnel_hdr_len + 2);
+					ASF_HTONS(skb->len + tunnel_hdr_len + 2);
 			}
 
 #endif
@@ -969,7 +969,7 @@ gen_indications:
 			ind.tuple.usDestPort = flow->ulPorts&0xffff;
 			ind.tuple.ucProtocol = flow->ucProtocol;
 			ind.ulZoneId = flow->ulZoneId;
-			ind.ulHashVal = htonl(ulHashVal);
+			ind.ulHashVal = ASF_HTONL(ulHashVal);
 
 			ind.ASFwInfo = (ASF_uint8_t *)flow->as_flow_info;
 			ind.ulTcpState = ulTcpState;
@@ -997,7 +997,7 @@ gen_indications:
 			ind.tuple.usDestPort = flow->ulPorts&0xffff;
 			ind.tuple.ucProtocol = flow->ucProtocol;
 			ind.ulZoneId = flow->ulZoneId;
-			ind.ulHashVal = htonl(ulHashVal);
+			ind.ulHashVal = ASF_HTONL(ulHashVal);
 
 			ind.ASFwInfo =
 			(ASF_uint8_t *)flow->as_flow_info;
@@ -1228,7 +1228,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 			return ASF_RTS;
 
 
-		pkt_len = ntohs(*(unsigned int *)(&skb_transport_header(skb)[4]));
+		pkt_len = ASF_NTOHS(*(unsigned int *)(&skb_transport_header(skb)[4]));
 
 		if (pkt_len > skb->len - sizeof(struct ipv6hdr))
 			goto drop_pkt;
@@ -1260,7 +1260,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		fragCnt = 1;
 
 		/* Do we need this check ? */
-		if (unlikely((fhdr->frag_off) & htons(0xFFF9))) {
+		if (unlikely((fhdr->frag_off) & ASF_HTONS(0xFFF9))) {
 			skb = asfIpv4Defrag(ulVsgId, skb, NULL, NULL, NULL, &fragCnt);
 			if (!(skb)) {
 				asf_debug("Skb absorbed for re-assembly \r\n");
@@ -1478,7 +1478,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	if (nexthdr == NEXTHDR_UDP) {
 		XGSTATS_INC(UdpPkts);
 		if (((skb->len - (exthdrsize + sizeof(struct ipv6hdr))) < 8) ||
-			(ntohs(*(q + 2)) > (skb->len - (exthdrsize + sizeof(struct ipv6hdr))))) {
+			(ASF_NTOHS(*(q + 2)) > (skb->len - (exthdrsize + sizeof(struct ipv6hdr))))) {
 				/* Udp header length is invalid */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpProtoHdr++;
@@ -1550,8 +1550,8 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		}
 		asf_debug_l2("TCP_STATE_PROC: out of sequence checks finished!\n");
 
-		ulOrgSeqNum = ntohl(ptcph->seq);
-		ulOrgAckNum = ntohl(ptcph->ack_seq);
+		ulOrgSeqNum = ASF_NTOHL(ptcph->seq);
+		ulOrgAckNum = ASF_NTOHL(ptcph->ack_seq);
 		asfTcpApplyDelta(flow, oth_flow, ptcph, ulOrgSeqNum, ulOrgAckNum);
 		asf_debug_l2("TCP_STATE_PROC: applied delta to the packet\n");
 
@@ -1628,14 +1628,14 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 		/* TCP delta checsum handling */
 		if (nexthdr == NEXTHDR_TCP) {
-			if (ulOrgSeqNum != ntohl(ptcph->seq))
+			if (ulOrgSeqNum != ASF_NTOHL(ptcph->seq))
 				inet_proto_csum_replace4(q, skb,
-					htonl(ulOrgSeqNum),
+					ASF_HTONL(ulOrgSeqNum),
 					ptcph->seq, 1);
 
-			if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+			if (ulOrgAckNum != ASF_NTOHL(ptcph->ack_seq))
 				inet_proto_csum_replace4(q, skb,
-					htonl(ulOrgAckNum),
+					ASF_HTONL(ulOrgAckNum),
 					ptcph->ack_seq, 1);
 		}
 #endif
@@ -1655,14 +1655,14 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		if (nexthdr == NEXTHDR_TCP) {
 			q = ((unsigned short int *) ptrhdrOffset) + 8;
 
-			if (ulOrgSeqNum != ntohl(ptcph->seq))
+			if (ulOrgSeqNum != ASF_NTOHL(ptcph->seq))
 				inet_proto_csum_replace4(q, skb,
-					htonl(ulOrgSeqNum),
+					ASF_HTONL(ulOrgSeqNum),
 					ptcph->seq, 1);
 
-			if (ulOrgAckNum != ntohl(ptcph->ack_seq))
+			if (ulOrgAckNum != ASF_NTOHL(ptcph->ack_seq))
 				inet_proto_csum_replace4(q, skb,
-					htonl(ulOrgAckNum),
+					ASF_HTONL(ulOrgAckNum),
 					ptcph->ack_seq, 1);
 		}
 #else
@@ -1759,7 +1759,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 		if (flow->bPPPoE) {
 			/* PPPoE packet.. Set Payload length in PPPoE header */
-			*((short *)&(skb->data[(flow->l2blob_len - tunnel_hdr_len)-4])) = htons(skb->len + tunnel_hdr_len + 2);
+			*((short *)&(skb->data[(flow->l2blob_len - tunnel_hdr_len)-4])) = ASF_HTONS(skb->len + tunnel_hdr_len + 2);
 		}
 
 		skb->len += flow->l2blob_len;
@@ -1816,7 +1816,7 @@ gen_indications:
 			ind.tuple.usDestPort = flow->ulPorts&0xffff;
 			ind.tuple.ucProtocol = flow->ucProtocol;
 			ind.ulZoneId = flow->ulZoneId;
-			ind.ulHashVal = htonl(ulHashVal);
+			ind.ulHashVal = ASF_HTONL(ulHashVal);
 
 			ind.ASFwInfo = (ASF_uint8_t *)flow->as_flow_info;
 			ind.ulTcpState = ulTcpState;
@@ -1844,7 +1844,7 @@ gen_indications:
 			ind.tuple.usDestPort = flow->ulPorts&0xffff;
 			ind.tuple.ucProtocol = flow->ucProtocol;
 			ind.ulZoneId = flow->ulZoneId;
-			ind.ulHashVal = htonl(ulHashVal);
+			ind.ulHashVal = ASF_HTONL(ulHashVal);
 
 			ind.ASFwInfo =
 			(ASF_uint8_t *)flow->as_flow_info;

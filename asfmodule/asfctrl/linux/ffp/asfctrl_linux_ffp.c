@@ -119,7 +119,7 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	memcpy(&pData->tuple, tpl, sizeof(ASFFFPFlowTuple_t));
 
 	pData->ulPathMTU = skb->dev->mtu;
-	skb->protocol = htons(ETH_P_IP);
+	skb->protocol = ASF_HTONS(ETH_P_IP);
 	asfctrl_skb_mark_dummy(skb);
 
 	asf_ip_send(skb);
@@ -185,7 +185,7 @@ static ASF_int32_t asf_linux_IPv6XmitL2blobDummyPkt(
 	memcpy(&pData->tuple, tpl, sizeof(ASFFFPFlowTuple_t));
 
 	pData->ulPathMTU = skb->dev->mtu;
-	skb->protocol = htons(ETH_P_IPV6);
+	skb->protocol = ASF_HTONS(ETH_P_IPV6);
 	asfctrl_skb_mark_dummy(skb);
 
 
@@ -264,7 +264,7 @@ ASF_void_t asfctrl_fnRuntime(
 		pInfo = pInfo;
 
 		ASFCTRL_INFO("CreateFlows Response (Result %d) hash %d\n",
-			ntohl(pInfo->iResult), pInfo->ulHashVal);
+			ASF_NTOHL(pInfo->iResult), pInfo->ulHashVal);
 	}
 	break;
 
@@ -275,7 +275,7 @@ ASF_void_t asfctrl_fnRuntime(
 		pInfo = pInfo;
 
 		ASFCTRL_INFO("DeleteFlows Response (Result %d)\n",
-			ntohl(pInfo->iResult));
+			ASF_NTOHL(pInfo->iResult));
 	}
 	break;
 
