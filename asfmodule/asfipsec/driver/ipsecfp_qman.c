@@ -677,8 +677,10 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 		}
+#ifdef ASF_IPSEC_DEBUG
 		if (net_ratelimit())
 			caam_jr_strstatus(pInfo->cb_pDev, err_val);
+#endif
 		ASFSkbFree(pInfo->cb_skb);
 		goto out;
 	}

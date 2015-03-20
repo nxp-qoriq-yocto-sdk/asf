@@ -28,7 +28,9 @@
 #ifdef CONFIG_ASF_SEC4x
 #include <jr.h>
 #include <desc_constr.h>
+#ifdef ASF_IPSEC_DEBUG
 #include <error.h>
+#endif
 #endif
 
 #define AES_MAX_KEY_SIZE       32

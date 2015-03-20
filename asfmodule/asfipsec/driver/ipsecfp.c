@@ -2133,6 +2133,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 			if (net_ratelimit())
 				caam_jr_strstatus(dev, error);
 #endif
+			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 		}
 		ASFIPSEC_DPERR("error = %x DROP PKT ", error);
 #endif
@@ -3448,9 +3449,11 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 #endif
 	if (unlikely(err)) {
 #if defined(CONFIG_ASF_SEC4x) && !defined(ASF_QMAN_IPSEC)
+#ifdef ASF_IPSEC_DEBUG
 		ASFIPSEC_DPERR("%08x", err);
 		if (net_ratelimit())
 			caam_jr_strstatus(dev, err);
+#endif
 		if (skb_shinfo(skb)->nr_frags)
 			secfp_free_frags(desc, skb);
 		else

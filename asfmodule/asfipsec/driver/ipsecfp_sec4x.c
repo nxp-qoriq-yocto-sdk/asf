@@ -62,13 +62,14 @@ extern struct device *pdev;
 static void secfp_splitKeyDone(struct device *dev, u32 *desc, u32 error,
 				void *context)
 {
-#ifdef ASF_IPSEC_DEBUG
 	if (error) {
+#ifdef ASF_IPSEC_DEBUG
 		ASFIPSEC_DPERR("%08x", error);
 		if (net_ratelimit())
 			caam_jr_strstatus(dev, error);
-	}
 #endif
+		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
+	}
 	kfree(desc);
 }
 /*
