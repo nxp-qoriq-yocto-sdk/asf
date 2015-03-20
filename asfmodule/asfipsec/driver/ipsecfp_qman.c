@@ -661,25 +661,24 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 	pInfo = container_of(pSG, struct ses_pkt_info, cb_SG[0]);
 
 	if (dqrr->fd.status) {
-		char err[256];
 		err_val = dqrr->fd.status;
-		caam_jr_strstatus(err, dqrr->fd.status);
 		if ((err_val & 0xF00000FF) == 0x40000084) {
-			ASFIPSEC_DEBUG("ANTI-REPLAY-ERR FD status = %#x "
-			"Err = %s\n", dqrr->fd.status, err);
+			ASFIPSEC_DEBUG("ANTI-REPLAY-ERR FD status = %#x",
+								err_val);
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
 		} else if ((err_val & 0xF00000FF) == 0x40000083) {
-			ASFIPSEC_DEBUG("LATE-PACKET-ERR FD status = %#x "
-			"Err = %s\n", dqrr->fd.status, err);
+			ASFIPSEC_DEBUG("LATE-PACKET-ERR FD status = %#x",
+								err_val);
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT19]);
 		} else {
-			ASFIPSEC_DEBUG("FD status = %#x Err = %s\n",
-			err_val, err);
+			ASFIPSEC_DEBUG("FD status = %#x", err_val);
 			ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 		}
+		if (net_ratelimit())
+			caam_jr_strstatus(pInfo->cb_pDev, err_val);
 		ASFSkbFree(pInfo->cb_skb);
 		goto out;
 	}

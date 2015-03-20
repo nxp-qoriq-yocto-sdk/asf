@@ -2129,9 +2129,9 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #ifdef CONFIG_ASF_SEC4x
 		if (error) {
 #ifdef ASF_IPSEC_DEBUG
-			char tmp[SECFP_ERROR_STR_MAX];
-			ASFIPSEC_DPERR("%08x: %s\n", error,
-				caam_jr_strstatus(tmp, error));
+			ASFIPSEC_DPERR("%08x", error);
+			if (net_ratelimit())
+				caam_jr_strstatus(dev, error);
 #endif
 		}
 		ASFIPSEC_DPERR("error = %x DROP PKT ", error);
@@ -3448,8 +3448,9 @@ void secfp_inComplete(struct device *dev, u32 *pdesc,
 #endif
 	if (unlikely(err)) {
 #if defined(CONFIG_ASF_SEC4x) && !defined(ASF_QMAN_IPSEC)
-		char tmp[SECFP_ERROR_STR_MAX];
-		ASFIPSEC_DPERR("%08x: %s\n", err, caam_jr_strstatus(tmp, err));
+		ASFIPSEC_DPERR("%08x", err);
+		if (net_ratelimit())
+			caam_jr_strstatus(dev, err);
 		if (skb_shinfo(skb)->nr_frags)
 			secfp_free_frags(desc, skb);
 		else

@@ -64,9 +64,9 @@ static void secfp_splitKeyDone(struct device *dev, u32 *desc, u32 error,
 {
 #ifdef ASF_IPSEC_DEBUG
 	if (error) {
-		char tmp[SECFP_ERROR_STR_MAX];
-		ASFIPSEC_DEBUG("%08x: %s\n", error,
-			caam_jr_strstatus(tmp, error));
+		ASFIPSEC_DPERR("%08x", error);
+		if (net_ratelimit())
+			caam_jr_strstatus(dev, error);
 	}
 #endif
 	kfree(desc);
