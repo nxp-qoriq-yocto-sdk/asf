@@ -1112,7 +1112,14 @@ ASF_void_t *asf_abuf_to_skb(ASFBuffer_t *pAbuf)
 	skb_reset_mac_header(skb);
 	skb->data += skb->mac_len;
 	skb->tail += pAbuf->pAnnot->fd->length20 + cache_fudge;
-	skb->len  = iph->tot_len;
+#ifdef ASF_IPV6_FP_SUPPORT
+	if (iph->version == 6) {
+		struct ipv6hdr *ipv6;
+		ipv6 = (struct ipv6hdr *)skb->data;
+		skb->len = ipv6->payload_len + ASF_IPV6_HDR_LEN;
+	} else
+#endif
+		skb->len = iph->tot_len;
 	/* To handle - PPPoE, Now we are at ip hdr */
 	skb->protocol = ASF_HTONS(*(u16 *)(skb->data - 2));
 	asf_debug("pAbuf->pAnnot->fd->length20 %d, pAbuf->ethh 0x%X,"

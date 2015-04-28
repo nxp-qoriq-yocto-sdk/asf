@@ -49,9 +49,6 @@
 #define IPS_ASF_OFFLOADED (1 << IPS_ASF_OFFLOADED_BIT)
 
 #define DEFVAL_INACTIVITY_DIVISOR	(4)
-#ifdef ASF_IPV6_FP_SUPPORT
-#define ASF_IPV6_HDR_LEN	(40)
-#endif
 #define AsfBuf2Skb(a)	((struct sk_buff *)(a.nativeBuffer))
 #define ASFCTRLKernelSkbAlloc	alloc_skb
 
