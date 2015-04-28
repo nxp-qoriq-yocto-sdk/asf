@@ -42,6 +42,9 @@
 #define PERR_SEC_ERROR         8
 #define PERR_DUP_FLOW_PUSH     9
 #define MAX_PERIODIC_ERRS      10
+#ifdef ASF_IPV6_FP_SUPPORT
+#define ASF_IPV6_HDR_LEN       40
+#endif
 
 #ifdef ASF_ARM
 #define ASF_NTOHS ntohs
