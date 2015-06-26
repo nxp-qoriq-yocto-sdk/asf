@@ -847,14 +847,8 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	if (pf_ipv6 == false) {
 		if ((inet_addr_type(net, ct_tuple_orig->src.u3.ip) == RTN_LOCAL)
 		|| (inet_addr_type(net, ct_tuple_reply->src.u3.ip) == RTN_LOCAL)) {
-
 			/* Connection with Local IP, no need to do anything */
-			dev = ip_dev_find(net, ct_tuple_orig->src.u3.ip);
-			if (dev != NULL)
-				ASFCTRL_INFO("NH ORIG: local dst if = %s\n", dev->name);
-			dev = ip_dev_find(net, ct_tuple_reply->src.u3.ip);
-			if (dev != NULL)
-				ASFCTRL_INFO("NH ORIG: local src if = %s\n", dev->name);
+			ASFCTRL_INFO("Ignoring Local connection");
 			return -EINVAL;
 		}
 
