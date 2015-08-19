@@ -39,6 +39,7 @@
 #include <net/dst.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <net/route.h>
+#include <net/sch_generic.h>
 #ifdef ASF_IPV6_FP_SUPPORT
 #include <net/ip6_route.h>
 #endif
@@ -765,6 +766,15 @@ ASF_void_t  asfctrl_fnVSGMappingNotFound(
 	ASFCTRL_FUNC_EXIT;
 }
 
+static int process_ceetm_queue_dummy(struct sk_buff *skb)
+{
+	ASFCTRL_FUNC_ENTRY;
+	/* If recevied DUMMY L2-blob packet, absorve it*/
+	if (asfctrl_dev_fp_tx_hook(skb, skb->dev) == AS_FP_STOLEN)
+		return 0;
+	return 1;
+}
+
 static int __init asfctrl_init(void)
 {
 	ASFFFPConfigIdentity_t cmd;
@@ -814,6 +824,11 @@ static int __init asfctrl_init(void)
 	ipv6_route_hook_fn_register(&asfctrl_l3_ipv6_route_flush);
 #endif
 
+#ifdef ASF_LINUX_QOS
+	/* Register Linux QoS Hook for receiving the L2blob packets */
+	asf_qos_fn_register(&process_ceetm_queue_dummy);
+#endif
+
 	asfctrl_sysfs_init();
 
 
@@ -838,6 +853,11 @@ static void __exit asfctrl_exit(void)
 		asfctrl_linux_unregister_ffp();
 
 	asfctrl_sysfs_exit();
+
+#ifdef ASF_LINUX_QOS
+	asf_qos_fn_register(NULL);
+#endif
+
 	/* Unregister the hook*/
 	route_hook_fn_register(NULL);
 #ifdef ASF_IPV6_FP_SUPPORT

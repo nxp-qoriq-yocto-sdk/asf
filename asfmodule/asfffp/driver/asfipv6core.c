@@ -820,11 +820,17 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 			PER_CPU_BP_COUNT(dpa_bp)--;
 
 			bSendOut = 1;
+#ifdef ASF_LINUX_QOS
+			if (dev_queue_xmit(skb) != 0) {
+				asf_warn("Error in Xmit: may happen\r\n");
+			}
+#else
 			if (asfDevHardXmit(skb->dev, skb) != 0) {
 				asf_debug("Error in transmit: "
 						"Should not happen\r\n");
 				ASFSkbFree(skb);
 			}
+#endif
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulOutPkts++;
 			vstats->ulOutPkts++;
@@ -925,6 +931,15 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendFD(
 #ifdef ASF_QOS
 			err = asf_qos_fd_handling(&abuf, flow->odev,
 					hdr->tc, &flow->tc_filter_res);
+#elif defined ASF_LINUX_QOS
+			struct sk_buff *skb = NULL;
+			skb = (struct sk_buff *)asf_abuf_to_skb(&abuf);
+			skb->dev = flow->odev;
+			skb->len += flow->l2blob_len;
+			skb->data -= flow->l2blob_len;
+			if (dev_queue_xmit(skb) != 0) {
+				asf_warn("Error in Xmit: may happen\r\n");
+			}
 #else
 			err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 					tx_fd, 0);
@@ -1782,6 +1797,10 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 #ifdef ASF_QOS
 		/* Enqueue the packet in Linux QoS framework */
 		asf_qos_handling(skb, &flow->tc_filter_res);
+#elif defined ASF_LINUX_QOS
+		if (dev_queue_xmit(skb) != 0) {
+			asf_warn("Error in Xmit: may happen\r\n");
+		}
 #else
 		txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
 		netdev = skb->dev;

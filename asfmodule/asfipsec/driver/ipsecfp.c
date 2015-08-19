@@ -2302,6 +2302,10 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 
 		/* Enqueue the packet in Linux QoS framework */
 		asf_qos_handling(skb, &pSA->tc_filter_res);
+#elif defined ASF_LINUX_QOS
+		if (dev_queue_xmit(skb) != 0) {
+			asf_warn("Error in Xmit: may happen\r\n");
+		}
 #else
 		txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
 		netdev = skb->dev;
@@ -2425,6 +2429,10 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #ifdef ASF_QOS
 					/* Enqueue the packet For QoS */
 					asf_qos_handling(pOutSkb, &pSA->tc_filter_res);
+#elif defined ASF_LINUX_QOS
+					if (dev_queue_xmit(pOutSkb) != 0) {
+						asf_warn("Error in Xmit: may happen\r\n");
+					}
 #else
 					txq = netdev_get_tx_queue(pOutSkb->dev, pOutSkb->queue_mapping);
 					netdev = pOutSkb->dev;

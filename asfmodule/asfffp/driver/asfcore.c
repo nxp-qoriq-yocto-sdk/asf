@@ -1332,7 +1332,7 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 	abuf.bbuffInDomain = ASF_FALSE;
 	/* L2 header related checks */
 	if (unlikely(!(pParse->l2r & DPAA_PARSE_L2_TYPES))) {
-		asf_debug("unhandled L2 type 0x%04X\n", pParse->l2r);
+		asf_debug_l2("unhandled L2 type 0x%04X\n", pParse->l2r);
 		XGSTATS_INC(L2Unknown);
 		goto ret_pkt;
 	}
@@ -2656,6 +2656,10 @@ ASF_void_t ASFFFPProcessAndSendFD(
 #ifdef ASF_QOS
 				/* Enqueue the packet in Linux QoS framework */
 				asf_qos_handling(pSkb, &flow->tc_filter_res);
+#elif defined ASF_LINUX_QOS
+				if (dev_queue_xmit(pSkb) != 0) {
+					asf_warn("Error in Xmit: may happen\r\n");
+				}
 #else
 				if (asfDevHardXmit(pSkb->dev, pSkb) != 0) {
 					asf_debug("Error in transmit: "
@@ -2758,6 +2762,16 @@ ASF_void_t ASFFFPProcessAndSendFD(
 #ifdef ASF_QOS
 		err = asf_qos_fd_handling(&abuf, flow->odev,
 					iph->tos, &flow->tc_filter_res);
+#elif defined ASF_LINUX_QOS
+		struct sk_buff *skb = NULL;
+		skb = (struct sk_buff *)asf_abuf_to_skb(&abuf);
+		skb->dev = flow->odev;
+		skb->len += flow->l2blob_len;
+		skb->data -= flow->l2blob_len;
+
+		if (dev_queue_xmit(skb) != 0) {
+			asf_warn("Error in Xmit: may happen\r\n");
+		}
 #else
 		err = qman_enqueue(priv->egress_fqs[smp_processor_id()],
 								tx_fd, 0);
@@ -3596,6 +3610,10 @@ sctp_flow:
 						/* Enqueue the packet in Linux
 						QoS framework */
 						asf_qos_handling(pSkb, &flow->tc_filter_res);
+#elif defined ASF_LINUX_QOS
+						if (dev_queue_xmit(pSkb) != 0) {
+							asf_warn("Error in Xmit: may happen\r\n");
+						}
 #else
 						netdev = pSkb->dev;
 						txq = netdev_get_tx_queue(pSkb->dev, skb->queue_mapping);
@@ -3674,6 +3692,10 @@ sctp_flow:
 #ifdef ASF_QOS
 			/* Enqueue the packet in Linux QoS framework */
 			asf_qos_handling(skb, &flow->tc_filter_res);
+#elif defined ASF_LINUX_QOS
+			if (dev_queue_xmit(skb) != 0) {
+				asf_warn("Error in Xmit: may happen\r\n");
+			}
 #else
 			netdev = skb->dev;
 			txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
