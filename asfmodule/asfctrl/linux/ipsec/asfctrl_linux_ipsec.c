@@ -338,6 +338,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 		pFreeFn(Buffer.nativeBuffer);
 		goto fnexit;
 	}
+#ifdef ASFCTRL_IPSEC_SA_MULTI_POLICY
 	{
 		struct xfrm_policy *xp = 0;
 		if (asfctrl_ipsec_get_policy(pOutSkb, IN_SA, &xp) < 0) {
@@ -347,6 +348,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 		if (xp)
 			asfctrl_map_pol_insa(x, xp);
 	}
+#endif
 	while (pOutSkb) {
 		skb1 = pOutSkb;
 		pOutSkb = pOutSkb->next;
@@ -847,126 +849,6 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 	return;
 }
 
-int asfctrl_ipsec_get_policy4(struct sk_buff *skb, int dir, struct xfrm_policy **pol)
-{
-	int err = 0;
-	struct net *net;
-	struct iphdr *iph = ip_hdr(skb);
-	struct flowi fl;
-	__be16 *ports = (__be16 *) (skb_network_header(skb) + iph->ihl * 4);
-
-	ASFCTRL_FUNC_TRACE;
-	if (skb->dev)
-		net = dev_net(skb->dev);
-	else
-		net = dev_net(skb_dst(skb)->dev);
-
-	memset(&fl, 0, sizeof(struct flowi));
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
-	fl.proto = iph->protocol;
-	fl.fl4_dst = iph->daddr;
-	fl.fl4_src = iph->saddr;
-	fl.fl4_tos = iph->tos;
-	fl.iif = skb->skb_iif;
-	fl.fl_ip_sport = ports[0];
-	fl.fl_ip_dport = ports[1];
-#else
-	fl.u.ip4.fl4_sport = ports[0];
-	fl.u.ip4.fl4_dport = ports[1];
-	fl.flowi_proto = iph->protocol;
-	fl.u.ip4.daddr = iph->daddr;
-	fl.u.ip4.saddr = iph->saddr;
-	fl.flowi_tos = iph->tos;
-	fl.flowi_iif = skb->skb_iif;
-#endif
-
-	ASFCTRL_DBG("\nflow info:\n");
-	ASFCTRL_DBG("\n src addr %x dst addr %x\n", fl.u.ip4.saddr, fl.u.ip4.daddr);
-	ASFCTRL_DBG("\n src port %d, dst port %d proto %d tos %d iif %d\n",
-	fl.u.ip4.fl4_sport, fl.u.ip4.fl4_dport, fl.flowi_proto, fl.flowi_tos, fl.flowi_iif);
-
-	*pol = __xfrm_policy_lookup(net, &fl, AF_INET, dir);
-	if (IS_ERR_OR_NULL(*pol)) {
-		ASFCTRL_DBG("\nPolicy Not Found");
-		return -EINVAL;
-	}
-	ASFCTRL_DBG("\nxfrm policy - net = %x, pol =%x", net, *pol);
-
-	err = is_policy_offloadable(*pol);
-	if (err)
-		err = -EINVAL;
-
-	return err;
-}
-
-int asfctrl_ipsec_get_policy6(struct sk_buff *skb, int dir, struct xfrm_policy **pol)
-{
-	int err = 0;
-	struct net *net;
-	struct ipv6hdr *hdr = ipv6_hdr(skb);
-	struct flowi fl;
-	u16 offset = skb_network_header_len(skb);
-	const unsigned char *nh = skb_network_header(skb);
-	__be16 *ports = (__be16 *)(nh + offset);
-
-ASFCTRL_FUNC_TRACE;
-	if (skb->dev)
-		net = dev_net(skb->dev);
-	else
-		net = dev_net(skb_dst(skb)->dev);
-
-	memset(&fl, 0, sizeof(struct flowi));
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
-	ipv6_addr_copy(&fl.fl6_dst, &hdr->daddr);
-	ipv6_addr_copy(&fl.fl6_src, &hdr->saddr);
-
-	fl.proto = hdr->nexthdr;
-	fl.fl6_flowlabel = hdr->flow_lbl;
-	fl.iif = skb->skb_iif;
-
-	fl.fl_ip_sport = ports[0];
-	fl.fl_ip_dport = ports[1];
-#else
-	ipv6_addr_copy(&fl.u.ip6.daddr, &hdr->daddr);
-	ipv6_addr_copy(&fl.u.ip6.saddr, &hdr->saddr);
-
-	fl.flowi_proto = hdr->nexthdr;
-	fl.flowi_tos = ((hdr->priority << 4) | (hdr->flow_lbl[0] >> 4));
-	fl.flowi_iif = skb->skb_iif;
-
-	fl.u.ip6.fl6_sport = ports[0];
-	fl.u.ip6.fl6_dport = ports[1];
-#endif
-
-	ASFCTRL_DBG("\nflow info:\n");
-	ASFCTRL_DBG("\n src addr %x dst addr %x\n", fl.u.ip4.saddr, fl.u.ip4.daddr);
-	ASFCTRL_DBG("\n src port %d, dst port %d proto %d tos %d iif %d\n",
-	fl.u.ip4.fl4_sport, fl.u.ip4.fl4_dport, fl.flowi_proto, fl.flowi_tos, fl.flowi_iif);
-
-	*pol = __xfrm_policy_lookup(net, &fl, AF_INET6, dir);
-
-	ASFCTRL_DBG("xfrm policy - net = %x, pol =%x", net, *pol);
-	if (IS_ERR_OR_NULL(*pol)) {
-		ASFCTRL_DBG("\nPolicy Not Found");
-		return -EINVAL;
-	}
-
-	err = is_policy_offloadable(*pol);
-	if (err)
-		err = -EINVAL;
-
-	return err;
-}
-
-int asfctrl_ipsec_get_policy(struct sk_buff *skb, int dir, struct xfrm_policy **pol)
-{
-	struct iphdr *iph = ip_hdr(skb);
-
-	if (iph->version == 4)
-		return asfctrl_ipsec_get_policy4(skb, dir, pol);
-	else
-		return asfctrl_ipsec_get_policy6(skb, dir, pol);
-}
 
 void asfctrl_ipsec_update_vsg_magic_number(ASF_uint32_t ulVSGId)
 {

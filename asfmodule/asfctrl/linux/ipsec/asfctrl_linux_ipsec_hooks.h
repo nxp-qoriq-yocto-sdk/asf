@@ -89,6 +89,7 @@ extern void unregister_ipsec_offload_hook(void);
 extern int ip_forward(struct sk_buff *);
 extern struct xfrm_policy *__xfrm_policy_lookup(struct net *, struct flowi *,
 					u16, u8);
+#ifdef ASFCTRL_IPSEC_SA_MULTI_POLICY
 extern void xfrm_state_policy_mapping(struct xfrm_state *xfrm,
 						struct policy_list *pol_lst);
 
@@ -100,4 +101,7 @@ int asfctrl_ipsec_get_policy(struct sk_buff *skb, int dir,
 					struct xfrm_policy **pol);
 int asfctrl_map_pol_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp);
 int asfctrl_map_pol_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp);
+#else
+extern struct xfrm_policy *xfrm_state_policy_mapping(struct xfrm_state *);
+#endif
 #endif

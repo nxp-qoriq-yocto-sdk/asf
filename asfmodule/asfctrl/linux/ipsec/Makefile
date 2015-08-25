@@ -21,8 +21,11 @@ export KBUILD_EXTRA_SYMBOLS
 
 obj-m += asfctrl_ipsec.o
 
-asfctrl_ipsec-y := \
-             asfctrl_linux_ipsec.o asfctrl_linux_ipsec_hooks.o
+ifeq ($(CONFIG_ASFCTRL_IPSEC_SA_MULTI_POLICY), y)
+asfctrl_ipsec-y := asfctrl_linux_ipsec.o asfctrl_linux_ipsec_hooks_multisa.o
+else
+asfctrl_ipsec-y := asfctrl_linux_ipsec.o asfctrl_linux_ipsec_hooks.o
+endif
 
 all:
 	make ARCH=$(ARCH) -C $(KERNEL_PATH) M=$(PWD) modules
