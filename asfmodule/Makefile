@@ -27,8 +27,10 @@ min :
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile
 endif
+ifneq ($(CONFIG_FSL_DPAA_ETH), y)
 ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
 	make -w -C asfqos -f Makefile
+endif
 endif
 	make -w -C asfctrl -f Makefile
 	mkdir -p bin
@@ -44,15 +46,19 @@ full :
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile
 endif
+ifneq ($(CONFIG_FSL_DPAA_ETH), y)
 ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
 	make -w -C asfqos -f Makefile
+endif
 endif
 	make -w -C asfctrl -f Makefile
 
 	cp asfffp/driver/asf.ko asfctrl/linux/ffp/asfctrl.ko bin/full
 	cp asfipsec/driver/asfipsec.ko asfctrl/linux/ipsec/asfctrl_ipsec.ko bin/full
+ifneq ($(CONFIG_FSL_DPAA_ETH), y)
 ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
 	cp asfqos/driver/asfqos.ko asfctrl/linux/qos/asfctrl_qos.ko bin/full 2>/dev/null
+endif
 endif
 	$(CROSS_COMPILE)strip --strip-unneeded bin/full/*.ko
 
@@ -63,8 +69,10 @@ clean:
 ifeq ($(CONFIG_XFRM), y)
 	make -w -C asfipsec -f Makefile clean
 endif
+ifneq ($(CONFIG_FSL_DPAA_ETH), y)
 ifeq ($(CONFIG_ASF_EGRESS_QOS), y)
 	make -w -C asfqos -f Makefile clean
+endif
 endif
 	make -w -C asfctrl -f Makefile clean
 	rm -rf bin
