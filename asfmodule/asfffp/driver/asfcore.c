@@ -1301,6 +1301,10 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 	if (unlikely(0 == asf_enable))
 		return AS_FP_PROCEED;
 
+#ifndef CONFIG_FSL_DPAA_ETH_JUMBO_FRAME
+	if (unlikely(fd->length20 > 1514))
+		return AS_FP_PROCEED;
+#endif
 	ASF_RCU_READ_LOCK(bLockFlag);
 	ACCESS_XGSTATS();
 
