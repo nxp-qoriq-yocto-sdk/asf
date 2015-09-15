@@ -110,8 +110,8 @@ void asf_pktdump(unsigned char *buf)
 		{
 		struct tcphdr *tcph = (struct tcphdr *)data;
 		p += sprintf(p, " TCP %d:%d", tcph->source, tcph->dest);
-		p += sprintf(p, " syn=%d, fin =%d, ack =%d, ackseq=%d",
-			tcph->syn, tcph->fin, tcph->ack, tcph->ack_seq);
+		p += sprintf(p, " syn=%lu, fin =%lu, ack =%lu, seq=%lu, ackseq=%lu",
+			tcph->syn, tcph->fin, tcph->ack, tcph->seq, tcph->ack_seq);
 		}
 		break;
 	case IPPROTO_UDP:

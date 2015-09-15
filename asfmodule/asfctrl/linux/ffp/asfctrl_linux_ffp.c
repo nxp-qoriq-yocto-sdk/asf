@@ -601,7 +601,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 			cmd.ulZoneId = ASF_DEF_ZN_ID;
 
 			ASFCTRL_INFO("Configured tunnel ID is %d ",
-			cmd.u.ipsec.ipsecInInfo.outContainerInfo.ulTunnelId);
+			cmd.u.ipsec.ipsecInfo.outContainerInfo.ulTunnelId);
 			if (ASFFFPRuntime(ulVSGId,
 				ASF_FFP_MODIFY_FLOWS,
 				&cmd, sizeof(cmd), NULL, 0) ==
@@ -1282,7 +1282,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	cmd.flow2.bIPsecOut = bIPsecOut ? 1 : 0;
 
 	if (cmd.flow1.bNAT) {
-		ASFCTRL_INFO("\nNAT Enabled\n ");
+		ASFCTRL_INFO("NAT Enabled\n ");
 		cmd.flow1.natInfo.ulDestNATIp = reply_sip;
 		cmd.flow1.natInfo.ulSrcNATIp = reply_dip;
 		cmd.flow1.natInfo.usDestNATPort = reply_sport;

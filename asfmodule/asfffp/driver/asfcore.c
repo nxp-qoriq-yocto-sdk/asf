@@ -2515,6 +2515,8 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		else /*if (abuf.iph->protocol == IPPROTO_TCP)*/
 			abuf.pCsum = ((u16 *)ptrhdrOffset) + 8;
 #endif /* ASF_DO_INC_CHECKSUM */
+		asf_debug_l2("POSTNAT: Hash(%d.%d.%d.%d, %d.%d.%d.%d, 0x%lx)\n",
+			NIPQUAD(iph->saddr), NIPQUAD(iph->daddr), *ptrhdrOffset);
 	} else {
 #ifdef ASF_DO_INC_CHECKSUM
 		if (iph->protocol == IPPROTO_TCP) {
