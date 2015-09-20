@@ -2313,7 +2313,7 @@ int asfIpv6Fragment(struct sk_buff *skb,
 	unsigned	char nexthdr;
 
 	asf_reasm_debug("skb->len = %d, ulMTU=%d, ip_tot_len =%d\r\n", skb->len,
-			ulMTU, , ASF_NTOHS(ip6h->payload_len));
+			ulMTU, ASF_NTOHS(ip6h->payload_len));
 
 	ip6hpexh_len = skb_transport_header(skb) - skb_network_header(skb);
 
