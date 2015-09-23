@@ -71,7 +71,9 @@ extern struct device *pdev;
 #define ASFIPSEC_SA_LOCK
 
 extern void secfp_removeCINodeFromTunnelList(unsigned int ulVSGId,
-					     unsigned int ulTunnelId,  struct SPDCILinkNode_s *pCINode, bool bDir);
+				unsigned int ulTunnelId,
+				struct SPDCILinkNode_s *pCINode,
+				bool bDir);
 static unsigned int secfp_copySAParams(ASF_IPSecSA_t *pASFSAParams,
 				       SAParams_t    *pSAParams);
 unsigned int secfp_copySrcAndDestSelSet(
@@ -626,6 +628,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u", pDelSA->ulTunnelId);
 				return;
 			}
+			ASFIPSEC_SA_LOCK;
 			if (secfp_DeleteOutSA(pDelSA->ulSPDContainerIndex,
 					pDelSA->ulSPDMagicNumber,
 					pDelSA->DestAddr,
@@ -636,6 +639,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 						SECFP_SUCCESS) {
 				ASFIPSEC_WARN("secfp_DeleteOutSA returned failure");
 			}
+			ASFIPSEC_SA_UNLOCK;
 		}
 		break;
 	case ASF_IPSEC_RUNTIME_ADD_INSA: /* Adding InSA */
@@ -667,6 +671,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 				return;
 			}
 
+			ASFIPSEC_SA_LOCK;
 			if (secfp_CreateInSA(ulVSGId,
 					pAddSA->ulTunnelId,
 					pAddSA->ulInSPDContainerIndex,
@@ -678,6 +683,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 					) != SECFP_SUCCESS) {
 				ASFIPSEC_WARN("secfp_CreateInSA returned failure");
 			}
+			ASFIPSEC_SA_UNLOCK;
 			secfp_freeSelSet(pSrcSel);
 			secfp_freeSelSet(pDstSel);
 		}
@@ -767,7 +773,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 				ASFIPSEC_DEBUG("Invalid Tunnel Id = %u\r\n", pDelSA->ulTunnelId);
 				return;
 			}
-
+			ASFIPSEC_SA_LOCK;
 			if (secfp_DeleteInSA(ulVSGId,
 					     pDelSA->ulSPDContainerIndex,
 					     pDelSA->ulSPDMagicNumber,
@@ -776,6 +782,7 @@ ASF_void_t ASFIPSecRuntime(ASF_uint32_t   ulVSGId,
 					     pDelSA->ulSPI) != SECFP_SUCCESS) {
 				ASFIPSEC_WARN("secfp_DeleteInSA returned failure");
 			}
+			ASFIPSEC_SA_UNLOCK;
 		}
 		break;
 	case ASF_IPSEC_RUNTIME_MOD_OUTSA:

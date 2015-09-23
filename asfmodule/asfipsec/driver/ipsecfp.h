@@ -180,7 +180,7 @@
 #define SECFP_MAX_TOS_INDICES		8
 
 /* Information for preparing outer IP header */
-#define SECFP_IP_TTL			120
+#define SECFP_IP_TTL			255
 
 /* MAximum supported MTU*/
 #define SECFP_MAX_MTU		9600

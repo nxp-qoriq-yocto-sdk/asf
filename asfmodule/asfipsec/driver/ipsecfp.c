@@ -812,7 +812,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	}
 #endif
 
-	if (skb_shinfo(skb1)->nr_frags) {
+	if (unlikely(skb_shinfo(skb1)->nr_frags)) {
 		total_frags = skb_shinfo(skb1)->nr_frags;
 		frag = &(skb_shinfo(skb1)->frags[total_frags - 1]);
 		charp = (u8 *)(page_address((const struct page *)frag->page.p) + frag->page_offset);
@@ -821,25 +821,27 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 		8 or 16 as is the case for DES/3DES/AES); In which case we
 		don't need to check the 4 byte alignment post padding
 			*/
-	usPadLen = (orig_pktlen + SECFP_ESP_TRAILER_LEN)
-			& (pSA->SAParams.ulBlockSize - 1);
-	usPadLen = (usPadLen == 0) ? 0 : pSA->SAParams.ulBlockSize
-			- usPadLen;
-	/* We need to fill the padding field with 010203 etc. */
-	/* Instead of implementing a while loop for this based on the
-	pad length, if pad length is non-zero, write block
-	size worth of words i.e. either 8/4 or 16/4 starting at tail
-	*/
-	if (skb_shinfo(skb1)->nr_frags)
-		for (ii = 0, jj = 0;
-			ii < usPadLen; ii += 4, jj++)
-			*(unsigned int *)&(charp[frag->size + ii])
-							= pad_words[jj];
-	else
-		for (ii = 0, jj = 0;
-			ii < usPadLen; ii += 4, jj++)
-		*(unsigned int *) &(pTailSkb->data[pTailSkb->len+ii])
-							= pad_words[jj];
+	if (pSA->SAParams.ucCipherAlgo != SECFP_ESP_NULL) {
+		usPadLen = (orig_pktlen + SECFP_ESP_TRAILER_LEN)
+				& (pSA->SAParams.ulBlockSize - 1);
+		usPadLen = (usPadLen == 0) ? 0 : pSA->SAParams.ulBlockSize
+				- usPadLen;
+		/* We need to fill the padding field with 010203 etc. */
+		/* Instead of implementing a while loop for this based on the
+		pad length, if pad length is non-zero, write block
+		size worth of words i.e. either 8/4 or 16/4 starting at tail
+		*/
+		if (skb_shinfo(skb1)->nr_frags)
+			for (ii = 0, jj = 0;
+				ii < usPadLen; ii += 4, jj++)
+			*(unsigned int *)&(charp[frag->size + ii]) = pad_words[jj];
+		else
+			for (ii = 0, jj = 0;
+				ii < usPadLen; ii += 4, jj++)
+			*(unsigned int *) &(pTailSkb->data[pTailSkb->len+ii]) = pad_words[jj];
+	} else {
+		usPadLen = 0;
+	}
 	ASFIPSEC_DEBUG("Total Len = %d +2(ESP TRAILER), padLen=%d",
 				ASF_NTOHS(org_iphdr->tot_len), usPadLen);
 
@@ -847,7 +849,7 @@ secfp_prepareOutPacket(struct sk_buff *skb1, outSA_t *pSA,
 	usLastByte = usPadLen << 8 | usNxtProto;
 	/* Need to add handling for NR_FRAGS */
 
-	if (skb_shinfo(skb1)->nr_frags) {
+	if (unlikely(skb_shinfo(skb1)->nr_frags)) {
 		*(unsigned short int *)&(charp[frag->size + usPadLen])
 				= usLastByte;
 		/* Need to see what can be done in case of frags */
@@ -1097,9 +1099,8 @@ secfp_finishOffloadOutPacket(struct sk_buff *skb, outSA_t *pSA,
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 send_l2blob:
-	if (ASFIPSecCbFn.pFnRefreshL2Blob) {
-
-		if (bl2blobRefresh) {
+	if (likely(ASFIPSecCbFn.pFnRefreshL2Blob)) {
+		if (unlikely(bl2blobRefresh)) {
 send_l2blob_2:
 			ASFIPSEC_PRINT("Sending L2blob Refresh");
 #ifdef ASF_IPV6_FP_SUPPORT
