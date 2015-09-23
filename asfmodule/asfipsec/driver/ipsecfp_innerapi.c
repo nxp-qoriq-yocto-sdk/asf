@@ -1927,7 +1927,8 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 					ALIGN(pSA->ctx.split_key_len, 16);
 			break;
 		default:
-			ASFIPSEC_DEBUG("Invalid ucAuthAlgo");
+			ASFIPSEC_WARN("unsupported ucAuthAlgo %d\n",
+				pSAParams->ucAuthAlgo);
 			return -1;
 		}
 	}
@@ -1975,7 +1976,8 @@ static inline int secfp_updateInSA(inSA_t *pSA, SAParams_t *pSAParams)
 			ASFIPSEC_DEBUG("NULL Encryption set");
 			break;
 		default:
-			ASFIPSEC_WARN("Invalid ucEncryptAlgo");
+			ASFIPSEC_WARN("unsupported ucEncryptAlgo %d\n",
+				pSAParams->ucCipherAlgo);
 			return -1;
 		}
 	}
@@ -2875,8 +2877,8 @@ unsigned int secfp_createOutSA(
 					&secFP_OutSATable,
 					pContainer->SAHolder.ulSAIndex[ii]);
 				if (SAParams->ulSPI == pOldSA->SAParams.ulSPI) {
-					ASFIPSEC_DEBUG("SA Already exists:"
-						"Ignore the new one");
+					ASFIPSEC_PRINT("outSA with SPI 0x%X Already exists: "
+						"Ignore the new one\n", SAParams->ulSPI);
 					if (!bVal)
 						local_bh_enable();
 					return SECFP_SUCCESS;
@@ -3757,7 +3759,7 @@ unsigned int secfp_CreateInSA(
 		if (likely(pSAParams->ucProtocol == SECFP_PROTO_ESP)) {
 		if (secfp_updateInSA(pSA, pSAParams)) {
 			GlobalErrors.ulInvalidAuthEncAlgo++;
-			kfree(pSA);
+			secfp_freeInSA((struct rcu_head *) pSA);
 			ASFIPSEC_DEBUG("secfp_updateInSA returned failure");
 			if (!bVal)
 				local_bh_enable();
@@ -3803,7 +3805,7 @@ unsigned int secfp_CreateInSA(
 
 		if (secfp_createInSACaamCtx(pSA)) {
 			ASFIPSEC_DEBUG("secfp_createInSACaamCtx returnfailure");
-			kfree(pSA);
+			secfp_freeInSA((struct rcu_head *) pSA);
 			if (!bVal)
 				local_bh_enable();
 
@@ -3843,7 +3845,7 @@ unsigned int secfp_CreateInSA(
 						pDstSel, ucSelFlags);
 		if (!pNode) {
 			ASFIPSEC_DEBUG("secfp_updateInSelSet returned failure");
-			kfree(pSA);
+			secfp_freeInSA((struct rcu_head *) pSA);
 			if (!bVal)
 				local_bh_enable();
 			return SECFP_FAILURE;
@@ -3854,7 +3856,7 @@ unsigned int secfp_CreateInSA(
 			ASFIPSEC_DEBUG("secfp_allocAndAppendSPIVal failure");
 			/* Remove from Selector List */
 			secfp_deleteInContainerSelList(pContainer, pNode);
-			kfree(pSA);
+			secfp_freeInSA((struct rcu_head *) pSA);
 			if (!bVal)
 				local_bh_enable();
 			return SECFP_FAILURE;
@@ -3870,7 +3872,7 @@ unsigned int secfp_CreateInSA(
 				ASFIPSEC_DEBUG("Alloc for TempMapNode failure");
 				/* Remove from Selector List */
 				secfp_deleteInContainerSelList(pContainer, pNode);
-				kfree(pSA);
+			secfp_freeInSA((struct rcu_head *) pSA);
 				if (!bVal)
 					local_bh_enable();
 				return SECFP_FAILURE;
@@ -4824,6 +4826,9 @@ ASF_uint32_t ASFIPSecFlushAllSA(ASF_uint32_t ulVSGId, ASF_uint32_t ulTunnelId)
 		iRetVal = asfFlushAllOutSAs(pCINode->ulIndex);
 		if (iRetVal == SECFP_FAILURE) {
 			ASFIPSEC_WARN("Failure while flushing Out SAs");
+			if (!bVal)
+				local_bh_enable();
+			return SECFP_FAILURE;
 		}
 		pCINode = pCINode->pNext;
 	}
@@ -4834,6 +4839,9 @@ ASF_uint32_t ASFIPSecFlushAllSA(ASF_uint32_t ulVSGId, ASF_uint32_t ulTunnelId)
 		iRetVal = asfFlushAllInSAs(pCINode->ulIndex);
 		if (iRetVal == SECFP_FAILURE) {
 			ASFIPSEC_WARN("Failure while flushing SAs");
+			if (!bVal)
+				local_bh_enable();
+			return SECFP_FAILURE;
 		}
 		pCINode = pCINode->pNext;
 	}

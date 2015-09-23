@@ -100,6 +100,10 @@ unsigned int secfp_genCaamSplitKey(struct caam_ctx *ctx,
 	gfp_t flags = in_interrupt() ? GFP_ATOMIC : GFP_KERNEL;
 
 	desc = kzalloc(CAAM_CMD_SZ * 6 + CAAM_PTR_SZ * 2, GFP_DMA | flags);
+	if (!desc) {
+		ASFIPSEC_DEBUG("Unable to allocate memory\n");
+		return -ENOMEM;
+	}
 
 	init_job_desc(desc, 0);
 
@@ -1082,6 +1086,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 	if (ret) {
 		ASFIPSEC_DPERR("error in secfp_prepare ShareDesc dir=%d", dir);
 		kfree(ctx->sh_desc_mem);
+		ctx->sh_desc_mem = NULL;
 		return ret;
 	}
 

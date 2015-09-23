@@ -1547,6 +1547,7 @@ l2blob_missing:
 	}
 
 drop_skb_list:
+	pNextSkb = skb->next;
 	ASFSkbFree(skb);
 	while (pNextSkb) {
 		skb = pNextSkb;
@@ -2036,8 +2037,10 @@ l2blob_missing:
 
 
 drop_skb_list:
-	if (skb)
+	if (skb) {
+		pNextSkb = skb->next;
 		ASFSkbFree(skb);
+	}
 	while (pNextSkb) {
 		skb = pNextSkb;
 		pNextSkb = skb->next;
@@ -2931,6 +2934,7 @@ int secfp_inCompleteSAProcess(struct sk_buff **pSkb,
 			ASFIPSEC_WARN("ESP header length is invalid"
 				"len = %d ", pHeadSkb->len);
 			rcu_read_unlock();
+			*pSkb = pHeadSkb;
 			return 1;
 		}
 #endif /*ASF_SECFP_PROTO_OFFLOAD*/

@@ -215,6 +215,7 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 
 		if (!ctx->SecFq) {
 			kfree(ctx->sh_desc_mem);
+			ctx->sh_desc_mem = NULL;
 			ASFIPSEC_DPERR("No Sec FQ available, just return\n");
 			return -ENOMEM;
 		}
@@ -223,7 +224,10 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 		if (ret) {
 			ASFIPSEC_DPERR("prepareEncapShareDesc-ret=%d", ret);
 			secfp_qman_release_out_fq(ctx);
+			ctx->RecvFq = NULL;
+			ctx->SecFq = NULL;
 			kfree(ctx->sh_desc_mem);
+			ctx->sh_desc_mem = NULL;
 			return ret;
 		}
 	} else {
@@ -233,6 +237,7 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 		spin_unlock(&secFP_InQmanFqLock);
 		if (!ctx->SecFq) {
 			kfree(ctx->sh_desc_mem);
+			ctx->sh_desc_mem = NULL;
 			ASFIPSEC_ERR("No Sec FQ available, just return\n");
 			return -ENOMEM;
 		}
@@ -241,7 +246,10 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 		if (ret) {
 			ASFIPSEC_DPERR("prepareEncapShareDesc-ret=%d", ret);
 			secfp_qman_release_in_fq(ctx);
+			ctx->RecvFq = NULL;
+			ctx->SecFq = NULL;
 			kfree(ctx->sh_desc_mem);
+			ctx->sh_desc_mem = NULL;
 			return ret;
 		}
 	}
@@ -258,6 +266,7 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 	if (ret) {
 		ASFIPSEC_DPERR("error in secfp_build_qman_desc");
 		kfree(ctx->sh_desc_mem);
+		ctx->sh_desc_mem = NULL;
 	}
 	return ret;
 
@@ -294,6 +303,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 
 		if (!ctx->SecFq) {
 			kfree(ctx->sh_desc_mem);
+			ctx->sh_desc_mem = NULL;
 			ASFIPSEC_DPERR("No Sec FQ available, just return\n");
 			return -ENOMEM;
 		}
@@ -303,6 +313,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 			ASFIPSEC_DPERR("prepareEncapShareDesc-ret=%d", ret);
 			secfp_qman_release_out_fq(ctx);
 			kfree(ctx->sh_desc_mem);
+			ctx->sh_desc_mem = NULL;
 			return ret;
 		}
 	} else {
@@ -312,6 +323,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 		spin_unlock(&secFP_InQmanFqLock);
 		if (!ctx->SecFq) {
 			kfree(ctx->sh_desc_mem);
+			ctx->sh_desc_mem = NULL;
 			ASFIPSEC_ERR("No Sec FQ available, just return\n");
 			return -ENOMEM;
 		}
@@ -321,6 +333,7 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 			ASFIPSEC_DPERR("prepareEncapShareDesc-ret=%d", ret);
 			secfp_qman_release_in_fq(ctx);
 			kfree(ctx->sh_desc_mem);
+			ctx->sh_desc_mem = NULL;
 			return ret;
 		}
 	}
@@ -335,8 +348,11 @@ int secfp_buildProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 	/* End of Shared Descriptor Creation */
 	ret = secfp_build_qman_desc(ctx);
 	if (ret) {
+		ctx->RecvFq = NULL;
+		ctx->SecFq = NULL;
 		ASFIPSEC_DPERR("error in secfp_build_qman_desc");
 		kfree(ctx->sh_desc_mem);
+		ctx->sh_desc_mem = NULL;
 	}
 	return ret;
 }
@@ -539,7 +555,7 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 {
 	int	iRetVal;
 	struct	qm_fd qmfd = {};
-	scatter_gather_entry_t *pSG;
+	scatter_gather_entry_t *pSG = NULL;
 	struct sk_buff *skb = (struct sk_buff *) context;
 	struct device *pDev = pSA->ctx.jrdev;
 	struct ses_pkt_info *pInfo;
@@ -1271,6 +1287,7 @@ static int secfp_qman_fq_deinit(void)
 			teardown_fq(&(qman_fq_node->qman_fq));
 			qman_fq_node = qman_fq_node->pNext;
 			kfree(qman_fq_node1);
+			qman_fq_node1 = NULL;
 		}
 	}
 	return 0;

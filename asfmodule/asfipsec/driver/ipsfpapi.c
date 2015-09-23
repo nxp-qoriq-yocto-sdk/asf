@@ -1457,8 +1457,9 @@ ASF_void_t ASFIPSecGetFirstNSPDContainers(ASFIPSecGetContainerParams_t *pParams,
 
 	spin_lock(&secfp_TunnelIfaceCIIndexListLock);
 	if (secFP_TunnelIfaces[pParams->ulVSGId][pParams->ulTunnelId].bInUse == 0) {
-		ASFIPSEC_DEBUG("Tunnel Interface is not in use.\
-	 TunnelId=%u, VSGId=%u\r\n", pParams->ulTunnelId, pParams->ulVSGId);
+		ASFIPSEC_DEBUG("Tunnel Interface is not in use."
+			"TunnelId=%u, VSGId=%u\r\n",
+			pParams->ulTunnelId, pParams->ulVSGId);
 		if (!bVal)
 			local_bh_enable();
 		spin_unlock(&secfp_TunnelIfaceCIIndexListLock);
@@ -1756,6 +1757,11 @@ static unsigned int asf_FillSAParams(ASF_IPSecSA_t *pASFSAParams,
 	pASFSAParams->bPropogateECN = pSAParams->bPropogateECN;
 	pASFSAParams->bDoAntiReplayCheck = pSAParams->bDoAntiReplayCheck;
 	pASFSAParams->bEncapsulationMode = pSAParams->bEncapsulationMode;
+
+	pASFSAParams->softKbyteLimit = pSAParams->softKbyteLimit;
+	pASFSAParams->hardKbyteLimit = pSAParams->hardKbyteLimit;
+	pASFSAParams->softPacketLimit = pSAParams->softPacketLimit;
+	pASFSAParams->hardPacketLimit = pSAParams->hardPacketLimit;
 
 	pASFSAParams->spi = pSAParams->ulSPI;
 
