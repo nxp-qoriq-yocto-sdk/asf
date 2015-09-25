@@ -9,7 +9,7 @@
 TOPDIR := $(shell pwd)
 export TOPDIR
 
-include $(KERNEL_PATH)/.config
+include $(KBUILD_OUTPUT)/.config
 include asfconfig.mk
 ifeq ($(CONFIG_AS_FASTPATH), y)
 #------------------------------------------------------------------------------

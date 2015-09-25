@@ -7,7 +7,7 @@
 # */
 
 
-include $(KERNEL_PATH)/.config
+include $(KBUILD_OUTPUT)/.config
 include $(TOPDIR)/asfconfig.mk
 
 

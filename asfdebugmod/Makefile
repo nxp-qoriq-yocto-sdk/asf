@@ -11,7 +11,7 @@ CC	= $(CROSS_COMPILE)gcc
 AR	= $(CROSS_COMPILE)ar
 LD	= $(CROSS_COMPILE)ld
 
-include $(KERNEL_PATH)/.config
+include $(KBUILD_OUTPUT)/.config
 ifeq ($(CONFIG_FSL_DPAA_ETH), y)
 include $(KERNEL_PATH)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 endif

@@ -6,7 +6,7 @@
 # *
 # */
 
-include $(KERNEL_PATH)/.config
+include $(KBUILD_OUTPUT)/.config
 include $(TOPDIR)/asfconfig.mk
 
 KBUILD_EXTRA_SYMBOLS := $(TOPDIR)/asfffp/driver/Module.symvers
