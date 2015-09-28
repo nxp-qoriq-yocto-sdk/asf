@@ -1393,8 +1393,14 @@ void secfp_inAHComplete(struct device *dev,
 	/* Packet is ready to go */
 	/* Assuming ethernet as the receiving device of original packet */
 	if (ucNextProto == SECFP_PROTO_IP) {
+		struct sk_buff *frag_skb;
 		secfp_inCompleteUpdateIpv4Pkt(skb);
 		skb->protocol = ASF_HTONS(ETH_P_IP);
+		frag_skb = (struct sk_buff *)skb_shinfo(skb)->frag_list;
+		while (frag_skb) {
+			frag_skb->protocol = ETH_P_IP;
+			frag_skb = frag_skb->next;
+		}
 
 		ASFIPSEC_FPRINT("decrypt skb %p len %d frag %p\n",
 			skb->head, skb->len,
@@ -1420,10 +1426,16 @@ void secfp_inAHComplete(struct device *dev,
 		pIPSecPPGlobalStats->ulTotInProcPkts++;
 #ifdef ASF_IPV6_FP_SUPPORT
 	} else if (ucNextProto == SECFP_PROTO_IPV6) {
+		struct sk_buff *frag_skb;
 		ASFIPSEC_DEBUG("\n ipv6 packet decrypted successfully"
 				" need to send it to ipv6stack");
 		skb_reset_network_header(skb);
 		skb->protocol = ASF_HTONS(ETH_P_IPV6);
+		frag_skb = (struct sk_buff *)skb_shinfo(skb)->frag_list;
+		while (frag_skb) {
+			frag_skb->protocol = ETH_P_IPV6;
+			frag_skb = frag_skb->next;
+		}
 		/* Homogenous buffer */
 		Buffer.nativeBuffer = skb;
 #ifdef ASF_TERM_FP_SUPPORT
@@ -1500,6 +1512,7 @@ void secfp_outAHComplete(struct device *dev,
 #endif
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
+	skb_reset_network_header(skb);
 
 	ASFIPSEC_DEBUG(" Entry");
 

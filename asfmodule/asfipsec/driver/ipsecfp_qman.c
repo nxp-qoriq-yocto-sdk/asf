@@ -429,6 +429,8 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 		unsigned int total_frags;
 		unsigned int ulFragpadlen = 0;
 		unsigned int len_to_caam = 0;
+		/* Below is valid for IPv4-IPv4 and IPv6-IPv6
+		Not valid when inner and outer hdr is diff */
 		if (ulHdrLen % 8)
 			ulFragpadlen = 8 - (ulHdrLen % 8);
 		ulHdrLen += ulFragpadlen;

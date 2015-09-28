@@ -2125,6 +2125,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
+	skb_reset_network_header(skb);
 
 	ASFIPSEC_DEBUG(" Entry");
 
@@ -3349,11 +3350,18 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 
 		if (ucNextProto == SECFP_PROTO_IP) {
 			ASFBuffer_t Buffer;
+			struct sk_buff *frag_skb;
 
 			pOrgEthHdr = skb_network_header(pHeadSkb)-ETH_HLEN;
 
 			secfp_inCompleteUpdateIpv4Pkt(pHeadSkb);
-/*todo			pHeadSkb->protocol = ETH_P_IP;*/
+			pHeadSkb->protocol = ETH_P_IP;
+			frag_skb = (struct sk_buff *)
+				skb_shinfo(pHeadSkb)->frag_list;
+			while (frag_skb) {
+				frag_skb->protocol = ETH_P_IP;
+				frag_skb = frag_skb->next;
+			}
 			/* Need to give it to the stack */
 			ASFIPSEC_FPRINT("pOrgEthHdr = 0x%x:0x%x:0x%x",
 					*(unsigned int *)&pOrgEthHdr[0],
@@ -3382,9 +3390,16 @@ void secfp_inCompleteWithFrags(struct device *dev, u32 *pdesc,
 #ifdef ASF_IPV6_FP_SUPPORT
 		} else if (ucNextProto == SECFP_PROTO_IPV6) {
 			ASFBuffer_t Buffer;
+			struct sk_buff *frag_skb;
 			pOrgEthHdr = skb_network_header(pHeadSkb)-ETH_HLEN;
 			skb_reset_network_header(pHeadSkb);
 			pHeadSkb->protocol = ETH_P_IPV6;
+			frag_skb = (struct sk_buff *)
+					skb_shinfo(pHeadSkb)->frag_list;
+			while (frag_skb) {
+				frag_skb->protocol = ETH_P_IPV6;
+				frag_skb = frag_skb->next;
+			}
 			ASFIPSEC_DEBUG("\n ipv6 packet decrypted successfully"
 					" need to send it to ipv6stack");
 			/* Homogenous buffer */
