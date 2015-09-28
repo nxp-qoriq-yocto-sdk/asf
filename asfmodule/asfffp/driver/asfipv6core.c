@@ -1259,14 +1259,16 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 
 	}
 
-	if (unlikely((skb->len < pkt_len))) {
+	if ((skb_shinfo(skb)->frag_list == NULL) &&
+		 unlikely((skb->len < pkt_len + sizeof(struct ipv6hdr)))) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		gstats->ulErrIpHdr++;
 #endif
 		goto drop_pkt;
 	}
 
-	skb->len = pkt_len + sizeof(struct ipv6hdr);
+	if (skb_shinfo(skb)->frag_list == NULL)
+		skb->len = pkt_len + sizeof(struct ipv6hdr);
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (unlikely(nexthdr == NEXTHDR_FRAGMENT)) {

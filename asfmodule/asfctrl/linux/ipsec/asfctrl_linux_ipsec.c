@@ -254,6 +254,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	struct sk_buff *pOutSkb = NULL;
 	struct xfrm_state *x;
 	struct net *net;
+	struct iphdr *iph;
 	xfrm_address_t daddr;
 	unsigned short family;
 	int bVal = in_softirq();
@@ -261,6 +262,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 		local_bh_disable();
 
 	skb = AsfBuf2Skb(Buffer);
+	iph = ip_hdr(skb);
 	ASFCTRL_DBG("DestAddr %x protocol %x SPI %x",
 			DestAddr.ipv4addr, ucProtocol, ulSPI);
 
@@ -309,16 +311,14 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 	if (DestAddr.bIPv4OrIPv6) {
 		memcpy(daddr.a6, DestAddr.ipv6addr, 16);
 		family = AF_INET6;
-		/*TODO This code shall be revisited once asf and linux
-		fraglist are compatile with each other*/
-		if (skb_shinfo(skb)->frag_list)
-			asfIpv6MakeFragment(skb, &pOutSkb);
 	} else {
 #endif
 		daddr.a4 = (DestAddr.ipv4addr);
 		family = AF_INET;
 #ifdef ASF_IPV6_FP_SUPPORT
 	}
+	if ((iph->version == 6) && (skb_shinfo(skb)->frag_list))
+		asfIpv6MakeFragment(skb, &pOutSkb);
 #endif
 	if (skb_shinfo(skb)->frag_list) {
 		struct sk_buff *tmp_skb = skb_shinfo(skb)->frag_list;
