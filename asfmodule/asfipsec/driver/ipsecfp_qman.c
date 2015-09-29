@@ -219,7 +219,7 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 			return -ENOMEM;
 		}
 		ret = secfp_buildAHQMANSharedDesc(ctx, sh_desc,
-					(outSA_t *)pSA, SECFP_AH_DIR_IN);
+					(outSA_t *)pSA, SECFP_AH_DIR_OUT);
 		if (ret) {
 			ASFIPSEC_DPERR("prepareEncapShareDesc-ret=%d", ret);
 			secfp_qman_release_out_fq(ctx);
@@ -237,7 +237,7 @@ int secfp_buildAHProtocolDesc(struct caam_ctx *ctx, void *pSA, int dir)
 			return -ENOMEM;
 		}
 		ret = secfp_buildAHQMANSharedDesc(ctx, sh_desc,
-					(inSA_t *)pSA, SECFP_AH_DIR_OUT);
+					(inSA_t *)pSA, SECFP_AH_DIR_IN);
 		if (ret) {
 			ASFIPSEC_DPERR("prepareEncapShareDesc-ret=%d", ret);
 			secfp_qman_release_in_fq(ctx);
