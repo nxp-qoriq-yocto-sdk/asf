@@ -603,8 +603,6 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 
 	xfrm->asf_sa_direction = OUT_SA;
-	xfrm->asf_sa_cookie = sa_id + 1;
-
 	memset(&outSA, 0, sizeof(ASFIPSecRuntimeAddOutSAArgs_t));
 
 	sel = &xp->selector;
@@ -843,6 +841,7 @@ int asfctrl_xfrm_add_outsa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	outSA.pSAParams = &SAParams;
 	handle = (uintptr_t)xfrm;
 	xfrm->asf_sa_direction = OUT_SA;
+	xfrm->asf_sa_cookie = sa_id + 1;
 	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
 	ASFIPSecRuntime(ulVSGId,
 			ASF_IPSEC_RUNTIME_ADD_OUTSA,
@@ -909,9 +908,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	}
 	sa_table[IN_SA][sa_id].spi = xfrm->id.spi;
 	sa_table[IN_SA][sa_id].con_magic_num = asfctrl_vsg_ipsec_cont_magic_id;
-	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 	xfrm->asf_sa_direction = IN_SA;
-	xfrm->asf_sa_cookie = sa_id + 1;
 
 	memset(&inSA, 0, sizeof(ASFIPSecRuntimeAddInSAArgs_t));
 	memset(&inSASel, 0, sizeof(ASF_IPSecSASelector_t));
@@ -1022,6 +1019,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 		ret = asfctrl_alg_getbyname(xfrm->aalg->alg_name,
 					AUTHENTICATION);
 		if (unlikely(ret == -EINVAL)) {
+			ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 			ASFCTRL_WARN("Auth algorithm not supported");
 			return ret;
 		}
@@ -1036,6 +1034,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	if (xfrm->ealg) {
 		ret = asfctrl_alg_getbyname(xfrm->ealg->alg_name, ENCRYPTION);
 		if (unlikely(ret == -EINVAL)) {
+			ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 			ASFCTRL_WARN("Encryption algorithm not supported");
 			return ret;
 		}
@@ -1050,6 +1049,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	if (aead && esp) {
 		ret = asfctrl_alg_getbyname(aead->alg_name, ENCRYPTION);
 		if (ret == -EINVAL) {
+			ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 			ASFCTRL_WARN("Encryption algorithm not supported");
 			return ret;
 		}
@@ -1066,6 +1066,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				SAParams.encAlgo = ASF_IPSEC_EALG_AES_CCM_ICV16;
 				break;
 			default:
+				ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 				ASFCTRL_WARN("CCM ICV length not supported");
 				return -EINVAL;
 			}
@@ -1081,6 +1082,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 				SAParams.encAlgo = ASF_IPSEC_EALG_AES_GCM_ICV16;
 				break;
 			default:
+				ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 				ASFCTRL_WARN("GCM ICV length not supported");
 				return -EINVAL;
 			}
@@ -1162,7 +1164,6 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 			sizeof(ASFIPSecRuntimeAddInSAArgs_t),
 			&handle, sizeof(uint32_t));
 
-	ASF_SPIN_LOCK(bLockFlag, &sa_table_lock);
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv4OrIPv6) {
 		memcpy(sa_table[IN_SA][sa_id].saddr.ipv6addr,
@@ -1184,6 +1185,7 @@ int asfctrl_xfrm_add_insa(struct xfrm_state *xfrm, struct xfrm_policy *xp)
 	sa_table[IN_SA][sa_id].container_id = inSA.ulInSPDContainerIndex;
 	sa_table[IN_SA][sa_id].ref_count++;
 /*	sa_table[OUT_SA][sa_id].iifindex = ifindex; */
+	xfrm->asf_sa_cookie = sa_id + 1;
 	ASF_SPIN_UNLOCK(bLockFlag, &sa_table_lock);
 	ASFCTRL_TRACE("saddr %x daddr %x spi 0x%x IN-SPD=%d",
 		xfrm->props.saddr.a4, xfrm->id.daddr.a4, xfrm->id.spi,
