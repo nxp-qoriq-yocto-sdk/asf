@@ -697,23 +697,29 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 	}
 
 	if (dqrr->fd.status) {
+		char err[256];
 		err_val = dqrr->fd.status & 0xF00000FF;
+		caam_jr_strstatus(err, dqrr->fd.status);
 		switch (err_val) {
 			case ANTI_REPLAY_ERR:
-				ASFIPSEC_DEBUG("ANTI_REPLAY_ERR FD status = %#x", err_val);
+				ASFIPSEC_DEBUG("FD status = %#x "
+				"Err = %s\n", dqrr->fd.status, err);
 				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT15]);
 				break;
 			case LATE_PACKET_ERR:
-				ASFIPSEC_DEBUG("LATE_PACKET_ERR FD status = %#x", err_val);
+				ASFIPSEC_DEBUG("FD status = %#x "
+				"Err = %s\n", dqrr->fd.status, err);
 				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 				IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT19]);
 				break;
 			case SEQUENCE_OVERFLOW_ERR:
-				ASFIPSEC_DEBUG("SEQUENCE_OVERFLOW_ERR FD status = %#x", err_val);
+				ASFIPSEC_DEBUG("FD status = %#x "
+				"Err = %s\n", dqrr->fd.status, err);
 				goto down;
 			default:
-				ASFIPSEC_DEBUG("FD status = %#x", err_val);
+				ASFIPSEC_DEBUG("FD status = %#x "
+				"Err = %s\n", err_val, err);
 				ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.
 					IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT18]);
 		}
