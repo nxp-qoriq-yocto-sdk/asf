@@ -161,10 +161,13 @@ static inline int secfp_build_qman_desc(struct caam_ctx *ctx)
 	opts.we_mask = QM_INITFQ_WE_DESTWQ | QM_INITFQ_WE_CONTEXTA
 			| QM_INITFQ_WE_CONTEXTB | QM_INITFQ_WE_FQCTRL;
 	opts.fqd.dest.channel = qm_channel_caam; /* dedicated channel */
-	/* Code is not 64-bit safe */
-	opts.fqd.context_a.hi = 0;
-	/* Cntxt_A_lo contains shared descriptor pointer */
+	/* Cntxt_A contains shared descriptor pointer */
+#ifdef CONFIG_64BIT
+	opts.fqd.context_a.hi = upper_32_bits(ctx->shared_desc_phys);
+	opts.fqd.context_a.lo = lower_32_bits(ctx->shared_desc_phys);
+#else
 	opts.fqd.context_a.lo = (u32) ctx->shared_desc_phys;
+#endif
 	opts.fqd.context_b = ulRecvFQID;
 	opts.fqd.fq_ctrl = QM_FQCTRL_CPCSTASH
 				| QM_FQCTRL_PREFERINCACHE;
@@ -512,24 +515,44 @@ int secfp_qman_in_submit(inSA_t *pSA, void *context)
 		pSG[1].length = skb->len;
 	}
 	} else {
+		unsigned int len;
+		if (pSA->SAParams.bUseExtendedSequenceNumber)
+			len = skb->len + SECFP_APPEND_BUF_LEN_FIELD;
+		else
+			len = skb->len;
 		clearICVMutable(skb, pInfo, pSA);
 		pInmap = dma_map_single(pSA->ctx.jrdev,
 			skb->data - pSA->ctx.split_key_len,
-			skb->len + pSA->ctx.split_key_len,
+			len + pSA->ctx.split_key_len,
 			DMA_BIDIRECTIONAL);
 		pInfo->dynamic = pSA->ctx.split_key_len;
 		/* filling compound frame */
-		pSG->addr = pInmap;
+#ifdef CONFIG_64BIT
+		pSG->addr_lo = lower_32_bits(pInmap);
+		pSG->addr_hi = upper_32_bits(pInmap);
+#else
+		pSG->addr_lo = (uint32_t)(pInmap);
+#endif
 		pSG->length = pSA->ctx.split_key_len;
-		pSG[1].addr = pInmap + pSA->ctx.split_key_len;
-		pSG[1].length = skb->len;
+#ifdef CONFIG_64BIT
+		pSG[1].addr_lo = lower_32_bits(pInmap + pSA->ctx.split_key_len);
+		pSG[1].addr_hi = upper_32_bits(pInmap + pSA->ctx.split_key_len);
+#else
+		pSG[1].addr_lo = pInmap + pSA->ctx.split_key_len;
+#endif
+		pSG[1].length = len;
 	}
 	pSG[1].final = 1;
 
 
 	qmfd._format2 = qm_fd_compound;
-	qmfd.addr = dma_map_single(pDev, pSG,
-		2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
+#ifdef CONFIG_64BIT
+		qmfd.addr = dma_map_single(pDev, pSG,
+			2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
+#else
+		qmfd.addr_lo = dma_map_single(pDev, pSG,
+			2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
+#endif
 	qmfd.length29 = 2*sizeof(scatter_gather_entry_t);
 
 	ASFIPSEC_DEBUG("out_len=%d :: in_len=%d\n", pSG->length, pSG[1].length);
@@ -574,6 +597,11 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 	}
 
 	iph = (struct iphdr *)skb->data;
+
+	pSG = pInfo->cb_SG;
+	pInfo->cb_skb = skb;
+	pInfo->dir = SECFP_OUT;
+	pInfo->proto = pSA->SAParams.ucProtocol;
 	if (pSA->SAParams.ucProtocol == SECFP_PROTO_ESP) {
 #ifdef ASF_IPV6_FP_SUPPORT
 		if (iph->version == 6) {
@@ -606,43 +634,58 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 			} else /*In case of IPv4-to-IPv4 tunnel*/
 				*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv4_IN_IPv4;
 		}
-	}
 
-	pSG = pInfo->cb_SG;
-	pInfo->cb_skb = skb;
-	pInfo->dir = SECFP_OUT;
-	pInfo->proto = pSA->SAParams.ucProtocol;
-	if (pSA->SAParams.ucProtocol == SECFP_PROTO_ESP) {
-	pInmap = dma_map_single(pSA->ctx.jrdev, (skb->data),
-		skb->len + SECFP_APPEND_BUF_LEN_FIELD + SECFP_NOUNCE_IV_LEN,
-		DMA_BIDIRECTIONAL);
+		pInmap = dma_map_single(pSA->ctx.jrdev, (skb->data),
+			skb->len + SECFP_APPEND_BUF_LEN_FIELD + SECFP_NOUNCE_IV_LEN,
+			DMA_BIDIRECTIONAL);
 
-	/* filling compound frame */
-	pSG->addr = pInmap - pSA->ulXmitHdrLen;
-	pSG->length = skb->len + pSA->ulCompleteOverHead;
+		/* filling compound frame */
+#ifdef CONFIG_64BIT
+		pSG->addr_lo = lower_32_bits(pInmap - pSA->ulXmitHdrLen);
+		pSG->addr_hi = upper_32_bits(pInmap - pSA->ulXmitHdrLen);
+#else
+		pSG->addr_lo = (uint32_t) (pInmap - pSA->ulXmitHdrLen);
+#endif
+		pSG->length = skb->len + pSA->ulCompleteOverHead;
 
-	pSG[1].addr = pInmap;
+#ifdef CONFIG_64BIT
+		pSG[1].addr_lo = lower_32_bits(pInmap);
+		pSG[1].addr_hi = upper_32_bits(pInmap);
+#else
+		pSG[1].addr_lo = (uint32_t) (pInmap);
+#endif
+		pSG[1].length = (skb->len);
 	} else {
+		unsigned int len;
+		if (pSA->SAParams.bUseExtendedSequenceNumber)
+			len = skb->len + SECFP_APPEND_BUF_LEN_FIELD;
+		else
+			len = skb->len;
 		pInmap = dma_map_single(pSA->ctx.jrdev,
 				(skb->data - pSA->ctx.split_key_len),
-				skb->len + pSA->ctx.split_key_len,
+				len + pSA->ctx.split_key_len,
 				DMA_BIDIRECTIONAL);
 		/* filling compound frame */
 		pInfo->dynamic = pSA->ctx.split_key_len;
 		pSG->addr = pInmap;
 		pSG->length = pSA->ctx.split_key_len;
 		pSG[1].addr = pInmap + pSA->ctx.split_key_len;
+		pSG[1].length = len;
 	}
 
 	ASFIPSEC_DEBUG("QMAN enqueue submit pSA->ulCompleteOverHead %d\n",
 				pSA->ulCompleteOverHead);
 
-	pSG[1].length = (skb->len);
 	pSG[1].final = 1;
 
 	qmfd._format2 = qm_fd_compound;
-	qmfd.addr = dma_map_single(pDev, pSG,
-		2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
+#ifdef CONFIG_64BIT
+		qmfd.addr = dma_map_single(pDev, pSG,
+			2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
+#else
+		qmfd.addr_lo = dma_map_single(pDev, pSG,
+			2*sizeof(scatter_gather_entry_t), DMA_BIDIRECTIONAL);
+#endif
 	qmfd.length29 = 2*sizeof(scatter_gather_entry_t);
 	if (dpovrd) {
 		dpovrd = 0x80000000 | dpovrd;
@@ -686,10 +729,12 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 			return qman_cb_dqrr_stop;
 		}
 	}
-
-	addr = dqrr->fd.addr;
 	/* ToDo: We set dma_map_single, so, should use dma_umap_single here */
-	pSG = (scatter_gather_entry_t *)phys_to_virt(addr);
+#ifdef CONFIG_64BIT
+		pSG = (scatter_gather_entry_t *)phys_to_virt(dqrr->fd.addr);
+#else
+		pSG = (scatter_gather_entry_t *)phys_to_virt(dqrr->fd.addr_lo);
+#endif
 	if (!pSG) {
 		ASFIPSEC_DPERR("NULL pSG buffer\n");
 		return qman_cb_dqrr_consume;
@@ -699,7 +744,11 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 
 	addr = pSG->addr;
 	if (!pSG->extension)
+#ifdef CONFIG_64BIT
 		pInfo->cb_skb->data = (u8 *)phys_to_virt(addr);
+#else
+		pInfo->cb_skb->data = (u8 *)phys_to_virt(pSG->addr_lo);
+#endif
 	else {
 		struct scatter_gather_entry_s *sgt =
 		(struct scatter_gather_entry_s *)phys_to_virt(addr);
@@ -750,14 +799,14 @@ down:
 	if (pInfo->proto != SECFP_PROTO_ESP)
 		pInfo->cb_skb->data += pInfo->dynamic;
 	if (pInfo->dir == SECFP_OUT) {
-		if (pInfo->proto == SECFP_PROTO_ESP)
+		if (pInfo->proto == SECFP_PROTO_ESP) {
 			pInfo->cb_skb->len = pSG->length;
-		if (pInfo->proto == SECFP_PROTO_ESP)
 			secfp_outComplete(pInfo->cb_pDev, NULL,
 				err_val, pInfo->cb_skb);
-		else
+		} else {
 			secfp_outAHComplete(pInfo->cb_pDev, NULL,
 				err_val, pInfo->cb_skb);
+		}
 	} else {
 #ifndef ASF_DEDICTD_CHAN_SEC_OUT
 		int hashval = 0, frag_cpu;
