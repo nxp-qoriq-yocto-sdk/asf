@@ -1309,7 +1309,7 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 		return AS_FP_PROCEED;
 
 #ifndef CONFIG_FSL_DPAA_ETH_JUMBO_FRAME
-	if (unlikely(fd->length20 > 1514))
+	if (unlikely(fd->length20 > 1518))
 		return AS_FP_PROCEED;
 #endif
 	ASF_RCU_READ_LOCK(bLockFlag);
@@ -1350,7 +1350,7 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 	/* make sure the pkt is on a mapped device */
 	anDev = ASFNetDev(real_dev);
 	if (unlikely(NULL == anDev))
-		goto iface_not_found;
+		goto ret_pkt;
 
 
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
@@ -1370,12 +1370,12 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 					"found (usVlanId %u)\n",
 					usVlanId);
 				XGSTATS_INC(InvalidVlanDev);
-				goto iface_not_found;
+				goto ret_pkt;
 			}
 		} else {
 			asf_debug("NULL VlanDevArray (cii %u) (usVlanId %u)\n",
 				anDev->ulCommonInterfaceId, usVlanId);
-			goto iface_not_found;
+			goto ret_pkt;
 		}
 		asf_debug("vlan dev %p on real dev %s\n", anDev->ndev,
 			real_dev->name);
@@ -1408,7 +1408,7 @@ int asf_ffp_devfp_rx(void *ptr, struct net_device *real_dev,
 			asf_debug("PPPoE dev entry not found (SessId %u)\n",
 				pppoe_session_id);
 			XGSTATS_INC(InvalidPPPoEDev);
-			goto iface_not_found;
+			goto ret_pkt;
 		}
 		asf_debug("PPPoE sessId %u dev %p on real dev %s\n",
 				pppoe_session_id,
@@ -2566,7 +2566,17 @@ ASF_void_t ASFFFPProcessAndSendFD(
 	/* flow->l2blob_len > 0 && flow->odev != NULL
 	from this point onwards */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
+	/* It is observed that while sending traffic on VLAN interfaces,
+	   linux hosts are not accounting for the extra 4 bytes of VLAN
+	   header in pmtu; i.e., they send full 1500 size ip packets
+	   with DF bit set; if we consider VLAN header in our mtu, which
+	   results in the mtu being 1496, our attempt to fragment fails
+	   because the DF bit is set; so, ignore VLAN header, just as
+	   linux hosts do. -Refer BR#57098.
+	*/
 	mtu = ASF_MIN(flow->pmtu, flow->odev->mtu) + ETH_HLEN - flow->l2blob_len;
+	if (flow->bVLAN)
+		mtu += 4;
 #endif
 	asf_debug_l2("attempting to xmit the packet\n");
 	if (unlikely(abuf.frag_list

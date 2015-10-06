@@ -90,7 +90,7 @@ static inline int asfGetTimeStamp(unsigned char *tcpopt, int optlen, unsigned lo
 			tcpopt += 3; /* 3 byte option length */
 			break;
 		case TCPOPT_TIMESTAMP:
-			*ts_val = ASF_NTOHL(*((unsigned long *)  (tcpopt + 2)));
+			*ts_val = ASF_NTOHL(*((unsigned int *)  (tcpopt + 2)));
 			return 0;
 		default:
 			tcpopt += tcpopt[1];
