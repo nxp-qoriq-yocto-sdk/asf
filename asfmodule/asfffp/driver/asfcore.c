@@ -4239,7 +4239,17 @@ ASF_uint32_t ASFMapInterface (ASF_uint32_t ulCommonInterfaceId, ASFInterfaceInfo
 
 			asf_debug("adding vlan %d to parent dev %s\n",
 					usVlanId, parent_dev->ndev->name);
-			/* Copy VLAN ID */
+
+			dev->ndev = (struct net_device *)info->ulRelatedIDs[1];
+
+			if (unlikely(dev->ndev == NULL)) {
+				asf_warn("Could not get netdev for vlan dev %d",
+					usVlanId);
+			}
+
+			asf_debug("adding vlan %d  parent dev %s, devname %s\n",
+				usVlanId, parent_dev->ndev->name,dev->ndev->name);
+
 			dev->usId = usVlanId;
 			dev->pParentDev = parent_dev;
 			ASFInsertVlanDev(parent_dev, usVlanId, dev);

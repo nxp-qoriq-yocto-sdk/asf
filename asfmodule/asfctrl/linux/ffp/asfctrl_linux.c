@@ -75,7 +75,7 @@ MODULE_DESCRIPTION(ASFCTRL_LINUX_DESC);
 
 
 /* Index is used as common interface ID */
-struct net_device *p_asfctrl_netdev_cii[ASFCTRL_MAX_IFACES];
+struct net_device *p_asfctrl_netdev_cii[ASF_MAX_IFACES];
 
 ASFCap_t  	g_cap;
 
@@ -261,13 +261,13 @@ int asfctrl_dev_get_cii(struct net_device *dev)
 {
 	ASFCTRL_FUNC_ENTRY;
 
-	if ((dev->ifindex < ASFCTRL_MAX_IFACES)
+	if ((dev->ifindex < ASF_MAX_IFACES)
 		&& (dev == p_asfctrl_netdev_cii[dev->ifindex])) {
 			return dev->ifindex;
 	} else {
 		ASF_int32_t ii;
 		/* avoid this and cache cii in netdev struct itself */
-		for (ii = 0; ii < ASFCTRL_MAX_IFACES; ii++) {
+		for (ii = 0; ii < ASF_MAX_IFACES; ii++) {
 			if (dev == p_asfctrl_netdev_cii[ii])
 				return ii;
 		}
@@ -281,7 +281,7 @@ struct net_device *asfctrl_dev_get_dev(int cii)
 {
 	ASFCTRL_FUNC_ENTRY;
 
-	if (cii > ASFCTRL_MAX_IFACES)
+	if (cii > ASF_MAX_IFACES)
 		return NULL;
 	return p_asfctrl_netdev_cii[cii];
 }
@@ -291,13 +291,13 @@ int asfctrl_dev_get_free_cii(struct net_device *dev)
 {
 	ASF_int32_t jj;
 	ASFCTRL_FUNC_ENTRY;
-	if (dev->ifindex < ASFCTRL_MAX_IFACES) {
+	if (dev->ifindex < ASF_MAX_IFACES) {
 		if (p_asfctrl_netdev_cii[dev->ifindex] == NULL)
 			return dev->ifindex;
 	}
 
 	/* find a free index in reverse order */
-	for (jj = ASFCTRL_MAX_IFACES-1; jj >= 0; jj--) {
+	for (jj = ASF_MAX_IFACES-1; jj >= 0; jj--) {
 		if (p_asfctrl_netdev_cii[jj] == NULL)
 			return jj;
 	}
@@ -341,12 +341,12 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 	}
 
 	cii = asfctrl_dev_get_free_cii(dev);
-	dev->cii = cii;
 	if (cii < 0) {
 		ASFCTRL_DBG("Failed to allocate free cii for device %s\n",
 			dev->name);
 		return T_FAILURE;
 	}
+	dev->cii = cii;
 
 	memset(&info, 0, sizeof(info));
 	info.ulMTU = dev->mtu;
@@ -362,6 +362,7 @@ ASF_int32_t asfctrl_create_dev_map(struct net_device *dev, ASF_int32_t bForce)
 				return T_FAILURE;
 			info.ulDevType = ASF_IFACE_TYPE_VLAN;
 			relIds[0] = asfctrl_dev_get_cii(pdev);
+			relIds[1] = dev;
 			info.ucDevIdentifierInPkt = (ASF_uint8_t *)&usVlanId;
 			info.ulDevIdentiferInPktLen = 2;
 			info.ucDevIdentifierType = ASF_IFACE_DEV_IDENTIFIER;
@@ -866,7 +867,7 @@ static void __exit asfctrl_exit(void)
 	devfp_register_hook(NULL, NULL);
 	unregister_netdevice_notifier(&asfctrl_dev_notifier);
 
-	for (ii = 0; ii < ASFCTRL_MAX_IFACES; ii++) {
+	for (ii = 0; ii < ASF_MAX_IFACES; ii++) {
 		if (p_asfctrl_netdev_cii[ii])
 			asfctrl_delete_dev_map(p_asfctrl_netdev_cii[ii]);
 	}

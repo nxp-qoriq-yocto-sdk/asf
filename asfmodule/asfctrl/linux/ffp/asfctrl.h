@@ -28,8 +28,6 @@
 #define ASF_DEF_VSG 		0
 #define ASF_DEF_ZN_ID 		0
 
-#define ASFCTRL_MAX_IFACES	(16)
-
 #define ASF_ASYNC_RESPONSE ASF_FALSE
 
 #define ASFCTRL_DUMMY_SKB_CB_OFFSET	(46)
