@@ -1512,7 +1512,7 @@ void secfp_outAHComplete(struct device *dev,
 #endif
 #ifdef CONFIG_DPA
 	struct dpa_priv_s       *priv;
-	struct dpa_bp	   *dpa_bp;
+	struct dpa_bp	   *dpa_bp = NULL;
 #endif
 	unsigned short tot_len = 0;
 	unsigned short ipHdrLen = 0;
@@ -1824,7 +1824,7 @@ sa_expired1:
 #endif
 			asf_set_queue_mapping(skb,iph->tos);
 #ifdef CONFIG_DPA
-		if (skb->cb[BUF_INDOMAIN_INDEX])
+		if (dpa_bp)
 			PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 
@@ -1949,7 +1949,7 @@ sa_expired1:
 
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
 #ifdef CONFIG_DPA
-					if (skb->cb[BUF_INDOMAIN_INDEX])
+					if (pOutSkb->cb[BUF_INDOMAIN_INDEX] && dpa_bp)
 						PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 #ifdef ASF_QOS
