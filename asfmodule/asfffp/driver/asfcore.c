@@ -2555,6 +2555,7 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		if (pFFPIPSecOut) {
 			if (pFFPIPSecOut(anDev->ulVSGId,
 				abuf.nativeBuffer, &flow->ipsecInfo) == 0) {
+				bSendOut = 1;
 				goto gen_indications;
 			}
 		}
@@ -2860,14 +2861,12 @@ gen_indications:
 
 			ffpCbFns.pFnFlowValidate(anDev->ulVSGId, &ind);
 		}
-#if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (flow->bDrop && !bSendOut) {
 			XGSTATS_INC(bDropPkts);
 			asf_debug("dropping packet as"\
 					"bDrop is set\n");
 			goto drop_pkt;
 		}
-#endif
 	}
 #endif /* (ASF_FEATURE_OPTION > ASF_MINIMUM) */
 
