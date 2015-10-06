@@ -2575,12 +2575,16 @@ ASF_void_t ASFFFPProcessAndSendFD(
 		struct sk_buff *pSkb, *pTempSkb;
 		struct sk_buff *skb;
 
-		XGSTATS_INC(FragAndXmit);
-		if (iph->frag_off & IP_DF)
-			goto ret_pkt_to_stk;
-
 		abuf.bbuffInDomain = ASF_TRUE;
 		skb = (struct sk_buff *)asf_abuf_to_skb(&abuf);
+		XGSTATS_INC(FragAndXmit);
+		if (iph->frag_off & IP_DF) {
+			asf_debug_l2("IP_DF set, pkt_tot_len %d, mtu %d\n",
+				iph->tot_len, mtu);
+			ASFSendIcmpErrMsg(skb->data, ASF_ICMP_DEST_UNREACH,
+				ASF_ICMP_CODE_FRAG_NEEDED, mtu, 0);
+			goto drop_pkt_1;
+		}
 
 		/* Need to call fragmentation routine */
 		asf_debug("attempting to fragment and xmit\n");
@@ -3537,11 +3541,18 @@ sctp_flow:
 				(skb_shinfo(skb)->frag_list)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 				struct sk_buff *pSkb, *pTempSkb;
+				int mtu;
 
+				mtu = ASF_MIN(flow->pmtu, flow->odev->mtu) + ETH_HLEN - flow->l2blob_len;
 				XGSTATS_INC(FragAndXmit);
 
-				if (ASF_NTOHS(iph->frag_off) & IP_DF)
-					goto ret_pkt_to_stk;
+				if (ASF_NTOHS(iph->frag_off) & IP_DF) {
+					asf_debug_l2("IP_DF set, pkt_tot_len %d, mtu %d\n",
+								iph->tot_len, mtu);
+					ASFSendIcmpErrMsg(skb->data, ASF_ICMP_DEST_UNREACH,
+					ASF_ICMP_CODE_FRAG_NEEDED, mtu, 0);
+					goto drop_pkt;
+				}
 
 				/* Need to call fragmentation routine */
 				asf_debug("attempting to fragment and xmit\n");

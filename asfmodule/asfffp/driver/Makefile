@@ -23,6 +23,7 @@ asf-y := asfproc.o \
 	    asfreasm.o \
 	    asfcore.o \
 	    asfpktdump.o \
+	    asficmpsend.o \
 	    gplcode.o
 
 ifeq ($(CONFIG_ASF_IPV6), y)

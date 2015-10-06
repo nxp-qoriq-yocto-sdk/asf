@@ -58,6 +58,19 @@
 #define ASF_HTONL
 #endif
 
+#define ASF_ICMP_DEST_UNREACH 3
+#define ASF_ICMP_CODE_FRAG_NEEDED 4
+
+#define ASF_ICMP_ECHO_REPLY	0 /* Echo Reply */
+#define ASF_ICMP_QUENCH		4 /* Source Quench */
+#define ASF_ICMP_REDIRECT	5 /* Redirect */
+#define ASF_ICMP_TIME_EXCEED	11 /* Time-to-live Exceeded */
+#define ASF_ICMP_PARAM_PROB	12
+
+#define ASF_IPLEN	20
+#define ASF_ICMPLEN	8
+#define ASF_IP_MAXOPT	40
+
 extern char *periodic_errmsg[];
 
 #define asf_err(fmt, arg...)  \
@@ -546,4 +559,10 @@ extern  unsigned int asfReasmPullBuf(struct sk_buff *skb,
 	unsigned int len,
 	unsigned int *fragCnt);
 extern void asf_ffp_cleanup_all_flows(void);
+
+extern int ASFSendIcmpErrMsg(unsigned char *pOrgData,
+				unsigned char ucType,
+				unsigned char ucCode,
+				unsigned int ulUnused,
+				unsigned int ulSNetId);
 #endif
