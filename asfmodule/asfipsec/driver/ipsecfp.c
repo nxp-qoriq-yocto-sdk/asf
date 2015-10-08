@@ -1475,12 +1475,6 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 				return 0;
 			}
 		}
-		if (skb->cb[SECFP_REF_INDEX] == 0) {
-			/* Some error happened in the c/b. Free the skb */
-			ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
-			skb->data_len = 0;
-			goto drop_skb_list;
-		}
 #endif /*CONFIG_ASF_SEC3x */
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 	}
@@ -1960,14 +1954,6 @@ static inline int secfp_try_fastPathOutv4(
 				rcu_read_unlock();
 				return 0;
 			}
-		}
-		if (skb->cb[SECFP_REF_INDEX] == 0) {
-			/* Some error happened in the c/b. Free the skb */
-			ASFIPSEC_DEBUG("O/b Proc Completed REF_CNT == 0, freeing the skb");
-			if (desc)
-				SECFP_DESC_FREE(desc);
-			skb->data_len = 0;
-			goto drop_skb_list;
 		}
 #endif /*CONFIG_ASF_SEC3x */
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
@@ -4569,13 +4555,6 @@ sa_expired:
 		/* Since we will be giving packet to fwnat processing, keep the data pointer as 14 bytes before data start */
 		ASFIPSEC_DEBUG("In: Offseting data by ulSecHdrLen = %d",
 					pSA->ulSecHdrLen);
-		if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
-			ASFIPSEC_TRACE;
-			SECFP_DESC_FREE(desc);
-			pHeadSkb->data_len = 0;
-			/* CB already finished processing the skb & there was an error*/
-			ASFSkbFree(pHeadSkb);
-		}
 #endif /*(CONFIG_ASF_SEC3x)*/
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		/* Assumes successful processing of the Buffer */
@@ -5348,13 +5327,6 @@ sa_expired:
 		/* Since we will be giving packet to fwnat processing, keep the data pointer as 14 bytes before data start */
 		ASFIPSEC_DEBUG("In: Offseting data by ulSecHdrLen = %d",
 					pSA->ulSecHdrLen);
-		if (pHeadSkb->cb[SECFP_REF_INDEX] == 0) {
-			ASFIPSEC_TRACE;
-			SECFP_DESC_FREE(desc);
-			pHeadSkb->data_len = 0;
-			/* CB already finished processing the skb & there was an error*/
-			ASFSkbFree(pHeadSkb);
-		}
 #endif /*(CONFIG_ASF_SEC3x)*/
 #endif /*(ASF_FEATURE_OPTION > ASF_MINIMUM)*/
 		/* Assumes successful processing of the Buffer */
