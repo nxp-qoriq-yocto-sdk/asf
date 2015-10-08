@@ -345,6 +345,30 @@
 #define SECFP_AH_DIR_OUT 0
 #define SECFP_AH_DIR_IN  1
 
+#ifdef CONFIG_ASF_SEC4x
+#define APPEND_MATH_IMM(op, desc, dest, src_0, src_1, len, opt) \
+append_cmd(desc, CMD_MATH | MATH_FUN_##op | MATH_DEST_##dest | \
+	MATH_SRC0_##src_0 | MATH_SRC1_##src_1 | opt | \
+	(u32) (len & MATH_LEN_MASK));
+
+#define append_math_imm(op, desc, dest, src0, src1, len, opt, data) \
+do { \
+	APPEND_MATH_IMM(op, desc, dest, src0, src1, len, opt) \
+	append_cmd(desc, data); \
+} while (0)
+#endif
+
+#ifdef CONFIG_ASF_SEC3x
+#define DESC_HDR_MODE1_MDEU_SHA384	cpu_to_be32(0x00000000)
+#define DESC_HDR_MODE0_MDEU_SHA384	cpu_to_be32(0x00000000)
+#define DESC_HDR_MODE0_MDEU_SHA384_HMAC	(DESC_HDR_MODE0_MDEU_SHA384 | \
+					DESC_HDR_MODE0_MDEU_HMAC)
+#define DESC_HDR_MODE1_MDEU_SHA384_HMAC	(DESC_HDR_MODE1_MDEU_SHA384 | \
+					DESC_HDR_MODE1_MDEU_HMAC)
+#define DESC_HDR_MODE0_MDEUB_SHA512_HMAC (DESC_HDR_MODE0_MDEUB_SHA512 | \
+						DESC_HDR_MODE0_MDEU_HMAC)
+#endif
+
 typedef struct ASFIPSecOpqueInfo_st {
 	unsigned int ulInSPDContainerId;
 	unsigned int ulInSPDMagicNumber;
