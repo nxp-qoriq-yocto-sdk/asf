@@ -1275,7 +1275,17 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 		struct frag_hdr *fhdr;
 		fhdr =  (struct frag_hdr *)skb_transport_header(skb);
 		fragCnt = 1;
-
+		if (!pIpsecOpaque) {
+			switch (fhdr->nexthdr) {
+			case NEXTHDR_ESP:
+			case NEXTHDR_AUTH:
+			case NEXTHDR_UDP:
+			case NEXTHDR_TCP:
+				break;
+			default:
+				return ASF_RTS;
+			}
+		}
 		/* Do we need this check ? */
 		if (unlikely((fhdr->frag_off) & ASF_HTONS(0xFFF9))) {
 			skb = asfIpv4Defrag(ulVsgId, skb, NULL, NULL, NULL, &fragCnt);
@@ -1494,8 +1504,7 @@ ASF_uint32_t ASFFFPIPv6ProcessAndSendPkt(
 	q = (unsigned short *)  ptrhdrOffset;
 	if (nexthdr == NEXTHDR_UDP) {
 		XGSTATS_INC(UdpPkts);
-		if (((skb->len - (exthdrsize + sizeof(struct ipv6hdr))) < 8) ||
-			(ASF_NTOHS(*(q + 2)) > (skb->len - (exthdrsize + sizeof(struct ipv6hdr))))) {
+		if ((skb->len - (exthdrsize + sizeof(struct ipv6hdr))) < 8) {
 				/* Udp header length is invalid */
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 			gstats->ulErrIpProtoHdr++;
