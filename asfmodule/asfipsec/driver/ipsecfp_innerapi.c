@@ -3054,6 +3054,8 @@ unsigned int secfp_createOutSA(
 				& (pSA->SAParams.ulBlockSize - 1);
 	pSA->ulInnerPathMTU -= SECFP_ESP_TRAILER_LEN;
 
+	pSA->orig_mtu = ulMtu;
+
 #ifdef CONFIG_ASF_SEC4x
 	pSA->option[1] = SECFP_NONE;
 	pSA->bIVDataPresent = ASF_TRUE;
@@ -3113,6 +3115,7 @@ unsigned int secfp_createOutSA(
 		}
 
 		pSA->ulInnerPathMTU = ulMtu - pSA->ulSecOverHead;
+		pSA->orig_mtu = ulMtu;
 		pSA->ulXmitHdrLen = pSA->ulSecHdrLen;
 		ASFIPSEC_DEBUG("ulMtu(%d) -  pSA->ulSecOverHead(%d), BlockSize=%d\n",
 				ulMtu, pSA->ulSecOverHead, pSA->SAParams.ulBlockSize);
@@ -3534,6 +3537,7 @@ unsigned int secfp_ModifyOutSA(unsigned long int ulVSGId,
 				ASFIPSEC_DEBUG("InnerMtu=%d,pOutSA->ulSecOverHead=%d",\
 					pOutSA->ulInnerPathMTU, pOutSA->ulSecOverHead);
 			}
+			pOutSA->orig_mtu = pModSA->u.ulMtu;
 			break;
 		case ASFIPSEC_UPDATE_L2BLOB:
 			memcpy(pOutSA->l2blob, pModSA->u.l2blob.l2blob,

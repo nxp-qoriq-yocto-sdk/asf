@@ -3568,7 +3568,7 @@ sctp_flow:
 				/* Need to call fragmentation routine */
 				asf_debug("attempting to fragment and xmit\n");
 
-				if (!asfIpv4Fragment(skb, flow->pmtu,
+				if (!asfIpv4Fragment(skb, mtu,
 						/*32*/ flow->l2blob_len,
 						0 /* FALSE */, flow->odev,
 						&pSkb)) {

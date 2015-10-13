@@ -785,6 +785,7 @@ typedef struct outSA_s {
 	unsigned int ulCompleteOverHead;
 	unsigned int ulXmitHdrLen;
 	unsigned int ulInnerPathMTU;
+	int orig_mtu;
 	unsigned long ulPkts[NR_CPUS];
 	unsigned long ulBytes[NR_CPUS];
 	AsfSPDPolicyPPStats_t	PolicyPPStats[NR_CPUS];

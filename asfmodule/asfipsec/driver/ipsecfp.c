@@ -1258,6 +1258,14 @@ static inline int secfp_try_fastPathOutv6(unsigned int ulVSGId,
 		ASFIPSEC_DEBUG("L2blob Not Resolved. Drop the packet");
 		goto l2blob_missing;
 	}
+
+	/*if we are in race condition, the device MTU is changed from the MTU
+	used for creating the innerMTU, update the MTU temporarily*/
+	if (unlikely(pSA->orig_mtu != pSA->odev->mtu)) {
+		/* adjust the difference*/
+		pSA->ulInnerPathMTU -= (pSA->orig_mtu - pSA->odev->mtu);
+		pSA->orig_mtu = pSA->odev->mtu;
+	}
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 	if (skb_shinfo(skb1)->frag_list) {
 		struct sk_buff *pSkb;
@@ -1631,6 +1639,13 @@ static inline int secfp_try_fastPathOutv4(
 	ip_decrease_ttl(iph);
 #endif
 
+	/*if we are in race condition, the device MTU is changed from the MTU
+	used for creating the innerMTU, update the MTU temporarily*/
+	if (unlikely(pSA->orig_mtu != pSA->odev->mtu)) {
+		/* adjust the difference*/
+		pSA->ulInnerPathMTU -= (pSA->orig_mtu - pSA->odev->mtu);
+		pSA->orig_mtu = pSA->odev->mtu;
+	}
 	if (unlikely(skb_shinfo(skb1)->frag_list)) {
 #if (ASF_FEATURE_OPTION > ASF_MINIMUM)
 		if (pSecInfo->outContainerInfo.bControlPathPkt)
