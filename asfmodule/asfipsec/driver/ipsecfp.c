@@ -5373,7 +5373,6 @@ sa_error:
 		Buffer.nativeBuffer = skb1;
 		ASF_IPSEC_PPS_ATOMIC_INC(IPSec4GblPPStats_g.IPSec4GblPPStat[ASF_IPSEC_PP_GBL_CNT23]);
 		if (ASFIPSecCbFn.pFnNoInSA) {
-#ifndef ASF_SECFP_PROTO_OFFLOAD
 			if (ucSkipLen) {
 				unsigned short usIPHdrLen;
 				char aIpHeader[ASF_IPLEN + ASF_IP_MAXOPT];
@@ -5388,12 +5387,25 @@ sa_error:
 				ip_hdr(skb1)->tot_len += ASF_HTONS(ucSkipLen);
 				ip_hdr(skb1)->protocol = IPPROTO_UDP;
 			}
-#endif
+			if (skb_shinfo(skb1)->frag_list) {
+				struct sk_buff *frag, *frag1;
+				frag = skb_shinfo(skb1)->frag_list;
+				while (frag) {
+					frag1 = frag->next;
+					frag->next = NULL;
+					ASFSkbFree(frag);
+					frag = frag1;
+				}
+				skb_shinfo(skb1)->frag_list = NULL;
+				ASFSkbFree(skb1);
+				ASFIPSEC_WARN("Frags - Not supported packet dropped");
+			} else {
 #ifdef CONFIG_DPA
-			asf_dec_skb_buf_count(skb1);
+				asf_dec_skb_buf_count(skb1);
 #endif
-			ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
-				skb1, ulCommonInterfaceId);
+				ASFIPSecCbFn.pFnNoInSA(ulVSGId, Buffer, secfp_SkbFree,
+					skb1, ulCommonInterfaceId);
+			}
 		}
 		return 0;
 	}
