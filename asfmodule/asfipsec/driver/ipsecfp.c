@@ -2427,7 +2427,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
 #ifdef CONFIG_DPA
-					if (skb->cb[BUF_INDOMAIN_INDEX])
+					if (pOutSkb->cb[BUF_INDOMAIN_INDEX] && dpa_bp)
 						PER_CPU_BP_COUNT(dpa_bp)--;
 #endif
 #ifdef ASF_QOS
