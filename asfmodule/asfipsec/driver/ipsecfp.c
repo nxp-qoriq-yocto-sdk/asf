@@ -616,6 +616,7 @@ secfp_finishOutPacket(struct sk_buff *skb, outSA_t *pSA,
 		skb->data -= pSA->ulL2BlobLen;
 		skb->len += pSA->ulL2BlobLen;
 
+		skb->cb[SECFP_OUTB_L2_OVERHEAD] = pSA->ulL2BlobLen;
 		/* make following unconditional*/
 		if (pSA->bVLAN)
 			skb->vlan_tci = pSA->tx_vlan_id;
@@ -2124,7 +2125,9 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
+#ifdef ASF_SECFP_PROTO_OFFLOAD
 	skb_reset_network_header(skb);
+#endif
 
 	ASFIPSEC_DEBUG(" Entry");
 
@@ -2205,9 +2208,11 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 		skb->len -= skb->prev->len;
 		skb->prev = NULL;
 	}
+	iph = (struct iphdr *) (skb->data + skb->cb[SECFP_OUTB_L2_OVERHEAD]);
 #endif
-	iph = (struct iphdr *) skb->data;
+
 #ifdef ASF_SECFP_PROTO_OFFLOAD
+	iph = (struct iphdr *) skb->data;
 	if ((iph->version == 4) && (iph->protocol == IPPROTO_UDP)) {
 		struct udphdr *uh = (struct udphdr *) ((u32 *) iph + iph->ihl);
 		uh->len = ASF_HTONS(ASF_NTOHS(iph->tot_len) - (iph->ihl * 4));
