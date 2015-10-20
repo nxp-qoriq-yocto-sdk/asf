@@ -325,6 +325,7 @@ ASF_void_t asfctrl_ipsec_fn_VerifySPD(ASF_uint32_t ulVSGId,
 		while (tmp_skb) {
 			skb->len += tmp_skb->len;
 			skb->data_len +=  tmp_skb->len;
+			skb->truesize += tmp_skb->truesize;
 			tmp_skb = tmp_skb->next;
 		}
 	}
