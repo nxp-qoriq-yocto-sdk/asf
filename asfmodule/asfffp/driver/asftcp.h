@@ -58,17 +58,16 @@ static inline int asfTcpSeqGt(unsigned long x, unsigned long y)
 }
 
 
-static inline int asfTimeStampLessThan(unsigned long ts_val1, unsigned long ts_val2)
+static inline int asfTimeStampLessThan(unsigned int ts_val1, unsigned int ts_val2)
 {
-	int diff = (ts_val2-ts_val1);
-	if ((diff >= 0) && (diff < ASF_TCP_TIMESTAMP_LIMIT))
+	if ((ts_val2 >= ts_val1) && ((ts_val2 - ts_val1) < ASF_TCP_TIMESTAMP_LIMIT))
 		return 1;
 	return 0;
 }
 
 
 
-static inline int asfGetTimeStamp(unsigned char *tcpopt, int optlen, unsigned long *ts_val)
+static inline int asfGetTimeStamp(unsigned char *tcpopt, int optlen, unsigned int *ts_val)
 {
 
 	unsigned char *endptr;
@@ -104,7 +103,7 @@ static inline int asfGetTimeStamp(unsigned char *tcpopt, int optlen, unsigned lo
 static inline int asfTcpProcessOptions(ffp_flow_t *flow, unsigned char *tcpopt, int optlen)
 {
 	{
-		unsigned long   ts_val;
+		unsigned int   ts_val;
 		if (asfGetTimeStamp(tcpopt, optlen, &ts_val) == 0) {
 			if (!asfTimeStampLessThan(ts_val, flow->ulTcpTimeStamp-1)) {
 				flow->ulTcpTimeStamp = ts_val;
