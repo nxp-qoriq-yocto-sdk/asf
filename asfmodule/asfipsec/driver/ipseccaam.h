@@ -202,5 +202,4 @@ struct ipsec_ah_edesc {
 };
 
 extern struct device *asf_caam_device(void);
-extern char *caam_jr_strstatus(char *outstr, u32 status);
 #endif
