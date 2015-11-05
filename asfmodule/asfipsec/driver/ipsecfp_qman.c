@@ -764,7 +764,9 @@ enum qman_cb_dqrr_result espDQRRCallback(struct qman_portal *qm,
 	if (dqrr->fd.status) {
 		char err[256];
 		err_val = dqrr->fd.status & 0xF00000FF;
+#ifdef ASF_IPSEC_DEBUG
 		caam_jr_strstatus(err, dqrr->fd.status);
+#endif
 		switch (err_val) {
 			case ANTI_REPLAY_ERR:
 				ASFIPSEC_DEBUG("FD status = %#x "
