@@ -5652,6 +5652,7 @@ ASF_void_t ASFIPSecDecryptAndSendPkt(ASF_uint32_t ulVSGId,
 {
 	struct sk_buff *skb;
 	unsigned char bHomogenous = ASF_TRUE;
+	int retval;
 
 	int bVal = in_interrupt();
 
@@ -5662,6 +5663,14 @@ ASF_void_t ASFIPSecDecryptAndSendPkt(ASF_uint32_t ulVSGId,
 		skb = (struct sk_buff *)Buffer.nativeBuffer;
 	} else {
 		/* Freeing the buffer in case of hetrogeneous buffers*/
+		if (pFreeFn)
+			(pFreeFn)(freeArg);
+		goto ret_stk;
+	}
+	/* skb_linearise will do linearisation of frag_list or nr_frags
+	otherwise it will just return */
+	retval = skb_linearize(skb);
+	if (retval) {
 		if (pFreeFn)
 			(pFreeFn)(freeArg);
 		goto ret_stk;

@@ -1594,6 +1594,10 @@ int asfctrl_xfrm_decrypt_n_send(struct sk_buff *skb,
 	}
 #endif
 	skb_dst_drop(skb);
+	if (skb->sp) {
+		secpath_put(skb->sp);
+		skb->sp = NULL;
+	}
 	ulVSGId = asfctrl_get_ipsec_sa_vsgid(xfrm);
 	ASFIPSecDecryptAndSendPkt(ulVSGId,
 			Buffer,
