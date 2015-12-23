@@ -1099,10 +1099,12 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			udph->dest = ct_tuple_reply->dst.u.udp.port;
 		}
 
+#ifdef ASF_IPV6_FP_SUPPORT
 		if (pf_ipv6 == true) {
 			result = ip6t_do_table(skb, NF_INET_FORWARD, idev,
 					skb->dev, net->ipv6.ip6table_filter);
 		} else
+#endif
 			result = ipt_do_table(skb, NF_INET_FORWARD, idev,
 					skb->dev, net->ipv4.iptable_filter);
 

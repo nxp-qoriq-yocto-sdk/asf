@@ -1386,16 +1386,25 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 								     ulSAIndex[ii]);
 				rcu_read_lock();
 				if (pOutSA && (pOutSA->SAParams.ulSPI == pInParams->ulSPI) &&
-					(pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr == pInParams->gwAddr.ipv4addr ||
-					!_ipv6_addr_cmp((struct in6_addr *)pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr,
-						(struct in6_addr *)pInParams->gwAddr.ipv6addr)) &&
-					(pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
-					for_each_possible_cpu(Index) {
-						pOutParams->ulPkts += pOutSA->ulPkts[Index];
-						pOutParams->ulBytes += pOutSA->ulBytes[Index];
+						(pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
+					if (!pOutSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+						if (pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr == pInParams->gwAddr.ipv4addr) {
+							for_each_possible_cpu(Index) {
+								pOutParams->ulPkts += pOutSA->ulPkts[Index];
+								pOutParams->ulBytes += pOutSA->ulBytes[Index];
+							}
+						}
+#ifdef ASF_IPV6_FP_SUPPORT
+					} else {
+						if (!_ipv6_addr_cmp((struct in6_addr *)pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr,
+							(struct in6_addr *)pInParams->gwAddr.ipv6addr)) {
+							for_each_possible_cpu(Index) {
+								pOutParams->ulPkts += pOutSA->ulPkts[Index];
+								pOutParams->ulBytes += pOutSA->ulBytes[Index];
+							}
+						}
+#endif
 					}
-					rcu_read_unlock();
-					return;
 				}
 				rcu_read_unlock();
 			}
@@ -1407,16 +1416,25 @@ ASF_void_t ASFIPSecSAQueryStats(ASFIPSecGetSAQueryParams_t *pInParams,
 							      pOutSALinkNode->ulSAIndex);
 			rcu_read_lock();
 			if (pOutSA && (pOutSA->SAParams.ulSPI == pInParams->ulSPI) &&
-					(pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr == pInParams->gwAddr.ipv4addr ||
-					!_ipv6_addr_cmp((struct in6_addr *)pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr,
-						(struct in6_addr *)pInParams->gwAddr.ipv6addr)) &&
 					(pOutSA->SAParams.ucProtocol == pInParams->ucProtocol)) {
-				for_each_possible_cpu(Index) {
-					pOutParams->ulPkts += pOutSA->ulPkts[Index];
-					pOutParams->ulBytes += pOutSA->ulBytes[Index];
+				if (!pOutSA->SAParams.tunnelInfo.bIPv4OrIPv6) {
+					if (pOutSA->SAParams.tunnelInfo.addr.iphv4.daddr == pInParams->gwAddr.ipv4addr) {
+						for_each_possible_cpu(Index) {
+							pOutParams->ulPkts += pOutSA->ulPkts[Index];
+							pOutParams->ulBytes += pOutSA->ulBytes[Index];
+						}
+					}
+#ifdef ASF_IPV6_FP_SUPPORT
+				} else {
+					if (!_ipv6_addr_cmp((struct in6_addr *)pOutSA->SAParams.tunnelInfo.addr.iphv6.daddr,
+						(struct in6_addr *)pInParams->gwAddr.ipv6addr)) {
+						for_each_possible_cpu(Index) {
+							pOutParams->ulPkts += pOutSA->ulPkts[Index];
+							pOutParams->ulBytes += pOutSA->ulBytes[Index];
+						}
+					}
+#endif
 				}
-				rcu_read_unlock();
-				return;
 			}
 			rcu_read_unlock();
 		}

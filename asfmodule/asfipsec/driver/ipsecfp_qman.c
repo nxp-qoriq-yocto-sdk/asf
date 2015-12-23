@@ -633,8 +633,9 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 				*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv4_IN_IPv6;
 			} else /*In case of IPv4-to-IPv4 tunnel*/
 				*(unsigned char *) &(skb->cb[SECFP_IN_OUT_HDR_DIFF]) = SECFP_IPv4_IN_IPv4;
+#ifdef ASF_IPV6_FP_SUPPORT
 		}
-
+#endif
 		pInmap = dma_map_single(pSA->ctx.jrdev, (skb->data),
 			skb->len + SECFP_APPEND_BUF_LEN_FIELD + SECFP_NOUNCE_IV_LEN,
 			DMA_BIDIRECTIONAL);
@@ -690,8 +691,10 @@ int secfp_qman_out_submit(outSA_t *pSA, void *context)
 	if (dpovrd) {
 		dpovrd = 0x80000000 | dpovrd;
 		if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
+#ifdef ASF_IPV6_FP_SUPPORT
 			dpovrd |= SECFP_IPV6_HDR_LEN << 16;
 		else
+#endif
 			dpovrd |= SECFP_IPV4_HDR_LEN << 16;
 		qmfd.cmd = dpovrd;
 	}
@@ -813,8 +816,9 @@ down:
 #ifndef ASF_DEDICTD_CHAN_SEC_OUT
 		int hashval = 0, frag_cpu;
 		struct iphdr *iph = (struct iphdr *)(pInfo->cb_skb->data);
+#ifdef ASF_IPV6_FP_SUPPORT
 		struct ipv6hdr *ip6h = (struct ipv6hdr *)(pInfo->cb_skb->data);
-
+#endif
 		/* With AH, the tunnel headers are not removed by SEC */
 		if (pInfo->proto == SECFP_PROTO_AH) {
 			unsigned int ah_header_len;
@@ -831,7 +835,9 @@ down:
 				(pInfo->cb_skb->data[SECFP_IPV4_HDR_LEN + 1]) + 2) << 2;
 				headers_len = SECFP_IPV4_HDR_LEN + ah_header_len;
 			}
+#ifdef ASF_IPV6_FP_SUPPORT
 			ip6h = (struct ip6hdr *)(pInfo->cb_skb->data + headers_len);
+#endif
 			iph = (struct iphdr *)(pInfo->cb_skb->data + headers_len);
 		}
 
@@ -843,6 +849,7 @@ down:
 				(iph->frag_off & ASF_HTONS(IP_MF|IP_OFFSET))) {
 			hashval = iph->id + iph->saddr;
 			frag_cpu = hashval % num_online_cpus();
+#ifdef ASF_IPV6_FP_SUPPORT
 		} else if ((iph->version == 6) &&
 				(ip6h->nexthdr == NEXTHDR_FRAGMENT)) {
 			hashval = ip6h->saddr.s6_addr32[0]
@@ -850,8 +857,8 @@ down:
 				+ ip6h->saddr.s6_addr32[2]
 				+ ip6h->saddr.s6_addr32[3];
 			frag_cpu = hashval % num_online_cpus();
+#endif
 		}
-
 		if (hashval && (frag_cpu != smp_processor_id())) {
 			ASFIPSEC_DEBUG("frag_pkt on other core=%d",
 				smp_processor_id());

@@ -1533,7 +1533,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 #ifdef ASF_IPV6_FP_SUPPORT
 	struct ipv6hdr	*ip6h;
 	struct frag_hdr *fhdr;
-	bool bIPv6;
+	bool bIPv6 = false;
 #endif
 	ACCESS_XGSTATS();
 	skb_reset_network_header(skb);
@@ -1542,9 +1542,7 @@ struct sk_buff  *asfIpv4Defrag(unsigned int ulVSGId,
 	fhdr = (struct frag_hdr *)skb_transport_header(skb);
 	if (ip6h->version == 6)
 		bIPv6 = true;
-	else
 #endif
-	bIPv6 = false;
 	XGSTATS_INC(DefragCalls);
 
 	/* Calculate the hash value */
