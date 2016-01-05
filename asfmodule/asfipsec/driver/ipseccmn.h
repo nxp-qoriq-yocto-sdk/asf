@@ -44,6 +44,11 @@ extern unsigned int *pulVSGL2blobMagicNumber;
 extern unsigned int **pulTunnelMagicNumber;
 extern unsigned int ulTimeStamp_g;
 
+static inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
+{
+	ASFSkbFree(freeArg);
+}
+
 #define ASFIPSEC_ERR	asf_err
 #define ASFIPSEC_DPERR asf_dperr
 

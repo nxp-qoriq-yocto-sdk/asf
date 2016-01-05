@@ -278,11 +278,6 @@ void secfp_IVDeInit(void)
 #endif
 
 
-inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
-{
-	ASFSkbFree(freeArg);
-}
-
 void secfp_deInit(void)
 {
 	ASFIPSEC_PRINT("DeInitializing Sec FP ");

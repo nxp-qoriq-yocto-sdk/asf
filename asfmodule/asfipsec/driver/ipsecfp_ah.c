@@ -124,10 +124,6 @@ void secfp_prepareAHOutDescriptor(struct sk_buff *skb, void *pData,
 #ifdef ASFIPSEC_DEBUG_FRAME
 extern void print_desc(struct talitos_desc *desc);
 #endif
-static inline ASF_void_t secfp_SkbFree(ASF_void_t *freeArg)
-{
-	ASFSkbFree(freeArg);
-}
 
 extern __be16 secfp_IPv4_IDs[NR_CPUS];
 static inline __be16 secfp_getNextId(void)
