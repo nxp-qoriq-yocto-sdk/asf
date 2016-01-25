@@ -2020,7 +2020,32 @@ unsigned int asfReasmPullBuf(struct sk_buff *skb, unsigned int len, unsigned int
 	}
 }
 
+/* Number of bytes to align the rx bufs to */
+#define BUFFER_ALIGNMENT 64
+#define ASF_HEAD_RESERVE 128
+#define ASF_TAIL_RESERVE 128
 
+struct sk_buff *asf_new_skb(struct net_device *dev, unsigned int  buffer_size)
+{
+	unsigned int alignamount;
+	struct sk_buff *skb = NULL;
+
+	skb = netdev_alloc_skb(dev, buffer_size + BUFFER_ALIGNMENT +
+		ASF_HEAD_RESERVE + ASF_TAIL_RESERVE);
+
+	if (!skb)
+		return NULL;
+
+	skb_reserve(skb, ASF_HEAD_RESERVE);
+	alignamount = BUFFER_ALIGNMENT -
+		(((unsigned long) skb->data) & (BUFFER_ALIGNMENT - 1));
+
+	/* We need the data buffer to be aligned properly. */
+	if (alignamount != BUFFER_ALIGNMENT)
+		skb_reserve(skb, alignamount);
+
+	return skb;
+}
 
 /* ulMTU - to be used for fragmentation
    ulDevXmitHdrLen : buffer space to be reserved for L2 header
@@ -2167,7 +2192,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 #ifdef CONFIG_DPA
 				skb2 = asf_alloc_buf_skb(ndev);
 #else
-				skb2 = gfar_new_skb(ndev);
+				skb2 = asf_new_skb(ndev, len + ihl);
 #endif
 				if (skb2) {
 					asf_reasm_debug("Next skb\r\n");
@@ -2229,7 +2254,7 @@ int asfIpv4Fragment(struct sk_buff *skb,
 #ifdef CONFIG_DPA
 				skb2 = asf_alloc_buf_skb(ndev);
 #else
-				skb2 = gfar_new_skb(ndev);
+				skb2 = asf_new_skb(ndev, first_frag_len);
 #endif
 				if (!skb2)
 					goto drop;
@@ -2364,7 +2389,7 @@ int asfIpv6Fragment(struct sk_buff *skb,
 #ifdef CONFIG_DPA
 		frag = alloc_skb(len+ip6hpexh_len+32, GFP_ATOMIC);
 #else
-		frag = gfar_new_skb(skb->dev);
+		frag = asf_new_skb(skb->dev, len + ip6hpexh_len + sizeof(struct frag_hdr));
 #endif
 
 		if (unlikely(!frag)) {

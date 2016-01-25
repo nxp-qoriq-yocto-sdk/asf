@@ -39,6 +39,8 @@
 #define AS_FP_STOLEN	DPAA_ETH_STOLEN
 
 #else
+#define AS_FP_PROCEED	1
+#define AS_FP_STOLEN	2
 #define devfp_register_hook(rx_hook, tx_hook) {	\
 	devfp_register_rx_hook(rx_hook);	\
 	devfp_register_tx_hook(tx_hook);	\

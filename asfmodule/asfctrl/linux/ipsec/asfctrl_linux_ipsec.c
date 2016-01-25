@@ -835,9 +835,9 @@ ASF_void_t asfctrl_ipsec_l2blob_update_fn(struct sk_buff *skb,
 	memcpy(&pSAData->u.l2blob.l2blob, skb->data,
 			pSAData->u.l2blob.ulL2BlobLen);
 #ifdef CONFIG_VLAN_8021Q
-	if (vlan_tx_tag_present(skb)) {
+	if (skb_vlan_tag_present(skb)) {
 		pSAData->u.l2blob.bTxVlan = 1;
-		pSAData->u.l2blob.usTxVlanId = (vlan_tx_tag_get(skb)
+		pSAData->u.l2blob.usTxVlanId = (skb_vlan_tag_get(skb)
 							| VLAN_TAG_PRESENT);
 	} else
 #endif

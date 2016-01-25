@@ -129,6 +129,7 @@ static ASF_int32_t asf_linux_XmitL2blobDummyPkt(
 	return T_SUCCESS;
 }
 
+#ifdef ASF_IPV6_FP_SUPPORT
 static ASF_int32_t asf_linux_IPv6XmitL2blobDummyPkt(
 				ASF_uint32_t ulVsgId,
 				ASF_uint32_t ulZoneId,
@@ -195,6 +196,7 @@ static ASF_int32_t asf_linux_IPv6XmitL2blobDummyPkt(
 
 	return T_SUCCESS;
 }
+#endif
 
 ASF_void_t asfctrl_fnZoneMappingNotFound(
 					ASF_uint32_t ulVSGId,
@@ -292,12 +294,15 @@ ASF_void_t asfctrl_fnFlowRefreshL2Blob(ASF_uint32_t ulVSGId,
 			ASFFFPFlowL2BlobRefreshCbInfo_t *pInfo)
 {
 	ASFCTRL_FUNC_ENTRY;
+#ifdef ASF_IPV6_FP_SUPPORT
 	if (pInfo->flowTuple.bIPv4OrIPv6 == 1) {
 		asf_linux_IPv6XmitL2blobDummyPkt(ulVSGId, pInfo->ulZoneId,
 				&pInfo->flowTuple, (struct in6_addr *)(pInfo->flowTuple.ipv6SrcIp),
 				(struct in6_addr *)(pInfo->packetTuple.ipv6DestIp), 0,
 				pInfo->ulHashVal, 0);
-	} else {
+	} else
+#endif
+	{
 		asf_linux_XmitL2blobDummyPkt(ulVSGId, pInfo->ulZoneId,
 				&pInfo->flowTuple, pInfo->flowTuple.ulSrcIp,
 				pInfo->packetTuple.ulDestIp, 0,
@@ -381,6 +386,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 	struct flowi fl_out;
 #endif
 	bool	bIPv6;
+	struct nf_hook_state state;
 	ASFCTRL_FUNC_ENTRY;
 
 
@@ -397,6 +403,7 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		return;
 	}
 
+#ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv6 == true) {
 		skb_reset_network_header(skb);
 		skb_put(skb, sizeof(struct ipv6hdr));
@@ -415,7 +422,9 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		if (!skb_dst(skb))
 			return;
 		skb->dev = skb_dst(skb)->dev;
-	} else { /* IPv4 case */
+	} else
+#endif
+	{ /* IPv4 case */
 		if (ct_tuple_orig->dst.u3.ip == pInfo->tuple.ulDestIp) {
 			if (pInfo->tuple.ulDestIp == ct_tuple_reply->src.u3.ip) {
 				uldestIp = pInfo->tuple.ulDestIp;
@@ -470,13 +479,15 @@ ASF_void_t asfctrl_fnFlowValidate(ASF_uint32_t ulVSGId,
 		udph->source = pInfo->tuple.usSrcPort;
 		udph->dest = usdport;
 	}
+	state.in = dev;
+	state.out = skb->dev;
 #ifdef ASF_IPV6_FP_SUPPORT
 	if (bIPv6 == true) {
-		result = ip6t_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
+		result = ip6t_do_table(skb, NF_INET_FORWARD, &state,
 				net->ipv6.ip6table_filter);
 	} else
 #endif
-		result = ipt_do_table(skb, NF_INET_FORWARD, dev, skb->dev,
+		result = ipt_do_table(skb, NF_INET_FORWARD, &state,
 				net->ipv4.iptable_filter);
 	ASFCTRLKernelSkbFree(skb);
 
@@ -772,6 +783,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	struct nf_conntrack_tuple *ct_tuple_orig, *ct_tuple_reply;
 	struct net_device *dev = NULL;
 	struct net *net = NULL;
+	possible_net_t psnet;
 	int result = 0;
 	bool pf_ipv6 = false;
 
@@ -783,7 +795,8 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 		return -EINVAL;
 	}
 
-	net = ct_event->ct_net;
+	psnet = ct_event->ct_net;
+	net = psnet.net;
 	ct_tuple_orig = tuple(ct_event, IP_CT_DIR_ORIGINAL);
 
 	ASFCTRL_INFO("[ORIGINAL]proto = %u src ip = " NIPQUAD_FMT
@@ -860,7 +873,9 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			ASFCTRL_INFO("Ignoring multicast connection");
 			return -EINVAL;
 		}
-	} else {
+	}
+#ifdef ASF_IPV6_FP_SUPPORT
+	else {
 		if (ipv6_chk_addr(net, &(ct_tuple_orig->src.u3.in6), NULL, 0)
 		|| ipv6_chk_addr(net, &(ct_tuple_reply->src.u3.in6), NULL, 0)) {
 			ASFCTRL_INFO("Ignoring Local connection");
@@ -873,7 +888,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			return -EINVAL;
 		}
 	}
-
+#endif
 
 	/* Bad hack: Modify the UDP timer from single floe timeout
 	* to double flow timeout
@@ -908,6 +923,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 	uint8_t orig_prot = ct_tuple_orig->dst.protonum;
 	uint8_t reply_prot = ct_tuple_reply->dst.protonum;
 	uint8_t ulCommonInterfaceId = 0;
+	struct nf_hook_state state;
 
 	ASF_uint32_t ulVSGId;
 
@@ -1058,7 +1074,9 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			iph->saddr = ct_tuple_reply->src.u3.ip;
 			iph->daddr = ct_tuple_reply->dst.u3.ip;
 			iph->protocol = ct_tuple_reply->dst.protonum;
-		} else {
+		} else
+#ifdef ASF_IPV6_FP_SUPPORT
+		{
 			skb_reset_network_header(skb);
 			skb_put(skb, sizeof(struct ipv6hdr));
 			ipv6h = ipv6_hdr(skb);
@@ -1084,6 +1102,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			}
 			skb->dev = skb_dst(skb)->dev;
 		}
+#endif
 		skb_reset_transport_header(skb);
 
 		if (ct_tuple_reply->dst.protonum == IPPROTO_TCP) {
@@ -1098,15 +1117,16 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 			udph->source = ct_tuple_reply->src.u.udp.port;
 			udph->dest = ct_tuple_reply->dst.u.udp.port;
 		}
-
+		state.in = idev;
+		state.out = skb->dev;
 #ifdef ASF_IPV6_FP_SUPPORT
 		if (pf_ipv6 == true) {
-			result = ip6t_do_table(skb, NF_INET_FORWARD, idev,
-					skb->dev, net->ipv6.ip6table_filter);
+			result = ip6t_do_table(skb, NF_INET_FORWARD, &state,
+					 net->ipv6.ip6table_filter);
 		} else
 #endif
-			result = ipt_do_table(skb, NF_INET_FORWARD, idev,
-					skb->dev, net->ipv4.iptable_filter);
+			result = ipt_do_table(skb, NF_INET_FORWARD, &state
+					, net->ipv4.iptable_filter);
 
 		ASFCTRLKernelSkbFree(skb);
 
@@ -1315,6 +1335,7 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 
 		ASFCTRL_INFO("Flow created successfully in ASF");
 
+#ifdef ASF_IPV6_FP_SUPPORT
 		if (pf_ipv6 == true) {
 			asf_linux_IPv6XmitL2blobDummyPkt(0, 0, &cmd.flow1.tuple,
 						(struct in6_addr *)(cmd.flow1.tuple.ipv6SrcIp),
@@ -1324,7 +1345,9 @@ static int32_t asfctrl_offload_session(struct nf_conn *ct_event)
 						(struct in6_addr *)(cmd.flow2.tuple.ipv6SrcIp),
 						(struct in6_addr *)(cmd.flow2.tuple.ipv6DestIp),
 						0, 0, ulCommonInterfaceId);
-		} else {
+		} else
+#endif
+		{
 
 			if (cmd.flow1.bNAT) {
 				flow1_dip =  cmd.flow1.natInfo.ulDestNATIp;
@@ -1556,7 +1579,6 @@ void asfctrl_linux_register_ffp(void)
 
 	ASFCTRL_FUNC_ENTRY;
 
-	need_ipv4_conntrack();
 	if (nf_conntrack_register_notifier(&init_net, &asfctrl_conntrack_event_nb) < 0) {
 		ASFCTRL_ERR("Register conntrack notifications failed!");
 		return ;

@@ -669,9 +669,9 @@ int asfctrl_dev_fp_tx_hook(struct sk_buff *skb, struct net_device *dev)
 
 		memcpy(cmd.u.l2blob.l2blob, skb->data, cmd.u.l2blob.l2blobLen);
 #ifdef CONFIG_VLAN_8021Q
-		if (vlan_tx_tag_present(skb)) {
+		if (skb_vlan_tag_present(skb)) {
 			cmd.u.l2blob.bTxVlan = 1;
-			cmd.u.l2blob.usTxVlanId = (vlan_tx_tag_get(skb)
+			cmd.u.l2blob.usTxVlanId = (skb_vlan_tag_get(skb)
 							| VLAN_TAG_PRESENT);
 		} else
 #endif

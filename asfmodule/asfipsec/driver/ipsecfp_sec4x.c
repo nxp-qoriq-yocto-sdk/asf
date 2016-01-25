@@ -1329,9 +1329,11 @@ static void secfp_prepareCaamJobDescriptor(struct aead_edesc *edesc,
 	if (dpovrd) {
 		static u32 data;
 		data = 0x80000000 | dpovrd;
+#ifdef ASF_IPV6_FP_SUPPORT
 		if (pSA->SAParams.tunnelInfo.bIPv4OrIPv6)
 			data |= SECFP_IPV6_HDR_LEN << 16;
 		else
+#endif
 			data |= SECFP_IPV4_HDR_LEN << 16;
 		append_load_as_imm(desc, &data, sizeof(data), LDST_CLASS_DECO |
 			LDST_SRCDST_WORD_DECO_PCLOVRD | 0x4);
