@@ -35,7 +35,7 @@ endif
 EXTRA_CFLAGS += -DASFCTRL_SCTP_SUPPORT
 EXTRA_CFLAGS += -DASF_SCTP_SUPPORT
 
-ifeq ($(CONFIG_FSL_DPAA_ETH),y)
+ifeq ($(CONFIG_FSL_SDK_DPAA_ETH),y)
 CONFIG_DPA=y
 EXTRA_CFLAGS += -DCONFIG_DPA
 ifeq ($(CONFIG_ASF_LINUX_QOS),y)
@@ -101,8 +101,8 @@ endif
 ifeq ($(CONFIG_ASF_HW_SHAPER), y)
 EXTRA_CFLAGS += -DASF_HW_SHAPER
 endif
-ifeq ($(CONFIG_FSL_DPAA_ETH), y)
-include $(KERNEL_PATH)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
+ifeq ($(CONFIG_FSL_SDK_DPAA_ETH), y)
+include $(KERNEL_PATH)/drivers/net/ethernet/freescale/sdk_fman/ncsw_config.mk
 endif
 
 ifeq ($(CONFIG_ASF_SEC4x), y)

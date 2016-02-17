@@ -36,8 +36,8 @@
 #include "asftcp.h"
 #include "asfipv6pvt.h"
 #ifdef CONFIG_DPA
-#include <dpa/dpaa_eth.h>
-#include <dpa/dpaa_eth_common.h>
+#include <sdk_dpaa/dpaa_eth.h>
+#include <sdk_dpaa/dpaa_eth_common.h>
 #endif
 
 #define ASF_DO_INC_CHECKSUM

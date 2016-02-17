@@ -57,8 +57,8 @@
 #include <net/xfrm.h>
 #include <linux/sysctl.h>
 #ifdef CONFIG_DPA
-#include <dpa/dpaa_eth.h>
-#include <dpa/dpaa_eth_common.h>
+#include <sdk_dpaa/dpaa_eth.h>
+#include <sdk_dpaa/dpaa_eth_common.h>
 #include <linux/fsl_bman.h>
 #include <linux/fsl_qman.h>
 #else
@@ -1035,6 +1035,7 @@ int asf_process_ip_options(struct sk_buff *skb, struct net_device *dev, struct i
 	return 0;
 }
 EXPORT_SYMBOL(asf_process_ip_options);
+
 #ifdef ASF_DEBUG
 void asf_display_frags(struct sk_buff *skb, char *msg)
 {

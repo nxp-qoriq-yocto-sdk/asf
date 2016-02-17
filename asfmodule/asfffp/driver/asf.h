@@ -15,7 +15,7 @@
 #ifdef CONFIG_DPA
 #include "crc64.h"
 #include <fm_ext.h>
-#include "dpa/dpaa_eth.h"
+#include "sdk_dpaa/dpaa_eth.h"
 #endif
 
 #define ASF_MINIMUM 1

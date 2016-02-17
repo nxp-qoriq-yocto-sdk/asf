@@ -30,9 +30,9 @@
 #include <linux/ip.h>
 #include <net/pkt_sched.h>
 #include <linux/hrtimer.h>
-#include <dpa/dpaa_eth.h>
-#include <dpa/mac.h>
-#include <dpa/dpaa_eth_common.h>
+#include <sdk_dpaa/dpaa_eth.h>
+#include <sdk_dpaa/mac.h>
+#include <sdk_dpaa/dpaa_eth_common.h>
 #ifdef ASF_TERM_FP_SUPPORT
 #include <linux/if_pmal.h>
 #endif
