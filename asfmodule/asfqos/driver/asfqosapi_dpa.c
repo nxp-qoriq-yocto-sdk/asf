@@ -604,6 +604,24 @@ int qos_enqueue_fd(ASFBuffer_t *abuf,
 		return ASF_SUCCESS;
 }
 
+static inline bool asf_skb_is_recycleable(struct sk_buff *skb, int skb_size)
+{
+	if (irqs_disabled())
+		return false;
+
+	if (skb_is_nonlinear(skb) || skb->fclone != SKB_FCLONE_UNAVAILABLE)
+		return false;
+
+	skb_size = SKB_DATA_ALIGN(skb_size + NET_SKB_PAD);
+	if (skb_end_pointer(skb) - skb->head < skb_size)
+		return false;
+
+	if (skb_shared(skb) || skb_cloned(skb))
+		return false;
+
+	return true;
+}
+
 int qos_enqueue_skb(struct sk_buff *skb,
 			struct  asf_qdisc *sch,
 			u32 *tc_filter_res)
@@ -662,7 +680,7 @@ int qos_enqueue_skb(struct sk_buff *skb,
 /* Maximum offset value for a contig or sg FD (represented on 9bits) */
 #define MAX_FD_OFFSET	((1 << 9) - 1)
 	/* Now Convert SKB to Tx_FD */
-	if (likely(skb_is_recycleable(skb, dpa_bp->size) &&
+	if (likely(asf_skb_is_recycleable(skb, dpa_bp->size) &&
 		   (skb_end_pointer(skb) - skb->head <=
 				dpa_bp->size + RECYCLE_EXTRA_SIZE) &&
 		   (PER_CPU_BP_COUNT(dpa_bp) < dpa_bp->target_count))) {

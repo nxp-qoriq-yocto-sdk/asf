@@ -21,7 +21,7 @@
 #ifndef __ASFQOS_PVT_H
 #define __ASFQOS_PVT_H
 
-#include <dpa/offline_port.h>
+#include <sdk_dpaa/offline_port.h>
 
 
 /* Initilization Parameters */
