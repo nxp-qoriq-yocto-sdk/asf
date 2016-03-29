@@ -2092,7 +2092,7 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 	struct iphdr *iph;
 #ifdef CONFIG_DPA
 	struct dpa_priv_s       *priv;
-	struct dpa_bp           *dpa_bp;
+	struct dpa_bp           *dpa_bp = NULL;
 #endif
 #ifdef ASF_SECFP_PROTO_OFFLOAD
 #ifdef ASF_IPV6_FP_SUPPORT
@@ -2109,14 +2109,6 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 	struct aead_edesc *desc;
 	desc = (struct aead_edesc *)((char *)pdesc -
 			offsetof(struct aead_edesc, hw_desc));
-#endif
-#ifdef CONFIG_DPA
-	if (skb->cb[BUF_INDOMAIN_INDEX]) {
-		if (skb->dev) {
-			priv = netdev_priv(skb->dev);
-			dpa_bp = priv->dpa_bp;
-		}
-	}
 #endif
 	pIPSecPPGlobalStats = asfPerCpuPtr(pIPSecPPGlobalStats_g, smp_processor_id());
 	pIPSecPPGlobalStats->ulTotOutPktsSecAppled++;
@@ -2289,8 +2281,13 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 #endif
 			asf_set_queue_mapping(skb, iph->tos);
 #ifdef CONFIG_DPA
-		if (skb->cb[BUF_INDOMAIN_INDEX])
-			PER_CPU_BP_COUNT(dpa_bp)--;
+		if (skb->cb[BUF_INDOMAIN_INDEX]) {
+			if (skb->dev) {
+				priv = netdev_priv(skb->dev);
+				dpa_bp = priv->dpa_bp;
+				PER_CPU_BP_COUNT(dpa_bp)--;
+			}
+		}
 #endif
 #ifdef ASF_QOS
 		pSA = (outSA_t *)ptrIArray_getData(&secFP_OutSATable,
@@ -2427,8 +2424,13 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 
 					pIPSecPPGlobalStats->ulTotOutProcPkts++;
 #ifdef CONFIG_DPA
-					if (pOutSkb->cb[BUF_INDOMAIN_INDEX] && dpa_bp)
-						PER_CPU_BP_COUNT(dpa_bp)--;
+					if (pOutSkb->cb[BUF_INDOMAIN_INDEX]) {
+						if (pOutSkb->dev) {
+							priv = netdev_priv(pOutSkb->dev);
+							dpa_bp = priv->dpa_bp;
+							PER_CPU_BP_COUNT(dpa_bp)--;
+						}
+					}
 #endif
 #ifdef ASF_QOS
 					/* Enqueue the packet For QoS */
