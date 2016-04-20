@@ -2308,16 +2308,24 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 			asf_warn("Error in Xmit: may happen\r\n");
 		}
 #else
-		txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
-		netdev = skb->dev;
-		if (asfDevHardXmit(skb->dev, skb) != 0) {
+		if (skb->dev) {
+			txq = netdev_get_tx_queue(skb->dev, skb->queue_mapping);
+			netdev = skb->dev;
+			if (asfDevHardXmit(skb->dev, skb) != 0) {
+#ifndef ASF_QMAN_IPSEC
+				/*TODO: DPAA driver always consumes skb */
+				ASFSkbFree(skb);
+#endif
+				return;
+			} else
+				netdev->trans_start = txq->trans_start = jiffies;
+		} else {
 #ifndef ASF_QMAN_IPSEC
 			/*TODO: DPAA driver always consumes skb */
 			ASFSkbFree(skb);
 #endif
 			return;
-		} else
-			netdev->trans_start = txq->trans_start = jiffies;
+		}
 #endif
 		pIPSecPPGlobalStats->ulTotOutProcPkts++;
 	} else {
@@ -2440,15 +2448,21 @@ void secfp_outComplete(struct device *dev, u32 *pdesc,
 						asf_warn("Error in Xmit: may happen\r\n");
 					}
 #else
-					txq = netdev_get_tx_queue(pOutSkb->dev, pOutSkb->queue_mapping);
-					netdev = pOutSkb->dev;
-					if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
-						ASFIPSEC_WARN("Error in transmit: Should not happen");
+					if (pOutSkb->dev) {
+						txq = netdev_get_tx_queue(pOutSkb->dev, pOutSkb->queue_mapping);
+						netdev = pOutSkb->dev;
+						if (asfDevHardXmit(pOutSkb->dev, pOutSkb) != 0) {
+							ASFIPSEC_WARN("Error in transmit: Should not happen");
+#ifndef ASF_QMAN_IPSEC
+							ASFSkbFree(pOutSkb);
+#endif
+						} else
+							netdev->trans_start = txq->trans_start = jiffies;
+					} else {
 #ifndef ASF_QMAN_IPSEC
 						ASFSkbFree(pOutSkb);
 #endif
-					} else
-						netdev->trans_start = txq->trans_start = jiffies;
+					}
 #endif
 				}
 				rcu_read_unlock();
